@@ -2,17 +2,13 @@
  * T-032 (docs/design/frontend.md section 5): per-tenant runtime branding.
  *
  * `tenant_config.brand.accent` (validated server-side as #RRGGBB at write
- * time, re-validated here defensively) becomes a scoped CSS override injected
+ * time, re-validated here defensively) becomes a CSS override injected
  * by the customer surface's server page - accent, hover/active/subtle steps
  * derived via simple HSL lightness shifts, focus ring following the accent.
  * If the accent fails WCAG AA contrast (4.5:1) against the light surface, the
  * whole override is skipped and the default primary ramp stays.
  *
- * The override is scoped to LIGHT mode only (`prefers-color-scheme: light`
- * plus the explicit `:root[data-theme="light"]` toggle state). Dark mode
- * keeps the default ramp: the derived subtle step is a near-white pastel that
- * pairs with dark-on-light text, and blindly overriding `:root` would win
- * over the media-query dark values and produce light-on-light chat bubbles.
+ * Dark mode is currently disabled. The override applies to :root directly.
  */
 
 /** Light-mode `--color-surface` from theme.css (layer 2). Kept in one place -
@@ -136,8 +132,7 @@ export function deriveBrandVars(accent: unknown): BrandVars | null {
 
 /**
  * The CSS text the customer surface injects server-side (no flash of default
- * branding), or null when the tenant has no usable accent. Scoped to light
- * mode only - see the module docstring for why dark keeps the default ramp.
+ * branding), or null when the tenant has no usable accent.
  */
 export function brandStyle(brand: Record<string, unknown>): string | null {
   const vars = deriveBrandVars(brand["accent"]);
@@ -148,8 +143,5 @@ export function brandStyle(brand: Record<string, unknown>): string | null {
     `--color-accent-active:${vars.accentActive};` +
     `--color-accent-subtle:${vars.accentSubtle};` +
     `--color-focus-ring:${vars.focusRing};`;
-  return (
-    `@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){${declarations}}}` +
-    `:root[data-theme="light"]{${declarations}}`
-  );
+  return `:root{${declarations}}`;
 }

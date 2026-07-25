@@ -21,12 +21,15 @@ factory) so instrumentation reads the same whether or not a backend is live:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Protocol
 from uuid import UUID
 
 from app.core.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class Span(Protocol):
@@ -76,6 +79,9 @@ def _langfuse_configured(settings: Settings) -> bool:
     return bool(settings.langfuse_public_key and settings.langfuse_secret_key)
 
 
+_warned_unwired = False
+
+
 def get_tracer(settings: Settings) -> Tracer:
     """Return the active tracer. Today this is always the no-op tracer; when
     the founder adds Langfuse keys and the ``langfuse`` SDK, this is where the
@@ -83,10 +89,16 @@ def get_tracer(settings: Settings) -> Tracer:
     single factory so that swap is one function, not a scatter of conditionals.
     """
     if _langfuse_configured(settings):
-        # Deliberately not importing langfuse here: the SDK is not a dependency
-        # of the free-first stack. Wiring it is a founder step (add the dep,
-        # implement a LangfuseTracer with the same Protocol, return it here).
-        # Until then, configured-but-unwired falls back to no-op rather than
-        # crashing a turn.
-        return NoOpTracer()
+        # Langfuse keys are set but the SDK backend isn't wired (it's not a
+        # dependency of the free-first stack). Rather than silently no-op -
+        # which reads as working observability and hides that nothing is being
+        # traced - warn once so an operator knows tracing is inert until a
+        # LangfuseTracer is implemented and returned here.
+        global _warned_unwired
+        if not _warned_unwired:
+            logger.warning(
+                "LANGFUSE keys are set but no tracer backend is wired; "
+                "traces are NOT being emitted (returning no-op tracer)"
+            )
+            _warned_unwired = True
     return NoOpTracer()

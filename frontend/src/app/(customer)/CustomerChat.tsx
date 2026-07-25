@@ -8,6 +8,7 @@ import { StreamingText } from "@/components/ui/StreamingText";
 import { CitationChip, type Citation } from "@/components/ui/CitationChip";
 import { QuoteCard, type QuotePayload } from "@/components/ui/QuoteCard";
 import { EscalationBanner } from "@/components/ui/EscalationBanner";
+import { parseChatStreamEvent } from "@/lib/chat-events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -173,26 +174,38 @@ export function CustomerChat({
 
         for (const raw of events) {
           if (!raw.startsWith("data: ")) continue;
-          const event = JSON.parse(raw.slice("data: ".length));
+          // A malformed or partial SSE frame parses to null; skip it and keep
+          // reading rather than abort the in-progress stream.
+          const event = parseChatStreamEvent(raw.slice("data: ".length));
+          if (!event) continue;
 
-          if (event.type === "conversation") {
-            setConversationId(event.conversation_id);
-          } else if (event.type === "citations") {
-            updateLastAssistant(() => ({ citations: event.citations }));
-          } else if (event.type === "quote") {
-            updateLastAssistant(() => ({ quote: event.quote }));
-          } else if (event.type === "redraft") {
-            // The backend's price gate rejected the streamed draft and is
-            // streaming a replacement - clear the rejected text.
-            updateLastAssistant(() => ({ text: "" }));
-          } else if (event.type === "token") {
-            updateLastAssistant((last) => ({ text: last.text + event.text }));
-          } else if (event.type === "refusal") {
-            updateLastAssistant(() => ({ text: event.text }));
-          } else if (event.type === "escalated") {
-            setEscalated(true);
-          } else if (event.type === "done") {
-            updateLastAssistant(() => ({ streaming: false }));
+          switch (event.type) {
+            case "conversation":
+              setConversationId(event.conversation_id);
+              break;
+            case "citations":
+              updateLastAssistant(() => ({ citations: event.citations }));
+              break;
+            case "quote":
+              updateLastAssistant(() => ({ quote: event.quote }));
+              break;
+            case "redraft":
+              // The backend's price gate rejected the streamed draft and is
+              // streaming a replacement - clear the rejected text.
+              updateLastAssistant(() => ({ text: "" }));
+              break;
+            case "token":
+              updateLastAssistant((last) => ({ text: last.text + event.text }));
+              break;
+            case "refusal":
+              updateLastAssistant(() => ({ text: event.text }));
+              break;
+            case "escalated":
+              setEscalated(true);
+              break;
+            case "done":
+              updateLastAssistant(() => ({ streaming: false }));
+              break;
           }
         }
       }

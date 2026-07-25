@@ -5,7 +5,7 @@
  * Rules (CI-enforced by frontend/scripts/check-tokens.mjs):
  *  - Raw color values (hex/rgb/hsl) may exist ONLY in this file.
  *  - Components use LAYER 2 (semantic) or LAYER 3 (component) tokens, never LAYER 1 primitives.
- *  - Dark mode, tenant branding, and future themes are variable overrides, never component changes.
+ *  - Tenant branding and future themes are variable overrides, never component changes.
  *
  * Palette: Material 3 style tonal role ramps (primary crimson, secondary teal,
  * tertiary green, error, neutral + neutral-variant). Ramp step numbers are M3
@@ -141,84 +141,6 @@
   --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-/* ============ LAYER 2 OVERRIDES - DARK ============ */
-/* Applied when the user's stored preference is dark, or when the system prefers dark
-   and no explicit light preference is stored. Components never know which is active.
-
-   IMPORTANT: the two dark blocks below (the [data-theme="dark"] rule and the
-   prefers-color-scheme media query) MUST stay literally identical - edit both
-   or neither. brand.ts assumes this duplication when it scopes tenant overrides
-   to light mode only; drift between the blocks would silently break dark mode. */
-:root[data-theme="dark"] {
-  --color-bg:                    var(--neutral-6);
-  --color-surface:               var(--neutral-12);
-  --color-surface-sunken:        var(--neutral-8);
-  --color-surface-raised:        var(--neutral-17);
-  --color-surface-container:     var(--neutral-17);
-  --color-surface-container-high:var(--neutral-22);
-  --color-border:                var(--neutral-22);
-  --color-border-strong:         var(--neutral-30);
-  --color-text:                  var(--neutral-90);
-  --color-text-secondary:        var(--neutral-variant-80);
-  --color-text-tertiary:         var(--neutral-80);
-  --color-text-inverse:          var(--neutral-10);
-
-  --color-accent:                var(--primary-80);
-  --color-accent-hover:          var(--primary-70);
-  --color-accent-active:         var(--primary-60);
-  --color-accent-subtle:         var(--primary-20);
-  --color-accent-container:      var(--primary-70); /* pairs with text-inverse: near-black on #F76F86 ~6.16:1 */
-  --color-focus-ring:            var(--primary-80);
-
-  --color-success:        var(--tertiary-80);
-  --color-warning:        var(--amber-300);
-  --color-danger:         var(--error-80);
-  --color-info:           var(--secondary-80);
-  /* subtle fills keep their light role via darker mixes over the surface */
-  --color-success-subtle: color-mix(in srgb, var(--tertiary-40) 22%, var(--neutral-12));
-  --color-warning-subtle: color-mix(in srgb, var(--amber-500) 22%, var(--neutral-12));
-  --color-danger-subtle:  color-mix(in srgb, var(--error-40) 22%, var(--neutral-12));
-  --color-info-subtle:    color-mix(in srgb, var(--secondary-40) 22%, var(--neutral-12));
-
-  /* depth from surface steps, not shadows */
-  --shadow-1: none;
-  --shadow-2: 0 0 0 1px var(--neutral-22);
-  --shadow-3: 0 8px 24px rgb(0 0 0 / 0.5);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    --color-bg:                    var(--neutral-6);
-    --color-surface:               var(--neutral-12);
-    --color-surface-sunken:        var(--neutral-8);
-    --color-surface-raised:        var(--neutral-17);
-    --color-surface-container:     var(--neutral-17);
-    --color-surface-container-high:var(--neutral-22);
-    --color-border:                var(--neutral-22);
-    --color-border-strong:         var(--neutral-30);
-    --color-text:                  var(--neutral-90);
-    --color-text-secondary:        var(--neutral-variant-80);
-    --color-text-tertiary:         var(--neutral-80);
-    --color-text-inverse:          var(--neutral-10);
-
-    --color-accent:                var(--primary-80);
-    --color-accent-hover:          var(--primary-70);
-    --color-accent-active:         var(--primary-60);
-    --color-accent-subtle:         var(--primary-20);
-    --color-accent-container:      var(--primary-70); /* pairs with text-inverse: near-black on #F76F86 ~6.16:1 */
-    --color-focus-ring:            var(--primary-80);
-
-    --color-success:        var(--tertiary-80);
-    --color-warning:        var(--amber-300);
-    --color-danger:         var(--error-80);
-    --color-info:           var(--secondary-80);
-    --color-success-subtle: color-mix(in srgb, var(--tertiary-40) 22%, var(--neutral-12));
-    --color-warning-subtle: color-mix(in srgb, var(--amber-500) 22%, var(--neutral-12));
-    --color-danger-subtle:  color-mix(in srgb, var(--error-40) 22%, var(--neutral-12));
-    --color-info-subtle:    color-mix(in srgb, var(--secondary-40) 22%, var(--neutral-12));
-
-    --shadow-1: none;
-    --shadow-2: 0 0 0 1px var(--neutral-22);
-    --shadow-3: 0 8px 24px rgb(0 0 0 / 0.5);
-  }
-}
+/* Dark mode overrides are disabled for now. See git history for the full dark
+   palette. Re-enable by adding :root[data-theme="dark"] and
+   @media (prefers-color-scheme: dark) blocks with matching variable overrides. */

@@ -19,6 +19,7 @@ from typing import Any
 from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
+from app.agents.drafting import stream_draft
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.core import db
@@ -107,10 +108,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             {"role": "system", "content": redraft_system_prompt},
             {"role": "user", "content": query},
         ]
-        redraft_text = ""
-        async for delta in ctx.provider.chat_stream(redraft_messages):
-            redraft_text += delta
-            writer({"type": "token", "text": delta})
+        redraft_text = await stream_draft(ctx.provider, redraft_messages)
         return {"draft_response": redraft_text}
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
@@ -154,10 +152,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         {"role": "user", "content": query},
     ]
 
-    full_text = ""
-    async for delta in ctx.provider.chat_stream(messages):
-        full_text += delta
-        writer({"type": "token", "text": delta})
+    full_text = await stream_draft(ctx.provider, messages)
 
     return {
         "draft_response": full_text,

@@ -199,7 +199,52 @@ async def _stream_chat_response(
                 stream_mode="custom",
                 config={"recursion_limit": limits.max_steps},
             )
-            events = [event async for event in stream]
+            # Process events as they arrive rather than draining the whole graph
+            # first. Structured, deterministic events (citations, quote) stream
+            # live for responsiveness; prose (token/refusal) stays buffered
+            # behind Inspection, so nothing the LLM *wrote* reaches the customer
+            # until a draft is approved - the T-021 invariant is unchanged.
+            async for event in stream:
+                etype = event["type"]
+                if etype in ("citations", "quote"):
+                    # Non-prose, and unchanged by a redraft (the quote row and
+                    # the retrieved chunks a redraft stays grounded in don't
+                    # move, and the redraft paths never re-emit them), so it is
+                    # safe to show immediately instead of holding it back.
+                    yield _sse(event)
+                elif etype == "token":
+                    full_text += str(event["text"])
+                    buffer.append(event)
+                elif etype == "refusal":
+                    # A refusal is always a complete, standalone message for its
+                    # attempt - never combined with prior token events.
+                    full_text = str(event["text"])
+                    buffer = [event]
+                elif etype == "tool_call":
+                    # T-030: a node invoked a tool - persisted against the
+                    # assistant message below for the Surface-2 trace, never
+                    # streamed to the customer.
+                    tool_calls.append(event)
+                elif etype == "redraft":
+                    # T-018/T-021: a gate rejected the draft text already
+                    # accumulated; the producing node is about to stream fresh
+                    # prose. Only prose is discarded - the citations/quote
+                    # already streamed live stay valid.
+                    full_text = ""
+                    buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                elif etype == "inspection":
+                    verdicts = dict(event.get("verdicts", {}))
+                    if event.get("decision") == "retry":
+                        full_text = ""
+                        buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                    else:
+                        for buffered_event in buffer:
+                            yield _sse(buffered_event)
+                        buffer = []
+                    # The raw "inspection" event is internal bookkeeping, never
+                    # forwarded to the customer surface.
+                else:
+                    buffer.append(event)
     except GraphRecursionError:
         await _record_limit_escalation(
             tenant_id=tenant_id,
@@ -218,44 +263,6 @@ async def _stream_chat_response(
         yield _sse({"type": "escalated"})
         yield _sse({"type": "done"})
         return
-
-    for event in events:
-        etype = event["type"]
-        if etype == "token":
-            full_text += str(event["text"])
-            buffer.append(event)
-        elif etype == "refusal":
-            # A refusal is always a complete, standalone message for its
-            # attempt - never combined with prior token events.
-            full_text = str(event["text"])
-            buffer = [event]
-        elif etype == "tool_call":
-            # T-030: a node invoked a tool - persisted against the assistant
-            # message below for the Surface-2 trace, never streamed to the
-            # customer.
-            tool_calls.append(event)
-        elif etype == "redraft":
-            # T-018/T-021: a gate rejected the draft text already
-            # accumulated; the producing node is about to stream fresh
-            # prose. Structured events (quote, citations) survive the
-            # discard - the quote row / retrieved chunks the redraft stays
-            # grounded in are unchanged, and the redraft paths never
-            # re-emit them.
-            full_text = ""
-            buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
-        elif etype == "inspection":
-            verdicts = dict(event.get("verdicts", {}))
-            if event.get("decision") == "retry":
-                full_text = ""
-                buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
-            else:
-                for buffered_event in buffer:
-                    yield _sse(buffered_event)
-                buffer = []
-            # The raw "inspection" event is internal bookkeeping, never
-            # forwarded to the customer surface.
-        else:
-            buffer.append(event)
 
     async with db.tenant_context(tenant_id, "customer") as conn:
         message_id = await conn.fetchval(

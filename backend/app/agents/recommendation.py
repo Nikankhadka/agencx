@@ -18,6 +18,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 from pydantic import BaseModel, Field
 
+from app.agents.drafting import stream_draft
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.core import db
@@ -93,12 +94,9 @@ async def run(state: AgentState) -> dict[str, Any]:
     # violations spelled out.
     violations = state.get("price_violations") or state.get("inspection_violations")
     if violations and state["selections"]:
-        redraft_text = ""
-        async for delta in ctx.provider.chat_stream(
-            _draft_messages(query, state["selections"], violations)
-        ):
-            redraft_text += delta
-            writer({"type": "token", "text": delta})
+        redraft_text = await stream_draft(
+            ctx.provider, _draft_messages(query, state["selections"], violations)
+        )
         # Clear both gates' violation keys - whichever gate re-checks this
         # redraft (price_gate, then possibly inspection) must only ever see
         # the violations IT found, never a stale set from the other gate's
@@ -156,9 +154,6 @@ async def run(state: AgentState) -> dict[str, Any]:
         for row in rows
     ]
 
-    full_text = ""
-    async for delta in ctx.provider.chat_stream(_draft_messages(query, selections)):
-        full_text += delta
-        writer({"type": "token", "text": delta})
+    full_text = await stream_draft(ctx.provider, _draft_messages(query, selections))
 
     return {"draft_response": full_text, "selections": selections}

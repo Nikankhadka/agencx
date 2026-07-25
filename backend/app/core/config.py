@@ -16,6 +16,14 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Deployment environment: 'local' | 'ci' | 'production'. Anything other than
+    # 'local'/'ci' is treated as a real deployment by the startup guard, which
+    # then refuses placeholder/empty secrets (app/core/startup.py).
+    environment: str = "local"
+
+    # Log level for the structured JSON logger (app/observability/logging.py).
+    log_level: str = "INFO"
+
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/wren"
     wren_app_db_password: str = "change-me"

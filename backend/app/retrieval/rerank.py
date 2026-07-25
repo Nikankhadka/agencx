@@ -69,25 +69,40 @@ class CohereReranker(Reranker):
 
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
+        # One connection-pooling client reused across calls (this reranker is
+        # process-cached via get_reranker_dependency), instead of paying a
+        # fresh TCP+TLS handshake per rerank. Created lazily so constructing
+        # the reranker never opens a socket. Closed by close_reranker() on
+        # app shutdown.
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def rerank(
         self, *, query: str, candidates: list[RetrievedChunk], top_k: int
     ) -> list[RetrievedChunk]:
         if not candidates:
             return []
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                _COHERE_RERANK_URL,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json={
-                    "model": _COHERE_MODEL,
-                    "query": query,
-                    "documents": [c.content for c in candidates],
-                    "top_n": top_k,
-                },
-            )
-            response.raise_for_status()
-            body = response.json()
+        response = await self._get_client().post(
+            _COHERE_RERANK_URL,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            json={
+                "model": _COHERE_MODEL,
+                "query": query,
+                "documents": [c.content for c in candidates],
+                "top_n": top_k,
+            },
+        )
+        response.raise_for_status()
+        body = response.json()
 
         return [
             replace(candidates[result["index"]], score=result["relevance_score"])

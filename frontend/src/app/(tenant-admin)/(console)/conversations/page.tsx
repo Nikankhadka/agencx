@@ -1,21 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Select";
 import { Table, type TableColumn } from "@/components/ui/Table";
-import { apiFetch, ApiError } from "@/lib/api";
-
-interface ConversationSummary {
-  id: string;
-  customer_ref: string | null;
-  status: string;
-  created_at: string;
-  message_count: number;
-}
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
+import type { ConversationSummary } from "@/lib/api-schemas";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -34,62 +27,47 @@ function formatDateTime(iso: string): string {
  */
 export default function ConversationsPage() {
   const router = useRouter();
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [status, setStatus] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = status === "all" ? "" : `?status=${status}`;
+  const { data, isPending, error } = useApiQuery<ConversationSummary[]>(
+    `/api/conversations${query}`,
+    { queryKey: ["conversations", status] },
+  );
+  const conversations = data ?? [];
 
-  useEffect(() => {
-    let active = true;
-    const query = status === "all" ? "" : `?status=${status}`;
-    apiFetch<ConversationSummary[]>(`/api/conversations${query}`)
-      .then((rows) => {
-        if (!active) return;
-        setConversations(rows);
-        setError(null);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof ApiError ? err.detail : "Failed to load conversations");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [status]);
-
-  const columns: TableColumn<ConversationSummary>[] = [
-    {
-      key: "customer_ref",
-      header: "Customer",
-      render: (row) => (
-        <Link
-          href={`/conversations/${row.id}`}
-          className="font-medium text-accent hover:text-accent-hover"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {row.customer_ref ?? "Anonymous"}
-        </Link>
-      ),
-    },
-    {
-      key: "created_at",
-      header: "Started",
-      render: (row) => formatDateTime(row.created_at),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => <Badge tone={toneForStatus(row.status)}>{row.status}</Badge>,
-    },
-    {
-      key: "message_count",
-      header: "Messages",
-      render: (row) => <span className="tabular-nums">{row.message_count}</span>,
-    },
-  ];
+  const columns: TableColumn<ConversationSummary>[] = useMemo(
+    () => [
+      {
+        key: "customer_ref",
+        header: "Customer",
+        render: (row) => (
+          <Link
+            href={`/conversations/${row.id}`}
+            className="font-medium text-accent hover:text-accent-hover"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.customer_ref ?? "Anonymous"}
+          </Link>
+        ),
+      },
+      {
+        key: "created_at",
+        header: "Started",
+        render: (row) => formatDateTime(row.created_at),
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (row) => <Badge tone={toneForStatus(row.status)}>{row.status}</Badge>,
+      },
+      {
+        key: "message_count",
+        header: "Messages",
+        render: (row) => <span className="tabular-nums">{row.message_count}</span>,
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="flex flex-col gap-6 p-8">
@@ -105,10 +83,7 @@ export default function ConversationsPage() {
           label="Filter by status"
           options={STATUS_OPTIONS}
           value={status}
-          onChange={(e) => {
-            setLoading(true);
-            setStatus(e.target.value);
-          }}
+          onChange={(e) => setStatus(e.target.value)}
         />
       </div>
 
@@ -116,8 +91,8 @@ export default function ConversationsPage() {
         columns={columns}
         rows={conversations}
         rowKey={(row) => row.id}
-        loading={loading}
-        error={error ?? undefined}
+        loading={isPending}
+        error={errorMessage(error, "Failed to load conversations") ?? undefined}
         onRowClick={(row) => router.push(`/conversations/${row.id}`)}
         emptyState={
           <EmptyState

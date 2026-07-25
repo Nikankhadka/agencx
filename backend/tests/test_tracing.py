@@ -57,6 +57,22 @@ def test_get_tracer_falls_back_to_noop_even_with_keys_set() -> None:
     assert isinstance(get_tracer(settings), NoOpTracer)
 
 
+def test_configured_but_unwired_tracer_warns_once(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keys set but no backend wired must not silently read as working
+    observability: it warns (once) that traces are not being emitted."""
+    import app.observability.tracing as tracing
+
+    monkeypatch.setattr(tracing, "_warned_unwired", False)
+    settings = Settings(langfuse_public_key="pk-test", langfuse_secret_key="sk-test")
+    with caplog.at_level("WARNING", logger="app.observability.tracing"):
+        get_tracer(settings)
+        get_tracer(settings)
+    warnings = [r for r in caplog.records if "NOT being emitted" in r.message]
+    assert len(warnings) == 1  # warned exactly once, not per turn
+
+
 # --- graph.py wrapper: proves a span opens per node --------------------------
 
 

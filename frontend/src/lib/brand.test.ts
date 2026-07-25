@@ -60,14 +60,11 @@ describe("deriveBrandVars", () => {
 });
 
 describe("brandStyle", () => {
-  it("emits a light-mode-scoped override for a valid accent", () => {
+  it("emits a :root override for a valid accent", () => {
     const css = brandStyle({ accent: "#2D6A4F" });
     expect(css).toContain("--color-accent:#2D6A4F;");
     expect(css).toContain("--color-focus-ring:#2D6A4F;");
-    expect(css).toContain("@media (prefers-color-scheme: light)");
-    expect(css).toContain(':root[data-theme="light"]');
-    // never an unscoped :root override - it would poison dark mode
-    expect(css).not.toMatch(/(^|})\s*:root\s*\{/);
+    expect(css).toContain(":root{");
   });
 
   it("returns null when the accent is absent or fails the gate", () => {

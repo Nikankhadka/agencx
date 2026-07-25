@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Sparkline } from "@/components/ui/Sparkline";
-import { apiFetch, ApiError } from "@/lib/api";
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 
 // --- API response shapes (mirror backend/app/api/dashboards.py Pydantic models).
 interface DailyCost {
@@ -104,55 +103,17 @@ function SectionError({ message, onRetry }: { message: string; onRetry: () => vo
  * loading/error state so one failing section never blanks the other.
  */
 export default function DashboardsPage() {
-  const [costs, setCosts] = useState<CostDashboard | null>(null);
-  const [costsLoading, setCostsLoading] = useState(true);
-  const [costsError, setCostsError] = useState<string | null>(null);
-  const [costsNonce, setCostsNonce] = useState(0);
+  // Two independent queries so one failing section never blanks the other.
+  const costsQuery = useApiQuery<CostDashboard>("/api/dashboards/costs");
+  const evalsQuery = useApiQuery<EvalDashboard>("/api/dashboards/evals");
 
-  const [evals, setEvals] = useState<EvalDashboard | null>(null);
-  const [evalsLoading, setEvalsLoading] = useState(true);
-  const [evalsError, setEvalsError] = useState<string | null>(null);
-  const [evalsNonce, setEvalsNonce] = useState(0);
+  const costs = costsQuery.data ?? null;
+  const costsLoading = costsQuery.isPending;
+  const costsError = errorMessage(costsQuery.error, "Failed to load cost metrics");
 
-  useEffect(() => {
-    let active = true;
-    apiFetch<CostDashboard>("/api/dashboards/costs")
-      .then((data) => {
-        if (!active) return;
-        setCosts(data);
-        setCostsError(null);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setCostsError(err instanceof ApiError ? err.detail : "Failed to load cost metrics");
-      })
-      .finally(() => {
-        if (active) setCostsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [costsNonce]);
-
-  useEffect(() => {
-    let active = true;
-    apiFetch<EvalDashboard>("/api/dashboards/evals")
-      .then((data) => {
-        if (!active) return;
-        setEvals(data);
-        setEvalsError(null);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setEvalsError(err instanceof ApiError ? err.detail : "Failed to load eval runs");
-      })
-      .finally(() => {
-        if (active) setEvalsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [evalsNonce]);
+  const evals = evalsQuery.data ?? null;
+  const evalsLoading = evalsQuery.isPending;
+  const evalsError = errorMessage(evalsQuery.error, "Failed to load eval runs");
 
   const thirtyDayTotal = costs
     ? costs.daily_costs.reduce((sum, d) => sum + d.cost_usd, 0)
@@ -170,14 +131,7 @@ export default function DashboardsPage() {
       <section className="flex flex-col gap-4">
         <h2 className="text-title-3 font-semibold text-text">Cost and volume</h2>
         {costsError ? (
-          <SectionError
-            message={costsError}
-            onRetry={() => {
-              setCostsError(null);
-              setCostsLoading(true);
-              setCostsNonce((n) => n + 1);
-            }}
-          />
+          <SectionError message={costsError} onRetry={() => costsQuery.refetch()} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
@@ -275,14 +229,7 @@ export default function DashboardsPage() {
       <section className="flex flex-col gap-4">
         <h2 className="text-title-3 font-semibold text-text">Eval runs</h2>
         {evalsError ? (
-          <SectionError
-            message={evalsError}
-            onRetry={() => {
-              setEvalsError(null);
-              setEvalsLoading(true);
-              setEvalsNonce((n) => n + 1);
-            }}
-          />
+          <SectionError message={evalsError} onRetry={() => evalsQuery.refetch()} />
         ) : evalsLoading && !evals ? (
           <div className="h-32 animate-pulse rounded-lg border border-border bg-surface-sunken" />
         ) : evals && evals.runs.length === 0 ? (
