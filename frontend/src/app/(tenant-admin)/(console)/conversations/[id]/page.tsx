@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
 import { ChatBubble, type ChatRole } from "@/components/ui/ChatBubble";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TraceTree, type TraceToolCall, type TraceCheckVerdict } from "@/components/ui/TraceTree";
-import { apiFetch, ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import { formatUsd } from "@/lib/money";
 
 interface MessageDetail {
@@ -50,37 +50,16 @@ function toChatRole(role: string): ChatRole {
 export default function ConversationDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const [conversation, setConversation] = useState<ConversationDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const {
+    data: conversation,
+    isPending,
+    error,
+  } = useApiQuery<ConversationDetail>(`/api/conversations/${id}`);
+  // A 404 (removed, or a cross-tenant id) gets its own calm not-found state
+  // rather than the generic error card.
+  const notFound = error instanceof ApiError && error.status === 404;
 
-  useEffect(() => {
-    let active = true;
-    apiFetch<ConversationDetail>(`/api/conversations/${id}`)
-      .then((data) => {
-        if (!active) return;
-        setConversation(data);
-        setError(null);
-        setNotFound(false);
-      })
-      .catch((err) => {
-        if (!active) return;
-        if (err instanceof ApiError && err.status === 404) {
-          setNotFound(true);
-        } else {
-          setError(err instanceof ApiError ? err.detail : "Failed to load conversation");
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  if (loading) {
+  if (isPending) {
     return (
       <div className="flex flex-col gap-3 p-8">
         <div className="h-6 w-48 animate-pulse rounded bg-surface-sunken" />
@@ -112,7 +91,7 @@ export default function ConversationDetailPage() {
     return (
       <div className="p-8">
         <div className="rounded-lg border border-border bg-surface p-6 text-body-sm text-danger">
-          {error ?? "Failed to load conversation"}
+          {errorMessage(error, "Failed to load conversation") ?? "Failed to load conversation"}
         </div>
       </div>
     );

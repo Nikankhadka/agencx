@@ -9,6 +9,7 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { Modal } from "@/components/ui/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 
 interface Tenant {
   id: string;
@@ -45,12 +46,11 @@ type ProvisionStep =
  * availability check, suspend/reactivate with a confirm modal.
  */
 export default function PlatformHome() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantsLoading, setTenantsLoading] = useState(true);
-  const [tenantsError, setTenantsError] = useState<string | null>(null);
-
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const tenantsQuery = useApiQuery<Tenant[]>("/api/platform/tenants");
+  const metricsQuery = useApiQuery<Metrics>("/api/platform/metrics");
+  const tenants = tenantsQuery.data ?? [];
+  const metrics = metricsQuery.data ?? null;
+  const metricsError = errorMessage(metricsQuery.error, "Failed to load metrics");
 
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [provisionStep, setProvisionStep] = useState<ProvisionStep>({ kind: "form" });
@@ -64,60 +64,6 @@ export default function PlatformHome() {
   const [confirmTarget, setConfirmTarget] = useState<Tenant | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-
-  function loadTenants() {
-    apiFetch<Tenant[]>("/api/platform/tenants")
-      .then((rows) => {
-        setTenants(rows);
-        setTenantsError(null);
-      })
-      .catch((err) => {
-        setTenantsError(err instanceof ApiError ? err.detail : "Failed to load tenants");
-      })
-      .finally(() => setTenantsLoading(false));
-  }
-
-  function loadMetrics() {
-    apiFetch<Metrics>("/api/platform/metrics")
-      .then((body) => {
-        setMetrics(body);
-        setMetricsError(null);
-      })
-      .catch((err) => {
-        setMetricsError(err instanceof ApiError ? err.detail : "Failed to load metrics");
-      });
-  }
-
-  // Mount-only load; loadTenants/loadMetrics are also called directly (not
-  // from an effect) after provision/suspend/reactivate mutations below.
-  useEffect(() => {
-    let active = true;
-    apiFetch<Tenant[]>("/api/platform/tenants")
-      .then((rows) => {
-        if (!active) return;
-        setTenants(rows);
-        setTenantsError(null);
-      })
-      .catch((err) => {
-        if (active) setTenantsError(err instanceof ApiError ? err.detail : "Failed to load tenants");
-      })
-      .finally(() => {
-        if (active) setTenantsLoading(false);
-      });
-    apiFetch<Metrics>("/api/platform/metrics")
-      .then((body) => {
-        if (active) {
-          setMetrics(body);
-          setMetricsError(null);
-        }
-      })
-      .catch((err) => {
-        if (active) setMetricsError(err instanceof ApiError ? err.detail : "Failed to load metrics");
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const slugFormatValid = SLUG_RE.test(slug) && slug.length >= 3;
 
@@ -165,8 +111,8 @@ export default function PlatformHome() {
         body: JSON.stringify({ name, slug }),
       });
       setProvisionStep({ kind: "success", note: body.note });
-      void loadTenants();
-      void loadMetrics();
+      void tenantsQuery.refetch();
+      void metricsQuery.refetch();
     } catch (err) {
       setProvisionError(err instanceof ApiError ? err.detail : "Failed to provision tenant");
     } finally {
@@ -183,7 +129,7 @@ export default function PlatformHome() {
         body: JSON.stringify({ status: nextStatus }),
       });
       setConfirmTarget(null);
-      void loadTenants();
+      void tenantsQuery.refetch();
     } catch (err) {
       setConfirmError(err instanceof ApiError ? err.detail : "Failed to update tenant");
     } finally {
@@ -262,8 +208,8 @@ export default function PlatformHome() {
         columns={columns}
         rows={tenants}
         rowKey={(t) => t.id}
-        loading={tenantsLoading}
-        error={tenantsError ?? undefined}
+        loading={tenantsQuery.isPending}
+        error={errorMessage(tenantsQuery.error, "Failed to load tenants") ?? undefined}
         emptyState={
           <EmptyState
             icon="groups"

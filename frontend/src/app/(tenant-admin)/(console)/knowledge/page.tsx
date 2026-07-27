@@ -1,20 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Select } from "@/components/ui/Select";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { apiFetch, ApiError } from "@/lib/api";
-
-interface Document {
-  id: string;
-  filename: string;
-  doc_type: string;
-  status: string;
-  error: string | null;
-}
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
+import type { DocumentResponse as Document } from "@/lib/api-schemas";
 
 interface UploadRow {
   key: string;
@@ -39,35 +33,10 @@ const ACCEPT = ".md,.txt,.pdf,.csv,.json";
  * re-uploads the same file under the same doc_type from the in-page list.
  */
 export default function KnowledgePage() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
+  const documentsQuery = useApiQuery<Document[]>("/api/knowledge");
+  const documents = documentsQuery.data ?? [];
   const [docType, setDocType] = useState(DOC_TYPE_OPTIONS[0]?.value ?? "other");
   const [uploads, setUploads] = useState<UploadRow[]>([]);
-
-  async function refresh() {
-    try {
-      const docs = await apiFetch<Document[]>("/api/knowledge");
-      setDocuments(docs);
-      setListError(null);
-    } catch (err) {
-      setListError(err instanceof ApiError ? err.detail : "Failed to load documents");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    apiFetch<Document[]>("/api/knowledge")
-      .then((docs) => {
-        setDocuments(docs);
-        setListError(null);
-      })
-      .catch((err) => {
-        setListError(err instanceof ApiError ? err.detail : "Failed to load documents");
-      })
-      .finally(() => setLoading(false));
-  }, []);
 
   async function uploadOne(file: File) {
     const key = `${file.name}-${Date.now()}`;
@@ -82,7 +51,7 @@ export default function KnowledgePage() {
       setUploads((prev) =>
         prev.map((row) => (row.key === key ? { ...row, status: "done" } : row))
       );
-      await refresh();
+      await documentsQuery.refetch();
     } catch (err) {
       const reason = err instanceof ApiError ? err.detail : "Upload failed";
       setUploads((prev) =>
@@ -153,8 +122,8 @@ export default function KnowledgePage() {
         columns={columns}
         rows={documents}
         rowKey={(doc) => doc.id}
-        loading={loading}
-        error={listError ?? undefined}
+        loading={documentsQuery.isPending}
+        error={errorMessage(documentsQuery.error, "Failed to load documents") ?? undefined}
         emptyState={
           <EmptyState
             title="No documents yet"

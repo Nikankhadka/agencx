@@ -1,21 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { apiFetch, ApiError } from "@/lib/api";
-
-interface Escalation {
-  id: string;
-  conversation_id: string;
-  reason: string;
-  status: string;
-  created_at: string;
-  resolved_at: string | null;
-}
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
+import type { EscalationResponse as Escalation } from "@/lib/api-schemas";
 
 function formatAge(iso: string): string {
   const then = new Date(iso).getTime();
@@ -35,44 +28,12 @@ function formatAge(iso: string): string {
  * else already moved the row) refetches rather than crashing.
  */
 export default function EscalationsPage() {
-  const [escalations, setEscalations] = useState<Escalation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const escalationsQuery = useApiQuery<Escalation[]>("/api/escalations");
+  const escalations = escalationsQuery.data ?? [];
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolveMessage, setResolveMessage] = useState("");
   const [rowError, setRowError] = useState<Record<string, string>>({});
-
-  async function refresh() {
-    try {
-      const rows = await apiFetch<Escalation[]>("/api/escalations");
-      setEscalations(rows);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Failed to load escalations");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    let active = true;
-    apiFetch<Escalation[]>("/api/escalations")
-      .then((rows) => {
-        if (!active) return;
-        setEscalations(rows);
-        setError(null);
-      })
-      .catch((err) => {
-        if (active) setError(err instanceof ApiError ? err.detail : "Failed to load escalations");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function setErrorFor(id: string, message: string | null) {
     setRowError((prev) => {
@@ -88,12 +49,12 @@ export default function EscalationsPage() {
     setErrorFor(id, null);
     try {
       await apiFetch(`/api/escalations/${id}/claim`, { method: "POST" });
-      await refresh();
+      await escalationsQuery.refetch();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Someone else already moved it - resync the row rather than crash.
         setErrorFor(id, err.detail);
-        await refresh();
+        await escalationsQuery.refetch();
       } else {
         setErrorFor(id, err instanceof ApiError ? err.detail : "Failed to claim");
       }
@@ -113,12 +74,12 @@ export default function EscalationsPage() {
       });
       setResolvingId(null);
       setResolveMessage("");
-      await refresh();
+      await escalationsQuery.refetch();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setErrorFor(id, err.detail);
         setResolvingId(null);
-        await refresh();
+        await escalationsQuery.refetch();
       } else {
         setErrorFor(id, err instanceof ApiError ? err.detail : "Failed to resolve");
       }
@@ -231,8 +192,8 @@ export default function EscalationsPage() {
         columns={columns}
         rows={escalations}
         rowKey={(row) => row.id}
-        loading={loading}
-        error={error ?? undefined}
+        loading={escalationsQuery.isPending}
+        error={errorMessage(escalationsQuery.error, "Failed to load escalations") ?? undefined}
         emptyState={
           <EmptyState
             title="Nothing needs you right now."

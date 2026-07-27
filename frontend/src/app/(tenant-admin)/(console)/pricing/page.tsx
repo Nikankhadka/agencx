@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import { formatCents } from "@/lib/money";
 
 interface PricingRule {
@@ -55,62 +56,15 @@ const INPUT_CLASS =
  * the PATCH render inline, never as an alert.
  */
 export default function PricingPage() {
-  const [rules, setRules] = useState<PricingRule[]>([]);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [rulesLoading, setRulesLoading] = useState(true);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [rulesError, setRulesError] = useState<string | null>(null);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const rulesQuery = useApiQuery<PricingRule[]>("/api/pricing/rules");
+  const catalogQuery = useApiQuery<CatalogItem[]>("/api/pricing/catalog");
+  const rules = rulesQuery.data ?? [];
+  const catalog = catalogQuery.data ?? [];
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<RuleDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-
-  async function loadRules() {
-    try {
-      const rows = await apiFetch<PricingRule[]>("/api/pricing/rules");
-      setRules(rows);
-      setRulesError(null);
-    } catch (err) {
-      setRulesError(err instanceof ApiError ? err.detail : "Failed to load pricing rules");
-    } finally {
-      setRulesLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    let active = true;
-    apiFetch<PricingRule[]>("/api/pricing/rules")
-      .then((rows) => {
-        if (!active) return;
-        setRules(rows);
-        setRulesError(null);
-      })
-      .catch((err) => {
-        if (active)
-          setRulesError(err instanceof ApiError ? err.detail : "Failed to load pricing rules");
-      })
-      .finally(() => {
-        if (active) setRulesLoading(false);
-      });
-    apiFetch<CatalogItem[]>("/api/pricing/catalog")
-      .then((rows) => {
-        if (!active) return;
-        setCatalog(rows);
-        setCatalogError(null);
-      })
-      .catch((err) => {
-        if (active)
-          setCatalogError(err instanceof ApiError ? err.detail : "Failed to load catalog");
-      })
-      .finally(() => {
-        if (active) setCatalogLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function startEdit(rule: PricingRule) {
     setEditingId(rule.id);
@@ -146,7 +100,7 @@ export default function PricingPage() {
         }),
       });
       cancelEdit();
-      await loadRules();
+      await rulesQuery.refetch();
     } catch (err) {
       // 422 (validation) / 409 (duplicate code) render inline per frontend.md.
       setEditError(err instanceof ApiError ? err.detail : "Failed to save changes");
@@ -317,8 +271,8 @@ export default function PricingPage() {
           columns={ruleColumns}
           rows={rules}
           rowKey={(rule) => rule.id}
-          loading={rulesLoading}
-          error={rulesError ?? undefined}
+          loading={rulesQuery.isPending}
+          error={errorMessage(rulesQuery.error, "Failed to load pricing rules") ?? undefined}
           emptyState={
             <EmptyState
               title="No pricing rules yet"
@@ -334,8 +288,8 @@ export default function PricingPage() {
           columns={catalogColumns}
           rows={catalog}
           rowKey={(item) => item.id}
-          loading={catalogLoading}
-          error={catalogError ?? undefined}
+          loading={catalogQuery.isPending}
+          error={errorMessage(catalogQuery.error, "Failed to load catalog") ?? undefined}
           emptyState={
             <EmptyState
               title="No catalog items yet"
