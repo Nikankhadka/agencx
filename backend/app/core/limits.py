@@ -47,6 +47,10 @@ _USAGE_CACHE_TTL_S = 10.0
 
 BUDGET_ESCALATION_REASON = "budget"
 STEP_CAP_ESCALATION_REASON = "step_cap"
+# An unexpected failure mid-turn (provider returned garbage, a node raised).
+# The turn cannot be completed, so it escalates like any other dead end rather
+# than leaving the customer's stream hanging with no terminal event.
+PROVIDER_ERROR_ESCALATION_REASON = "provider_error"
 
 BUDGET_UNAVAILABLE_MESSAGE = (
     "We're unable to answer automatically right now, so I'm passing this to a "

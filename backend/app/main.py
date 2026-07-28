@@ -23,8 +23,9 @@ from app.api import (
 from app.core import db
 from app.core.config import get_settings
 from app.core.startup import check_startup_config
+from app.llm.dependency import get_embedder_dependency
 from app.observability.logging import RequestContextMiddleware, configure_logging
-from app.retrieval.dependency import close_reranker
+from app.retrieval.dependency import close_reranker, get_reranker_dependency
 
 # The frontend and backend are always different origins - three tenant-facing
 # subdomains in dev (localhost:3000) and prod ({slug|admin|app}.wren.app), none
@@ -33,6 +34,26 @@ from app.retrieval.dependency import close_reranker
 _ALLOWED_ORIGIN_REGEX = r"^https?://([a-z0-9-]+\.)?(localhost|wren\.app)(:\d+)?$"
 
 logger = logging.getLogger("app.main")
+
+
+async def _warm_local_models() -> None:
+    """Load the local embedder/reranker models now rather than on the first
+    customer message.
+
+    Both are lazily loaded on first use, so before this the first chat of a
+    fresh process paid the full sentence-transformers import plus two model
+    loads inside the turn. Warming is best-effort: a failure here (e.g. no
+    network on a cold HF cache) must not stop the app from booting, since the
+    same load would simply be retried on first use.
+    """
+    for name, component in (
+        ("embedder", get_embedder_dependency()),
+        ("reranker", get_reranker_dependency()),
+    ):
+        try:
+            await component.warm()
+        except Exception:
+            logger.warning("could not warm %s; it will load on first use", name, exc_info=True)
 
 
 @asynccontextmanager
@@ -55,6 +76,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except RuntimeError:
         await db.create_pool()
         created_here = True
+    await _warm_local_models()
     try:
         yield
     finally:

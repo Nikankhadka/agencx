@@ -40,6 +40,13 @@ class Embedder(ABC):
         Every vector has exactly ``settings.embedding_dim`` dimensions."""
         raise NotImplementedError
 
+    async def warm(self) -> None:
+        """Pre-load any lazily initialized model so the first real request does
+        not pay for it. Deliberately concrete (not abstract) and a no-op by
+        default: hosted backends have nothing to warm, and making it abstract
+        would break every existing test double for no benefit."""
+        return None
+
 
 class LocalEmbedder(Embedder):
     """sentence-transformers embedder - the free, keyless default.
@@ -60,6 +67,9 @@ class LocalEmbedder(Embedder):
 
             self._model = SentenceTransformer(self._model_name)
         return self._model
+
+    async def warm(self) -> None:
+        await run_in_threadpool(self._load_model)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:

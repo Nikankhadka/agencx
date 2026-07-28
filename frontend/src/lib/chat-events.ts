@@ -9,15 +9,42 @@ import type { QuotePayload } from "@/components/ui/QuoteCard";
  * parser below is the one guarded entry point (a malformed or partial frame
  * must never abort an in-progress stream).
  */
+/**
+ * Which stage of the agent graph is currently running. The backend emits these
+ * as fixed machine keys (app/agents/graph.py `_PROGRESS_STAGES`) and never as
+ * display text, so all customer-facing copy lives here on the frontend.
+ */
+export type ProgressStage =
+  | "routing"
+  | "answering"
+  | "quoting"
+  | "checking"
+  | "escalating";
+
 export type ChatStreamEvent =
   | { type: "conversation"; conversation_id: string }
   | { type: "citations"; citations: Citation[] }
   | { type: "quote"; quote: QuotePayload }
+  | { type: "progress"; stage: ProgressStage }
   | { type: "redraft" }
   | { type: "token"; text: string }
   | { type: "refusal"; text: string }
   | { type: "escalated" }
   | { type: "done" };
+
+/**
+ * Customer-facing label for each stage. A turn runs several LLM calls in series
+ * and nothing the model writes may be shown until inspection clears it, so
+ * without this the customer stares at an unexplained pause; naming the current
+ * stage makes that wait legible rather than making it shorter.
+ */
+export const PROGRESS_LABELS: Record<ProgressStage, string> = {
+  routing: "Understanding your question…",
+  answering: "Finding an answer…",
+  quoting: "Preparing your quote…",
+  checking: "Checking the answer…",
+  escalating: "Connecting you to a human…",
+};
 
 /**
  * Parse one SSE `data:` payload into a typed event, or `null` if it is not

@@ -20,6 +20,8 @@ verdicts onto the assistant message row for the Surface-2 trace viewer.
 from __future__ import annotations
 
 import json
+import logging
+import time
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
@@ -37,6 +39,7 @@ from app.core import config, db
 from app.core.limits import (
     BUDGET_ESCALATION_REASON,
     BUDGET_UNAVAILABLE_MESSAGE,
+    PROVIDER_ERROR_ESCALATION_REASON,
     STEP_CAP_ESCALATION_REASON,
     TenantLimits,
     TimeLimitedProvider,
@@ -49,6 +52,8 @@ from app.observability.cost import collect_usage, record_costs
 from app.observability.tracing import get_tracer
 from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
+
+logger = logging.getLogger("app.api.chat")
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -169,6 +174,14 @@ async def _stream_chat_response(
     verdicts: dict[str, object] = {}
     tool_calls: list[dict[str, object]] = []
     tracer = get_tracer(config.get_settings())
+    # Latency baseline. The gap between first_model_token_ms (the model started
+    # producing prose) and first_prose_ms (the customer was first allowed to see
+    # any of it) is exactly what the T-021 inspection buffer costs in perceived
+    # latency - measured rather than asserted, since the buffer is a ratified
+    # scope decision (US-060) and is not going to be removed to chase it.
+    turn_started = time.perf_counter()
+    first_model_token_ms: float | None = None
+    first_prose_ms: float | None = None
     try:
         # T-030: one trace per turn (a no-op unless Langfuse keys are set),
         # and collect every LLM call's token usage for the whole turn so a
@@ -206,13 +219,21 @@ async def _stream_chat_response(
             # until a draft is approved - the T-021 invariant is unchanged.
             async for event in stream:
                 etype = event["type"]
-                if etype in ("citations", "quote"):
+                if etype == "progress":
+                    # D5: a fixed stage key naming the node now running. Carries
+                    # no model output at all, so streaming it live narrates the
+                    # wait without letting any unverified prose reach the
+                    # customer - the T-021/US-060 invariant is untouched.
+                    yield _sse(event)
+                elif etype in ("citations", "quote"):
                     # Non-prose, and unchanged by a redraft (the quote row and
                     # the retrieved chunks a redraft stays grounded in don't
                     # move, and the redraft paths never re-emit them), so it is
                     # safe to show immediately instead of holding it back.
                     yield _sse(event)
                 elif etype == "token":
+                    if first_model_token_ms is None:
+                        first_model_token_ms = round((time.perf_counter() - turn_started) * 1000, 1)
                     full_text += str(event["text"])
                     buffer.append(event)
                 elif etype == "refusal":
@@ -238,6 +259,10 @@ async def _stream_chat_response(
                         full_text = ""
                         buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
                     else:
+                        if first_prose_ms is None and any(
+                            e["type"] in ("token", "refusal") for e in buffer
+                        ):
+                            first_prose_ms = round((time.perf_counter() - turn_started) * 1000, 1)
                         for buffered_event in buffer:
                             yield _sse(buffered_event)
                         buffer = []
@@ -256,6 +281,29 @@ async def _stream_chat_response(
         # tripped - by definition more than a normal turn's worth. Its usage
         # must land in cost_logs or step-capped turns are invisible to the
         # T-028 daily budget, which sums exactly that table.
+        if usages:
+            async with db.tenant_context(tenant_id, "customer") as conn:
+                await record_costs(conn, tenant_id, conversation_id, usages)
+        yield _sse({"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE})
+        yield _sse({"type": "escalated"})
+        yield _sse({"type": "done"})
+        return
+    except Exception:
+        # Anything else that kills a turn mid-flight (observed live: OpenRouter
+        # forwarding an upstream failure as a 200 with choices=null, which blew
+        # up inside the OpenAI SDK's parser). Without this the generator simply
+        # stopped: the SSE stream ended with no terminal event and the
+        # customer's chat bubble span forever, which reads as infinite latency.
+        # Escalate like any other dead end so the turn always terminates.
+        logger.exception("chat turn failed mid-stream; escalating")
+        await _record_limit_escalation(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            reason=PROVIDER_ERROR_ESCALATION_REASON,
+            message=BUDGET_UNAVAILABLE_MESSAGE,
+        )
+        # The failed turn still burned tokens before it died; they belong in
+        # cost_logs for the same reason the step-cap path records its own.
         if usages:
             async with db.tenant_context(tenant_id, "customer") as conn:
                 await record_costs(conn, tenant_id, conversation_id, usages)
@@ -289,6 +337,24 @@ async def _stream_chat_response(
                 call.get("latency_ms"),
             )
         await record_costs(conn, tenant_id, conversation_id, usages)
+    logger.info(
+        "chat turn",
+        extra={
+            "total_ms": round((time.perf_counter() - turn_started) * 1000, 1),
+            # None when the turn produced no prose at all (a deterministic
+            # order_status/escalation draft never emits token events).
+            "first_model_token_ms": first_model_token_ms,
+            "first_prose_ms": first_prose_ms,
+            # What the inspection buffer costs this turn: prose existed this
+            # much earlier than the customer was allowed to see it.
+            "buffer_hold_ms": (
+                round(first_prose_ms - first_model_token_ms, 1)
+                if first_model_token_ms is not None and first_prose_ms is not None
+                else None
+            ),
+            "chars": len(full_text),
+        },
+    )
     yield _sse({"type": "done"})
 
 

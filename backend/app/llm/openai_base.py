@@ -21,7 +21,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import httpx
-from openai import RateLimitError
+from openai import LengthFinishReasonError, RateLimitError
 from pydantic import ValidationError
 
 from app.llm.provider import ChatMessage, LLMProvider, SchemaT
@@ -44,6 +44,33 @@ SDK_TIMEOUT = httpx.Timeout(SDK_TIMEOUT_S, connect=CONNECT_TIMEOUT_S)
 # be cancelled by the outer timeout anyway.
 _RETRY_ATTEMPTS = 3
 _MAX_BACKOFF_S = 20.0
+
+
+class UpstreamResponseError(RuntimeError):
+    """The endpoint returned a 200 whose body is not a usable completion.
+
+    Observed live against OpenRouter: when the upstream provider behind a
+    ``:free`` model fails or is congested, the gateway forwards an
+    ``{"error": ...}`` body with ``choices: null`` under a 200 status. The
+    OpenAI SDK then iterates that null inside ``parse_chat_completion`` and
+    raises a bare ``TypeError: 'NoneType' object is not iterable``, which is
+    neither a ``RateLimitError`` nor a ``ValidationError`` - so before this
+    class existed it escaped the retry below and killed the whole turn (the
+    customer's SSE stream died mid-flight with no terminal event, leaving the
+    chat bubble spinning forever).
+
+    It is transient in practice, so it is retried like a 429.
+    """
+
+
+def _require_choices(completion: Any) -> None:
+    """Raise a retryable error if a completion carries no choices, instead of
+    letting an opaque TypeError/IndexError surface from attribute access."""
+    if not getattr(completion, "choices", None):
+        raise UpstreamResponseError(
+            "provider returned a response with no choices (likely an upstream "
+            "error body forwarded under a 200)"
+        )
 
 
 def _report(model: str, usage: Any) -> None:
@@ -74,6 +101,15 @@ async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
     for attempt in range(_RETRY_ATTEMPTS):
         try:
             return await factory()
+        except UpstreamResponseError:
+            if attempt == _RETRY_ATTEMPTS - 1:
+                raise
+            logger.warning(
+                "llm returned an unusable response body; retrying (attempt %d/%d)",
+                attempt + 1,
+                _RETRY_ATTEMPTS,
+            )
+            await asyncio.sleep(1.0)
         except RateLimitError as error:
             if attempt == _RETRY_ATTEMPTS - 1:
                 raise
@@ -103,23 +139,61 @@ class OpenAISDKProvider(LLMProvider):
     """Common OpenAI-SDK chat/extract/stream behavior. Subclasses only build
     the async client and pass the model (or Azure deployment) identifier."""
 
-    def __init__(self, client: Any, model_id: str) -> None:
+    def __init__(
+        self,
+        client: Any,
+        model_id: str,
+        *,
+        max_tokens_draft: int = 0,
+        max_tokens_extract: int = 0,
+    ) -> None:
         self._client = client
         self._model = model_id
+        self._max_tokens_draft = max_tokens_draft
+        self._max_tokens_extract = max_tokens_extract
+
+    def _cap(self, tokens: int) -> dict[str, int]:
+        """Kwargs for an output cap, or nothing when the cap is disabled (0).
+        Spread into the call so an uncapped provider sends no max_tokens field
+        at all, exactly as before this existed."""
+        return {"max_tokens": tokens} if tokens > 0 else {}
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
         async def _call() -> SchemaT:
-            completion = await self._client.chat.completions.parse(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input},
-                ],
-                response_format=schema,
-            )
+            try:
+                completion = await self._client.chat.completions.parse(
+                    model=self._model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_input},
+                    ],
+                    response_format=schema,
+                    **self._cap(self._max_tokens_extract),
+                )
+            except LengthFinishReasonError as error:
+                # The output cap was hit before the model finished the JSON.
+                # Retrying is pointless (same cap, same outcome), so fail with
+                # the actual cause named. Overwhelmingly this means the cap is
+                # too low for a REASONING model, whose hidden thinking tokens
+                # are spent before any answer is emitted.
+                raise ValueError(
+                    "structured output hit the "
+                    f"{self._max_tokens_extract}-token LLM_MAX_TOKENS_EXTRACT cap before "
+                    "completing. If this model is a reasoning model, its thinking tokens "
+                    "consume that budget first - raise the cap or set it to 0 (uncapped)."
+                ) from error
+            except TypeError as error:
+                # The SDK iterates completion.choices inside its own parser, so
+                # a null-choices error body surfaces here as a bare TypeError
+                # before any of our code can inspect it. Narrow re-raise, so it
+                # joins the retry path instead of aborting the turn.
+                raise UpstreamResponseError(
+                    "provider returned an unparseable completion body"
+                ) from error
             _report(self._model, completion.usage)
+            _require_choices(completion)
             parsed = completion.choices[0].message.parsed
             if parsed is None:
                 raise ValueError("model produced no parseable structured output")
@@ -132,8 +206,10 @@ class OpenAISDKProvider(LLMProvider):
             completion = await self._client.chat.completions.create(
                 model=self._model,
                 messages=[dict(message) for message in messages],
+                **self._cap(self._max_tokens_draft),
             )
             _report(self._model, completion.usage)
+            _require_choices(completion)
             content = completion.choices[0].message.content
             if content is None:
                 raise ValueError("model produced no chat content")
@@ -152,6 +228,7 @@ class OpenAISDKProvider(LLMProvider):
                 stream=True,
                 # Ask for a final usage-only chunk so streamed calls are costed too.
                 stream_options={"include_usage": True},
+                **self._cap(self._max_tokens_draft),
             )
 
         stream = await _with_retry(_open)

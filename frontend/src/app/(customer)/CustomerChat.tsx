@@ -8,7 +8,7 @@ import { StreamingText } from "@/components/ui/StreamingText";
 import { CitationChip, type Citation } from "@/components/ui/CitationChip";
 import { QuoteCard, type QuotePayload } from "@/components/ui/QuoteCard";
 import { EscalationBanner } from "@/components/ui/EscalationBanner";
-import { parseChatStreamEvent } from "@/lib/chat-events";
+import { PROGRESS_LABELS, parseChatStreamEvent, type ProgressStage } from "@/lib/chat-events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -64,6 +64,9 @@ export function CustomerChat({
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [escalated, setEscalated] = useState(false);
+  // Which agent stage is running right now, for the live region below. Null
+  // between turns; the backend sends one of these per graph node.
+  const [stage, setStage] = useState<ProgressStage | null>(null);
   // Starter chips only make sense before the customer has said anything -
   // hidden the moment the first real message goes out, never shown again.
   const [showStarters, setShowStarters] = useState(starterQuestions.length > 0);
@@ -141,6 +144,7 @@ export function CustomerChat({
     const trimmed = text.trim();
     if (!trimmed || busy || escalated) return;
     setBusy(true);
+    setStage(null);
     setInput("");
     setShowStarters(false);
     setMessages((prev) => [
@@ -189,6 +193,9 @@ export function CustomerChat({
             case "quote":
               updateLastAssistant(() => ({ quote: event.quote }));
               break;
+            case "progress":
+              setStage(event.stage);
+              break;
             case "redraft":
               // The backend's price gate rejected the streamed draft and is
               // streaming a replacement - clear the rejected text.
@@ -233,6 +240,7 @@ export function CustomerChat({
     } finally {
       abortRef.current = null;
       setBusy(false);
+      setStage(null);
     }
   }
 
@@ -293,7 +301,7 @@ export function CustomerChat({
               region, but often miss one that appears and disappears with its
               content in the same render. */}
           <p className="h-4 text-footnote text-text-secondary" aria-live="polite">
-            {busy ? "Answering…" : ""}
+            {busy ? (stage ? PROGRESS_LABELS[stage] : "Answering…") : ""}
           </p>
           <div className="flex items-end gap-2">
             <div className="flex-1">

@@ -41,6 +41,24 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    # Output caps, 0 = uncapped (the default, and the behavior before these
+    # existed).
+    #
+    # DO NOT set these without checking whether the configured model is a
+    # REASONING model. Reasoning models (the current default,
+    # nvidia/nemotron-3-super-*, and any o1/R1-class model) spend their output
+    # budget on hidden thinking tokens BEFORE emitting an answer, and those
+    # count against max_tokens. Measured here: a 256-token cap on a structured
+    # extract was fully consumed by ~300 reasoning tokens, so the model emitted
+    # no JSON at all and every turn died with LengthFinishReasonError. A cap
+    # that looks generous for the visible answer can still be far too small.
+    #
+    # They are kept as knobs because on a NON-reasoning model, capping the
+    # draft is a real latency win (the draft was 23s of a measured 37s turn,
+    # scaling with emitted prose). Set them per-model, never blindly.
+    llm_max_tokens_draft: int = 0
+    llm_max_tokens_extract: int = 0
+
     # Azure OpenAI (used when llm_provider='azure' and/or embedder='azure')
     azure_openai_endpoint: str = ""
     azure_openai_api_key: str = ""

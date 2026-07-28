@@ -351,7 +351,14 @@ async def test_rejected_draft_never_reaches_the_stream_and_citations_survive(
     body = "".join(chunks)
     assert "REJECTED-DRAFT" not in body
     events = [json.loads(chunk.removeprefix("data: ")) for chunk in chunks]
-    types = [event["type"] for event in events]
+    # D5 progress events are non-prose stage markers emitted per graph node, so
+    # they interleave with (and outnumber) the prose here. Assert them for what
+    # they must be - carrying no model text at all, which is why streaming them
+    # live cannot weaken T-021 - then exclude them so the sequence assertion
+    # below stays a statement about the PROSE the customer receives.
+    assert [e for e in events if e["type"] == "progress"], "expected progress narration"
+    assert all(set(e) == {"type", "stage"} for e in events if e["type"] == "progress")
+    types = [event["type"] for event in events if event["type"] != "progress"]
     assert types == ["conversation", "citations"] + ["token"] * 5 + ["done"]
     streamed = "".join(e["text"] for e in events if e["type"] == "token")
     assert streamed == "We are open weekdays 9-5. "

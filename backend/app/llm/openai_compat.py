@@ -32,4 +32,9 @@ class OpenAICompatProvider(OpenAISDKProvider):
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
         )
-        super().__init__(client, settings.llm_model)
+        super().__init__(
+            client,
+            settings.llm_model,
+            max_tokens_draft=settings.llm_max_tokens_draft,
+            max_tokens_extract=settings.llm_max_tokens_extract,
+        )

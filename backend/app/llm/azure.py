@@ -27,4 +27,9 @@ class AzureOpenAIProvider(OpenAISDKProvider):
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
         )
-        super().__init__(client, settings.azure_openai_chat_deployment)
+        super().__init__(
+            client,
+            settings.azure_openai_chat_deployment,
+            max_tokens_draft=settings.llm_max_tokens_draft,
+            max_tokens_extract=settings.llm_max_tokens_extract,
+        )

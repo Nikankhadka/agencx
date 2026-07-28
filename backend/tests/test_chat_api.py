@@ -67,6 +67,14 @@ def _parse_sse(text: str) -> list[dict[str, Any]]:
     return events
 
 
+def _without_progress(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop the D5 progress events (one per graph node, carrying only a stage
+    key and never any model text) so a test can assert the sequence of prose
+    the customer actually receives. Their own contract is pinned in
+    test_inspection.py rather than re-asserted in every stream test."""
+    return [event for event in events if event["type"] != "progress"]
+
+
 @pytest_asyncio.fixture
 async def client(migrated_db: str) -> AsyncIterator[httpx.AsyncClient]:
     await db.create_pool(dsn=_app_dsn_for(migrated_db), min_size=1, max_size=4)
@@ -126,9 +134,10 @@ async def test_chat_happy_path_streams_citations_and_tokens(
     assert response.status_code == 200
     events = _parse_sse(response.text)
 
-    types = [event["type"] for event in events]
+    prose = _without_progress(events)
+    types = [event["type"] for event in prose]
     assert types == ["conversation", "citations"] + ["token"] * 7 + ["done"]
-    assert events[1]["citations"][0]["source"] == "faq.md"
+    assert prose[1]["citations"][0]["source"] == "faq.md"
     full_text = "".join(e["text"] for e in events if e["type"] == "token")
     assert full_text == "Sure, here's the answer [1]."
 
@@ -170,9 +179,10 @@ async def test_chat_refuses_when_nothing_is_relevant(
     assert response.status_code == 200
     events = _parse_sse(response.text)
 
-    assert events[1]["type"] == "refusal"
-    assert events[1]["text"] == REFUSAL_MESSAGE
-    assert events[-1]["type"] == "done"
+    prose = _without_progress(events)
+    assert prose[1]["type"] == "refusal"
+    assert prose[1]["text"] == REFUSAL_MESSAGE
+    assert prose[-1]["type"] == "done"
     assert not any(e["type"] == "citations" for e in events)
 
 
