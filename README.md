@@ -98,7 +98,7 @@ Prerequisites: Node 22+, [uv](https://docs.astral.sh/uv/), Docker.
 ### One command (demo-ready)
 
 ```bash
-./scripts/demo.sh
+make demo
 ```
 
 Starts a local GoTrue (Supabase Auth) + the database, fixes env files, runs
@@ -106,27 +106,29 @@ migrations and a seeded demo world (two tenants, three logins), and brings up
 the backend + frontend. See [`docs/DEMO.md`](docs/DEMO.md) for the full
 walkthrough, credentials, and troubleshooting.
 
-### Manual
+### Manual (step by step)
 
 ```bash
-# database (Postgres + pgvector)
-docker compose up -d db
-
-# backend
-cd backend
-uv sync
-uv run python -m app.core.migrate
-uv run uvicorn app.main:app --reload          # http://localhost:8000/health
-
-# frontend
-cd frontend
-npm install
-npm run dev                                   # http://localhost:3000
+make db         # Postgres + pgvector
+make install    # install all deps (frontend + backend)
+make migrate    # apply schema
+make dev        # backend (:8000) + frontend (:3000) concurrently
 ```
 
-Copy `.env.example` to `.env` and fill in values as tickets wire up each service (Supabase, Azure OpenAI, Langfuse). To seed the sample tenant: `cd backend && uv run python -m seeds.seed_tenant1_phoneshop`, then open http://bytefix.localhost:3000. For the full demo world (two tenants + auth users + conversations), run `./scripts/demo.sh` or `cd backend && uv run python -m seeds.seed_demo` (needs local GoTrue - see docs/DEMO.md).
+See [`AGENTS.md`](AGENTS.md) for the full command reference - lint, test,
+typecheck, eval, CI, per-service dev servers, and more.
 
-The verified build/lint/test commands live in [`AGENTS.md`](AGENTS.md).
+Copy `.env.example` to `.env` and fill in values as tickets wire up each
+service (Supabase, Azure OpenAI, Langfuse). To seed a tenant:
+
+```bash
+make seed-tenant1     # ByteFix phone repair shop
+# or
+make seed             # full demo world (two tenants + auth users)
+```
+
+Open http://bytefix.localhost:3000 after seeding. The full demo world needs
+local GoTrue - see [`docs/DEMO.md`](docs/DEMO.md).
 
 ## The two rules everything else bends around
 
