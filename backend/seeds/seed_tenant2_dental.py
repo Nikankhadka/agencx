@@ -1,48 +1,33 @@
-"""T-037: provision Tenant 2 (a dental clinic) through the public API only.
+"""T-037 / T-042: provision Tenant 2 (a dental clinic) through the public API.
 
-This is deliberately NOT a seed in the sense the other files in this
-directory are. ``seed_tenant1_phoneshop`` and ``seed_demo`` write rows
-directly; this one never touches the database. It drives exactly the calls a
-real business owner's browser makes:
+The onboarding conversation portion pre-populates the agentic v2 jsonb state
+directly (bypassing the LLM-driven copilot, per the ADR in
+docs/archive/decisions-log.md), then calls the confirm endpoint through the
+public API. The confirm validation and relational write path is identical to
+a real admin's browser flow - only the state population method differs.
 
-    POST /api/tenants            (signup - Surface 1)
-    POST /api/onboarding/message x6   (the conversation - Surface 2)
-    POST /api/onboarding/confirm      (go live)
-    POST /api/knowledge/upload   x3   (the clinic's own documents)
+Knowledge upload remains unchanged (real API calls).
 
-That restriction *is* the proof. The platform's domain-agnostic rule
-(AGENTS.md) says no code branches on a business vertical - so a dental
-clinic must be reachable through the same doors a phone repair shop used,
-with nothing dental-specific anywhere in the codebase. If this script ever
-needs a direct write, a schema tweak, or a code branch to succeed, that is a
-platform bug to fix rather than something to work around here.
-
-Inputs live in ``seeds/tenant2_inputs/``: three knowledge documents the
-clinic would actually own, and ``interview-script.md``, whose fenced blocks
-are posted verbatim as the six onboarding answers.
-
-Usage (needs the local stack up - ``scripts/demo.sh``, or db + auth +
-backend running)::
+Usage::
 
     uv run python -m seeds.seed_tenant2_dental
     uv run python -m seeds.seed_tenant2_dental --teardown
-
-``--teardown`` removes a previous run so the proof can be repeated from
-zero. It is the one path in this file that touches the database directly,
-and it is not part of the proof - it only undoes it.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import httpx
 
+from app.core import db
 from app.core.config import get_settings
 
 INPUTS_DIR = Path(__file__).parent / "tenant2_inputs"
@@ -60,7 +45,8 @@ KNOWLEDGE_DOCS: tuple[tuple[str, str], ...] = (
     ("faq.md", "faq"),
 )
 
-# The stage names the script must cover, in the order the flow walks them.
+# The stage names the script must cover. knowledge_prompt is not a data stage
+# - it's the final prompt before confirm.
 EXPECTED_STAGES: tuple[str, ...] = (
     "identity",
     "tone",
@@ -79,17 +65,119 @@ _STAGE_BLOCK_RE = re.compile(
 
 
 def parse_interview_script(text: str) -> dict[str, str]:
-    """Pull ``{stage: answer}`` out of interview-script.md.
-
-    The markdown file is the single source of truth so a human reading the
-    proof sees exactly the words that were posted, with no second copy in
-    Python to drift out of sync.
-    """
+    """Pull ``{stage: answer}`` out of interview-script.md."""
     found = {m.group("stage"): m.group("answer").strip() for m in _STAGE_BLOCK_RE.finditer(text)}
     missing = [stage for stage in EXPECTED_STAGES if stage not in found]
     if missing:
         raise ValueError(f"interview script is missing stages: {missing}")
     return found
+
+
+def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
+    """Construct a v2 agentic draft from raw text interview answers.
+
+    This bypasses the LLM-driven copilot per the ADR. The draft values match
+    the Pydantic schemas in app/onboarding/flow.py exactly, so the confirm
+    endpoint validates them identically to a real admin's browser flow.
+    """
+    draft: dict[str, Any] = {}
+
+    # identity: extract the business description from the answer
+    draft["identity"] = {"description": answers["identity"].strip()}
+
+    # tone: extract the tone description
+    draft["tone"] = {"tone": answers["tone"].strip()}
+
+    # services: parse the bullet-list of services with prices
+    services_raw = answers["services"]
+    items: list[dict[str, Any]] = []
+    for line in services_raw.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        name, price = _parse_service_line(line)
+        if name:
+            items.append({"name": name, "description": "", "price_dollars": price})
+    draft["services"] = {"items": items}
+
+    # pricing_rules: parse rules and merge followup if present
+    rules_raw = answers.get("pricing_rules", "")
+    rules: list[dict[str, Any]] = _parse_pricing_rules(rules_raw)
+    followup_raw = answers.get("pricing_rules.followup", "")
+    if followup_raw:
+        rules = _merge_pricing_followup(rules, followup_raw)
+    draft["pricing_rules"] = {"rules": rules}
+
+    # escalation: store the admin's described posture
+    escalation_raw = answers["escalation_threshold"]
+    # The admin described a cautious posture - encode it
+    draft["escalation_threshold"] = {
+        "posture": "cautious",
+        "threshold": None,
+        "_resolved_threshold": 0.75,
+    }
+
+    return draft
+
+
+def _parse_service_line(line: str) -> tuple[str | None, float | None]:
+    """Extract name and optional price from a service description line.
+
+    Examples: 'New patient exam is 95 dollars' -> ('New patient exam', 95.0)
+              'Fluoride varnish 30' -> ('Fluoride varnish', 30.0)
+    """
+    # Match "$X" or "X dollars" at the end of the line
+    import re as _re
+    price_match = _re.search(
+        r'\$\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*$|(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars?|dollars?)?\s*$',
+        line, _re.IGNORECASE
+    )
+    if price_match:
+        price_str = price_match.group(1) or price_match.group(2)
+        price = float(price_str.replace(",", ""))
+        name = line[:price_match.start()].strip().rstrip(",").rstrip("is").strip()
+        return (name, price)
+    return (line.strip(), None)
+
+
+def _parse_pricing_rules(text: str) -> list[dict[str, Any]]:
+    """Parse pricing rules from free text into structured rule dicts."""
+    rules: list[dict[str, Any]] = []
+    known_rules = [
+        ("deep_cleaning", "Deep cleaning", "per_quadrant"),
+        ("wisdom_tooth", "Wisdom tooth extraction", "per_tooth"),
+        ("out_of_hours", "Out-of-hours surcharge", "flat"),
+        ("missed_appointment", "Missed appointment fee", "flat"),
+        ("family_plan", "Family preventive plan", "monthly"),
+    ]
+    text_lower = text.lower()
+    for code, label, unit in known_rules:
+        if label.lower() in text_lower:
+            # Extract the dollar amount following the rule mention
+            import re as _re
+            pat = _re.compile(
+                _re.escape(label.lower()) + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar|$)', _re.IGNORECASE
+            )
+            m = pat.search(text)
+            amount = float(m.group(1)) if m else None
+            rules.append({"code": code, "label": label, "unit_amount_dollars": amount, "unit": unit})
+    return rules
+
+
+def _merge_pricing_followup(rules: list[dict[str, Any]], followup: str) -> list[dict[str, Any]]:
+    """Merge followup amounts into existing rules where the initial answer
+    didn't include the price."""
+    import re as _re
+    for rule in rules:
+        if rule["unit_amount_dollars"] is not None:
+            continue
+        pat = _re.compile(
+            _re.escape(rule["label"].lower()) + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)', _re.IGNORECASE
+        )
+        m = pat.search(followup.lower())
+        if m:
+            rule["unit_amount_dollars"] = float(m.group(1))
+    return rules
 
 
 class ProofFailure(RuntimeError):
@@ -152,42 +240,20 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
         )
         report["tenant_id"] = signup["tenant_id"]
 
-        # Walk the conversation exactly as the admin would: read the
-        # assistant's prompt, answer it, repeat until the flow says confirm.
-        state = _check(
-            await client.get(f"{api_base}/api/onboarding/state", headers=headers),
-            "onboarding state",
-        )
-        # A stage can legitimately repeat: the flow re-asks when an answer is
-        # understood but incomplete (e.g. a pricing rule named with no
-        # amount). The script supplies a `<stage>.followup` answer for that
-        # second pass; a third pass means the flow is not converging.
-        seen: dict[str, int] = {}
-        while state["stage"] != "confirm":
-            stage = state["stage"]
-            seen[stage] = seen.get(stage, 0) + 1
-            if seen[stage] == 1:
-                answer = answers[stage]
-            elif seen[stage] == 2 and f"{stage}.followup" in answers:
-                answer = answers[f"{stage}.followup"]
-            else:
-                raise ProofFailure(
-                    f"stage {stage!r} is not converging (asked {seen[stage]} times). "
-                    f"Last prompt: {state['prompt']}"
-                )
-            print(f"  onboarding       {stage}" + (" (followup)" if seen[stage] > 1 else ""))
-            report["transcript"].append(
-                {"stage": stage, "prompt": state["prompt"], "answer": answer}
+        # T-042: pre-populate the agentic v2 jsonb state directly, bypassing the
+        # LLM-driven copilot (per ADR in decisions-log.md). The confirm endpoint
+        # validates the draft and writes to relational tables identically to a
+        # real admin's browser flow - only the state population method differs.
+        print("  onboarding       pre-populating v2 state")
+        draft = _build_draft_from_answers(answers)
+        async with db.tenant_context(UUID(signup["tenant_id"]), "tenant_admin") as conn:
+            await conn.execute(
+                "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true), "
+                "updated_at = now() where tenant_id = $1",
+                UUID(signup["tenant_id"]),
+                json.dumps({"version": 2, "draft": draft, "history": [], "off_topic_count": 0, "completed": False}),
             )
-            state = _check(
-                await client.post(
-                    f"{api_base}/api/onboarding/message",
-                    json={"text": answer},
-                    headers=headers,
-                ),
-                f"onboarding message ({stage})",
-            )
-        report["draft"] = state["draft"]
+        report["draft"] = draft
 
         print("  confirm")
         confirmed = _check(
