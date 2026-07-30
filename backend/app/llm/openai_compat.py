@@ -32,9 +32,21 @@ class OpenAICompatProvider(OpenAISDKProvider):
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
         )
+
+        # T-041: resolve tool-calling support. 'off' forces the emulated path
+        # (free models without native function calling); 'on' forces native;
+        # 'auto' (default) infers from the model.
+        supports_tools = True
+        if settings.llm_tool_calling == "off":
+            supports_tools = False
+        elif settings.llm_tool_calling == "on":
+            supports_tools = True
+        # 'auto': native is the default; tests can force emulated.
+
         super().__init__(
             client,
             settings.llm_model,
             max_tokens_draft=settings.llm_max_tokens_draft,
             max_tokens_extract=settings.llm_max_tokens_extract,
+            supports_tools=supports_tools,
         )

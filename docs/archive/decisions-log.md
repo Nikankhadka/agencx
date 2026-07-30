@@ -419,3 +419,84 @@ This file is read-on-need, not every session. Current, actionable facts live in
 - 2026-07-29 (CI vs demo model drift - worth fixing for consistency, not speed): `.github/workflows/ci.yml:133` pins `LLM_MODEL: google/gemma-4-26b-a4b-it:free`, but `backend/.env` runs `nvidia/nemotron-3-super-120b-a12b:free` and `.env.example:23` suggests the nemotron as THE OpenRouter option. So CI validates one model while the demo and the documented setup path use another - and the two differ in a way that matters (zero vs non-zero reasoning tokens, different structured-output behavior under a token cap). Not changed here because model choice is the founder's call and the latency evidence above does not support a swap; flagged so the divergence is deliberate rather than accidental.
 
 - 2026-07-28 (latency work that IS legal under the ruling): four changes, all pure implementation detail, none touching an invariant. D2 overlap routing and retrieval (the retrieval query is the customer message, independent of the route, so it need not wait for the supervisor); D3 cap `max_tokens` (draft ~400, structured extracts ~256, configurable); D4 warm `LocalEmbedder`/`LocalCrossEncoderReranker` in the FastAPI lifespan so the first real message does not pay cold start; D5 stream non-prose progress events (`searching knowledge base`, `checking answer`) alongside the `citations`/`quote` events that already stream live - these are deterministic app events, NOT model prose, so US-060 is untouched, and they convert dead silence into a narrated wait. Instrument FIRST (per-node wall-clock via the existing `_traced` wrapper in `graph.py`, plus a first-token timestamp in `_stream_chat_response`) and capture a baseline, so the gains are measured rather than asserted. Note the deterministic-pricing invariant (`conventions.md:44-52`, "outranks convenience, speed") independently forbids showing any money-carrying draft before the price gate clears, under any latency argument.
+
+## ADR: Agentic conversation layer - onboarding copilot + customer chat (2026-07-30)
+
+### The problem
+
+Both of Wren's chat surfaces treat conversation as classification into task buckets. Neither handles the human parts of talking.
+
+**Onboarding** (`backend/app/onboarding/flow.py`) is a seven-stage state machine with seven hardcoded prompt strings and one `extract()` call per stage. `advance()` passes exactly one user message to the model with no conversation history, then increments the stage index. An admin asking "what's your name?" at the identity stage gets `IdentityDraft(description="what's your name?")` stored as the tenant's system prompt. It cannot redirect, rephrase, answer a question, or skip ahead when the admin volunteers something early.
+
+**Customer chat** has the same shape one level up. `supervisor.py:36-39` routes to exactly five specialists: knowledge, recommendation, quoting, order_status, escalation. There is no route for a greeting, a meta question, or thanks. "What's your name?" either scores low confidence and is force-escalated to a human, or lands in `knowledge` and gets answered from the business's RAG index. Escalating a greeting to a human is a visible product defect.
+
+### Scope precedent
+
+Three frozen planning docs defer "a more open-ended interviewer" to Phase 2 and list "open-ended 'magic' onboarding interviewer" under EXPLICIT PHASE 2:
+
+- `docs/source/architecture.md:142` -- "Phase 2: a more open-ended interviewer that infers structure from freeform description and existing-website ingestion."
+- `docs/source/sprint-plan.md:122` -- "open-ended 'magic' onboarding interviewer + existing-website ingestion" under EXPLICIT PHASE 2.
+- `docs/source/product-requirements.md` WON'T table (line 173) -- "Open-ended 'magic' onboarding interviewer | Guided-conversational onboarding proves the concept; a fully open interviewer that reliably configures any business is itself a hard agent-research problem, deferred."
+
+The working doc `docs/phases/phase-1-foundations.md` line 99 also specifies: "a guided state machine (explicit ordered stages), NOT an open-ended interviewer."
+
+Per `docs/INDEX.md` precedence rule 2, frozen docs win on scope, and `conventions.md` section 4 requires architectural changes to be flagged to the founder rather than decided mid-build. The founder has ruled: proceed with the fully agentic, tool-driven design, pulling forward the deferred Phase 2 interviewer.
+
+### What changes
+
+The onboarding state machine is retired and replaced with an agentic copilot that uses tool calling. The customer chat gains a `conversation` route for greetings/thanks/meta questions, and the supervisor moves from a fixed five-specialist topology to a tool-driven agent loop.
+
+### What supersedes the frozen-doc position
+
+This ADR supersedes the three frozen-doc positions listed above. The Phase 2 "open-ended interviewer" is being pulled forward into the current implementation phase. The frozen docs are NOT edited; this ADR is the authoritative record of the scope change.
+
+### Guarantees that replace the state machine's structural ones
+
+The state machine was carrying real structural guarantees. Each is now carried explicitly in Python rather than implicitly in the machine:
+
+1. **Completeness is Python's call, never the model's.** The agent may *request* finalize; a Python gate verifies every required config section is present and valid and refuses with a typed reason the agent must act on. The model never decides "done".
+2. **Money arithmetic stays in Python.** `_cents()` is unchanged. Tool args carry admin-transcribed dollar floats only.
+3. **Optional numerics stay optional.** The `| None` design on `price_dollars` and `unit_amount_dollars` and the `posture` enum encode production failures; tool schemas preserve this, and Python re-asks rather than stores a placeholder.
+4. **`resolve_threshold()` and `_POSTURE_THRESHOLDS` are reused unchanged.** The model never produces the threshold number.
+5. **Deterministic pricing hard rule holds on both surfaces.** No tool schema on the quoting path gains a money field.
+6. **Domain-agnostic hard rule.** No prompt, tool, or route branches on a vertical. Tenant 2 must still onboard by config alone.
+7. **Termination.** Every loop is bounded in Python: tool-call iterations per turn, consecutive off-topic turns, and total turns.
+8. **Atomic commit.** The confirm write stays one transaction inside `db.tenant_context`.
+
+### Calendar impact (Phase 4 context)
+
+Phase 4 is Ship (8/9 done as of 2026-07-30; T-036 deploy + T-040 demo video remain, both founder-blocked on external credentials). These four tickets inject scope into a nominally-completing phase. Impact:
+
+- **T-041** (provider tool-calling): ~1 day, self-contained, all existing tests pass alongside.
+- **T-042** (agentic onboarding): ~1.5 days, largest single-scope item. Seeds + tests rewrite.
+- **T-043** (conversation route): ~0.5 day, small diff, fixes a visible defect independently.
+- **T-044** (tool-driven supervisor): ~1.5-2 days, highest risk - rewrites graph topology, 24+ test files and 4 evals affected. Seeks safe completion before T-036 deploy lands.
+
+Total injection: ~4.5-5 days. This does NOT block T-036/T-040 - those remain founder-gated on external credentials. This work completes alongside them. The 30-day clock is treated as a calendar envelope; quality within it is per `conventions.md` §4.
+
+### Design decisions ratified during review (2026-07-30)
+
+Before any code lands, the following design refinements are recorded as settled:
+
+1. **Admin-facing prose and the deterministic-pricing hard rule.** `conventions.md` §8 targets customer-facing surfaces (no LLM ever produces a monetary amount that reaches a customer). Onboarding is admin-facing; the admin IS the source of every price. The copilot may echo back a price the admin stated ("I've saved screen repair at $89") as part of a confirmation - this is transcription/confirmation, not computation. If an admin restates a figure the admin never gave (price echo check catches this) the figure is dropped. This is the same spirit as the T-006 ADR entry (2026-07-11): "the model's job is transcription of a number they already said, never invention of one."
+
+2. **Spotlight-wrapping on the admin path is scoped to injection scanning only.** `spotlight.py`'s `wrap()` fences untrusted third-party content from reaching the model. The admin IS the instruction-giver, not an attacker against themselves. Spotlight's `scan_input()` (the regex pattern check) still runs on admin messages as defence-in-depth (advisory flag, never blocks), but `wrap()` is NOT applied - admin text enters the prompt directly, as it does today in `advance()`.
+
+3. **Seeds bypass the copilot, not drive through it.** `seed_tenant2_dental.py` pre-populates the new jsonb state format directly (simulated completed tool calls), same pattern as the current seed bypasses the API. Driving answers through the copilot API would make seeds LLM-dependent, slow, and non-deterministic. The confirm endpoint validates and writes to relational tables regardless of how state was populated, so no LLM dependency is introduced.
+
+4. **State format migration: version key for backward compatibility.** The onboarding record in `tenant_config.config->'onboarding'` jsonb gains a `version` key (set to `2` for the agentic format). On read, if `version` is absent or `1`, the record is treated as a legacy state-machine record. A legacy record with `completed: false` triggers a one-time migration prompt (the copilot resumes from captured draft fields if any exist, re-asks for missing ones). A legacy record with `completed: true` is left as-is. This avoids bricking partially-onboarded tenants.
+
+5. **Confidence gate semantics for the conversation route.** The conversation route uses the same single threshold as task routes. The supervisor's system prompt is updated to assign HIGH confidence (>= 0.8) to clear greetings/thanks/meta questions and LOW confidence to genuinely ambiguous messages. This preserves the threshold-as-escalation-posture behaviour without a second threshold. An ambiguous message below threshold still escalates - the only path into `conversation` is a high-confidence classification, which a greeting inherently is.
+
+6. **Tool-calling abstraction follows OpenAI's API contract, not a custom shape.** `chat_with_tools(messages, tools) -> ToolTurn` where `ToolTurn` carries `text: str | None` (a model reply in the same response) + `tool_calls: list[ToolCall]`. The "directive" pattern is a prompt-engineering layer ABOVE the provider, not inside it. The provider never knows about directives - it only knows about tools and messages. The onboarding agent composes the directive from tool results and feeds it as the system/user prompt to `chat_stream`.
+
+### Verification strategy
+
+Ordered, each stage verified before the next begins. Automated: `make check` clean at every stage; `make ci` before each commit. End-to-end: drive the exact failure that prompted this work, verify tenant 2 generalizes with zero code changes, `make test-e2e` with the first Playwright spec for onboarding. Free-model check: run the full onboarding flow once with `LLM_TOOL_CALLING=off` to prove the emulated path works on a free OpenRouter model.
+
+### Tickets
+
+- Phase file: `docs/phases/phase-5-agentic-conversation.md` - tickets T-041 through T-044
+- `docs/PROGRESS.md` - new Phase 5 section, one row per ticket, updated at commit time
+- `.agents/memory.md` - record that the onboarding state machine is retired, which guarantees replaced it, and that tool calling has a free-model emulation path
+- `.agents/map.md` - refreshed for new modules (`backend/app/onboarding/{agent,tools}.py`, `backend/app/agents/{conversation,tracing}.py`)

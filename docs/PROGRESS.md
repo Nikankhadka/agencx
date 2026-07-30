@@ -86,6 +86,17 @@ Goal: polish all three surfaces, deploy to real infrastructure, and prove domain
 | T-039 Security write-up | done | _pending commit_ | OWASP LLM Top 10 mapping with exact code + test pointers per control, plus deliberate deferrals stated as decisions. See `docs/artifacts/security.md`. |
 | T-040 README + LEARNINGS + demo video | in progress | _pending commit_ | `README.md` gained architecture diagram + artifacts table + deferral rationale; `LEARNINGS.md` written per subsystem. Only the 5-10 min demo-video recording remains (founder step). |
 
+## Phase 5 - Agentic conversation layer (in progress)
+
+Goal: replace the hardcoded onboarding state machine and the fixed five-specialist customer-chat supervisor with fully agentic, tool-driven conversations on both surfaces, with strong Python-level guardrails. The frozen docs' Phase 2 "open-ended interviewer" is pulled forward per ADR in `docs/archive/decisions-log.md` (2026-07-30).
+
+| Ticket | Status | Commit | What was done |
+|---|---|---|---|
+| T-041 Tool calling in the provider abstraction | not started | - | Extend provider ABC with `chat_with_tools` (native + emulated free-model fallback), `ToolSpec`, `ToolTurn`, timeout wrapping, fake provider. |
+| T-042 Agentic onboarding copilot | not started | - | Replace state machine with tool-driven agent: two LLM calls per turn, six tools, guardrails, SSE streaming, formatted summary panel, seed script rewritten for ordered-pool answers. |
+| T-043 Conversational customer chat route | not started | - | Add a sixth `conversation` capability for greetings/thanks/meta questions. Fixes the visible defect of greetings escalating to a human. |
+| T-044 Tool-driven supervisor | not started | - | Replace fixed five-specialist topology with agent node looping over tools, then draft node. Specialists become tool implementations. Extract `_traced` into shared `tracing.py`. |
+
 ## Unticketed founder additions
 
 | Work | Status | Commit | What was done |

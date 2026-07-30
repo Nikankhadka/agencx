@@ -31,7 +31,7 @@ from uuid import UUID
 
 from app.core import db
 from app.core.config import Settings
-from app.llm.provider import ChatMessage, LLMProvider, SchemaT
+from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 
 # Platform defaults - a tenant's config.limits overrides any subset of these.
 DEFAULT_DAILY_COST_USD = 5.0
@@ -200,3 +200,16 @@ class TimeLimitedProvider(LLMProvider):
             except StopAsyncIteration:
                 return
             yield delta
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        return await with_timeout(
+            self._inner.chat_with_tools(messages=messages, tools=tools, tool_choice=tool_choice),
+            self._timeout_s,
+            what="LLM chat_with_tools",
+        )

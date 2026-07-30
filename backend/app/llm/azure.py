@@ -27,9 +27,18 @@ class AzureOpenAIProvider(OpenAISDKProvider):
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
         )
+
+        # Azure OpenAI always supports native tool calling.
+        supports_tools = True
+        if settings.llm_tool_calling == "off":
+            supports_tools = False
+        elif settings.llm_tool_calling == "on":
+            supports_tools = True
+
         super().__init__(
             client,
             settings.azure_openai_chat_deployment,
             max_tokens_draft=settings.llm_max_tokens_draft,
             max_tokens_extract=settings.llm_max_tokens_extract,
+            supports_tools=supports_tools,
         )

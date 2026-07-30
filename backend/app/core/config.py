@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     llm_max_tokens_draft: int = 0
     llm_max_tokens_extract: int = 0
 
+    # T-041: tool calling mode. 'auto' (the default) uses native function calling
+    # when the model supports it; 'on' forces native; 'off' forces the emulated
+    # extract()-based fallback path, for free models that lack native tool support
+    # (per the standing $0-deploy principle).
+    llm_tool_calling: str = "auto"
+
     # Azure OpenAI (used when llm_provider='azure' and/or embedder='azure')
     azure_openai_endpoint: str = ""
     azure_openai_api_key: str = ""

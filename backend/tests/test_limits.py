@@ -26,7 +26,7 @@ from app.core.limits import (
     budget_exceeded,
     with_timeout,
 )
-from app.llm.provider import ChatMessage, LLMProvider, SchemaT
+from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 
 # --- limit resolution -------------------------------------------------------------
 
@@ -136,6 +136,12 @@ class _SlowProvider(LLMProvider):
         await asyncio.sleep(1.0)
         yield "never"
 
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto"
+    ) -> ToolTurn:
+        await asyncio.sleep(1.0)
+        raise AssertionError("should have timed out")
+
 
 class _FastProvider(LLMProvider):
     async def extract(
@@ -149,6 +155,11 @@ class _FastProvider(LLMProvider):
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         for token in ("a", "b", "c"):
             yield token
+
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto"
+    ) -> ToolTurn:
+        raise NotImplementedError
 
 
 async def test_time_limited_provider_bounds_chat() -> None:

@@ -9,6 +9,10 @@ never forces every test double in the suite to grow a matching no-op.
 (``settings.embedding_dim``, matching knowledge_chunks.embedding's
 vector(N)) but content-blind - fine for tests that only need ingestion or
 retrieval plumbing to work, not meaningful dense rankings.
+
+``ToolAwareFakeProvider`` is a test double with ``chat_with_tools``
+responses keyed by tool name - the turn returns tool calls or text depending
+on what the test needs each time.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from collections.abc import AsyncIterator
 
 from app.core.config import get_settings
 from app.llm.embedder import Embedder
-from app.llm.provider import ChatMessage, LLMProvider, SchemaT
+from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 
 EMBEDDING_DIM = get_settings().embedding_dim
 
@@ -34,6 +38,15 @@ class BaseFakeProvider(LLMProvider):
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         raise NotImplementedError
         yield  # pragma: no cover - unreachable; makes this an async generator function
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        raise NotImplementedError
 
 
 class ZeroEmbedder(Embedder):
