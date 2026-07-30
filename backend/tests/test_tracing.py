@@ -25,7 +25,7 @@ from app.observability.tracing import NoOpTracer, get_tracer
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 
 
 def test_noop_span_set_accepts_arbitrary_attributes_and_does_nothing() -> None:
@@ -94,7 +94,7 @@ class _RecordingTurn:
         yield _RecordingSpan(name, self._log)
 
 
-class FakeKnowledgeProvider(BaseFakeProvider):
+class FakeKnowledgeProvider(ToolAwareFakeProvider):
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
@@ -153,8 +153,8 @@ async def test_graph_opens_a_span_per_node(
         # supervisor routes to knowledge (no seeded chunk -> refusal, which
         # is draft_deterministic, so inspection short-circuits) - both nodes
         # must have opened a span regardless.
-        assert "supervisor" in span_names
-        assert "knowledge" in span_names
+        assert "agent" in span_names
+        assert "draft" in span_names
         assert "inspection" in span_names
     finally:
         await db.close_pool()

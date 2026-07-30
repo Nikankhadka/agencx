@@ -33,12 +33,12 @@ from app.observability.cost import report_usage
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, BaseFakeProvider, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
 
-class _AlwaysRouteKnowledge(BaseFakeProvider):
+class _AlwaysRouteKnowledge(ToolAwareFakeProvider):
     """Routes to knowledge and streams a normal answer - enough for the graph
     to execute the several nodes a step cap of 2 will overrun."""
 
@@ -54,6 +54,15 @@ class _AlwaysRouteKnowledge(BaseFakeProvider):
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         for token in ("We are ", "open ", "weekdays."):
             yield token
+
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[Any], tool_choice: str = "auto",
+    ) -> Any:
+        from app.observability.cost import report_usage
+        report_usage("gpt-4o-mini", 100, 10)
+        return await super().chat_with_tools(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
 
 
 class _PassthroughReranker(Reranker):

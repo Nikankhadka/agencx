@@ -30,19 +30,23 @@ from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, BaseFakeProvider, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
 
-class FakeChatProvider(BaseFakeProvider):
-    async def extract(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
-        # The only extract() caller in this flow is the supervisor's routing
-        # decision (T-013) - always route to knowledge with high confidence
-        # so these tests keep exercising T-011's straight RAG path.
-        return schema.model_validate({"route": "knowledge", "confidence": 1.0, "reason": "test"})
+class FakeChatProvider(ToolAwareFakeProvider):
+    def __init__(self) -> None:
+        from app.llm.provider import ToolCall, ToolTurn
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[
+                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                ]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            extract_route="knowledge",
+        )
 
     async def chat_stream(self, messages: list[Any]) -> AsyncIterator[str]:
         for delta in ["Sure", ", ", "here's ", "the ", "answer", " [1]", "."]:
@@ -289,21 +293,40 @@ async def test_chat_wrong_tenant_conversation_id_is_404(
     assert response.status_code == 404
 
 
-class FakeOrderStatusProvider(BaseFakeProvider):
+class FakeOrderStatusProvider(ToolAwareFakeProvider):
     """T-030: routes to order_status and reports fake token usage on every
-    extract() call, so a real /api/chat turn exercises both the tool_calls
+    call, so a real /api/chat turn exercises both the tool_calls
     persistence (order_status's real DB lookup) and cost_logs recording
     (report_usage -> chat.py's collect_usage()/record_costs())."""
+
+    def __init__(self) -> None:
+        from app.llm.provider import ToolCall, ToolTurn
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[
+                    ToolCall(id="call_o", name="lookup_order_or_ticket",
+                             args={"ref_code": "R-1001"}),
+                ]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            extract_route="order_status",
+        )
+
+    async def chat_with_tools(
+        self, *, messages: list[Any], tools: list[Any], tool_choice: str = "auto",
+    ) -> Any:
+        report_usage("fake-model", 10, 5)
+        return await super().chat_with_tools(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
         report_usage("fake-model", 10, 5)
-        if "route" in schema.model_fields:
-            return schema.model_validate(
-                {"route": "order_status", "confidence": 1.0, "reason": "test"}
-            )
-        return schema.model_validate({"ref_code": "R-1001", "customer_ref": None})
+        return await super().extract(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
 
 
 async def _seed_tenant_with_order(conn: asyncpg.Connection[Any], *, slug: str) -> uuid.UUID:

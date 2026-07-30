@@ -6,10 +6,11 @@ detection, price echo check, and legacy state migration.
 
 from __future__ import annotations
 
-import pytest
-from pydantic import BaseModel
+from typing import Any
 
-from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolCall, ToolSpec, ToolTurn
+import pytest
+
+from app.llm.provider import SchemaT, ToolCall, ToolTurn
 from app.onboarding.agent import (
     Directive,
     OnboardingRecord,
@@ -19,23 +20,15 @@ from app.onboarding.agent import (
 )
 from app.onboarding.flow import (
     CatalogItemDraft,
-    EscalationDraft,
     IdentityDraft,
-    PricingRuleDraft,
-    PricingRulesDraft,
     ServicesDraft,
-    ToneDraft,
 )
 from app.onboarding.tools import (
-    TOOL_REGISTRY,
-    ToolResult,
-    _check_completeness,
     request_finalize,
     save_identity,
     save_services,
 )
 from tests.fakes import BaseFakeProvider
-
 
 # --- fake providers ------------------------------------------------------------
 
@@ -49,35 +42,39 @@ class _ToolFake(BaseFakeProvider):
         self._call = 0
         self._reply = 0
 
-    async def chat_with_tools(self, *, messages, tools, tool_choice="auto"):
+    async def chat_with_tools(
+        self, *, messages: Any, tools: Any, tool_choice: str = "auto"
+    ) -> ToolTurn:
         if self._call < len(self._turns):
             tc = self._turns[self._call]
             self._call += 1
             return ToolTurn(tool_calls=tc)
         return ToolTurn()
 
-    async def chat(self, messages):
+    async def chat(self, messages: Any) -> str:
         r = self._replies[self._reply % len(self._replies)]
         self._reply += 1
         return r
 
 
 class _ExtractStub(BaseFakeProvider):
-    async def extract(self, *, system_prompt: str, user_input: str, schema: type[SchemaT]) -> SchemaT:
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
         return schema.model_validate({})
 
 
 # --- tool execution ------------------------------------------------------------
 
 
-def test_save_identity_updates_draft():
-    draft: dict = {}
+def test_save_identity_updates_draft() -> None:
+    draft: dict[str, Any] = {}
     result = save_identity(draft, IdentityDraft(description="A phone repair shop"))
     assert result["identity"]["description"] == "A phone repair shop"
 
 
-def test_save_services_stores_items_with_optional_prices():
-    draft: dict = {}
+def test_save_services_stores_items_with_optional_prices() -> None:
+    draft: dict[str, Any] = {}
     svc = ServicesDraft(items=[
         CatalogItemDraft(name="Screen repair", price_dollars=89.5),
         CatalogItemDraft(name="Battery replacement", price_dollars=None),
@@ -92,7 +89,7 @@ def test_save_services_stores_items_with_optional_prices():
 # --- completeness gate ---------------------------------------------------------
 
 
-def test_completeness_gate_passes_when_all_sections_present():
+def test_completeness_gate_passes_when_all_sections_present() -> None:
     draft = {
         "identity": {"description": "A shop"},
         "tone": {"tone": "friendly"},
@@ -105,7 +102,7 @@ def test_completeness_gate_passes_when_all_sections_present():
     assert result.missing == []
 
 
-def test_completeness_gate_fails_when_missing_sections():
+def test_completeness_gate_fails_when_missing_sections() -> None:
     draft = {
         "identity": {"description": "A shop"},
     }
@@ -115,7 +112,7 @@ def test_completeness_gate_fails_when_missing_sections():
     assert any("assistant tone" in m for m in result.missing)
 
 
-def test_completeness_gate_requires_service_price():
+def test_completeness_gate_requires_service_price() -> None:
     draft = {
         "identity": {"description": "A shop"},
         "tone": {"tone": "friendly"},
@@ -128,7 +125,7 @@ def test_completeness_gate_requires_service_price():
     assert any("prices for" in m for m in result.missing)
 
 
-def test_completeness_gate_requires_pricing_rule_amounts():
+def test_completeness_gate_requires_pricing_rule_amounts() -> None:
     draft = {
         "identity": {"description": "A shop"},
         "tone": {"tone": "friendly"},
@@ -144,32 +141,32 @@ def test_completeness_gate_requires_pricing_rule_amounts():
 # --- off-topic detection -------------------------------------------------------
 
 
-def test_onboarding_message_is_not_off_topic():
+def test_onboarding_message_is_not_off_topic() -> None:
     assert not _off_topic("we fix phones and tablets", no_tools=True)
 
 
-def test_unrelated_question_is_off_topic():
+def test_unrelated_question_is_off_topic() -> None:
     assert _off_topic("what is the meaning of life?", no_tools=True)
 
 
-def test_message_with_tools_is_never_off_topic():
+def test_message_with_tools_is_never_off_topic() -> None:
     assert not _off_topic("what is the meaning of life?", no_tools=False)
 
 
 # --- price echo check ----------------------------------------------------------
 
 
-def test_reply_with_known_price_is_not_flagged():
+def test_reply_with_known_price_is_not_flagged() -> None:
     draft = {"services": {"items": [{"name": "Fix", "price_dollars": 89.5}]}}
     assert not _echo("Screen repair costs $89.50.", draft)
 
 
-def test_reply_with_unknown_price_is_flagged():
+def test_reply_with_unknown_price_is_flagged() -> None:
     draft = {"services": {"items": [{"name": "Fix", "price_dollars": 50.0}]}}
     assert _echo("Screen repair costs $89.50.", draft)
 
 
-def test_reply_with_no_prices_is_not_flagged():
+def test_reply_with_no_prices_is_not_flagged() -> None:
     draft = {"services": {"items": [{"name": "Fix", "price_dollars": 50.0}]}}
     assert not _echo("We offer screen repair.", draft)
 
@@ -177,7 +174,7 @@ def test_reply_with_no_prices_is_not_flagged():
 # --- legacy state migration ----------------------------------------------------
 
 
-def test_from_jsonb_migrates_legacy_format():
+def test_from_jsonb_migrates_legacy_format() -> None:
     legacy = {"state": {"draft": {"identity": {"description": "old shop"}}}, "completed": False}
     record = OnboardingRecord.from_jsonb(legacy)
     assert record.version == 2
@@ -185,15 +182,19 @@ def test_from_jsonb_migrates_legacy_format():
     assert not record.completed
 
 
-def test_from_jsonb_reads_v2_format():
+def test_from_jsonb_reads_v2_format() -> None:
     v2 = {"version": 2, "draft": {"identity": {"description": "new shop"}}, "completed": True}
     record = OnboardingRecord.from_jsonb(v2)
     assert record.draft["identity"]["description"] == "new shop"
     assert record.completed
 
 
-def test_to_jsonb_roundtrips():
-    record = OnboardingRecord(version=2, draft={"identity": {"description": "test"}}, completed=False)
+def test_to_jsonb_roundtrips() -> None:
+    record = OnboardingRecord(
+        version=2,
+        draft={"identity": {"description": "test"}},
+        completed=False,
+    )
     data = record.to_jsonb()
     restored = OnboardingRecord.from_jsonb(data)
     assert restored.draft == record.draft
@@ -204,7 +205,7 @@ def test_to_jsonb_roundtrips():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_captures_tool_result_and_returns_reply():
+async def test_run_turn_captures_tool_result_and_returns_reply() -> None:
     provider = _ToolFake(
         tool_turns=[
             [ToolCall(id="c1", name="save_identity", args={"description": "A phone shop"})],
@@ -220,7 +221,7 @@ async def test_run_turn_captures_tool_result_and_returns_reply():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_no_tools_asks_for_next():
+async def test_run_turn_no_tools_asks_for_next() -> None:
     provider = _ToolFake(tool_turns=[], replies=["What services do you offer?"])
     record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
     updated, reply = await run_turn(admin_message="ok go on", record=record, provider=provider)
@@ -230,7 +231,7 @@ async def test_run_turn_no_tools_asks_for_next():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_handles_completed_record():
+async def test_run_turn_handles_completed_record() -> None:
     provider = _ToolFake(tool_turns=[], replies=[])
     record = OnboardingRecord(completed=True)
     updated, reply = await run_turn(admin_message="anything", record=record, provider=provider)
@@ -239,7 +240,7 @@ async def test_run_turn_handles_completed_record():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_off_topic_increments_count():
+async def test_run_turn_off_topic_increments_count() -> None:
     provider = _ToolFake(tool_turns=[], replies=["I'm here to help you set up the assistant."])
     record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
     updated, reply = await run_turn(
@@ -249,7 +250,7 @@ async def test_run_turn_off_topic_increments_count():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_price_echo_triggers_redraft():
+async def test_run_turn_price_echo_triggers_redraft() -> None:
     """When the model invents a price not in the draft, the reply is redrafted."""
     provider = _ToolFake(
         tool_turns=[
@@ -269,7 +270,7 @@ async def test_run_turn_price_echo_triggers_redraft():
 
 
 @pytest.mark.asyncio
-async def test_run_turn_unknown_tool_is_skipped():
+async def test_run_turn_unknown_tool_is_skipped() -> None:
     """A hallucinated tool name should not crash the turn. Both the unknown and
     the valid tool call are in the same ToolTurn - only the known one sticks."""
     provider = _ToolFake(
@@ -289,14 +290,14 @@ async def test_run_turn_unknown_tool_is_skipped():
 # --- directive shape -----------------------------------------------------------
 
 
-def test_directive_as_prompt_with_acknowledged():
+def test_directive_as_prompt_with_acknowledged() -> None:
     d = Directive(acknowledged=["save_identity"], ask_for="assistant tone")
     prompt = d.as_prompt()
     assert "save_identity" in prompt
     assert "assistant tone" in prompt
 
 
-def test_directive_redirect_firmness():
+def test_directive_redirect_firmness() -> None:
     d = Directive(redirect_firmness=2)
     prompt = d.as_prompt()
     assert "Decline" in prompt or "firmly" in prompt.lower()

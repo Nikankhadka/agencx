@@ -32,7 +32,7 @@ from evals.trajectory_eval import (
     step_efficiency,
 )
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 
 # --- fixture helpers -------------------------------------------------------------
 
@@ -281,11 +281,22 @@ def test_score_case_collects_every_failure_kind() -> None:
 pytestmark_db = pytest.mark.db
 
 
-class _RouteThenRefProvider(BaseFakeProvider):
+class _RouteThenRefProvider(ToolAwareFakeProvider):
     """Real supervisor + real order_status, fake model: answers the routing
     extraction with order_status and the ref extraction with the given code."""
 
     def __init__(self, *, ref_code: str) -> None:
+        from app.llm.provider import ToolCall, ToolTurn
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[
+                    ToolCall(id="call_o", name="lookup_order_or_ticket",
+                             args={"ref_code": ref_code}),
+                ]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            extract_route="order_status",
+        )
         self._ref_code = ref_code
 
     async def extract(
@@ -350,8 +361,8 @@ async def test_run_case_captures_steps_lookup_and_terminal_state(
         )
 
         assert [step.node for step in trajectory.steps] == [
-            "supervisor",
-            "order_status",
+            "agent",
+            "draft",
             "inspection",
         ]
         assert trajectory.final_state["lookup"] == {

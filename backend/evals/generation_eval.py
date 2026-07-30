@@ -299,7 +299,7 @@ async def _answer_case(
     embedder: Embedder,
     reranker: Reranker,
 ) -> tuple[str, list[dict[str, Any]]]:
-    graph = build_graph(supervisor_node=_forced_knowledge_route)
+    graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id, provider=provider, embedder=embedder, reranker=reranker
     )

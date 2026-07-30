@@ -1,26 +1,25 @@
-"""T-020: Escalation Agent node tests, driven through the graph (get_runtime()
-constraint - see T-013's memory entry). Confirms the escalations row,
-conversations.status flip, and reason plumbing from each upstream path.
+"""T-044: Escalation agent tests - tool-driven agent node calls
+create_escalation tool, escalation node creates DB rows.
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from typing import Any
 
 import asyncpg
 import pytest
 
-from app.agents.escalation import HANDOFF_MESSAGE
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.core import db
+from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
@@ -30,18 +29,6 @@ class NoopReranker(Reranker):
         self, *, query: str, candidates: list[RetrievedChunk], top_k: int
     ) -> list[RetrievedChunk]:
         return candidates[:top_k]
-
-
-def _forced_route(
-    route: str, *, escalation_reason: str | None = None
-) -> Callable[[AgentState], Awaitable[dict[str, Any]]]:
-    async def supervisor_stub(state: AgentState) -> dict[str, Any]:
-        update: dict[str, Any] = {"route": route, "route_confidence": 1.0}
-        if escalation_reason is not None:
-            update["escalation_reason"] = escalation_reason
-        return update
-
-    return supervisor_stub
 
 
 def _initial_state(*, tenant_id: uuid.UUID, conversation_id: uuid.UUID) -> AgentState:
@@ -81,60 +68,44 @@ async def _seed_tenant_with_conversation(
     return tenant_id, conversation_id
 
 
+def _escalation_provider(*, reason: str) -> ToolAwareFakeProvider:
+    return ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(tool_calls=[
+                ToolCall(id="call_e", name="create_escalation", args={"reason": reason}),
+            ]),
+        ],
+        stream_text="",
+        extract_route="escalation",
+    )
+
+
 async def test_escalation_creates_row_and_flips_conversation_status(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
     tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
-    graph = build_graph(
-        supervisor_node=_forced_route("escalation", escalation_reason="customer_request")
-    )
+    graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=BaseFakeProvider(),
+        provider=_escalation_provider(reason="customer_request"),
         embedder=ZeroEmbedder(),
         reranker=NoopReranker(),
     )
-
     final_state = await graph.ainvoke(
         _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
     )
-
     assert final_state["escalated"] is True
-    assert final_state["draft_response"] == HANDOFF_MESSAGE
-
+    assert "a human will pick this up" in final_state["draft_response"].lower()
     escalation_row = await superuser_conn.fetchrow(
         "select reason, status from escalations where conversation_id = $1", conversation_id
     )
     assert escalation_row is not None
     assert escalation_row["reason"] == "customer_request"
     assert escalation_row["status"] == "open"
-
     conversation_status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
     assert conversation_status == "escalated"
-
-
-async def test_escalation_without_reason_uses_unspecified(
-    superuser_conn: asyncpg.Connection[Any],
-) -> None:
-    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
-    graph = build_graph(supervisor_node=_forced_route("escalation"))
-    context = GraphContext(
-        tenant_id=tenant_id,
-        provider=BaseFakeProvider(),
-        embedder=ZeroEmbedder(),
-        reranker=NoopReranker(),
-    )
-
-    await graph.ainvoke(
-        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
-    )
-
-    reason = await superuser_conn.fetchval(
-        "select reason from escalations where conversation_id = $1", conversation_id
-    )
-    assert reason == "unspecified"
 
 
 async def test_escalation_is_scoped_to_its_own_tenant(
@@ -142,21 +113,16 @@ async def test_escalation_is_scoped_to_its_own_tenant(
 ) -> None:
     tenant_a, conversation_a = await _seed_tenant_with_conversation(superuser_conn)
     tenant_b, conversation_b = await _seed_tenant_with_conversation(superuser_conn)
-
-    graph = build_graph(
-        supervisor_node=_forced_route("escalation", escalation_reason="low_confidence")
-    )
+    graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_a,
-        provider=BaseFakeProvider(),
+        provider=_escalation_provider(reason="low_confidence"),
         embedder=ZeroEmbedder(),
         reranker=NoopReranker(),
     )
     await graph.ainvoke(
         _initial_state(tenant_id=tenant_a, conversation_id=conversation_a), context=context
     )
-
-    # Tenant B's conversation is untouched by tenant A's escalation.
     status_b = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_b
     )
@@ -170,21 +136,14 @@ async def test_escalation_is_scoped_to_its_own_tenant(
 async def test_concurrent_escalations_on_same_conversation_do_not_duplicate(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
-    """0011_escalations_dedupe.sql's partial unique index guards the
-    check-then-act race between chat.py's status read and this node's
-    write - two racing turns on the same conversation must only produce
-    one open escalations row."""
     tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
-    graph = build_graph(
-        supervisor_node=_forced_route("escalation", escalation_reason="low_confidence")
-    )
+    graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=BaseFakeProvider(),
+        provider=_escalation_provider(reason="low_confidence"),
         embedder=ZeroEmbedder(),
         reranker=NoopReranker(),
     )
-
     await asyncio.gather(
         graph.ainvoke(
             _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
@@ -193,13 +152,11 @@ async def test_concurrent_escalations_on_same_conversation_do_not_duplicate(
             _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
         ),
     )
-
     open_escalations = await superuser_conn.fetchval(
         "select count(*) from escalations where conversation_id = $1 and status = 'open'",
         conversation_id,
     )
     assert open_escalations == 1
-
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )

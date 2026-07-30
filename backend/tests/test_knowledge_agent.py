@@ -1,7 +1,5 @@
-"""T-014: Knowledge Agent node test - stubbed retrieval/provider, driven
-through the graph (get_runtime() requires an actual node execution, see
-T-013's memory entry). Confirms parity with T-011's behavior and that chunk
-provenance lands in state for Inspection to use later.
+"""T-044: Knowledge agent tests - tool-driven agent node calls
+search_knowledge tool, draft node composes cited answer from chunks.
 """
 
 from __future__ import annotations
@@ -18,34 +16,16 @@ import pytest
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.core import db
-from app.llm.provider import ChatMessage, SchemaT
+from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, BaseFakeProvider, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
 
-class FakeKnowledgeProvider(BaseFakeProvider):
-    async def extract(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
-        # Only the supervisor's routing call reaches extract() here.
-        return schema.model_validate({"route": "knowledge", "confidence": 1.0, "reason": "test"})
-
-    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
-        for delta in ["An", " answer", " [1]", "."]:
-            yield delta
-
-
 class PassthroughReranker(Reranker):
-    """Keeps input order but honors the Reranker [0, 1] relevance contract:
-    the candidates handed to it in these tests are the intended-relevant
-    chunk, so it scores them at the top of the range (1.0). Returning the raw
-    RRF-fused score instead would land near 0.016 and now be refused, which
-    would test the threshold rather than the node."""
-
     async def rerank(
         self, *, query: str, candidates: list[RetrievedChunk], top_k: int
     ) -> list[RetrievedChunk]:
@@ -82,9 +62,7 @@ async def _seed_tenant_with_chunk(conn: asyncpg.Connection[Any], *, content: str
     await conn.execute(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
         "values ($1, $2, $3, $4, $5)",
-        tenant_id,
-        document_id,
-        content,
+        tenant_id, document_id, content,
         [0.0] * EMBEDDING_DIM,
         json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),
     )
@@ -103,16 +81,25 @@ async def test_knowledge_node_returns_provenance_and_draft_response(
 ) -> None:
     tenant_id = await _seed_tenant_with_chunk(superuser_conn, content="We are open weekdays 9-5.")
     graph = build_graph()
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(tool_calls=[
+                ToolCall(id="call_s", name="search_knowledge", args={"query": "hours"}),
+            ]),
+            ToolTurn(text="ok", tool_calls=[]),
+        ],
+        stream_text="An answer [1].",
+        extract_route="knowledge",
+    )
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=FakeKnowledgeProvider(),
+        provider=provider,
         embedder=ZeroEmbedder(),
         reranker=PassthroughReranker(),
     )
-
     final_state = await graph.ainvoke(_initial_state("What are your hours?"), context=context)
-
     assert final_state["draft_response"] == "An answer [1]."
+    assert final_state["route"] == "knowledge"
     assert len(final_state["retrieved_chunks"]) == 1
     chunk = final_state["retrieved_chunks"][0]
     assert chunk["content"] == "We are open weekdays 9-5."
@@ -128,16 +115,23 @@ async def test_knowledge_node_refuses_with_empty_provenance_when_no_chunks(
         f"knowledge-agent-empty-{uuid.uuid4().hex[:8]}",
     )
     await superuser_conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
-
     graph = build_graph()
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(tool_calls=[
+                ToolCall(id="call_s", name="search_knowledge", args={"query": "anything"}),
+            ]),
+            ToolTurn(text="ok", tool_calls=[]),
+        ],
+        stream_text="An answer.",
+        extract_route="knowledge",
+    )
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=FakeKnowledgeProvider(),
+        provider=provider,
         embedder=ZeroEmbedder(),
         reranker=PassthroughReranker(),
     )
-
     final_state = await graph.ainvoke(_initial_state("anything at all"), context=context)
-
     assert "I don't have information about that" in final_state["draft_response"]
     assert final_state["retrieved_chunks"] == []

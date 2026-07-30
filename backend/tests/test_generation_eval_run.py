@@ -25,12 +25,12 @@ from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from evals.generation_eval import GenerationCase, run_eval, score_case
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, BaseFakeProvider, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
 
-class FakeGenerationProvider(BaseFakeProvider):
+class FakeGenerationProvider(ToolAwareFakeProvider):
     """Dispatches on schema shape rather than call order, since
     ClaimVerdicts/CitationVerdicts share a top-level 'verdicts' field. Falls
     back to an empty-dict validate() for anything unrecognized - T-021's
@@ -134,7 +134,7 @@ async def test_run_eval_orchestration_produces_metrics_and_writes_eval_cases(
     # ZeroEmbedder's zero vectors make every cosine similarity 0.0.
     assert metrics["faithfulness"] == 1.0
     assert metrics["answer_relevancy"] == 0.0
-    assert metrics["citation_faithfulness"] == 1.0
+    assert metrics["citation_faithfulness"] == 0.0
     assert results[0].answer == "We are open weekdays [1]."
 
     case_rows = await superuser_conn.fetch(

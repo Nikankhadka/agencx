@@ -109,7 +109,6 @@ def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
     draft["pricing_rules"] = {"rules": rules}
 
     # escalation: store the admin's described posture
-    escalation_raw = answers["escalation_threshold"]
     # The admin described a cautious posture - encode it
     draft["escalation_threshold"] = {
         "posture": "cautious",
@@ -160,7 +159,10 @@ def _parse_pricing_rules(text: str) -> list[dict[str, Any]]:
             )
             m = pat.search(text)
             amount = float(m.group(1)) if m else None
-            rules.append({"code": code, "label": label, "unit_amount_dollars": amount, "unit": unit})
+            rules.append({
+                "code": code, "label": label,
+                "unit_amount_dollars": amount, "unit": unit,
+            })
     return rules
 
 
@@ -172,7 +174,9 @@ def _merge_pricing_followup(rules: list[dict[str, Any]], followup: str) -> list[
         if rule["unit_amount_dollars"] is not None:
             continue
         pat = _re.compile(
-            _re.escape(rule["label"].lower()) + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)', _re.IGNORECASE
+            _re.escape(rule["label"].lower())
+            + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)',
+            _re.IGNORECASE,
         )
         m = pat.search(followup.lower())
         if m:
@@ -248,10 +252,14 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
         draft = _build_draft_from_answers(answers)
         async with db.tenant_context(UUID(signup["tenant_id"]), "tenant_admin") as conn:
             await conn.execute(
-                "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true), "
+                "update tenant_config set config = "
+                "jsonb_set(config, '{onboarding}', $2::jsonb, true), "
                 "updated_at = now() where tenant_id = $1",
                 UUID(signup["tenant_id"]),
-                json.dumps({"version": 2, "draft": draft, "history": [], "off_topic_count": 0, "completed": False}),
+                json.dumps({
+                    "version": 2, "draft": draft, "history": [],
+                    "off_topic_count": 0, "completed": False,
+                }),
             )
         report["draft"] = draft
 

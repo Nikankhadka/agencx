@@ -40,7 +40,7 @@ from evals.leakage_eval import (
 )
 from seeds.seed_leakage_pair import SECRETS_A, SECRETS_B, SLUG_A, SLUG_B, seed
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
@@ -99,12 +99,24 @@ async def test_structural_leakage_checks_all_pass() -> None:
     assert metrics_b["total"] == 12
 
 
-class _ParrotProvider(BaseFakeProvider):
+class _ParrotProvider(ToolAwareFakeProvider):
     """Always routes to knowledge and echoes its own system prompt (which
     includes the retrieved context block) back as the answer - so ANY
     chunk content threaded into the prompt, including a hypothetical
     cross-tenant leak, would surface verbatim in the streamed response.
     Maximally sensitive to a wiring bug, not a realistic assistant."""
+
+    def __init__(self) -> None:
+        from app.llm.provider import ToolCall, ToolTurn
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[
+                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                ]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            extract_route="knowledge",
+        )
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]

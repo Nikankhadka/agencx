@@ -1,19 +1,4 @@
-"""Shared LLMProvider / Embedder test doubles.
-
-``BaseFakeProvider`` implements every abstract method with a
-``NotImplementedError`` stub - subclasses override only the method(s) their
-test actually exercises, so adding a new abstract method to ``LLMProvider``
-never forces every test double in the suite to grow a matching no-op.
-
-``ZeroEmbedder`` is the standard embedder double: dimensionally correct
-(``settings.embedding_dim``, matching knowledge_chunks.embedding's
-vector(N)) but content-blind - fine for tests that only need ingestion or
-retrieval plumbing to work, not meaningful dense rankings.
-
-``ToolAwareFakeProvider`` is a test double with ``chat_with_tools``
-responses keyed by tool name - the turn returns tool calls or text depending
-on what the test needs each time.
-"""
+"""Shared LLMProvider / Embedder test doubles."""
 
 from __future__ import annotations
 
@@ -37,16 +22,56 @@ class BaseFakeProvider(LLMProvider):
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         raise NotImplementedError
-        yield  # pragma: no cover - unreachable; makes this an async generator function
+        yield
 
     async def chat_with_tools(
-        self,
-        *,
-        messages: list[ChatMessage],
-        tools: list[ToolSpec],
-        tool_choice: str = "auto",
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto",
     ) -> ToolTurn:
         raise NotImplementedError
+
+
+class ToolAwareFakeProvider(BaseFakeProvider):
+    def __init__(
+        self,
+        tool_call_sequence: list[ToolTurn] | None = None,
+        stream_text: str = "Hello! I'm the virtual assistant. How can I help?",
+        extract_route: str = "knowledge",
+        extract_confidence: float = 1.0,
+    ) -> None:
+        self._turns = list(tool_call_sequence or [])
+        self._turn_index = 0
+        self._stream_text = stream_text
+        self._extract_route = extract_route
+        self._extract_confidence = extract_confidence
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        if "grounding" in schema.model_fields:
+            return schema.model_validate({})
+        if "route" in schema.model_fields:
+            return schema.model_validate({
+                "route": self._extract_route,
+                "confidence": self._extract_confidence,
+                "reason": "test",
+            })
+        if "ref_code" in schema.model_fields:
+            return schema.model_validate({"ref_code": "R-1042", "customer_ref": None})
+        if "needs" in schema.model_fields:
+            return schema.model_validate({"needs": [], "constraints": []})
+        raise NotImplementedError
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        yield self._stream_text
+
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto",
+    ) -> ToolTurn:
+        if self._turn_index < len(self._turns):
+            turn = self._turns[self._turn_index]
+            self._turn_index += 1
+            return turn
+        return ToolTurn(text="", tool_calls=[])
 
 
 class ZeroEmbedder(Embedder):

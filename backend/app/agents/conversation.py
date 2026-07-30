@@ -34,7 +34,7 @@ _SYSTEM_PROMPT = (
 async def run(state: AgentState) -> dict[str, Any]:
     runtime = get_runtime(GraphContext)
     ctx = runtime.context
-    writer = get_stream_writer()
+    _ = get_stream_writer()  # writer registered for SSE, value not needed here
 
     query = state["messages"][-1]["content"]
     messages: list[ChatMessage] = [

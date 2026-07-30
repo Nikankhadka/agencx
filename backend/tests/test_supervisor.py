@@ -1,11 +1,6 @@
-"""T-013: supervisor routing unit tests with a stubbed provider.
-
-``get_runtime()`` only works inside an actual graph node execution, so
-these drive the real supervisor through ``build_graph()`` (not mocked out,
-unlike test_agent_graph.py's forced-route tests) with a controllable fake
-provider, and inspect the resulting state's route/route_confidence. Needs a
-real tenant_config row for the escalation_threshold read, so these are DB
-tests.
+"""T-044: agent node routing tests - verify that tool calls produce the
+correct route in state. Replaces T-013's supervisor confidence-threshold
+tests since routing is now done by the agent node's tool-calling loop.
 """
 
 from __future__ import annotations
@@ -20,29 +15,13 @@ import pytest
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.core import db
-from app.llm.provider import SchemaT
+from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
-
-
-class FakeRouteProvider(BaseFakeProvider):
-    def __init__(self, *, route: str, confidence: float) -> None:
-        self._route = route
-        self._confidence = confidence
-
-    async def extract(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
-        return schema.model_validate(
-            {"route": self._route, "confidence": self._confidence, "reason": "test"}
-        )
-
-    async def chat_stream(self, messages: list[Any]) -> Any:
-        yield "Hello! How can I help?"
 
 
 class NoopReranker(Reranker):
@@ -50,6 +29,69 @@ class NoopReranker(Reranker):
         self, *, query: str, candidates: list[RetrievedChunk], top_k: int
     ) -> list[RetrievedChunk]:
         return candidates[:top_k]
+
+
+def _make_tool_call(name: str, args: dict[str, object]) -> ToolCall:
+    return ToolCall(id=f"call_{name}", name=name, args=args)
+
+
+def _provider_for_route(route: str) -> ToolAwareFakeProvider:
+    if route == "conversation":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[ToolTurn(text="Hello!", tool_calls=[])],
+            stream_text="Hello! How can I help?",
+            extract_route=route,
+        )
+    if route == "knowledge":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[_make_tool_call("search_knowledge", {"query": "test"})]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            stream_text="An answer.",
+            extract_route=route,
+        )
+    if route == "recommendation":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[_make_tool_call("recommend_items", {"preferences": "test"})]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            stream_text="Try this.",
+            extract_route=route,
+        )
+    if route == "quoting":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[_make_tool_call("get_quote_inputs", {"selections": [
+                    {"rule_code": "test-rule", "quantity": 1},
+                ]})]),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            stream_text="Here is your quote.",
+            extract_route=route,
+        )
+    if route == "order_status":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[
+                    _make_tool_call(
+                        "lookup_order_or_ticket", {"ref_code": "R-1042"}
+                    ),
+                ]),
+            ],
+            stream_text="",
+            extract_route=route,
+        )
+    if route == "escalation":
+        return ToolAwareFakeProvider(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[_make_tool_call("create_escalation", {"reason": "test"})]),
+            ],
+            stream_text="",
+            extract_route=route,
+        )
+    raise ValueError(f"unknown route: {route}")
 
 
 def _initial_state(
@@ -71,20 +113,13 @@ def _initial_state(
 
 
 async def _seed_tenant(
-    conn: asyncpg.Connection[Any], *, escalation_threshold: float
+    conn: asyncpg.Connection[Any],
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    """Returns (tenant_id, conversation_id) - escalation.py writes real rows
-    (escalations FK's conversations, updates conversations.status), so any
-    test that might route there needs a real conversation to exist."""
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Routing Test Co') returning id",
         f"routing-{uuid.uuid4().hex[:8]}",
     )
-    await conn.execute(
-        "insert into tenant_config (tenant_id, escalation_threshold) values ($1, $2)",
-        tenant_id,
-        escalation_threshold,
-    )
+    await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
     conversation_id: uuid.UUID = await conn.fetchval(
         "insert into conversations (tenant_id) values ($1) returning id", tenant_id
     )
@@ -102,73 +137,56 @@ async def _pool(migrated_db: str) -> AsyncIterator[None]:
     "route",
     ["conversation", "knowledge", "recommendation", "quoting", "order_status", "escalation"],
 )
-async def test_high_confidence_routes_pass_through(
+async def test_agent_node_sets_route_from_tool_calls(
     superuser_conn: asyncpg.Connection[Any], route: str
 ) -> None:
-    tenant_id, conversation_id = await _seed_tenant(superuser_conn, escalation_threshold=0.5)
+    tenant_id, conversation_id = await _seed_tenant(superuser_conn)
     graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=FakeRouteProvider(route=route, confidence=0.9),
+        provider=_provider_for_route(route),
         embedder=ZeroEmbedder(),
         reranker=NoopReranker(),
     )
-
     final_state = await graph.ainvoke(_initial_state(conversation_id, tenant_id), context=context)
-
     assert final_state["route"] == route
-    assert final_state["route_confidence"] == 0.9
 
 
-async def test_low_confidence_is_overridden_to_escalation(
+async def test_conversation_with_no_tools_stays_conversation(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
-    tenant_id, conversation_id = await _seed_tenant(superuser_conn, escalation_threshold=0.5)
+    tenant_id, conversation_id = await _seed_tenant(superuser_conn)
     graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id,
-        provider=FakeRouteProvider(route="quoting", confidence=0.2),
+        provider=ToolAwareFakeProvider(
+            tool_call_sequence=[ToolTurn(text="Hi there!", tool_calls=[])],
+            stream_text="Hello! Welcome.",
+            extract_route="conversation",
+        ),
         embedder=ZeroEmbedder(),
         reranker=NoopReranker(),
     )
-
     final_state = await graph.ainvoke(
-        _initial_state(conversation_id, tenant_id, "asdkjfh asdkjfh gibberish"), context=context
+        _initial_state(conversation_id, tenant_id, "hi"), context=context
     )
+    assert final_state["route"] == "conversation"
+    assert final_state["escalated"] is False
 
+
+async def test_escalation_tool_produces_escalation_route(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_provider_for_route("escalation"),
+        embedder=ZeroEmbedder(),
+        reranker=NoopReranker(),
+    )
+    final_state = await graph.ainvoke(
+        _initial_state(conversation_id, tenant_id, "I want a human"), context=context
+    )
     assert final_state["route"] == "escalation"
     assert final_state["escalated"] is True
-
-
-async def test_confidence_exactly_at_threshold_is_not_escalated(
-    superuser_conn: asyncpg.Connection[Any],
-) -> None:
-    tenant_id, conversation_id = await _seed_tenant(superuser_conn, escalation_threshold=0.5)
-    graph = build_graph()
-    context = GraphContext(
-        tenant_id=tenant_id,
-        provider=FakeRouteProvider(route="knowledge", confidence=0.5),
-        embedder=ZeroEmbedder(),
-        reranker=NoopReranker(),
-    )
-
-    final_state = await graph.ainvoke(_initial_state(conversation_id, tenant_id), context=context)
-
-    assert final_state["route"] == "knowledge"
-
-
-async def test_lower_tenant_threshold_lets_lower_confidence_through(
-    superuser_conn: asyncpg.Connection[Any],
-) -> None:
-    tenant_id, conversation_id = await _seed_tenant(superuser_conn, escalation_threshold=0.1)
-    graph = build_graph()
-    context = GraphContext(
-        tenant_id=tenant_id,
-        provider=FakeRouteProvider(route="recommendation", confidence=0.2),
-        embedder=ZeroEmbedder(),
-        reranker=NoopReranker(),
-    )
-
-    final_state = await graph.ainvoke(_initial_state(conversation_id, tenant_id), context=context)
-
-    assert final_state["route"] == "recommendation"
