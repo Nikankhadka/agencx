@@ -177,7 +177,8 @@ def _off_topic(msg: str, no_tools: bool) -> bool:
         return False
     signals = ["business", "customer", "service", "product", "price", "cost",
                "pricing", "rule", "fee", "charge", "tone", "friendly", "formal",
-               "professional", "escalat", "hand off", "human", "assistant"]
+               "professional", "escalat", "hand off", "human", "assistant",
+               "phone", "repair", "shop", "offer", "help", "dental", "clinic"]
     return not any(s in msg.lower() for s in signals)
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:
