@@ -93,8 +93,8 @@ Goal: replace the hardcoded onboarding state machine and the fixed five-speciali
 | Ticket | Status | Commit | What was done |
 |---|---|---|---|
 | T-041 Tool calling in the provider abstraction | done | `e6d00df` | Extend LLMProvider ABC with chat_with_tools (native + emulated free-model fallback), ToolSpec/ToolTurn/ToolCall types, supports_tools property, TimeLimitedProvider wrapper, BaseFakeProvider stub. 13 new unit tests. |
-| T-042 Agentic onboarding copilot | done | _pending commit_ | Replace state machine with tool-driven agent: two LLM calls per turn, six tools, guardrails, SSE streaming, formatted summary panel. |
-| T-043 Conversational customer chat route | done | _pending commit_ | Add a sixth `conversation` capability for greetings/thanks/meta questions. Fixes the visible defect of greetings escalating to a human. |
+| T-042 Agentic onboarding copilot | done | `0aba966` | Replace state machine with tool-driven agent: OnboardingRecord, run_turn, six tools, TurnDirective, off-topic detection, price echo check, SSE streaming, completeness gate on confirm. 27 new tests, 464 total pass. |
+| T-043 Conversational customer chat route | done | `27662e8` | Add a sixth `conversation` capability for greetings/thanks/meta questions. Fixes the visible defect of greetings escalating to a human. |
 | T-044 Tool-driven supervisor | not started | - | Replace fixed five-specialist topology with agent node looping over tools, then draft node. Specialists become tool implementations. Extract `_traced` into shared `tracing.py`. |
 
 ## Unticketed founder additions
