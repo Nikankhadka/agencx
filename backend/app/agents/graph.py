@@ -23,6 +23,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import get_runtime
 
 from app.agents import (
+    conversation,
     escalation,
     inspection,
     knowledge,
@@ -36,7 +37,7 @@ from app.agents.state import AgentState, GraphContext
 
 logger = logging.getLogger("app.agents.graph")
 
-_SPECIALISTS = ("knowledge", "recommendation", "quoting", "order_status", "escalation")
+_SPECIALISTS = ("conversation", "knowledge", "recommendation", "quoting", "order_status", "escalation")
 # The two specialists whose drafts carry money route through the T-018
 # price-provenance gate before inspection; the rest go straight to inspection.
 _PRICE_GATED = ("recommendation", "quoting")
@@ -68,6 +69,7 @@ _SPAN_ATTR_KEYS = (
 # (price_gate, a sub-millisecond deterministic check) emit nothing.
 _PROGRESS_STAGES = {
     "supervisor": "routing",
+    "conversation": "answering",
     "knowledge": "answering",
     "recommendation": "answering",
     "quoting": "quoting",
@@ -154,9 +156,9 @@ def _inspection_route(state: AgentState) -> str:
         route = state["route"]
         # order_status/escalation drafts are always draft_deterministic (or
         # already escalated) and short-circuit inspection before a retry
-        # decision is ever possible - only these three ever reach a real,
+        # decision is ever possible - only these four ever reach a real,
         # retryable LLM-authored draft.
-        assert route in ("knowledge", "recommendation", "quoting")
+        assert route in ("conversation", "knowledge", "recommendation", "quoting")
         return route
     if decision == "escalate":
         return "escalation"
@@ -173,6 +175,7 @@ def build_graph(
     # No type: ignore needed on these registrations - see _traced's docstring
     # for why its return type is erased at the add_node boundary.
     graph.add_node("supervisor", _traced("supervisor", supervisor_node))
+    graph.add_node("conversation", _traced("conversation", conversation.run))
     graph.add_node("knowledge", _traced("knowledge", knowledge.run))
     graph.add_node("recommendation", _traced("recommendation", recommendation.run))
     graph.add_node("quoting", _traced("quoting", quoting.run))

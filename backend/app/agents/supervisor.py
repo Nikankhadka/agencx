@@ -22,6 +22,9 @@ from app.core import db
 _SYSTEM_PROMPT = (
     "You are the routing supervisor for a customer support assistant. Given the "
     "customer's message, decide which specialist should handle it:\n"
+    "- conversation: a greeting (hi, hello), thanks, or a meta question about the "
+    "assistant itself (what's your name, what can you do). These are clearly "
+    "conversational - assign high confidence (>= 0.8) to them.\n"
     "- knowledge: answering a question using general information, policies, or FAQs\n"
     "- recommendation: helping the customer choose between products or services\n"
     "- quoting: the customer wants a price or quote for something specific\n"
@@ -34,7 +37,9 @@ _SYSTEM_PROMPT = (
 
 
 class RouteDecision(BaseModel):
-    route: Literal["knowledge", "recommendation", "quoting", "order_status", "escalation"]
+    route: Literal[
+        "conversation", "knowledge", "recommendation", "quoting", "order_status", "escalation"
+    ]
     confidence: float
     reason: str
 

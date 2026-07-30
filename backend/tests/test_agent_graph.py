@@ -46,12 +46,17 @@ class FakeReranker(Reranker):
 class FakeProvider(BaseFakeProvider):
     """Returns a schema-shaped dummy for whatever extract() call a
     specialist happens to make - only the shape matters for these topology
-    tests, not the content."""
+    tests, not the content. Also supplies a canned chat_stream response
+    so specialists that generate prose (knowledge, conversation) complete
+    without hitting NotImplementedError."""
 
     async def extract(self, *, system_prompt: str, user_input: str, schema: type[Any]) -> Any:
         if "needs" in schema.model_fields:
             return schema.model_validate({"needs": [], "constraints": []})
         return schema.model_validate({"route": "knowledge", "confidence": 1.0, "reason": "test"})
+
+    async def chat_stream(self, messages: list[Any]) -> Any:
+        yield "Hello! I'm the virtual assistant. How can I help you today?"
 
 
 def _initial_state(*, tenant_id: uuid.UUID, conversation_id: uuid.UUID) -> AgentState:
@@ -112,7 +117,9 @@ async def _run_and_collect_node_order(
     return order
 
 
-@pytest.mark.parametrize("route", ["recommendation", "quoting", "order_status", "escalation"])
+@pytest.mark.parametrize(
+    "route", ["conversation", "recommendation", "quoting", "order_status", "escalation"]
+)
 async def test_forced_route_runs_supervisor_specialist_inspection(
     route: str, superuser_conn: asyncpg.Connection[Any]
 ) -> None:

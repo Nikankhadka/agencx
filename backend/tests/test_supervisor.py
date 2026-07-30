@@ -41,6 +41,9 @@ class FakeRouteProvider(BaseFakeProvider):
             {"route": self._route, "confidence": self._confidence, "reason": "test"}
         )
 
+    async def chat_stream(self, messages: list[Any]) -> Any:
+        yield "Hello! How can I help?"
+
 
 class NoopReranker(Reranker):
     async def rerank(
@@ -96,7 +99,8 @@ async def _pool(migrated_db: str) -> AsyncIterator[None]:
 
 
 @pytest.mark.parametrize(
-    "route", ["knowledge", "recommendation", "quoting", "order_status", "escalation"]
+    "route",
+    ["conversation", "knowledge", "recommendation", "quoting", "order_status", "escalation"],
 )
 async def test_high_confidence_routes_pass_through(
     superuser_conn: asyncpg.Connection[Any], route: str
