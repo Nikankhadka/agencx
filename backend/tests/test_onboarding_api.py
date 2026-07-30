@@ -1,12 +1,13 @@
-"""T-006: onboarding endpoints exercised at the API level, LLM provider stubbed.
+"""T-006 / T-042: onboarding endpoints exercised at the API level.
 
-Same client-fixture pattern as test_auth_api.py, plus a FastAPI dependency
-override so `/message` never calls a real model - `FakeProvider` (mirrors
-test_onboarding_flow.py's) returns canned drafts keyed by schema.
+Uses an OnboardingFakeProvider that synthesizes onboarding tool calls from
+canned draft data, one section per turn, so the API-level tests never call
+a real model.
 """
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -17,20 +18,12 @@ import httpx
 import jwt
 import pytest
 import pytest_asyncio
-from pydantic import BaseModel
 
 from app.core import db
 from app.core.config import get_settings
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
-from app.llm.provider import SchemaT
+from app.llm.provider import ToolCall, ToolTurn
 from app.main import app
-from app.onboarding.flow import (
-    EscalationDraft,
-    IdentityDraft,
-    PricingRulesDraft,
-    ServicesDraft,
-    ToneDraft,
-)
 from tests.conftest import _app_dsn_for
 from tests.fakes import BaseFakeProvider, ZeroEmbedder
 
@@ -39,27 +32,23 @@ pytestmark = pytest.mark.db
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
 
-class FakeProvider(BaseFakeProvider):
-    def __init__(self, responses: dict[type[BaseModel], BaseModel]) -> None:
-        self._responses = responses
-
-    async def extract(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
-        return self._responses[schema]  # type: ignore[return-value]
-
-
-FAKE_RESPONSES: dict[type[BaseModel], BaseModel] = {
-    IdentityDraft: IdentityDraft(description="A neighborhood phone repair shop."),
-    ToneDraft: ToneDraft(tone="friendly"),
-    ServicesDraft: ServicesDraft.model_validate(
+_FAKE_TOOLS = [
+    ("save_identity", {"description": "A neighborhood phone repair shop."}),
+    ("save_tone", {"tone": "friendly"}),
+    (
+        "save_services",
         {
             "items": [
-                {"name": "Screen repair", "description": "Cracked screens", "price_dollars": 89.5}
+                {
+                    "name": "Screen repair",
+                    "description": "Cracked screens",
+                    "price_dollars": 89.5,
+                }
             ]
-        }
+        },
     ),
-    PricingRulesDraft: PricingRulesDraft.model_validate(
+    (
+        "save_pricing_rules",
         {
             "rules": [
                 {
@@ -69,10 +58,42 @@ FAKE_RESPONSES: dict[type[BaseModel], BaseModel] = {
                     "unit": "flat",
                 }
             ]
-        }
+        },
     ),
-    EscalationDraft: EscalationDraft(threshold=0.6),
-}
+    ("save_escalation", {"threshold": 0.6}),
+]
+
+_CHAT_REPLIES = [
+    "I've captured your business description. How should the assistant sound?",
+    "Friendly tone noted! What services do you offer?",
+    "Services recorded. Any pricing rules?",
+    "Pricing rules saved. When should the assistant escalate?",
+    "Escalation threshold set. Ready to confirm?",
+    "All sections captured - you can confirm now.",
+]
+
+
+class OnboardingFakeProvider(BaseFakeProvider):
+    """Synthesizes tool calls from canned data, one section per chat_with_tools
+    call until all sections are captured."""
+
+    def __init__(self):
+        self._tool_idx = 0
+        self._chat_idx = 0
+
+    async def chat(self, messages):
+        reply = _CHAT_REPLIES[self._chat_idx % len(_CHAT_REPLIES)]
+        self._chat_idx += 1
+        return reply
+
+    async def chat_with_tools(self, *, messages, tools, tool_choice="auto"):
+        if self._tool_idx < len(_FAKE_TOOLS):
+            name, args = _FAKE_TOOLS[self._tool_idx]
+            self._tool_idx += 1
+            return ToolTurn(
+                tool_calls=[ToolCall(id=f"call_{self._tool_idx}", name=name, args=args)]
+            )
+        return ToolTurn()
 
 
 @pytest.fixture(autouse=True)
@@ -93,7 +114,8 @@ def _supabase_jwt_secret_env() -> Iterator[None]:
 @pytest_asyncio.fixture
 async def client(migrated_db: str) -> AsyncIterator[httpx.AsyncClient]:
     await db.create_pool(dsn=_app_dsn_for(migrated_db), min_size=1, max_size=4)
-    app.dependency_overrides[get_llm_provider] = lambda: FakeProvider(FAKE_RESPONSES)
+    fake = OnboardingFakeProvider()
+    app.dependency_overrides[get_llm_provider] = lambda: fake
     app.dependency_overrides[get_embedder_dependency] = ZeroEmbedder
     try:
         transport = httpx.ASGITransport(app=app)
@@ -107,7 +129,12 @@ async def client(migrated_db: str) -> AsyncIterator[httpx.AsyncClient]:
 
 def _make_token(user_id: uuid.UUID) -> str:
     now = int(time.time())
-    payload = {"sub": str(user_id), "aud": "authenticated", "iat": now, "exp": now + 3600}
+    payload = {
+        "sub": str(user_id),
+        "aud": "authenticated",
+        "iat": now,
+        "exp": now + 3600,
+    }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
 
@@ -153,7 +180,7 @@ async def test_fresh_tenant_starts_at_identity(client: httpx.AsyncClient) -> Non
     assert body["draft"] == {}
 
 
-async def test_message_advances_stage_and_persists_draft(client: httpx.AsyncClient) -> None:
+async def test_message_captures_identity_and_advances_stage(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -161,11 +188,11 @@ async def test_message_advances_stage_and_persists_draft(client: httpx.AsyncClie
         "/api/onboarding/message", json={"text": "we fix phones"}, headers=headers
     )
     assert response.status_code == 200
-    assert response.json()["stage"] == "tone"
-    description = response.json()["draft"]["identity"]["description"]
+    body = response.json()
+    assert body["stage"] == "tone"
+    description = body["draft"]["identity"]["description"]
     assert description == "A neighborhood phone repair shop."
 
-    # A fresh GET (simulating a page refresh) resumes from the persisted stage.
     resumed = await client.get("/api/onboarding/state", headers=headers)
     assert resumed.json()["stage"] == "tone"
 
@@ -187,7 +214,8 @@ async def test_full_flow_confirm_writes_tenant_config_and_catalog(
     assert body["pricing_rules_created"] == 1
 
     config_row = await superuser_conn.fetchrow(
-        "select system_prompt, tone, escalation_threshold from tenant_config where tenant_id = $1",
+        "select system_prompt, tone, escalation_threshold from tenant_config "
+        "where tenant_id = $1",
         tenant_id,
     )
     assert config_row is not None
@@ -203,15 +231,13 @@ async def test_full_flow_confirm_writes_tenant_config_and_catalog(
     assert item_row["price_cents"] == 8950
 
     rule_row = await superuser_conn.fetchrow(
-        "select code, unit_amount_cents from pricing_rules where tenant_id = $1", tenant_id
+        "select code, unit_amount_cents from pricing_rules where tenant_id = $1",
+        tenant_id,
     )
     assert rule_row is not None
     assert rule_row["code"] == "rush-fee"
     assert rule_row["unit_amount_cents"] == 2500
 
-    # T-008: confirm also ingests catalog_items into a synthetic 'catalog'
-    # document, proving the ingest_catalog_items wiring rather than letting a
-    # provider failure silently mark it failed.
     catalog_doc = await superuser_conn.fetchrow(
         "select id, status from documents where tenant_id = $1 and doc_type = 'catalog'",
         tenant_id,
@@ -226,7 +252,7 @@ async def test_full_flow_confirm_writes_tenant_config_and_catalog(
     assert "Screen repair" in chunk_row["content"]
 
 
-async def test_confirm_before_final_stage_is_conflict(client: httpx.AsyncClient) -> None:
+async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.post(
         "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
@@ -250,7 +276,28 @@ async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -
     headers = {"Authorization": f"Bearer {token}"}
     await _walk_to_confirm(client, token)
 
+    # Confirm, then try to send another message.
+    await client.post("/api/onboarding/confirm", headers=headers)
     response = await client.post(
         "/api/onboarding/message", json={"text": "anything"}, headers=headers
     )
     assert response.status_code == 409
+
+
+async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with client.stream(
+        "POST", "/api/onboarding/message/stream",
+        json={"text": "we fix phones"}, headers=headers,
+    ) as resp:
+        assert resp.status_code == 200
+        events: list[dict[str, object]] = []
+        async for line in resp.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+    types = [e["type"] for e in events]
+    assert "progress" in types
+    assert "reply" in types
+    assert "done" in types

@@ -1,59 +1,87 @@
-"""T-042: onboarding agent tools."""
-
+"""T-042: onboarding tool implementations."""
 from __future__ import annotations
 from typing import Any
-from pydantic import BaseModel
-from app.llm.provider import ToolSpec
+from pydantic import BaseModel, Field
 from app.onboarding.flow import (
-    _REQUIRED_SECTIONS, EscalationDraft, IdentityDraft,
-    PricingRulesDraft, ServicesDraft, ToneDraft, _incomplete_rules,
+    IdentityDraft, ToneDraft, ServicesDraft, PricingRulesDraft, EscalationDraft,
+    _incomplete_rules, resolve_threshold,
 )
 
-def _apply_identity(d, a):
-    p = IdentityDraft.model_validate(a); d["identity"] = p.model_dump(); return p
-def _apply_tone(d, a):
-    p = ToneDraft.model_validate(a); d["tone"] = p.model_dump(); return p
-def _apply_services(d, a):
-    p = ServicesDraft.model_validate(a); d["services"] = p.model_dump(); return p
-def _apply_pricing_rules(d, a):
-    p = PricingRulesDraft.model_validate(a); d["pricing_rules"] = p.model_dump(); return p
-def _apply_escalation(d, a):
-    p = EscalationDraft.model_validate(a); d["escalation_threshold"] = p.model_dump(); return p
+class ToolResult(BaseModel):
+    ok: bool = True
+    message: str = Field(default="")
+    missing: list[str] = Field(default_factory=list)
 
-class FinalizeResult(BaseModel):
-    ready: bool
+def save_identity(draft: dict[str, Any], args: IdentityDraft) -> dict[str, Any]:
+    draft["identity"] = args.model_dump()
+    return draft
+
+def save_tone(draft: dict[str, Any], args: ToneDraft) -> dict[str, Any]:
+    draft["tone"] = args.model_dump()
+    return draft
+
+def save_services(draft: dict[str, Any], args: ServicesDraft) -> dict[str, Any]:
+    draft["services"] = args.model_dump()
+    return draft
+
+def save_pricing_rules(draft: dict[str, Any], args: PricingRulesDraft) -> dict[str, Any]:
+    rules = args.model_dump()
+    missing = _incomplete_rules(args.rules)
+    if missing:
+        rules["_unpriced"] = [r.code for r in missing]
+    draft["pricing_rules"] = rules
+    return draft
+
+def save_escalation(draft: dict[str, Any], args: EscalationDraft) -> dict[str, Any]:
+    raw = args.model_dump()
+    raw["_resolved_threshold"] = resolve_threshold(args)
+    draft["escalation_threshold"] = raw
+    return draft
+
+def _check_completeness(draft: dict[str, Any]) -> list[str]:
     missing: list[str] = []
-    unpriced_rules: list[str] = []
-    message: str = ""
+    identity = draft.get("identity")
+    tone = draft.get("tone")
+    services = draft.get("services")
+    pricing = draft.get("pricing_rules")
+    escalation = draft.get("escalation_threshold")
 
-def request_finalize(draft):
-    missing = []
-    for n, s in _REQUIRED_SECTIONS.items():
-        if n not in draft: missing.append(n); continue
-        try: s.model_validate(draft[n])
-        except Exception: missing.append(n)
-    unpriced = []
-    if "pricing_rules" in draft:
-        try: rules = PricingRulesDraft.model_validate(draft["pricing_rules"]).rules
-        except Exception: rules = []
-        unpriced = [r.code for r in _incomplete_rules(rules)]
-    if not missing and not unpriced:
-        return FinalizeResult(ready=True, message="All complete.")
-    parts = []
-    if missing: parts.append(f"Still need: {', '.join(missing)}")
-    if unpriced: parts.append(f"Unpriced rules: {', '.join(unpriced)}")
-    return FinalizeResult(ready=False, missing=missing, unpriced_rules=unpriced, message=" ".join(parts))
+    if not identity or not identity.get("description"):
+        missing.append("business description")
+    if not tone or not tone.get("tone"):
+        missing.append("assistant tone")
 
-ONBOARDING_TOOLS = [
-    ToolSpec(name="save_identity", description="Save business description", args_schema=IdentityDraft),
-    ToolSpec(name="save_tone", description="Save tone preference", args_schema=ToneDraft),
-    ToolSpec(name="save_services", description="Save services/products", args_schema=ServicesDraft),
-    ToolSpec(name="save_pricing_rules", description="Save pricing rules", args_schema=PricingRulesDraft),
-    ToolSpec(name="save_escalation", description="Save escalation posture", args_schema=EscalationDraft),
-]
+    items = services.get("items", []) if services and isinstance(services, dict) else []
+    if not items:
+        missing.append("at least one service or product with a price")
+    else:
+        unpriced = [i.get("name", "unknown") for i in items if i.get("price_dollars") is None]
+        if unpriced:
+            missing.append(f"prices for services: {', '.join(unpriced)}")
 
-TOOL_HANDLERS = {
-    "save_identity": _apply_identity, "save_tone": _apply_tone,
-    "save_services": _apply_services, "save_pricing_rules": _apply_pricing_rules,
-    "save_escalation": _apply_escalation,
+    rules = pricing.get("rules", []) if pricing and isinstance(pricing, dict) else []
+    unpriced_rules = [
+        r.get("code", r.get("label", "unknown")) for r in rules
+        if r.get("unit_amount_dollars") is None or r.get("unit_amount_dollars", 0) <= 0
+    ]
+    if unpriced_rules:
+        missing.append(f"amounts for pricing rules: {', '.join(unpriced_rules)}")
+
+    if not escalation or not escalation.get("_resolved_threshold"):
+        missing.append("escalation posture")
+    return missing
+
+def request_finalize(draft: dict[str, Any]) -> ToolResult:
+    missing = _check_completeness(draft)
+    if missing:
+        return ToolResult(ok=False, missing=missing)
+    return ToolResult(ok=True, message="All required sections complete.")
+
+# Map tool name -> (handler function, Pydantic args schema)
+TOOL_REGISTRY: dict[str, tuple[Any, type[BaseModel]]] = {
+    "save_identity": (save_identity, IdentityDraft),
+    "save_tone": (save_tone, ToneDraft),
+    "save_services": (save_services, ServicesDraft),
+    "save_pricing_rules": (save_pricing_rules, PricingRulesDraft),
+    "save_escalation": (save_escalation, EscalationDraft),
 }
