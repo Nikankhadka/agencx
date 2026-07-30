@@ -22,7 +22,7 @@ import pytest_asyncio
 from app.core import db
 from app.core.config import get_settings
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
-from app.llm.provider import ToolCall, ToolTurn
+from app.llm.provider import ChatMessage, ToolCall, ToolSpec, ToolTurn
 from app.main import app
 from tests.conftest import _app_dsn_for
 from tests.fakes import BaseFakeProvider, ZeroEmbedder
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.db
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
 
-_FAKE_TOOLS = [
+_FAKE_TOOLS: list[tuple[str, dict[str, object]]] = [
     ("save_identity", {"description": "A neighborhood phone repair shop."}),
     ("save_tone", {"tone": "friendly"}),
     (
@@ -77,21 +77,28 @@ class OnboardingFakeProvider(BaseFakeProvider):
     """Synthesizes tool calls from canned data, one section per chat_with_tools
     call until all sections are captured."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tool_idx = 0
         self._chat_idx = 0
 
-    async def chat(self, messages):
+    async def chat(self, messages: list[ChatMessage]) -> str:
         reply = _CHAT_REPLIES[self._chat_idx % len(_CHAT_REPLIES)]
         self._chat_idx += 1
         return reply
 
-    async def chat_with_tools(self, *, messages, tools, tool_choice="auto"):
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
         if self._tool_idx < len(_FAKE_TOOLS):
             name, args = _FAKE_TOOLS[self._tool_idx]
             self._tool_idx += 1
             return ToolTurn(
-                tool_calls=[ToolCall(id=f"call_{self._tool_idx}", name=name, args=args)]
+                tool_calls=[
+                    ToolCall(
+                        id=f"call_{self._tool_idx}", name=name, args=args,
+                    ),
+                ],
             )
         return ToolTurn()
 

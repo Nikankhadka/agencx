@@ -1,11 +1,20 @@
 """T-042: onboarding tool implementations."""
 from __future__ import annotations
+
 from typing import Any
+
 from pydantic import BaseModel, Field
+
 from app.onboarding.flow import (
-    IdentityDraft, ToneDraft, ServicesDraft, PricingRulesDraft, EscalationDraft,
-    _incomplete_rules, resolve_threshold,
+    EscalationDraft,
+    IdentityDraft,
+    PricingRulesDraft,
+    ServicesDraft,
+    ToneDraft,
+    _incomplete_rules,
+    resolve_threshold,
 )
+
 
 class ToolResult(BaseModel):
     ok: bool = True

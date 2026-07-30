@@ -7,10 +7,13 @@ Guardrails: scan_input, price echo check, redirection budget, bounded tool loop.
 State: {version: 2, draft, history, off_topic_count, completed} in jsonb.
 """
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
 from pydantic import BaseModel
+
 from app.agents.spotlight import scan_input
 from app.llm.provider import ChatMessage, LLMProvider, ToolSpec
 from app.onboarding.tools import TOOL_REGISTRY, _check_completeness, request_finalize
@@ -60,7 +63,13 @@ def _build_specs() -> list[ToolSpec]:
     }
     for name, (_, schema) in TOOL_REGISTRY.items():
         specs.append(ToolSpec(name=name, description=descs.get(name, ""), args_schema=schema))
-    specs.append(ToolSpec(name="request_finalize", description="Request to finalize.", args_schema=_NoArgs))
+        specs.append(
+            ToolSpec(
+                name="request_finalize",
+                description="Request to finalize.",
+                args_schema=_NoArgs,
+            )
+        )
     return specs
 
 _TOOL_SPECS = _build_specs()
@@ -74,7 +83,7 @@ class OnboardingRecord:
     completed: bool = False
 
     @classmethod
-    def from_jsonb(cls, raw: dict[str, Any]) -> "OnboardingRecord":
+    def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
         if raw.get("version") == 2:
             return cls(
                 version=2, draft=raw.get("draft", {}),
@@ -140,8 +149,13 @@ async def run_turn(
 
     reply_msgs: list[ChatMessage] = [
         {"role": "system", "content": _COPILOT},
-        {"role": "system",
-         "content": f"Compose reply. {directive.as_prompt()} Be conversational, concise. Never invent prices."},
+        {
+            "role": "system",
+            "content": (
+                f"Compose reply. {directive.as_prompt()} "
+                "Be conversational, concise. Never invent prices."
+            ),
+        },
     ]
     for entry in record.history[-3:]:
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
