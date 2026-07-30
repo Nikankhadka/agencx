@@ -203,6 +203,18 @@ def _incomplete_rules(rules: list[PricingRuleDraft]) -> list[PricingRuleDraft]:
     return [r for r in rules if r.unit_amount_dollars is None or r.unit_amount_dollars <= 0]
 
 
+# Map of required draft section keys to their Pydantic schemas. Used by the
+# agentic copilot (T-042) to construct tool specs and by the completeness
+# gate to validate that every required section is present.
+_REQUIRED_SECTIONS: dict[str, type[BaseModel]] = {
+    "identity": IdentityDraft,
+    "tone": ToneDraft,
+    "services": ServicesDraft,
+    "pricing_rules": PricingRulesDraft,
+    "escalation_threshold": EscalationDraft,
+}
+
+
 def _prior_rules_context(rules: list[PricingRuleDraft]) -> str:
     """Render the rules captured so far, to carry into a follow-up extraction.
 
