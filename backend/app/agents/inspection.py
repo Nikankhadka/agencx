@@ -52,8 +52,12 @@ ESCALATION_MESSAGE = (
     "to a human who can. They'll pick it up from here."
 )
 
-_PRICE_GATED_ROUTES = ("recommendation", "quoting")
-_RETRYABLE_ROUTES = ("knowledge", "recommendation", "quoting")
+# Public because graph.py routes on exactly these two facts. They were once
+# duplicated there as literal tuples and drifted: "conversation" was retryable
+# per graph.py but absent here, so a second inspection failure on that route
+# raised instead of escalating. One definition, no drift.
+PRICE_GATED_ROUTES = ("recommendation", "quoting")
+RETRYABLE_ROUTES = ("conversation", "knowledge", "recommendation", "quoting")
 
 
 class CheckVerdict(BaseModel):
@@ -92,7 +96,7 @@ def check_prompt_leak(draft: str, system_prompt: str) -> CheckVerdict | None:
 
 
 def check_price_provenance(state: AgentState) -> CheckVerdict:
-    if state["route"] not in _PRICE_GATED_ROUTES:
+    if state["route"] not in PRICE_GATED_ROUTES:
         return CheckVerdict()
     provenance = [
         selection["price_cents"]
@@ -214,7 +218,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         }
 
     assert (
-        state["route"] in _RETRYABLE_ROUTES
+        state["route"] in RETRYABLE_ROUTES
     )  # only these ever reach a real (non-deterministic) draft
     first_check, _ = failed[0]
     writer({"type": "refusal", "text": ESCALATION_MESSAGE})

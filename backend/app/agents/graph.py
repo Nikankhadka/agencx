@@ -17,7 +17,7 @@ from app.agents.draft_node import run as draft_node_run
 from app.agents.state import AgentState, GraphContext
 from app.agents.tracing import traced
 
-_PRICE_GATED = ("recommendation", "quoting")
+_PRICE_GATED = inspection.PRICE_GATED_ROUTES
 
 
 def _price_gate_route(state: AgentState) -> str:
@@ -42,7 +42,7 @@ def _inspection_route(state: AgentState) -> str:
     decision = state.get("inspection_decision")
     if decision == "retry":
         route = state["route"]
-        assert route in ("conversation", "knowledge", "recommendation", "quoting")
+        assert route in inspection.RETRYABLE_ROUTES
         return "draft"
     if decision == "escalate":
         return "escalation"
