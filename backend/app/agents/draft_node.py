@@ -103,15 +103,21 @@ def _build_recommendation_prompt(
 def _build_quoting_prompt(
     engine_quote: dict[str, Any], violations: list[str] | None,
 ) -> str:
+    # Line-item labels come from tenant-authored pricing rules and catalog
+    # items, so they are wrapped like every other piece of tenant data (T-027).
+    # Quantities are engine-computed and safe unwrapped.
+    spotlight = new_spotlight()
     coverage = "\n".join(
-        f"- {item['label']} x{item['quantity']}" for item in engine_quote["line_items"]
+        f"- {spotlight.wrap(item['label'])} x{item['quantity']}"
+        for item in engine_quote["line_items"]
     )
     prompt = (
         "You are presenting a price quote to a customer. A quote card showing "
         "the exact line items, quantities, and totals is displayed alongside "
         "your message. Briefly explain what the quote covers, referring to the "
         "card for figures. Do NOT state any prices, totals, or other monetary "
-        "amounts yourself - the card is the single source of numbers.\n\n"
+        "amounts yourself - the card is the single source of numbers.\n"
+        f"{spotlight.instruction()}\n\n"
         f"The quote covers:\n{coverage}"
     )
     return prompt + _redraft_note(

@@ -68,9 +68,6 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
         self._drafts = list(drafts or ["A grounded, on-policy answer [1]."])
         self.verdict_calls = 0
         self.stream_calls = 0
-        # System prompt of each draft call, so a test can assert the redraft
-        # actually carried the violations forward.
-        self.draft_prompts: list[str] = []
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]

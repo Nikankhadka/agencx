@@ -193,3 +193,26 @@ def test_selection_schema_has_no_money_fields() -> None:
         if field.annotation in (int, int | None)
     ]
     assert int_fields == ["quantity"]
+
+
+async def test_quote_line_item_labels_are_spotlight_wrapped(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """T-027: line-item labels come from tenant-authored pricing rules, so the
+    quoting draft prompt must delimit them. The pre-T-044 quoting specialist
+    wrapped these; the replacement dropped it, which is what this guards."""
+    tenant_id, conversation_id, _ = await _seed_quoting_tenant(superuser_conn)
+    provider = _quoting_provider(selections=[{"rule_code": "screen-repair-a", "quantity": 1}])
+    graph = build_graph()
+    initial_state = _initial_state("how much for a screen repair?")
+    initial_state["tenant_id"] = str(tenant_id)
+    initial_state["conversation_id"] = str(conversation_id)
+
+    await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
+
+    prompt = provider.draft_prompts[0]
+    assert "Screen repair (tier A)" in prompt, "sanity: the label reached the prompt"
+    assert "<<data-" in prompt, "line-item label was not spotlight-wrapped"
+    assert "never" in prompt.lower(), "the spotlight instruction must accompany the wrapping"
+    # The deterministic-pricing rule is unaffected by the wrapping.
+    assert "Do NOT state any prices" in prompt
