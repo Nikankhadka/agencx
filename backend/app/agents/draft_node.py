@@ -43,6 +43,23 @@ _SYSTEM_PROMPT_CONVERSATION = (
 )
 
 
+def _redraft_note(violations: list[str] | None, extra: str = "") -> str:
+    """The instruction appended to a draft prompt after the price gate or
+    inspection rejected the previous attempt. One definition so that every
+    retryable route's second attempt actually differs from its first - a
+    redraft built from an unchanged prompt is guaranteed to fail the same way.
+    """
+    if not violations:
+        return ""
+    return (
+        "\n\nYour previous draft was rejected: "
+        + "; ".join(violations)
+        + ". Redraft now, addressing this"
+        + (f" - {extra}" if extra else "")
+        + "."
+    )
+
+
 def _build_knowledge_prompt(
     chunks: list[dict[str, Any]], tenant_prompt: str, tone: str,
     violations: list[str] | None,
@@ -60,12 +77,7 @@ def _build_knowledge_prompt(
         "never invent information.\n\n"
         f"Context:\n{context_block}"
     )
-    if violations:
-        prompt += (
-            "\n\nYour previous draft was rejected: "
-            + "; ".join(violations) + ". Redraft now, addressing this."
-        )
-    return prompt
+    return prompt + _redraft_note(violations)
 
 
 def _build_recommendation_prompt(
@@ -83,36 +95,34 @@ def _build_recommendation_prompt(
         "invent an item or a price that isn't listed.\n"
         f"{spotlight.instruction()}\n\nAvailable items:\n{items_block}"
     )
-    if violations:
-        prompt += (
-            "\n\nYour previous draft was rejected: " + "; ".join(violations)
-            + ". Redraft now, addressing this - name prices only exactly as listed above, "
-            "or leave them out entirely."
-        )
-    return prompt
+    return prompt + _redraft_note(
+        violations, "name prices only exactly as listed above, or leave them out entirely"
+    )
 
 
 def _build_quoting_prompt(
     engine_quote: dict[str, Any], violations: list[str] | None,
 ) -> str:
+    # Line-item labels come from tenant-authored pricing rules and catalog
+    # items, so they are wrapped like every other piece of tenant data (T-027).
+    # Quantities are engine-computed and safe unwrapped.
+    spotlight = new_spotlight()
     coverage = "\n".join(
-        f"- {item['label']} x{item['quantity']}" for item in engine_quote["line_items"]
+        f"- {spotlight.wrap(item['label'])} x{item['quantity']}"
+        for item in engine_quote["line_items"]
     )
     prompt = (
         "You are presenting a price quote to a customer. A quote card showing "
         "the exact line items, quantities, and totals is displayed alongside "
         "your message. Briefly explain what the quote covers, referring to the "
         "card for figures. Do NOT state any prices, totals, or other monetary "
-        "amounts yourself - the card is the single source of numbers.\n\n"
+        "amounts yourself - the card is the single source of numbers.\n"
+        f"{spotlight.instruction()}\n\n"
         f"The quote covers:\n{coverage}"
     )
-    if violations:
-        prompt += (
-            "\n\nYour previous draft was rejected: "
-            + "; ".join(violations)
-            + ". Redraft now, addressing this - state no monetary amounts yourself either way."
-        )
-    return prompt
+    return prompt + _redraft_note(
+        violations, "state no monetary amounts yourself either way"
+    )
 
 
 async def run(state: AgentState) -> dict[str, Any]:
@@ -141,11 +151,12 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     if route == "conversation":
         messages: list[ChatMessage] = [
-            {"role": "system", "content": _SYSTEM_PROMPT_CONVERSATION},
+            {"role": "system",
+             "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
-        return {"draft_response": text, "draft_deterministic": False}
+        return {"draft_response": text, "draft_deterministic": False, **clear_violations}
 
     if route == "knowledge":
         retrieved_chunks = state.get("retrieved_chunks", [])
@@ -243,11 +254,12 @@ async def run(state: AgentState) -> dict[str, Any]:
     _logging.getLogger("app.agents.draft_node").warning(
         "draft_node: unknown route %s, falling back to conversation", route)
     messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT_CONVERSATION},
+        {"role": "system",
+         "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
         {"role": "user", "content": query},
     ]
     text = await stream_draft(ctx.provider, messages)
-    return {"draft_response": text, "draft_deterministic": False}
+    return {"draft_response": text, "draft_deterministic": False, **clear_violations}
 
 
 def _citation_source(chunk: dict[str, Any]) -> str:

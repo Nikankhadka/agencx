@@ -41,6 +41,16 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    # Optional fallback chat provider: when a base URL and model are set, every
+    # LLM call fails over to this provider after the primary's internal retries
+    # are exhausted (transient 429s, unusable upstream bodies, malformed
+    # structured output). Empty base URL = failover disabled, the app uses the
+    # primary provider alone. The fallback is always OpenAI-compatible
+    # (Z.ai's free GLM Flash models are the intended use).
+    llm_fallback_base_url: str = ""
+    llm_fallback_api_key: str = ""
+    llm_fallback_model: str = ""
+
     # Output caps, 0 = uncapped (the default, and the behavior before these
     # existed).
     #

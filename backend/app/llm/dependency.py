@@ -4,24 +4,44 @@ Shared by every router that needs one (onboarding, knowledge, chat) so tests
 override a single callable and stub every call site at once. Both factories
 key off settings enums (LLM_PROVIDER, EMBEDDER) - the reranker's pattern
 (app/retrieval/rerank.py) - so providers are swapped by env, never by code.
+
+When a fallback model + API key are configured, the returned provider is a
+FailoverProvider: every call is served by the primary and retried once against
+the fallback when the primary's own retries are exhausted. This is invisible
+to callers - they still see a plain LLMProvider.
 """
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from app.core.config import get_settings
 from app.llm.azure import AzureOpenAIProvider
 from app.llm.embedder import Embedder, get_embedder
+from app.llm.failover import FailoverProvider
 from app.llm.openai_compat import OpenAICompatProvider
 from app.llm.provider import LLMProvider
+from app.llm.zai import ZaiOpenAICompatProvider
+
+logger = logging.getLogger(__name__)
 
 
 def get_llm_provider() -> LLMProvider:
     settings = get_settings()
+    primary: LLMProvider
     if settings.llm_provider == "openai_compat":
-        return OpenAICompatProvider(settings)
-    return AzureOpenAIProvider(settings)
+        primary = OpenAICompatProvider(settings)
+    else:
+        primary = AzureOpenAIProvider(settings)
+
+    if settings.llm_fallback_model and settings.llm_fallback_api_key:
+        fallback = ZaiOpenAICompatProvider(settings)
+        return FailoverProvider(primary, fallback)
+
+    if settings.llm_fallback_model:
+        logger.warning("LLM_FALLBACK_MODEL set but LLM_FALLBACK_API_KEY missing; failover disabled")
+    return primary
 
 
 @lru_cache

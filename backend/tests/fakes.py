@@ -43,6 +43,13 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         self._stream_text = stream_text
         self._extract_route = extract_route
         self._extract_confidence = extract_confidence
+        # Messages seen by each chat_with_tools call, so a test can assert what
+        # the agent loop actually feeds back to the model (tool results are
+        # tenant-authored data and must arrive spotlight-wrapped).
+        self.tool_call_messages: list[list[ChatMessage]] = []
+        # System prompt of each draft call, so a test can assert what the draft
+        # node composed (spotlight wrapping, redraft violations).
+        self.draft_prompts: list[str] = []
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
@@ -62,11 +69,15 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         raise NotImplementedError
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        self.draft_prompts.append(
+            next((m["content"] for m in messages if m["role"] == "system"), "")
+        )
         yield self._stream_text
 
     async def chat_with_tools(
         self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto",
     ) -> ToolTurn:
+        self.tool_call_messages.append([dict(m) for m in messages])  # type: ignore[misc]
         if self._turn_index < len(self._turns):
             turn = self._turns[self._turn_index]
             self._turn_index += 1

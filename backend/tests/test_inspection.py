@@ -48,6 +48,10 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
                 ]),
                 ToolTurn(text="ok", tool_calls=[]),
             ]
+        elif route == "conversation":
+            # No tool calls at all - _determine_route falls through to
+            # "conversation" (agent_node.py:154).
+            tool_sequence = [ToolTurn(text="hi", tool_calls=[])]
         else:
             tool_sequence = [
                 ToolTurn(tool_calls=[
@@ -78,6 +82,9 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         self.stream_calls += 1
+        self.draft_prompts.append(
+            next((m["content"] for m in messages if m["role"] == "system"), "")
+        )
         draft = self._drafts.pop(0) if self._drafts else self._drafts_exhausted_fallback()
         for word in draft.split(" "):
             yield word + " "
@@ -273,6 +280,58 @@ async def test_clean_path_passes_with_one_inspection_call(
     assert final_state["inspection_decision"] == "ok"
     assert final_state["escalated"] is False
     assert provider.stream_calls == 1
+
+
+async def test_conversation_route_redraft_sees_the_violations(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """A conversation-route draft that fails inspection must get the violations
+    fed into its redraft prompt - otherwise the second attempt regenerates the
+    identical prompt and is guaranteed to fail the same way."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    provider = FakeInspectionProvider(
+        route="conversation",
+        verdict_payloads=[{"policy": {"passed": False, "reason": "too curt"}}, {}],
+        drafts=["Nope.", "Happy to help - what can I do for you?"],
+    )
+    graph = build_graph()
+    initial_state = _initial_state()
+    initial_state["tenant_id"] = str(tenant_id)
+    initial_state["conversation_id"] = str(conversation_id)
+
+    final_state = await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
+
+    assert final_state["inspection_decision"] == "ok"
+    assert final_state["escalated"] is False
+    assert provider.stream_calls == 2
+    assert "too curt" in provider.draft_prompts[1]
+
+
+async def test_conversation_route_second_failure_escalates_cleanly(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Two failed inspections on the conversation route must escalate like any
+    other retryable route, not raise (inspection.RETRYABLE_ROUTES is the single
+    definition graph.py's _inspection_route asserts against)."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    provider = FakeInspectionProvider(
+        route="conversation",
+        verdict_payloads=[
+            {"policy": {"passed": False, "reason": "too curt"}},
+            {"policy": {"passed": False, "reason": "still too curt"}},
+        ],
+        drafts=["Nope.", "Still nope."],
+    )
+    graph = build_graph()
+    initial_state = _initial_state()
+    initial_state["tenant_id"] = str(tenant_id)
+    initial_state["conversation_id"] = str(conversation_id)
+
+    final_state = await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
+
+    assert final_state["escalated"] is True
+    assert final_state["escalation_reason"] == "inspection:policy"
+    assert final_state["draft_response"] == ESCALATION_MESSAGE
 
 
 async def test_order_status_is_never_inspected_by_the_llm(

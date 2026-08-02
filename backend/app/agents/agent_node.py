@@ -19,6 +19,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 from pydantic import BaseModel, Field
 
+from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
 from app.core import db
@@ -45,6 +46,20 @@ _SYSTEM_PROMPT = (
     "respond directly without calling any tool. If you are unsure or the message "
     "is unclear, escalate."
 )
+
+
+def _tool_result(spotlight: Spotlight, payload: dict[str, Any]) -> str:
+    """Serialize a tool result for the model, spotlight-wrapped (T-027).
+
+    Everything a tool returns is ultimately tenant-authored - catalog names and
+    descriptions, pricing-rule labels, order statuses, even an exception string
+    that may quote a row. The agent loop feeds these straight back as ``tool``
+    messages and then decides which tool to call next, so undelimited tool
+    output is an instruction channel. Wrapping the whole payload rather than
+    hand-picking fields means a later change to what a tool returns cannot
+    silently open that channel again.
+    """
+    return spotlight.wrap(json.dumps(payload))
 
 
 class _SearchKnowledgeArgs(BaseModel):
@@ -171,9 +186,14 @@ async def run(state: AgentState) -> dict[str, Any]:
     ctx = runtime.context
     writer = get_stream_writer()
 
+    # One spotlight per turn: every tool result below is wrapped with it, and
+    # the instruction that explains the delimiters ships in the same prompt.
+    spotlight = new_spotlight()
+
     tail = state["messages"][-3:] if len(state["messages"]) > 3 else state["messages"]
     messages: list[ChatMessage] = [
-        ChatMessage(role="system", content=_SYSTEM_PROMPT),
+        ChatMessage(role="system",
+                    content=f"{_SYSTEM_PROMPT}\n{spotlight.instruction()}"),
     ]
     for m in tail:
         messages.append(ChatMessage(role=m["role"], content=m["content"]))
@@ -225,7 +245,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             conn, ctx.tenant_id, sk_args.query, ctx.embedder, ctx.reranker,
                         )
                         retrieved_chunks = chunks
-                        result_text = json.dumps({"found": len(chunks)})
+                        result_text = _tool_result(spotlight, {"found": len(chunks)})
                         writer({"type": "tool_call", "name": "search_knowledge",
                                 "arguments": call.args, "result": {"chunks": len(chunks)},
                                 "success": True,
@@ -236,7 +256,8 @@ async def run(state: AgentState) -> dict[str, Any]:
                             conn, ctx.tenant_id, ri_args.preferences, ctx.embedder, ctx.reranker,
                         )
                         selections = items
-                        result_text = json.dumps({"found": len(items), "items": items})
+                        result_text = _tool_result(
+                            spotlight, {"found": len(items), "items": items})
                         writer({"type": "tool_call", "name": "recommend_items",
                                 "arguments": call.args, "result": {"items": len(items)},
                                 "success": True,
@@ -246,7 +267,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                         raw_sel = [s.model_dump(exclude_none=True) for s in qi_args.selections]
                         quote = await _get_quote_inputs_impl(conn, ctx.tenant_id, raw_sel)
                         engine_quote = quote
-                        result_text = json.dumps({
+                        result_text = _tool_result(spotlight, {
                             "total_cents": quote["total_cents"],
                             "line_items": quote["line_items"],
                         })
@@ -267,7 +288,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             "ref_code": result.ref_code, "found": result.found,
                             "status": result.status, "kind": result.kind,
                         }
-                        result_text = json.dumps({
+                        result_text = _tool_result(spotlight, {
                             "found": result.found, "status": result.status, "kind": result.kind,
                         })
                         writer({"type": "tool_call", "name": "lookup_order_or_ticket",
@@ -282,17 +303,19 @@ async def run(state: AgentState) -> dict[str, Any]:
                             conn, ctx.tenant_id, UUID(state["conversation_id"]), ce_args.reason,
                         )
                         writer({"type": "escalated"})
-                        result_text = json.dumps({"escalated": True, "reason": ce_args.reason})
+                        result_text = _tool_result(
+                            spotlight, {"escalated": True, "reason": ce_args.reason})
                         writer({"type": "tool_call", "name": "create_escalation",
                                 "arguments": call.args, "result": {"escalated": True},
                                 "success": True,
                                 "latency_ms": int((time.perf_counter() - started) * 1000)})
                     else:
                         logger.warning("unknown tool requested: %s", call.name)
-                        result_text = json.dumps({"error": f"unknown tool: {call.name}"})
+                        result_text = _tool_result(
+                            spotlight, {"error": f"unknown tool: {call.name}"})
                 except Exception as exc:
                     logger.exception("tool %s failed", call.name)
-                    result_text = json.dumps({"error": str(exc)})
+                    result_text = _tool_result(spotlight, {"error": str(exc)})
                     writer({"type": "tool_call", "name": call.name,
                             "arguments": call.args, "result": {"error": str(exc)},
                             "success": False,
