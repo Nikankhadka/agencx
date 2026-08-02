@@ -182,12 +182,24 @@ class OpenAISDKProvider(LLMProvider):
         # configured model lacks native function calling and the emulated
         # extract()-based fallback should be used.
         supports_tools: bool = True,
+        # Extra request-body fields for every call this provider makes (e.g.
+        # Z.ai's "thinking": {"type": "disabled"} to suppress the hidden
+        # reasoning tokens that tax latency). Sent verbatim as extra_body.
+        extra_body: dict[str, object] | None = None,
+        # Structured-output mode: False (default) uses strict json_schema via
+        # the SDK's parse(); True uses the looser json_object mode - the schema
+        # goes in the system prompt and the raw content is pydantic-validated
+        # here. Needed for vendors that document only json_object (Z.ai), where
+        # a strict json_schema response_format would be rejected.
+        json_object_extract: bool = False,
     ) -> None:
         self._client = client
         self._model = model_id
         self._max_tokens_draft = max_tokens_draft
         self._max_tokens_extract = max_tokens_extract
         self._supports_tools = supports_tools
+        self._extra_body = extra_body or {}
+        self._json_object_extract = json_object_extract
 
     @property
     def supports_tools(self) -> bool:
@@ -198,6 +210,12 @@ class OpenAISDKProvider(LLMProvider):
         Spread into the call so an uncapped provider sends no max_tokens field
         at all, exactly as before this existed."""
         return {"max_tokens": tokens} if tokens > 0 else {}
+
+    def _extra_body_kwargs(self) -> dict[str, object]:
+        """Kwargs for the configured extra_body fields, or nothing when none
+        are set - spread into every SDK call so an empty config changes
+        nothing on the wire."""
+        return {"extra_body": self._extra_body} if self._extra_body else {}
 
     # --- native tool definitions (OpenAI wire format) ---------------------------
 
@@ -235,6 +253,7 @@ class OpenAISDKProvider(LLMProvider):
                 tools=self._tool_defs(tools),
                 tool_choice=tool_choice,
                 **self._cap(self._max_tokens_draft),
+                **self._extra_body_kwargs(),
             )
 
         completion = await _with_retry(_call)
@@ -253,9 +272,7 @@ class OpenAISDKProvider(LLMProvider):
                         f"tool call '{tc.function.name}' returned unparseable arguments: "
                         f"{tc.function.arguments[:200]}"
                     ) from e
-                tool_calls.append(
-                    ToolCall(id=tc.id, name=tc.function.name, args=args)
-                )
+                tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, args=args))
         return ToolTurn(text=text, tool_calls=tool_calls)
 
     # --- chat_with_tools: emulated path -----------------------------------------
@@ -302,8 +319,7 @@ class OpenAISDKProvider(LLMProvider):
 
         # Build the system prompt describing tools.
         tool_descriptions = "\n".join(
-            f"  - {t.name}: {t.description}"
-            f"\n    args schema: {t.args_schema.model_json_schema()}"
+            f"  - {t.name}: {t.description}\n    args schema: {t.args_schema.model_json_schema()}"
             for t in tools
         )
         system_prompt = (
@@ -330,10 +346,7 @@ class OpenAISDKProvider(LLMProvider):
                         "tool_args": dict[str, object],
                     },
                     "tool_name": Field(
-                        description=(
-                            "The tool to call "
-                            "(note: __no_tool__ is not available)"
-                        )
+                        description=("The tool to call (note: __no_tool__ is not available)")
                     ),
                     "tool_args": Field(default_factory=dict),
                 },
@@ -376,6 +389,17 @@ class OpenAISDKProvider(LLMProvider):
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
+        if self._json_object_extract:
+            return await self._extract_json_object(
+                system_prompt=system_prompt, user_input=user_input, schema=schema
+            )
+        return await self._extract_strict(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
+
+    async def _extract_strict(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
         async def _call() -> SchemaT:
             try:
                 completion = await self._client.chat.completions.parse(
@@ -386,6 +410,7 @@ class OpenAISDKProvider(LLMProvider):
                     ],
                     response_format=schema,
                     **self._cap(self._max_tokens_extract),
+                    **self._extra_body_kwargs(),
                 )
             except LengthFinishReasonError as error:
                 # The output cap was hit before the model finished the JSON.
@@ -416,12 +441,70 @@ class OpenAISDKProvider(LLMProvider):
 
         return await _with_retry(_call)
 
+    async def _extract_json_object(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        """json_object-mode extraction for vendors that reject strict
+        json_schema (Z.ai). The schema travels in the system prompt; the
+        raw content is pydantic-validated here, and a malformed JSON surfaces
+        as a ValidationError that joins the retry path exactly like the strict
+        path's SDK parse failure."""
+
+        async def _call() -> SchemaT:
+            schema_json = schema.model_json_schema()
+            try:
+                completion = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                f"{system_prompt}\n\n"
+                                "Respond with a single JSON object conforming to this schema:\n"
+                                f"{json.dumps(schema_json)}\n"
+                                "Output only the JSON object, no markdown, no prose."
+                            ),
+                        },
+                        {"role": "user", "content": user_input},
+                    ],
+                    response_format={"type": "json_object"},
+                    **self._cap(self._max_tokens_extract),
+                    **self._extra_body_kwargs(),
+                )
+            except TypeError as error:
+                # Same null-choices 200 error-body trap as the strict path.
+                raise UpstreamResponseError(
+                    "provider returned an unparseable completion body"
+                ) from error
+            _report(self._model, completion.usage)
+            _require_choices(completion)
+            content = completion.choices[0].message.content
+            if not content:
+                raise ValueError("model produced no parseable structured output")
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as error:
+                raise ValidationError.from_exception_data(
+                    title=schema.__name__,
+                    line_errors=[
+                        {
+                            "type": "json_invalid",
+                            "loc": (0,),
+                            "input": content[:200],
+                        }
+                    ],
+                ) from error
+            return schema.model_validate(data)
+
+        return await _with_retry(_call)
+
     async def chat(self, messages: list[ChatMessage]) -> str:
         async def _call() -> str:
             completion = await self._client.chat.completions.create(
                 model=self._model,
                 messages=[dict(message) for message in messages],
                 **self._cap(self._max_tokens_draft),
+                **self._extra_body_kwargs(),
             )
             _report(self._model, completion.usage)
             _require_choices(completion)
@@ -444,6 +527,7 @@ class OpenAISDKProvider(LLMProvider):
                 # Ask for a final usage-only chunk so streamed calls are costed too.
                 stream_options={"include_usage": True},
                 **self._cap(self._max_tokens_draft),
+                **self._extra_body_kwargs(),
             )
 
         stream = await _with_retry(_open)
