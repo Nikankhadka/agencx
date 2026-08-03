@@ -66,15 +66,21 @@ async def _seed_catalog(
         item_id: uuid.UUID = await conn.fetchval(
             "insert into catalog_items (tenant_id, name, description, price_cents) "
             "values ($1, $2, $3, $4) returning id",
-            tenant_id, name, description, price_cents,
+            tenant_id,
+            name,
+            description,
+            price_cents,
         )
         item_ids.append(item_id)
         chunk = chunk_catalog_item(str(item_id), name, description, price_cents)
         await conn.execute(
             "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
             "values ($1, $2, $3, $4, $5)",
-            tenant_id, document_id, chunk.content,
-            [0.0] * EMBEDDING_DIM, json.dumps(chunk.metadata),
+            tenant_id,
+            document_id,
+            chunk.content,
+            [0.0] * EMBEDDING_DIM,
+            json.dumps(chunk.metadata),
         )
     return tenant_id, item_ids
 
@@ -82,9 +88,11 @@ async def _seed_catalog(
 def _recommendation_provider(*, stream_text: str = "Try item one.") -> ToolAwareFakeProvider:
     return ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_r", name="recommend_items", args={"preferences": "durable"}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_r", name="recommend_items", args={"preferences": "durable"}),
+                ]
+            ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
         stream_text=stream_text,
@@ -212,7 +220,5 @@ async def test_poisoned_catalog_text_cannot_close_the_data_block(
     )
     await graph.ainvoke(_initial_state("I need something durable"), context=context)
 
-    result = next(
-        m["content"] for m in provider.tool_call_messages[1] if m["role"] == "tool"
-    )
+    result = next(m["content"] for m in provider.tool_call_messages[1] if m["role"] == "tool")
     assert "<</data-deadbeefdeadbeef>>" not in result

@@ -1,5 +1,4 @@
-"""T-021/T-044: reasoning-inspection layer tests.
-"""
+"""T-021/T-044: reasoning-inspection layer tests."""
 
 from __future__ import annotations
 
@@ -35,17 +34,22 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
         tool_sequence: list[ToolTurn]
         if route == "knowledge":
             tool_sequence = [
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ]
         elif route == "order_status":
             tool_sequence = [
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_o", name="lookup_order_or_ticket",
-                             args={"ref_code": "R-1042"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_o", name="lookup_order_or_ticket", args={"ref_code": "R-1042"}
+                        ),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ]
         elif route == "conversation":
@@ -54,9 +58,11 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
             tool_sequence = [ToolTurn(text="hi", tool_calls=[])]
         else:
             tool_sequence = [
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ]
         super().__init__(
@@ -98,6 +104,7 @@ class PassthroughReranker(Reranker):
         self, *, query: str, candidates: list[RetrievedChunk], top_k: int
     ) -> list[RetrievedChunk]:
         from dataclasses import replace
+
         return [replace(chunk, score=1.0) for chunk in candidates[:top_k]]
 
 
@@ -135,7 +142,8 @@ async def _seed_tenant_with_chunk(
     )
     await conn.execute(
         "insert into tenant_config (tenant_id, system_prompt) values ($1, $2)",
-        tenant_id, system_prompt,
+        tenant_id,
+        system_prompt,
     )
     document_id: uuid.UUID = await conn.fetchval(
         "insert into documents (tenant_id, filename, doc_type, status) "
@@ -145,7 +153,8 @@ async def _seed_tenant_with_chunk(
     await conn.execute(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
         "values ($1, $2, $3, $4, $5)",
-        tenant_id, document_id,
+        tenant_id,
+        document_id,
         "We are open weekdays 9am to 5pm.",
         [0.0] * EMBEDDING_DIM,
         json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),
@@ -169,7 +178,8 @@ async def _seed_tenant_with_conversation(
     await conn.execute(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
         "values ($1, $2, $3, $4, $5)",
-        tenant_id, document_id,
+        tenant_id,
+        document_id,
         "We are open weekdays 9am to 5pm.",
         [0.0] * EMBEDDING_DIM,
         json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),

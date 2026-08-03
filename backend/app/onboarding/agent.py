@@ -6,6 +6,7 @@ a conversational reply from a server-computed directive.
 Guardrails: scan_input, price echo check, redirection budget, bounded tool loop.
 State: {version: 2, draft, history, off_topic_count, completed} in jsonb.
 """
+
 from __future__ import annotations
 
 import re
@@ -21,8 +22,10 @@ from app.onboarding.tools import TOOL_REGISTRY, _check_completeness, request_fin
 _MAX_CALLS = 4
 _MAX_HIST = 20
 
+
 class _NoArgs(BaseModel):
     pass
+
 
 @dataclass
 class Directive:
@@ -31,6 +34,7 @@ class Directive:
     ask_for: str = ""
     warn: str = ""
     redirect_firmness: int = 0
+
     def as_prompt(self) -> str:
         parts: list[str] = []
         if self.acknowledged:
@@ -46,11 +50,13 @@ class Directive:
             parts.append("Keep short, redirect to onboarding.")
         return " ".join(parts)
 
+
 _COPILOT = (
     "You are an onboarding copilot. Collect identity, tone, services (with "
     "prices), pricing rules, and escalation posture. Call tools to record info. "
     "Be conversational. Redirect off-topic questions. Never invent prices."
 )
+
 
 def _build_specs() -> list[ToolSpec]:
     specs: list[ToolSpec] = []
@@ -72,7 +78,9 @@ def _build_specs() -> list[ToolSpec]:
         )
     return specs
 
+
 _TOOL_SPECS = _build_specs()
+
 
 @dataclass
 class OnboardingRecord:
@@ -86,23 +94,31 @@ class OnboardingRecord:
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
         if raw.get("version") == 2:
             return cls(
-                version=2, draft=raw.get("draft", {}),
+                version=2,
+                draft=raw.get("draft", {}),
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
             )
         legacy_state = raw.get("state", {}) or {}
         legacy_draft = legacy_state.get("draft", {}) if isinstance(legacy_state, dict) else {}
-        return cls(version=2, draft=legacy_draft, history=[], off_topic_count=0,
-                   completed=raw.get("completed", False))
+        return cls(
+            version=2,
+            draft=legacy_draft,
+            history=[],
+            off_topic_count=0,
+            completed=raw.get("completed", False),
+        )
 
     def to_jsonb(self) -> dict[str, Any]:
         return {
-            "version": self.version, "draft": self.draft,
+            "version": self.version,
+            "draft": self.draft,
             "history": self.history[-_MAX_HIST:],
             "off_topic_count": self.off_topic_count,
             "completed": self.completed,
         }
+
 
 async def run_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
@@ -169,17 +185,42 @@ async def run_turn(
 
     record.history.append({"role": "user", "content": admin_message})
     record.history.append({"role": "assistant", "content": reply})
-    record.history = record.history[-_MAX_HIST * 2:]
+    record.history = record.history[-_MAX_HIST * 2 :]
     return record, reply
+
 
 def _off_topic(msg: str, no_tools: bool) -> bool:
     if not no_tools:
         return False
-    signals = ["business", "customer", "service", "product", "price", "cost",
-               "pricing", "rule", "fee", "charge", "tone", "friendly", "formal",
-               "professional", "escalat", "hand off", "human", "assistant",
-               "phone", "repair", "shop", "offer", "help", "dental", "clinic"]
+    signals = [
+        "business",
+        "customer",
+        "service",
+        "product",
+        "price",
+        "cost",
+        "pricing",
+        "rule",
+        "fee",
+        "charge",
+        "tone",
+        "friendly",
+        "formal",
+        "professional",
+        "escalat",
+        "hand off",
+        "human",
+        "assistant",
+        "phone",
+        "repair",
+        "shop",
+        "offer",
+        "help",
+        "dental",
+        "clinic",
+    ]
     return not any(s in msg.lower() for s in signals)
+
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:
     figures = re.findall(r"\$\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?", reply)

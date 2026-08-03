@@ -15,16 +15,28 @@ from app.agents.state import AgentState, GraphContext
 logger = logging.getLogger("app.agents.graph")
 
 _SPAN_ATTR_KEYS = (
-    "route", "route_confidence", "route_reason", "price_gate_decision",
-    "inspection_decision", "escalated", "escalation_reason", "draft_deterministic",
+    "route",
+    "route_confidence",
+    "route_reason",
+    "price_gate_decision",
+    "inspection_decision",
+    "escalated",
+    "escalation_reason",
+    "draft_deterministic",
 )
 
 _PROGRESS_STAGES = {
-    "supervisor": "routing", "agent": "routing", "draft": "answering",
-    "conversation": "answering", "knowledge": "answering",
-    "recommendation": "answering", "quoting": "quoting",
-    "order_status": "answering", "escalation": "escalating",
-    "inspection": "checking", "price_gate": "checking",
+    "supervisor": "routing",
+    "agent": "routing",
+    "draft": "answering",
+    "conversation": "answering",
+    "knowledge": "answering",
+    "recommendation": "answering",
+    "quoting": "quoting",
+    "order_status": "answering",
+    "escalation": "escalating",
+    "inspection": "checking",
+    "price_gate": "checking",
 }
 
 
@@ -54,8 +66,12 @@ def traced(name: str, node: Callable[[AgentState], Awaitable[dict[str, Any]]]) -
             span.set(**attrs, duration_ms=duration_ms)
             logger.info(
                 "agent node",
-                extra={"node": name, "duration_ms": duration_ms,
-                       "route": result.get("route", state.get("route"))},
+                extra={
+                    "node": name,
+                    "duration_ms": duration_ms,
+                    "route": result.get("route", state.get("route")),
+                },
             )
             return result
+
     return wrapped

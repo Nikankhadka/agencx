@@ -108,11 +108,14 @@ class _ParrotProvider(ToolAwareFakeProvider):
 
     def __init__(self) -> None:
         from app.llm.provider import ToolCall, ToolTurn
+
         super().__init__(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="knowledge",

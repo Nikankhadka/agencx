@@ -127,14 +127,15 @@ class GateTestFakeProvider(ToolAwareFakeProvider):
     def __init__(self, drafts: list[str]) -> None:
         super().__init__(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    ToolCall(
-                        id="call_q", name="get_quote_inputs",
-                        args={"selections": [
-                            {"rule_code": "screen-repair-a", "quantity": 1}
-                        ]},
-                    ),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_q",
+                            name="get_quote_inputs",
+                            args={"selections": [{"rule_code": "screen-repair-a", "quantity": 1}]},
+                        ),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="quoting",
@@ -258,9 +259,7 @@ async def test_clean_engine_derived_response_passes_untouched(
     _pool: None, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     tenant_id, conversation_id = await _seed_rule_tenant(superuser_conn)
-    provider = GateTestFakeProvider(
-        drafts=["That's $120.00 plus $9.60 tax: $129.60 total."]
-    )
+    provider = GateTestFakeProvider(drafts=["That's $120.00 plus $9.60 tax: $129.60 total."])
     graph = build_graph()
     context = GraphContext(
         tenant_id=tenant_id,

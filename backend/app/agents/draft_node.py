@@ -61,7 +61,9 @@ def _redraft_note(violations: list[str] | None, extra: str = "") -> str:
 
 
 def _build_knowledge_prompt(
-    chunks: list[dict[str, Any]], tenant_prompt: str, tone: str,
+    chunks: list[dict[str, Any]],
+    tenant_prompt: str,
+    tone: str,
     violations: list[str] | None,
 ) -> str:
     spotlight = new_spotlight()
@@ -81,7 +83,8 @@ def _build_knowledge_prompt(
 
 
 def _build_recommendation_prompt(
-    selections: list[dict[str, Any]], violations: list[str] | None,
+    selections: list[dict[str, Any]],
+    violations: list[str] | None,
 ) -> str:
     spotlight = new_spotlight()
     items_block = "\n".join(
@@ -101,7 +104,8 @@ def _build_recommendation_prompt(
 
 
 def _build_quoting_prompt(
-    engine_quote: dict[str, Any], violations: list[str] | None,
+    engine_quote: dict[str, Any],
+    violations: list[str] | None,
 ) -> str:
     # Line-item labels come from tenant-authored pricing rules and catalog
     # items, so they are wrapped like every other piece of tenant data (T-027).
@@ -120,9 +124,7 @@ def _build_quoting_prompt(
         f"{spotlight.instruction()}\n\n"
         f"The quote covers:\n{coverage}"
     )
-    return prompt + _redraft_note(
-        violations, "state no monetary amounts yourself either way"
-    )
+    return prompt + _redraft_note(violations, "state no monetary amounts yourself either way")
 
 
 async def run(state: AgentState) -> dict[str, Any]:
@@ -151,8 +153,7 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     if route == "conversation":
         messages: list[ChatMessage] = [
-            {"role": "system",
-             "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
+            {"role": "system", "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
@@ -162,8 +163,11 @@ async def run(state: AgentState) -> dict[str, Any]:
         retrieved_chunks = state.get("retrieved_chunks", [])
         if not retrieved_chunks:
             writer({"type": "refusal", "text": _KNOWLEDGE_REFUSAL})
-            return {"draft_response": _KNOWLEDGE_REFUSAL, "retrieved_chunks": [],
-                    "draft_deterministic": True}
+            return {
+                "draft_response": _KNOWLEDGE_REFUSAL,
+                "retrieved_chunks": [],
+                "draft_deterministic": True,
+            }
         citations = [
             {"index": i + 1, "source": _citation_source(c), "snippet": c["content"][:200]}
             for i, c in enumerate(retrieved_chunks)
@@ -191,8 +195,11 @@ async def run(state: AgentState) -> dict[str, Any]:
         selections = state.get("selections", [])
         if not selections:
             writer({"type": "refusal", "text": _RECOMMENDATION_REFUSAL})
-            return {"draft_response": _RECOMMENDATION_REFUSAL, "selections": [],
-                    "draft_deterministic": True}
+            return {
+                "draft_response": _RECOMMENDATION_REFUSAL,
+                "selections": [],
+                "draft_deterministic": True,
+            }
         system_prompt = _build_recommendation_prompt(selections, violations)
         messages = [
             {"role": "system", "content": system_prompt},
@@ -205,18 +212,24 @@ async def run(state: AgentState) -> dict[str, Any]:
         engine_quote = state.get("engine_quote")
         if not engine_quote:
             writer({"type": "refusal", "text": _QUOTING_NO_CANDIDATES})
-            return {"draft_response": _QUOTING_NO_CANDIDATES, "selections": [],
-                    "draft_deterministic": True}
+            return {
+                "draft_response": _QUOTING_NO_CANDIDATES,
+                "selections": [],
+                "draft_deterministic": True,
+            }
         if not engine_quote.get("quote_id"):
             import json as _json
+
             async with db.tenant_context(ctx.tenant_id, "customer") as conn:
                 quote_id = await conn.fetchval(
                     "insert into quotes (tenant_id, conversation_id, line_items, "
                     "subtotal_cents, tax_cents, total_cents, status) "
                     "values ($1, $2, $3, $4, $5, $6, 'sent') returning id",
-                    ctx.tenant_id, UUID(state["conversation_id"]),
+                    ctx.tenant_id,
+                    UUID(state["conversation_id"]),
                     _json.dumps(engine_quote["line_items"]),
-                    engine_quote["subtotal_cents"], engine_quote["tax_cents"],
+                    engine_quote["subtotal_cents"],
+                    engine_quote["tax_cents"],
                     engine_quote["total_cents"],
                 )
             engine_quote["quote_id"] = str(quote_id)
@@ -228,34 +241,46 @@ async def run(state: AgentState) -> dict[str, Any]:
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
-        return {"draft_response": text, "selections": state.get("selections", []),
-                "engine_quote": engine_quote, **clear_violations}
+        return {
+            "draft_response": text,
+            "selections": state.get("selections", []),
+            "engine_quote": engine_quote,
+            **clear_violations,
+        }
 
     if route == "order_status":
         lookup = state.get("lookup") or {}
         ref_code = lookup.get("ref_code")
         if not ref_code:
             writer({"type": "refusal", "text": _ORDER_ASK_FOR_CODE})
-            return {"draft_response": _ORDER_ASK_FOR_CODE, "draft_deterministic": True,
-                    "lookup": {"ref_code": None, "found": False}}
+            return {
+                "draft_response": _ORDER_ASK_FOR_CODE,
+                "draft_deterministic": True,
+                "lookup": {"ref_code": None, "found": False},
+            }
         if not lookup.get("found"):
             text = _ORDER_NOT_FOUND_TEMPLATE.format(ref_code=ref_code)
             writer({"type": "refusal", "text": text})
-            return {"draft_response": text, "draft_deterministic": True,
-                    "lookup": {"ref_code": ref_code, "found": False}}
+            return {
+                "draft_response": text,
+                "draft_deterministic": True,
+                "lookup": {"ref_code": ref_code, "found": False},
+            }
         text = _ORDER_FOUND_TEMPLATE.format(
-            kind=lookup.get("kind", ""), ref_code=lookup.get("ref_code", ""),
+            kind=lookup.get("kind", ""),
+            ref_code=lookup.get("ref_code", ""),
             status=lookup.get("status", ""),
         )
         writer({"type": "token", "text": text})
         return {"draft_response": text, "draft_deterministic": True, "lookup": lookup}
 
     import logging as _logging
+
     _logging.getLogger("app.agents.draft_node").warning(
-        "draft_node: unknown route %s, falling back to conversation", route)
+        "draft_node: unknown route %s, falling back to conversation", route
+    )
     messages = [
-        {"role": "system",
-         "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
+        {"role": "system", "content": _SYSTEM_PROMPT_CONVERSATION + _redraft_note(violations)},
         {"role": "user", "content": query},
     ]
     text = await stream_draft(ctx.provider, messages)

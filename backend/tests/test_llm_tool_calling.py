@@ -31,12 +31,8 @@ class SearchArgs(BaseModel):
     query: str = Field(description="What to search for")
 
 
-GREET_TOOL = ToolSpec(
-    name="greet", description="Greet a person by name", args_schema=GreetArgs
-)
-SEARCH_TOOL = ToolSpec(
-    name="search", description="Search for information", args_schema=SearchArgs
-)
+GREET_TOOL = ToolSpec(name="greet", description="Greet a person by name", args_schema=GreetArgs)
+SEARCH_TOOL = ToolSpec(name="search", description="Search for information", args_schema=SearchArgs)
 
 # --- native path tests -------------------------------------------------------
 
@@ -199,9 +195,7 @@ class TestEmulatedToolCalling:
 
     async def test_emulated_returns_empty_when_no_tool(self) -> None:
         """An emulated path with __no_tool__ returns an empty ToolTurn."""
-        provider = _make_emulated_provider(
-            _ToolChoice(tool_name="__no_tool__", tool_args={})
-        )
+        provider = _make_emulated_provider(_ToolChoice(tool_name="__no_tool__", tool_args={}))
         result = await provider.chat_with_tools(
             messages=[{"role": "user", "content": "Hi"}],
             tools=[GREET_TOOL],

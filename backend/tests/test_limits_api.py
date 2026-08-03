@@ -56,9 +56,14 @@ class _AlwaysRouteKnowledge(ToolAwareFakeProvider):
             yield token
 
     async def chat_with_tools(
-        self, *, messages: list[ChatMessage], tools: list[Any], tool_choice: str = "auto",
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[Any],
+        tool_choice: str = "auto",
     ) -> Any:
         from app.observability.cost import report_usage
+
         report_usage("gpt-4o-mini", 100, 10)
         return await super().chat_with_tools(
             messages=messages, tools=tools, tool_choice=tool_choice

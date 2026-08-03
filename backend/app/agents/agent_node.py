@@ -90,11 +90,19 @@ class _CreateEscalationArgs(BaseModel):
 
 
 async def _search_knowledge_impl(
-    conn: Any, tenant_id: UUID, query: str, embedder: Any, reranker: Any,
+    conn: Any,
+    tenant_id: UUID,
+    query: str,
+    embedder: Any,
+    reranker: Any,
 ) -> list[dict[str, Any]]:
     results = await retrieve(
-        conn, tenant_id=tenant_id, query=query,
-        embedder=embedder, reranker=reranker, top_k=5,
+        conn,
+        tenant_id=tenant_id,
+        query=query,
+        embedder=embedder,
+        reranker=reranker,
+        top_k=5,
     )
     relevant = [chunk for chunk in results if chunk.score > _REFUSAL_SCORE_THRESHOLD]
     return [
@@ -104,35 +112,54 @@ async def _search_knowledge_impl(
 
 
 async def _recommend_items_impl(
-    conn: Any, tenant_id: UUID, preferences: str, embedder: Any, reranker: Any,
+    conn: Any,
+    tenant_id: UUID,
+    preferences: str,
+    embedder: Any,
+    reranker: Any,
 ) -> list[dict[str, Any]]:
     results = await retrieve(
-        conn, tenant_id=tenant_id, query=preferences,
-        embedder=embedder, reranker=reranker, top_k=5,
+        conn,
+        tenant_id=tenant_id,
+        query=preferences,
+        embedder=embedder,
+        reranker=reranker,
+        top_k=5,
         metadata_kind="catalog_item",
     )
     item_ids = [
         UUID(chunk.metadata["catalog_item_id"])
-        for chunk in results if chunk.metadata.get("catalog_item_id")
+        for chunk in results
+        if chunk.metadata.get("catalog_item_id")
     ]
     rows = (
         await conn.fetch(
             "select id, name, description, price_cents from catalog_items "
             "where tenant_id = $1 and id = any($2::uuid[]) and active",
-            tenant_id, item_ids,
-        ) if item_ids else []
+            tenant_id,
+            item_ids,
+        )
+        if item_ids
+        else []
     )
     return [
-        {"catalog_item_id": str(row["id"]), "name": row["name"],
-         "description": row["description"], "price_cents": row["price_cents"]}
+        {
+            "catalog_item_id": str(row["id"]),
+            "name": row["name"],
+            "description": row["description"],
+            "price_cents": row["price_cents"],
+        }
         for row in rows
     ]
 
 
 async def _get_quote_inputs_impl(
-    conn: Any, tenant_id: UUID, selections: list[dict[str, Any]],
+    conn: Any,
+    tenant_id: UUID,
+    selections: list[dict[str, Any]],
 ) -> dict[str, Any]:
     from app.pricing.engine import Selection, SelectionError, compute_quote
+
     engine_selections = []
     for sel in selections:
         if sel.get("rule_code"):
@@ -151,17 +178,23 @@ async def _get_quote_inputs_impl(
 
 
 async def _create_escalation_impl(
-    conn: Any, tenant_id: UUID, conversation_id: UUID, reason: str,
+    conn: Any,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    reason: str,
 ) -> None:
     await conn.execute(
         "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
         "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
-        tenant_id, conversation_id, reason,
+        tenant_id,
+        conversation_id,
+        reason,
     )
     await conn.execute(
         "update conversations set status = 'escalated' "
         "where id = $1 and tenant_id = $2 and status <> 'escalated'",
-        conversation_id, tenant_id,
+        conversation_id,
+        tenant_id,
     )
 
 
@@ -192,28 +225,37 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     tail = state["messages"][-3:] if len(state["messages"]) > 3 else state["messages"]
     messages: list[ChatMessage] = [
-        ChatMessage(role="system",
-                    content=f"{_SYSTEM_PROMPT}\n{spotlight.instruction()}"),
+        ChatMessage(role="system", content=f"{_SYSTEM_PROMPT}\n{spotlight.instruction()}"),
     ]
     for m in tail:
         messages.append(ChatMessage(role=m["role"], content=m["content"]))
 
     tools = [
-        ToolSpec(name="search_knowledge",
-                 description="Search the business knowledge base for policies or FAQs",
-                 args_schema=_SearchKnowledgeArgs),
-        ToolSpec(name="recommend_items",
-                 description="Recommend products/services based on customer preferences",
-                 args_schema=_RecommendItemsArgs),
-        ToolSpec(name="get_quote_inputs",
-                 description="Produce a price quote for selected items/services",
-                 args_schema=_GetQuoteInputsArgs),
-        ToolSpec(name="lookup_order_or_ticket",
-                 description="Look up the status of an existing order, repair, or ticket by code",
-                 args_schema=_LookupOrderArgs),
-        ToolSpec(name="create_escalation",
-                 description="Escalate to a human agent when you cannot help confidently",
-                 args_schema=_CreateEscalationArgs),
+        ToolSpec(
+            name="search_knowledge",
+            description="Search the business knowledge base for policies or FAQs",
+            args_schema=_SearchKnowledgeArgs,
+        ),
+        ToolSpec(
+            name="recommend_items",
+            description="Recommend products/services based on customer preferences",
+            args_schema=_RecommendItemsArgs,
+        ),
+        ToolSpec(
+            name="get_quote_inputs",
+            description="Produce a price quote for selected items/services",
+            args_schema=_GetQuoteInputsArgs,
+        ),
+        ToolSpec(
+            name="lookup_order_or_ticket",
+            description="Look up the status of an existing order, repair, or ticket by code",
+            args_schema=_LookupOrderArgs,
+        ),
+        ToolSpec(
+            name="create_escalation",
+            description="Escalate to a human agent when you cannot help confidently",
+            args_schema=_CreateEscalationArgs,
+        ),
     ]
 
     called_tools: set[str] = set()
@@ -226,7 +268,9 @@ async def run(state: AgentState) -> dict[str, Any]:
         for _ in range(_MAX_ITERATIONS):
             with ctx.turn.span("agent_tool_call") as span:
                 turn = await ctx.provider.chat_with_tools(
-                    messages=messages, tools=tools, tool_choice="auto",
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
                 )
                 span.set(tool_calls=len(turn.tool_calls))
 
@@ -242,97 +286,170 @@ async def run(state: AgentState) -> dict[str, Any]:
                     if call.name == "search_knowledge":
                         sk_args = _SearchKnowledgeArgs.model_validate(call.args)
                         chunks = await _search_knowledge_impl(
-                            conn, ctx.tenant_id, sk_args.query, ctx.embedder, ctx.reranker,
+                            conn,
+                            ctx.tenant_id,
+                            sk_args.query,
+                            ctx.embedder,
+                            ctx.reranker,
                         )
                         retrieved_chunks = chunks
                         result_text = _tool_result(spotlight, {"found": len(chunks)})
-                        writer({"type": "tool_call", "name": "search_knowledge",
-                                "arguments": call.args, "result": {"chunks": len(chunks)},
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "search_knowledge",
+                                "arguments": call.args,
+                                "result": {"chunks": len(chunks)},
                                 "success": True,
-                                "latency_ms": int((time.perf_counter() - started) * 1000)})
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
                     elif call.name == "recommend_items":
                         ri_args = _RecommendItemsArgs.model_validate(call.args)
                         items = await _recommend_items_impl(
-                            conn, ctx.tenant_id, ri_args.preferences, ctx.embedder, ctx.reranker,
+                            conn,
+                            ctx.tenant_id,
+                            ri_args.preferences,
+                            ctx.embedder,
+                            ctx.reranker,
                         )
                         selections = items
-                        result_text = _tool_result(
-                            spotlight, {"found": len(items), "items": items})
-                        writer({"type": "tool_call", "name": "recommend_items",
-                                "arguments": call.args, "result": {"items": len(items)},
+                        result_text = _tool_result(spotlight, {"found": len(items), "items": items})
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "recommend_items",
+                                "arguments": call.args,
+                                "result": {"items": len(items)},
                                 "success": True,
-                                "latency_ms": int((time.perf_counter() - started) * 1000)})
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
                     elif call.name == "get_quote_inputs":
                         qi_args = _GetQuoteInputsArgs.model_validate(call.args)
                         raw_sel = [s.model_dump(exclude_none=True) for s in qi_args.selections]
                         quote = await _get_quote_inputs_impl(conn, ctx.tenant_id, raw_sel)
                         engine_quote = quote
-                        result_text = _tool_result(spotlight, {
-                            "total_cents": quote["total_cents"],
-                            "line_items": quote["line_items"],
-                        })
-                        writer({"type": "tool_call", "name": "get_quote_inputs",
+                        result_text = _tool_result(
+                            spotlight,
+                            {
+                                "total_cents": quote["total_cents"],
+                                "line_items": quote["line_items"],
+                            },
+                        )
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "get_quote_inputs",
                                 "arguments": call.args,
                                 "result": {"total_cents": quote["total_cents"]},
                                 "success": True,
-                                "latency_ms": int((time.perf_counter() - started) * 1000)})
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
                     elif call.name == "lookup_order_or_ticket":
                         lo_args = _LookupOrderArgs.model_validate(call.args)
                         result = await with_timeout(
                             lookup_order_or_ticket(
-                                conn, ctx.tenant_id, lo_args.ref_code, lo_args.customer_ref,
+                                conn,
+                                ctx.tenant_id,
+                                lo_args.ref_code,
+                                lo_args.customer_ref,
                             ),
-                            ctx.tool_timeout_s, what="order lookup",
+                            ctx.tool_timeout_s,
+                            what="order lookup",
                         )
                         lookup_result = {
-                            "ref_code": result.ref_code, "found": result.found,
-                            "status": result.status, "kind": result.kind,
+                            "ref_code": result.ref_code,
+                            "found": result.found,
+                            "status": result.status,
+                            "kind": result.kind,
                         }
-                        result_text = _tool_result(spotlight, {
-                            "found": result.found, "status": result.status, "kind": result.kind,
-                        })
-                        writer({"type": "tool_call", "name": "lookup_order_or_ticket",
+                        result_text = _tool_result(
+                            spotlight,
+                            {
+                                "found": result.found,
+                                "status": result.status,
+                                "kind": result.kind,
+                            },
+                        )
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "lookup_order_or_ticket",
                                 "arguments": call.args,
-                                "result": {"found": result.found, "status": result.status,
-                                           "kind": result.kind},
+                                "result": {
+                                    "found": result.found,
+                                    "status": result.status,
+                                    "kind": result.kind,
+                                },
                                 "success": True,
-                                "latency_ms": int((time.perf_counter() - started) * 1000)})
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
                     elif call.name == "create_escalation":
                         ce_args = _CreateEscalationArgs.model_validate(call.args)
                         await _create_escalation_impl(
-                            conn, ctx.tenant_id, UUID(state["conversation_id"]), ce_args.reason,
+                            conn,
+                            ctx.tenant_id,
+                            UUID(state["conversation_id"]),
+                            ce_args.reason,
                         )
                         writer({"type": "escalated"})
                         result_text = _tool_result(
-                            spotlight, {"escalated": True, "reason": ce_args.reason})
-                        writer({"type": "tool_call", "name": "create_escalation",
-                                "arguments": call.args, "result": {"escalated": True},
+                            spotlight, {"escalated": True, "reason": ce_args.reason}
+                        )
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "create_escalation",
+                                "arguments": call.args,
+                                "result": {"escalated": True},
                                 "success": True,
-                                "latency_ms": int((time.perf_counter() - started) * 1000)})
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
                     else:
                         logger.warning("unknown tool requested: %s", call.name)
                         result_text = _tool_result(
-                            spotlight, {"error": f"unknown tool: {call.name}"})
+                            spotlight, {"error": f"unknown tool: {call.name}"}
+                        )
                 except Exception as exc:
                     logger.exception("tool %s failed", call.name)
                     result_text = _tool_result(spotlight, {"error": str(exc)})
-                    writer({"type": "tool_call", "name": call.name,
-                            "arguments": call.args, "result": {"error": str(exc)},
+                    writer(
+                        {
+                            "type": "tool_call",
+                            "name": call.name,
+                            "arguments": call.args,
+                            "result": {"error": str(exc)},
                             "success": False,
-                            "latency_ms": int((time.perf_counter() - started) * 1000)})
+                            "latency_ms": int((time.perf_counter() - started) * 1000),
+                        }
+                    )
 
-                tool_result_messages.append({
-                    "role": "tool", "tool_call_id": call.id, "content": result_text,
-                })
+                tool_result_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result_text,
+                    }
+                )
 
-            messages.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [
-                    {"id": c.id, "type": "function",
-                     "function": {"name": c.name, "arguments": json.dumps(c.args)}}
-                    for c in turn.tool_calls
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {"name": c.name, "arguments": json.dumps(c.args)},
+                        }
+                        for c in turn.tool_calls
+                    ],
+                }
+            )
             messages.extend(tool_result_messages)
 
             if "create_escalation" in called_tools:
@@ -342,11 +459,15 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     if route == "escalation":
         return {
-            "route": route, "escalated": True,
+            "route": route,
+            "escalated": True,
             "escalation_reason": "tool_requested",
         }
 
     return {
-        "route": route, "retrieved_chunks": retrieved_chunks,
-        "selections": selections, "engine_quote": engine_quote, "lookup": lookup_result,
+        "route": route,
+        "retrieved_chunks": retrieved_chunks,
+        "selections": selections,
+        "engine_quote": engine_quote,
+        "lookup": lookup_result,
     }

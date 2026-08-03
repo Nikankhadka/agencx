@@ -62,7 +62,9 @@ async def _seed_tenant_with_chunk(conn: asyncpg.Connection[Any], *, content: str
     await conn.execute(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
         "values ($1, $2, $3, $4, $5)",
-        tenant_id, document_id, content,
+        tenant_id,
+        document_id,
+        content,
         [0.0] * EMBEDDING_DIM,
         json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),
     )
@@ -83,9 +85,11 @@ async def test_knowledge_node_returns_provenance_and_draft_response(
     graph = build_graph()
     provider = ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_s", name="search_knowledge", args={"query": "hours"}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_s", name="search_knowledge", args={"query": "hours"}),
+                ]
+            ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
         stream_text="An answer [1].",
@@ -118,9 +122,11 @@ async def test_knowledge_node_refuses_with_empty_provenance_when_no_chunks(
     graph = build_graph()
     provider = ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_s", name="search_knowledge", args={"query": "anything"}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_s", name="search_knowledge", args={"query": "anything"}),
+                ]
+            ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
         stream_text="An answer.",

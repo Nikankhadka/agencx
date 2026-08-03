@@ -87,7 +87,10 @@ class OnboardingFakeProvider(BaseFakeProvider):
         return reply
 
     async def chat_with_tools(
-        self, *, messages: list[ChatMessage], tools: list[ToolSpec],
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
         tool_choice: str = "auto",
     ) -> ToolTurn:
         if self._tool_idx < len(_FAKE_TOOLS):
@@ -96,7 +99,9 @@ class OnboardingFakeProvider(BaseFakeProvider):
             return ToolTurn(
                 tool_calls=[
                     ToolCall(
-                        id=f"call_{self._tool_idx}", name=name, args=args,
+                        id=f"call_{self._tool_idx}",
+                        name=name,
+                        args=args,
                     ),
                 ],
             )
@@ -221,8 +226,7 @@ async def test_full_flow_confirm_writes_tenant_config_and_catalog(
     assert body["pricing_rules_created"] == 1
 
     config_row = await superuser_conn.fetchrow(
-        "select system_prompt, tone, escalation_threshold from tenant_config "
-        "where tenant_id = $1",
+        "select system_prompt, tone, escalation_threshold from tenant_config where tenant_id = $1",
         tenant_id,
     )
     assert config_row is not None
@@ -296,8 +300,10 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     async with client.stream(
-        "POST", "/api/onboarding/message/stream",
-        json={"text": "we fix phones"}, headers=headers,
+        "POST",
+        "/api/onboarding/message/stream",
+        json={"text": "we fix phones"},
+        headers=headers,
     ) as resp:
         assert resp.status_code == 200
         events: list[dict[str, object]] = []

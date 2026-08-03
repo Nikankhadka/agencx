@@ -127,14 +127,16 @@ def _parse_service_line(line: str) -> tuple[str | None, float | None]:
     """
     # Match "$X" or "X dollars" at the end of the line
     import re as _re
+
     price_match = _re.search(
-        r'\$\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*$|(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars?|dollars?)?\s*$',
-        line, _re.IGNORECASE
+        r"\$\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*$|(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars?|dollars?)?\s*$",
+        line,
+        _re.IGNORECASE,
     )
     if price_match:
         price_str = price_match.group(1) or price_match.group(2)
         price = float(price_str.replace(",", ""))
-        name = line[:price_match.start()].strip().rstrip(",").rstrip("is").strip()
+        name = line[: price_match.start()].strip().rstrip(",").rstrip("is").strip()
         return (name, price)
     return (line.strip(), None)
 
@@ -154,15 +156,20 @@ def _parse_pricing_rules(text: str) -> list[dict[str, Any]]:
         if label.lower() in text_lower:
             # Extract the dollar amount following the rule mention
             import re as _re
+
             pat = _re.compile(
-                _re.escape(label.lower()) + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar|$)', _re.IGNORECASE
+                _re.escape(label.lower()) + r".*?(\d+(?:\.\d{1,2})?)\s*(?:dollar|$)", _re.IGNORECASE
             )
             m = pat.search(text)
             amount = float(m.group(1)) if m else None
-            rules.append({
-                "code": code, "label": label,
-                "unit_amount_dollars": amount, "unit": unit,
-            })
+            rules.append(
+                {
+                    "code": code,
+                    "label": label,
+                    "unit_amount_dollars": amount,
+                    "unit": unit,
+                }
+            )
     return rules
 
 
@@ -170,12 +177,12 @@ def _merge_pricing_followup(rules: list[dict[str, Any]], followup: str) -> list[
     """Merge followup amounts into existing rules where the initial answer
     didn't include the price."""
     import re as _re
+
     for rule in rules:
         if rule["unit_amount_dollars"] is not None:
             continue
         pat = _re.compile(
-            _re.escape(rule["label"].lower())
-            + r'.*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)',
+            _re.escape(rule["label"].lower()) + r".*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)",
             _re.IGNORECASE,
         )
         m = pat.search(followup.lower())
@@ -256,10 +263,15 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
                 "jsonb_set(config, '{onboarding}', $2::jsonb, true), "
                 "updated_at = now() where tenant_id = $1",
                 UUID(signup["tenant_id"]),
-                json.dumps({
-                    "version": 2, "draft": draft, "history": [],
-                    "off_topic_count": 0, "completed": False,
-                }),
+                json.dumps(
+                    {
+                        "version": 2,
+                        "draft": draft,
+                        "history": [],
+                        "off_topic_count": 0,
+                        "completed": False,
+                    }
+                ),
             )
         report["draft"] = draft
 

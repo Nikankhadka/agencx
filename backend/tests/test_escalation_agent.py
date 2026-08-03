@@ -71,9 +71,11 @@ async def _seed_tenant_with_conversation(
 def _escalation_provider(*, reason: str) -> ToolAwareFakeProvider:
     return ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_e", name="create_escalation", args={"reason": reason}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_e", name="create_escalation", args={"reason": reason}),
+                ]
+            ),
         ],
         stream_text="",
         extract_route="escalation",

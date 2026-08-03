@@ -38,11 +38,14 @@ pytestmark = pytest.mark.db
 class FakeChatProvider(ToolAwareFakeProvider):
     def __init__(self) -> None:
         from app.llm.provider import ToolCall, ToolTurn
+
         super().__init__(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="knowledge",
@@ -301,19 +304,27 @@ class FakeOrderStatusProvider(ToolAwareFakeProvider):
 
     def __init__(self) -> None:
         from app.llm.provider import ToolCall, ToolTurn
+
         super().__init__(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_o", name="lookup_order_or_ticket",
-                             args={"ref_code": "R-1001"}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_o", name="lookup_order_or_ticket", args={"ref_code": "R-1001"}
+                        ),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="order_status",
         )
 
     async def chat_with_tools(
-        self, *, messages: list[Any], tools: list[Any], tool_choice: str = "auto",
+        self,
+        *,
+        messages: list[Any],
+        tools: list[Any],
+        tool_choice: str = "auto",
     ) -> Any:
         report_usage("fake-model", 10, 5)
         return await super().chat_with_tools(

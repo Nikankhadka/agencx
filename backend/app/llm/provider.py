@@ -35,6 +35,7 @@ class ChatMessage(TypedDict, total=False):
 @dataclass(frozen=True)
 class ToolCall:
     """One tool-use request returned by the model in a tool turn."""
+
     id: str
     name: str
     args: dict[str, object]
@@ -48,6 +49,7 @@ class ToolSpec:
     ``args_schema`` is a Pydantic model whose JSON schema the provider
     includes in the tool definition so the model knows what args to supply.
     """
+
     name: str
     description: str
     args_schema: type[BaseModel]
@@ -62,6 +64,7 @@ class ToolTurn:
     wants to call one or more tools, in which order they should be executed.
     At least one of the two is populated.
     """
+
     text: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
 

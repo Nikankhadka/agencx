@@ -70,9 +70,18 @@ def _provider_for_route(route: str, *, tenant_id: uuid.UUID) -> ToolAwareFakePro
     if route == "quoting":
         return ToolAwareFakeProvider(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[_make_tool_call("get_quote_inputs", {"selections": [
-                    {"rule_code": "test-rule", "quantity": 1},
-                ]})]),
+                ToolTurn(
+                    tool_calls=[
+                        _make_tool_call(
+                            "get_quote_inputs",
+                            {
+                                "selections": [
+                                    {"rule_code": "test-rule", "quantity": 1},
+                                ]
+                            },
+                        )
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             stream_text="Here is your quote.",
@@ -81,11 +90,11 @@ def _provider_for_route(route: str, *, tenant_id: uuid.UUID) -> ToolAwareFakePro
     if route == "order_status":
         return ToolAwareFakeProvider(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    _make_tool_call(
-                        "lookup_order_or_ticket", {"ref_code": "R-1042"}
-                    ),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        _make_tool_call("lookup_order_or_ticket", {"ref_code": "R-1042"}),
+                    ]
+                ),
             ],
             stream_text="",
             extract_route=route,

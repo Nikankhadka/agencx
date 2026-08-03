@@ -1,4 +1,5 @@
 """T-042: onboarding tool implementations."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,17 +22,21 @@ class ToolResult(BaseModel):
     message: str = Field(default="")
     missing: list[str] = Field(default_factory=list)
 
+
 def save_identity(draft: dict[str, Any], args: IdentityDraft) -> dict[str, Any]:
     draft["identity"] = args.model_dump()
     return draft
+
 
 def save_tone(draft: dict[str, Any], args: ToneDraft) -> dict[str, Any]:
     draft["tone"] = args.model_dump()
     return draft
 
+
 def save_services(draft: dict[str, Any], args: ServicesDraft) -> dict[str, Any]:
     draft["services"] = args.model_dump()
     return draft
+
 
 def save_pricing_rules(draft: dict[str, Any], args: PricingRulesDraft) -> dict[str, Any]:
     rules = args.model_dump()
@@ -41,11 +46,13 @@ def save_pricing_rules(draft: dict[str, Any], args: PricingRulesDraft) -> dict[s
     draft["pricing_rules"] = rules
     return draft
 
+
 def save_escalation(draft: dict[str, Any], args: EscalationDraft) -> dict[str, Any]:
     raw = args.model_dump()
     raw["_resolved_threshold"] = resolve_threshold(args)
     draft["escalation_threshold"] = raw
     return draft
+
 
 def _check_completeness(draft: dict[str, Any]) -> list[str]:
     missing: list[str] = []
@@ -70,7 +77,8 @@ def _check_completeness(draft: dict[str, Any]) -> list[str]:
 
     rules = pricing.get("rules", []) if pricing and isinstance(pricing, dict) else []
     unpriced_rules = [
-        r.get("code", r.get("label", "unknown")) for r in rules
+        r.get("code", r.get("label", "unknown"))
+        for r in rules
         if r.get("unit_amount_dollars") is None or r.get("unit_amount_dollars", 0) <= 0
     ]
     if unpriced_rules:
@@ -80,11 +88,13 @@ def _check_completeness(draft: dict[str, Any]) -> list[str]:
         missing.append("escalation posture")
     return missing
 
+
 def request_finalize(draft: dict[str, Any]) -> ToolResult:
     missing = _check_completeness(draft)
     if missing:
         return ToolResult(ok=False, missing=missing)
     return ToolResult(ok=True, message="All required sections complete.")
+
 
 # Map tool name -> (handler function, Pydantic args schema)
 TOOL_REGISTRY: dict[str, tuple[Any, type[BaseModel]]] = {

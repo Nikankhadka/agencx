@@ -25,7 +25,11 @@ class BaseFakeProvider(LLMProvider):
         yield
 
     async def chat_with_tools(
-        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto",
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
     ) -> ToolTurn:
         raise NotImplementedError
 
@@ -57,11 +61,13 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         if "grounding" in schema.model_fields:
             return schema.model_validate({})
         if "route" in schema.model_fields:
-            return schema.model_validate({
-                "route": self._extract_route,
-                "confidence": self._extract_confidence,
-                "reason": "test",
-            })
+            return schema.model_validate(
+                {
+                    "route": self._extract_route,
+                    "confidence": self._extract_confidence,
+                    "reason": "test",
+                }
+            )
         if "ref_code" in schema.model_fields:
             return schema.model_validate({"ref_code": "R-1042", "customer_ref": None})
         if "needs" in schema.model_fields:
@@ -75,7 +81,11 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         yield self._stream_text
 
     async def chat_with_tools(
-        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto",
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
     ) -> ToolTurn:
         self.tool_call_messages.append([dict(m) for m in messages])  # type: ignore[misc]
         if self._turn_index < len(self._turns):

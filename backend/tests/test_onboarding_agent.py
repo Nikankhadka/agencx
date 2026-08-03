@@ -75,10 +75,12 @@ def test_save_identity_updates_draft() -> None:
 
 def test_save_services_stores_items_with_optional_prices() -> None:
     draft: dict[str, Any] = {}
-    svc = ServicesDraft(items=[
-        CatalogItemDraft(name="Screen repair", price_dollars=89.5),
-        CatalogItemDraft(name="Battery replacement", price_dollars=None),
-    ])
+    svc = ServicesDraft(
+        items=[
+            CatalogItemDraft(name="Screen repair", price_dollars=89.5),
+            CatalogItemDraft(name="Battery replacement", price_dollars=None),
+        ]
+    )
     result = save_services(draft, svc)
     items = result["services"]["items"]
     assert len(items) == 2

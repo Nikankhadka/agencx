@@ -287,12 +287,16 @@ class _RouteThenRefProvider(ToolAwareFakeProvider):
 
     def __init__(self, *, ref_code: str) -> None:
         from app.llm.provider import ToolCall, ToolTurn
+
         super().__init__(
             tool_call_sequence=[
-                ToolTurn(tool_calls=[
-                    ToolCall(id="call_o", name="lookup_order_or_ticket",
-                             args={"ref_code": ref_code}),
-                ]),
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_o", name="lookup_order_or_ticket", args={"ref_code": ref_code}
+                        ),
+                    ]
+                ),
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="order_status",

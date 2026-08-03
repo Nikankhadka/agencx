@@ -65,7 +65,10 @@ async def _seed_tenant_with_order(
     await conn.execute(
         "insert into orders (tenant_id, ref_code, kind, status, details) "
         "values ($1, $2, 'repair', $3, $4)",
-        tenant_id, ref_code, status, json.dumps({}),
+        tenant_id,
+        ref_code,
+        status,
+        json.dumps({}),
     )
     return tenant_id
 
@@ -73,9 +76,13 @@ async def _seed_tenant_with_order(
 def _order_provider(*, ref_code: str) -> ToolAwareFakeProvider:
     return ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_o", name="lookup_order_or_ticket", args={"ref_code": ref_code}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_o", name="lookup_order_or_ticket", args={"ref_code": ref_code}
+                    ),
+                ]
+            ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
         stream_text="",

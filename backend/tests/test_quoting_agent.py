@@ -81,7 +81,11 @@ async def _seed_quoting_tenant(
     await conn.execute(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
         "values ($1, $2, $3, $4, $5)",
-        tenant_id, document_id, chunk.content, [0.0] * EMBEDDING_DIM, json.dumps(chunk.metadata),
+        tenant_id,
+        document_id,
+        chunk.content,
+        [0.0] * EMBEDDING_DIM,
+        json.dumps(chunk.metadata),
     )
     conversation_id: uuid.UUID = await conn.fetchval(
         "insert into conversations (tenant_id) values ($1) returning id", tenant_id
@@ -91,18 +95,23 @@ async def _seed_quoting_tenant(
 
 def _context(tenant_id: uuid.UUID, provider: ToolAwareFakeProvider) -> GraphContext:
     return GraphContext(
-        tenant_id=tenant_id, provider=provider,
-        embedder=ZeroEmbedder(), reranker=PassthroughReranker(),
+        tenant_id=tenant_id,
+        provider=provider,
+        embedder=ZeroEmbedder(),
+        reranker=PassthroughReranker(),
     )
 
 
-def _quoting_provider(*, selections: list[dict[str, Any]],
-                     stream_text: str = "Here is your quote.") -> ToolAwareFakeProvider:
+def _quoting_provider(
+    *, selections: list[dict[str, Any]], stream_text: str = "Here is your quote."
+) -> ToolAwareFakeProvider:
     return ToolAwareFakeProvider(
         tool_call_sequence=[
-            ToolTurn(tool_calls=[
-                ToolCall(id="call_q", name="get_quote_inputs", args={"selections": selections}),
-            ]),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_q", name="get_quote_inputs", args={"selections": selections}),
+                ]
+            ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
         stream_text=stream_text,
@@ -134,7 +143,8 @@ async def test_selection_flows_through_engine_to_persisted_row(
     assert engine_quote["total_cents"] == 12960
     row = await superuser_conn.fetchrow(
         "select * from quotes where tenant_id = $1 and conversation_id = $2",
-        tenant_id, conversation_id,
+        tenant_id,
+        conversation_id,
     )
     assert row is not None
     assert row["subtotal_cents"] == 12000
@@ -177,6 +187,7 @@ async def test_bad_selection_does_not_produce_quote(
 
 def test_selection_schema_has_no_money_fields() -> None:
     forbidden = ("price", "cent", "amount", "total", "cost", "money", "dollar", "tax", "subtotal")
+
     def assert_clean(model: type[BaseModel]) -> None:
         for name, field in model.model_fields.items():
             lowered = name.lower()
@@ -186,10 +197,12 @@ def test_selection_schema_has_no_money_fields() -> None:
             annotation = field.annotation
             if isinstance(annotation, type) and issubclass(annotation, BaseModel):
                 assert_clean(annotation)
+
     assert_clean(QuoteSelectionResult)
     assert_clean(SelectionChoice)
     int_fields = [
-        name for name, field in SelectionChoice.model_fields.items()
+        name
+        for name, field in SelectionChoice.model_fields.items()
         if field.annotation in (int, int | None)
     ]
     assert int_fields == ["quantity"]
@@ -204,9 +217,8 @@ async def test_quote_line_item_labels_are_spotlight_wrapped(
     tenant_id, conversation_id, _ = await _seed_quoting_tenant(superuser_conn)
     provider = _quoting_provider(selections=[{"rule_code": "screen-repair-a", "quantity": 1}])
     graph = build_graph()
-    initial_state = _initial_state("how much for a screen repair?")
+    initial_state = _initial_state("how much for a screen repair?", conversation_id)
     initial_state["tenant_id"] = str(tenant_id)
-    initial_state["conversation_id"] = str(conversation_id)
 
     await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
 

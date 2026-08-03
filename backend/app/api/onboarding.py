@@ -63,9 +63,7 @@ async def _load_record(conn: AppConnection, tenant_id: UUID) -> dict[str, Any]:
     return json.loads(raw) if raw is not None else {}
 
 
-async def _save_record(
-    conn: AppConnection, tenant_id: UUID, record: dict[str, Any]
-) -> None:
+async def _save_record(conn: AppConnection, tenant_id: UUID, record: dict[str, Any]) -> None:
     await conn.execute(
         "update tenant_config set config = jsonb_set("
         "config, '{onboarding}', $2::jsonb, true), "
@@ -90,12 +88,12 @@ def _response_from_record(record: dict[str, Any]) -> OnboardingStateResponse:
             prompt = msg.get("content", "")
             break
     if not prompt:
-        prompt = (
-            "I am ready to help set up your assistant. "
-            "Tell me about your business."
-        )
+        prompt = "I am ready to help set up your assistant. Tell me about your business."
     return OnboardingStateResponse(
-        stage=stage, prompt=prompt, draft=draft, completed=completed,
+        stage=stage,
+        prompt=prompt,
+        draft=draft,
+        completed=completed,
     )
 
 
@@ -123,7 +121,9 @@ async def post_message(
                 detail="onboarding already confirmed",
             )
         updated, _reply = await run_turn(
-            admin_message=body.text, record=onboarding, provider=provider,
+            admin_message=body.text,
+            record=onboarding,
+            provider=provider,
         )
         record_data = updated.to_jsonb()
         await _save_record(conn, admin.tenant_id, record_data)
@@ -150,7 +150,9 @@ async def post_message_stream(
                 return
             yield _sse_str({"type": "progress", "stage": "processing"})
             updated, reply = await run_turn(
-                admin_message=body.text, record=onboarding, provider=provider,
+                admin_message=body.text,
+                record=onboarding,
+                provider=provider,
             )
             record_data = updated.to_jsonb()
             await _save_record(conn, admin.tenant_id, record_data)
@@ -174,7 +176,8 @@ async def confirm(
         onboarding = OnboardingRecord.from_jsonb(record)
         if onboarding.completed:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="already confirmed",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="already confirmed",
             )
         draft = onboarding.draft
         gate = request_finalize(draft)
@@ -196,18 +199,20 @@ async def confirm(
         await conn.execute(
             "update tenant_config set system_prompt=$2, tone=$3, "
             "escalation_threshold=$4, updated_at=now() where tenant_id=$1",
-            admin.tenant_id, sp, tone.tone, threshold,
+            admin.tenant_id,
+            sp,
+            tone.tone,
+            threshold,
         )
         for item in services.items:
-            pc = (
-                _cents(item.price_dollars)
-                if item.price_dollars is not None
-                else None
-            )
+            pc = _cents(item.price_dollars) if item.price_dollars is not None else None
             await conn.execute(
                 "insert into catalog_items (tenant_id, name, description, "
                 "price_cents) values ($1, $2, $3, $4)",
-                admin.tenant_id, item.name, item.description, pc,
+                admin.tenant_id,
+                item.name,
+                item.description,
+                pc,
             )
         unpriced = [
             r.code
@@ -226,10 +231,16 @@ async def confirm(
             await conn.execute(
                 "insert into pricing_rules (tenant_id, code, label, "
                 "unit_amount_cents, unit) values ($1, $2, $3, $4, $5)",
-                admin.tenant_id, rule.code, rule.label, _cents(amount), rule.unit,
+                admin.tenant_id,
+                rule.code,
+                rule.label,
+                _cents(amount),
+                rule.unit,
             )
         await ingest_catalog_items(
-            conn, tenant_id=admin.tenant_id, embedder=embedder,
+            conn,
+            tenant_id=admin.tenant_id,
+            embedder=embedder,
         )
         onboarding.completed = True
         record_data = onboarding.to_jsonb()
