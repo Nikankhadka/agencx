@@ -8,7 +8,8 @@ key off settings enums (LLM_PROVIDER, EMBEDDER) - the reranker's pattern
 When a fallback model + API key are configured, the returned provider is a
 FailoverProvider: every call is served by the primary and retried once against
 the fallback when the primary's own retries are exhausted. This is invisible
-to callers - they still see a plain LLMProvider.
+to callers - they still see a plain LLMProvider. The fallback vendor class is
+selected by LLM_FALLBACK_PROVIDER ('zai' default, or 'openai_compat').
 """
 
 from __future__ import annotations
@@ -31,12 +32,17 @@ def get_llm_provider() -> LLMProvider:
     settings = get_settings()
     primary: LLMProvider
     if settings.llm_provider == "openai_compat":
-        primary = OpenAICompatProvider(settings)
+        primary = OpenAICompatProvider(settings, fallback=False)
+    elif settings.llm_provider == "zai":
+        primary = ZaiOpenAICompatProvider(settings, fallback=False)
     else:
         primary = AzureOpenAIProvider(settings)
 
     if settings.llm_fallback_model and settings.llm_fallback_api_key:
-        fallback = ZaiOpenAICompatProvider(settings)
+        if settings.llm_fallback_provider == "openai_compat":
+            fallback: LLMProvider = OpenAICompatProvider(settings, fallback=True)
+        else:
+            fallback = ZaiOpenAICompatProvider(settings, fallback=True)
         return FailoverProvider(primary, fallback)
 
     if settings.llm_fallback_model:

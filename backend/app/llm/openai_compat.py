@@ -9,8 +9,11 @@ swapping hosted chat vendors is an env change, never a code change.
 model>`` json_schema), which the target endpoint/model must support - free
 models that do include Gemini flash, DeepSeek, and Groq's llama-3.3-70b. The
 shared extract/chat/chat_stream bodies (with transient-failure retry) live in
-OpenAISDKProvider; this class only builds the client. Never touched by tests
-directly - they stub ``LLMProvider``.
+OpenAISDKProvider; this class only builds the client. The same class also
+serves the fallback position: ``fallback=False`` (the default - primary is the
+sane default role) reads the primary ``llm_*`` settings; ``fallback=True``
+reads the ``llm_fallback_*`` settings so any OpenAI-compatible vendor can fail
+over behind a Z.ai primary.
 """
 
 from __future__ import annotations
@@ -22,12 +25,15 @@ from app.llm.openai_base import SDK_TIMEOUT, OpenAISDKProvider
 
 
 class OpenAICompatProvider(OpenAISDKProvider):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, fallback: bool = False) -> None:
+        base_url = settings.llm_fallback_base_url if fallback else settings.llm_base_url
+        api_key = settings.llm_fallback_api_key if fallback else settings.llm_api_key
+        model = settings.llm_fallback_model if fallback else settings.llm_model
         client = AsyncOpenAI(
-            base_url=settings.llm_base_url,
+            base_url=base_url,
             # Keyless endpoints (e.g. a local Ollama) ignore the value, but the
             # SDK requires one; hosted vendors reject a bad key server-side.
-            api_key=settings.llm_api_key or "unused",
+            api_key=api_key or "unused",
             # Explicit connect timeout so a hung connect fails fast rather than
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
@@ -45,7 +51,7 @@ class OpenAICompatProvider(OpenAISDKProvider):
 
         super().__init__(
             client,
-            settings.llm_model,
+            model,
             max_tokens_draft=settings.llm_max_tokens_draft,
             max_tokens_extract=settings.llm_max_tokens_extract,
             supports_tools=supports_tools,

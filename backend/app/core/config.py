@@ -33,9 +33,11 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
 
-    # Chat LLM provider: 'azure' | 'openai_compat'. 'openai_compat' speaks the
-    # OpenAI wire format against any base URL (OpenRouter, Groq, Ollama, ...),
-    # so swapping hosted vendors is a config change, never a code change.
+    # Chat LLM provider: 'azure' | 'openai_compat' | 'zai'. 'openai_compat'
+    # speaks the OpenAI wire format against any base URL (OpenRouter, Groq,
+    # Ollama, ...), so swapping hosted vendors is a config change, never a code
+    # change. 'zai' is Z.ai's GLM Flash line: the same wire format but with the
+    # two Z.ai quirks handled (json_object extract mode, thinking disabled).
     llm_provider: str = "azure"
     llm_base_url: str = ""
     llm_api_key: str = ""
@@ -45,8 +47,11 @@ class Settings(BaseSettings):
     # LLM call fails over to this provider after the primary's internal retries
     # are exhausted (transient 429s, unusable upstream bodies, malformed
     # structured output). Empty base URL = failover disabled, the app uses the
-    # primary provider alone. The fallback is always OpenAI-compatible
-    # (Z.ai's free GLM Flash models are the intended use).
+    # primary provider alone. llm_fallback_provider selects the vendor class:
+    # 'zai' (default - Z.ai's free GLM Flash models, json_object extract mode)
+    # or 'openai_compat' (any other OpenAI-compatible endpoint, e.g. OpenRouter
+    # when the primary is Z.ai). The fallback is always OpenAI-compatible.
+    llm_fallback_provider: str = "zai"
     llm_fallback_base_url: str = ""
     llm_fallback_api_key: str = ""
     llm_fallback_model: str = ""

@@ -1,4 +1,4 @@
-"""Z.ai fallback provider and the json_object extraction mode it needs.
+"""Z.ai provider and the json_object extraction mode it needs.
 
 Z.ai's free GLM Flash models are OpenAI-compatible but document only the
 looser ``json_object`` response format, not strict json_schema - so the schema
@@ -117,9 +117,28 @@ async def test_zai_provider_sends_thinking_disabled_on_every_call() -> None:
 
 
 def test_zai_provider_defaults_to_the_zai_base_url() -> None:
-    settings = Settings(llm_fallback_api_key="k", llm_fallback_model="glm-4.7-flash")
-    provider = ZaiOpenAICompatProvider(settings)
+    settings = Settings(
+        llm_fallback_api_key="k",
+        llm_fallback_model="glm-4.7-flash",
+        llm_fallback_base_url="",
+    )
+    provider = ZaiOpenAICompatProvider(settings, fallback=True)
     assert str(provider._client.base_url) == ZAI_BASE_URL
+    assert provider._json_object_extract is True
+    assert provider._extra_body == {"thinking": {"type": "disabled"}}
+
+
+def test_zai_provider_as_primary_reads_the_primary_settings() -> None:
+    """fallback=False swaps the settings group so Z.ai can be the direct
+    primary (with another vendor failing over behind it)."""
+    settings = Settings(
+        llm_base_url="https://primary.example.test/v1",
+        llm_api_key="k",
+        llm_model="glm-4.7-flash",
+    )
+    provider = ZaiOpenAICompatProvider(settings, fallback=False)
+    assert str(provider._client.base_url) == "https://primary.example.test/v1/"
+    assert provider._model == "glm-4.7-flash"
     assert provider._json_object_extract is True
     assert provider._extra_body == {"thinking": {"type": "disabled"}}
 
@@ -130,11 +149,11 @@ def test_zai_provider_honors_a_custom_base_url() -> None:
         llm_fallback_api_key="k",
         llm_fallback_model="glm-4.7-flash",
     )
-    provider = ZaiOpenAICompatProvider(settings)
+    provider = ZaiOpenAICompatProvider(settings, fallback=True)
     assert str(provider._client.base_url) == "https://proxy.example.test/v1/"
 
 
 def test_zai_provider_builds_a_real_openai_client() -> None:
     settings = Settings(llm_fallback_api_key="k", llm_fallback_model="glm-4.7-flash")
-    provider = ZaiOpenAICompatProvider(settings)
+    provider = ZaiOpenAICompatProvider(settings, fallback=True)
     assert isinstance(provider._client, AsyncOpenAI)
