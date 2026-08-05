@@ -24,9 +24,9 @@ Never touched by tests directly - they stub ``LLMProvider``.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import TypeVar
 
-import httpx
 from openai import APIConnectionError, RateLimitError
 from pydantic import ValidationError
 
@@ -36,16 +36,16 @@ from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTu
 logger = logging.getLogger(__name__)
 
 # Failures that mean "this provider is unusable right now" - retrying it
-# again is pointless, so the fallback provider gets the call instead.
-# APIConnectionError covers the SDK's timeouts and connection errors (the SDK
-# wraps raw httpx failures, so both are listed for completeness).
+# again is pointless, so the fallback provider gets the call instead. The SDK
+# wraps every raw httpx failure as APIConnectionError, so nothing else escapes.
 _FAILOVER_ERRORS = (
     RateLimitError,
     APIConnectionError,
-    httpx.HTTPError,
     UpstreamResponseError,
     ValidationError,
 )
+
+_T = TypeVar("_T")
 
 
 class FailoverProvider(LLMProvider):
@@ -62,29 +62,42 @@ class FailoverProvider(LLMProvider):
         # the emulated-vs-native decision is made from its capability.
         return self._primary.supports_tools
 
+    async def _retry_or_failover(
+        self,
+        what: str,
+        call: Callable[[], Awaitable[_T]],
+        fallback: Callable[[], Awaitable[_T]],
+    ) -> _T:
+        try:
+            return await call()
+        except _FAILOVER_ERRORS as error:
+            logger.warning(
+                "primary llm %s failed (%s: %s); failing over",
+                what,
+                type(error).__name__,
+                error,
+            )
+            return await fallback()
+
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
-        try:
-            return await self._primary.extract(
+        return await self._retry_or_failover(
+            "extract",
+            lambda: self._primary.extract(
                 system_prompt=system_prompt, user_input=user_input, schema=schema
-            )
-        except _FAILOVER_ERRORS as error:
-            logger.warning(
-                "primary llm extract failed (%s: %s); failing over", type(error).__name__, error
-            )
-            return await self._fallback.extract(
+            ),
+            lambda: self._fallback.extract(
                 system_prompt=system_prompt, user_input=user_input, schema=schema
-            )
+            ),
+        )
 
     async def chat(self, messages: list[ChatMessage]) -> str:
-        try:
-            return await self._primary.chat(messages)
-        except _FAILOVER_ERRORS as error:
-            logger.warning(
-                "primary llm chat failed (%s: %s); failing over", type(error).__name__, error
-            )
-            return await self._fallback.chat(messages)
+        return await self._retry_or_failover(
+            "chat",
+            lambda: self._primary.chat(messages),
+            lambda: self._fallback.chat(messages),
+        )
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         stream = self._primary.chat_stream(messages)
@@ -119,16 +132,12 @@ class FailoverProvider(LLMProvider):
         tools: list[ToolSpec],
         tool_choice: str = "auto",
     ) -> ToolTurn:
-        try:
-            return await self._primary.chat_with_tools(
+        return await self._retry_or_failover(
+            "chat_with_tools",
+            lambda: self._primary.chat_with_tools(
                 messages=messages, tools=tools, tool_choice=tool_choice
-            )
-        except _FAILOVER_ERRORS as error:
-            logger.warning(
-                "primary llm chat_with_tools failed (%s: %s); failing over",
-                type(error).__name__,
-                error,
-            )
-            return await self._fallback.chat_with_tools(
+            ),
+            lambda: self._fallback.chat_with_tools(
                 messages=messages, tools=tools, tool_choice=tool_choice
-            )
+            ),
+        )

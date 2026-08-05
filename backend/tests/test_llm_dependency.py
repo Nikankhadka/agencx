@@ -1,8 +1,11 @@
 """get_llm_provider wiring: LLM_PROVIDER / LLM_FALLBACK_PROVIDER select the
-vendor classes for each failover position, purely by env.
+vendor behavior for each failover position, purely by env.
 
-The provider classes themselves are tested elsewhere (test_llm_zai.py,
-test_llm_provider_retry.py); this file pins the factory's routing.
+The provider class itself is tested elsewhere (test_llm_zai.py,
+test_llm_provider_retry.py); this file pins the factory's routing: one
+universal OpenAICompatProvider, with the 'zai' role distinguished only by the
+quirks the factory applies (json_object extract mode, thinking disabled, Z.ai
+base URL default).
 """
 
 from __future__ import annotations
@@ -16,7 +19,8 @@ from app.llm import dependency
 from app.llm.failover import FailoverProvider
 from app.llm.openai_compat import OpenAICompatProvider
 from app.llm.provider import LLMProvider
-from app.llm.zai import ZaiOpenAICompatProvider
+
+_THINKING_OFF = {"thinking": {"type": "disabled"}}
 
 
 def _wired(monkeypatch: pytest.MonkeyPatch, **settings_kwargs: Any) -> LLMProvider:
@@ -41,18 +45,25 @@ def test_zai_primary_with_openai_compat_fallback(
         llm_fallback_model="google/gemma-4-26b-a4b-it:free",
     )
     assert isinstance(provider, FailoverProvider)
-    assert isinstance(provider._primary, ZaiOpenAICompatProvider)
-    assert provider._primary._model == "glm-4.7-flash"
-    assert isinstance(provider._fallback, OpenAICompatProvider)
-    assert provider._fallback._model == "google/gemma-4-26b-a4b-it:free"
-    assert str(provider._fallback._client.base_url).startswith("https://openrouter.example.test")
+    primary = provider._primary
+    assert isinstance(primary, OpenAICompatProvider)
+    assert primary._model == "glm-4.7-flash"
+    assert primary._json_object_extract is True
+    assert primary._extra_body == _THINKING_OFF
+    fallback = provider._fallback
+    assert isinstance(fallback, OpenAICompatProvider)
+    assert fallback._model == "google/gemma-4-26b-a4b-it:free"
+    assert fallback._json_object_extract is False
+    assert fallback._extra_body == {}
+    assert str(fallback._client.base_url).startswith("https://openrouter.example.test")
     assert provider.supports_tools is True
 
 
 def test_openai_compat_primary_with_default_zai_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The pre-existing pairing must keep wiring exactly as before."""
+    """The pre-existing pairing must keep wiring exactly as before; an empty
+    fallback base URL defaults to the Z.ai endpoint."""
     provider = _wired(
         monkeypatch,
         llm_provider="openai_compat",
@@ -66,8 +77,12 @@ def test_openai_compat_primary_with_default_zai_fallback(
     )
     assert isinstance(provider, FailoverProvider)
     assert isinstance(provider._primary, OpenAICompatProvider)
-    assert isinstance(provider._fallback, ZaiOpenAICompatProvider)
-    assert str(provider._fallback._client.base_url).endswith("api.z.ai/api/paas/v4/")
+    fallback = provider._fallback
+    assert isinstance(fallback, OpenAICompatProvider)
+    assert fallback._model == "glm-4.7-flash"
+    assert fallback._json_object_extract is True
+    assert fallback._extra_body == _THINKING_OFF
+    assert str(fallback._client.base_url).endswith("api.z.ai/api/paas/v4/")
 
 
 def test_no_fallback_configuration_returns_the_plain_primary(
@@ -84,3 +99,4 @@ def test_no_fallback_configuration_returns_the_plain_primary(
         llm_fallback_base_url="",
     )
     assert isinstance(provider, OpenAICompatProvider)
+    assert not isinstance(provider, FailoverProvider)

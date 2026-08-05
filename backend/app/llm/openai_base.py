@@ -7,8 +7,9 @@ bodies, the usage->cost reporting, and - critically - the transient-failure
 retry every live turn needs. The retry is ported from the eval harness (``evals/
 trajectory_eval.py``), which already learned that free-tier models fail
 transiently in two ways: upstream 429s, and occasionally emitting malformed
-structured-output JSON (surfaces as a pydantic ``ValidationError`` from the
-SDK's ``parse``). Without it, either one aborts a whole customer turn.
+structured-output JSON (surfaces as a pydantic ``ValidationError`` when the
+raw content is validated here). Without it, either one aborts a whole customer
+turn.
 
 Never touched by tests directly - they stub ``LLMProvider``.
 """
@@ -389,26 +390,30 @@ class OpenAISDKProvider(LLMProvider):
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
-        if self._json_object_extract:
-            return await self._extract_json_object(
-                system_prompt=system_prompt, user_input=user_input, schema=schema
-            )
-        return await self._extract_strict(
-            system_prompt=system_prompt, user_input=user_input, schema=schema
-        )
+        # One implementation for both structured-output modes: strict json_schema
+        # (response_format=<model>, the default) and the looser json_object mode
+        # where the schema travels in the system prompt (Z.ai's GLM Flash line).
+        # The raw content is pydantic-validated here in both; a malformed JSON
+        # surfaces as a ValidationError that joins the retry path exactly
+        # like the strict mode's SDK parse failure.
+        embed_schema = self._json_object_extract
 
-    async def _extract_strict(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
         async def _call() -> SchemaT:
+            system = system_prompt
+            if embed_schema:
+                system += (
+                    "\n\nRespond with a single JSON object conforming to this schema:\n"
+                    f"{json.dumps(schema.model_json_schema())}\n"
+                    "Output only the JSON object, no markdown, no prose."
+                )
             try:
-                completion = await self._client.chat.completions.parse(
+                completion = await self._client.chat.completions.create(
                     model=self._model,
                     messages=[
-                        {"role": "system", "content": system_prompt},
+                        {"role": "system", "content": system},
                         {"role": "user", "content": user_input},
                     ],
-                    response_format=schema,
+                    response_format={"type": "json_object"} if embed_schema else schema,
                     **self._cap(self._max_tokens_extract),
                     **self._extra_body_kwargs(),
                 )
@@ -429,50 +434,6 @@ class OpenAISDKProvider(LLMProvider):
                 # a null-choices error body surfaces here as a bare TypeError
                 # before any of our code can inspect it. Narrow re-raise, so it
                 # joins the retry path instead of aborting the turn.
-                raise UpstreamResponseError(
-                    "provider returned an unparseable completion body"
-                ) from error
-            _report(self._model, completion.usage)
-            _require_choices(completion)
-            parsed = completion.choices[0].message.parsed
-            if parsed is None:
-                raise ValueError("model produced no parseable structured output")
-            return parsed  # type: ignore[no-any-return]
-
-        return await _with_retry(_call)
-
-    async def _extract_json_object(
-        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
-    ) -> SchemaT:
-        """json_object-mode extraction for vendors that reject strict
-        json_schema (Z.ai). The schema travels in the system prompt; the
-        raw content is pydantic-validated here, and a malformed JSON surfaces
-        as a ValidationError that joins the retry path exactly like the strict
-        path's SDK parse failure."""
-
-        async def _call() -> SchemaT:
-            schema_json = schema.model_json_schema()
-            try:
-                completion = await self._client.chat.completions.create(
-                    model=self._model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                f"{system_prompt}\n\n"
-                                "Respond with a single JSON object conforming to this schema:\n"
-                                f"{json.dumps(schema_json)}\n"
-                                "Output only the JSON object, no markdown, no prose."
-                            ),
-                        },
-                        {"role": "user", "content": user_input},
-                    ],
-                    response_format={"type": "json_object"},
-                    **self._cap(self._max_tokens_extract),
-                    **self._extra_body_kwargs(),
-                )
-            except TypeError as error:
-                # Same null-choices 200 error-body trap as the strict path.
                 raise UpstreamResponseError(
                     "provider returned an unparseable completion body"
                 ) from error

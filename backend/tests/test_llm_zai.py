@@ -1,11 +1,13 @@
-"""Z.ai provider and the json_object extraction mode it needs.
+"""The json_object extraction mode the 'zai' role needs.
 
 Z.ai's free GLM Flash models are OpenAI-compatible but document only the
 looser ``json_object`` response format, not strict json_schema - so the schema
 travels in the system prompt and the raw content is pydantic-validated
 client-side. These tests pin that the json_object mode sends the right wire
 shape, that malformed content is retried like the strict path, and that the
-Zai provider itself sends the thinking-disabled extra_body on every call.
+thinking-disabled extra_body reaches the wire. The provider class itself is
+universal (OpenAICompatProvider); which role gets these quirks is decided by
+the factory (test_llm_dependency.py).
 
 """
 
@@ -16,13 +18,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from app.core.config import Settings
 from app.llm import openai_base
 from app.llm.openai_base import OpenAISDKProvider
-from app.llm.zai import ZAI_BASE_URL, ZaiOpenAICompatProvider
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +81,7 @@ async def test_json_object_extract_sends_json_object_mode_and_schema() -> None:
 
 async def test_json_object_extract_retries_malformed_content() -> None:
     """Malformed raw content joins the retry path exactly like the strict
-    path's SDK parse failure: resample, don't abort the turn."""
+    path's validation failure: resample, don't abort the turn."""
     completions = _RecordingCompletions(
         [_completion('{"wrong_key": 1}'), _completion('{"value": "recovered"}')]
     )
@@ -104,7 +103,7 @@ async def test_json_object_extract_gives_up_after_the_attempt_budget() -> None:
     assert len(persistently_bad.calls) == openai_base._RETRY_ATTEMPTS
 
 
-async def test_zai_provider_sends_thinking_disabled_on_every_call() -> None:
+async def test_thinking_disabled_reaches_the_wire_on_every_call() -> None:
     completions = _RecordingCompletions([_completion("hi")])
     client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
     provider = OpenAISDKProvider(
@@ -114,46 +113,3 @@ async def test_zai_provider_sends_thinking_disabled_on_every_call() -> None:
     )
     await provider.chat([{"role": "user", "content": "q"}])
     assert completions.calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
-
-
-def test_zai_provider_defaults_to_the_zai_base_url() -> None:
-    settings = Settings(
-        llm_fallback_api_key="k",
-        llm_fallback_model="glm-4.7-flash",
-        llm_fallback_base_url="",
-    )
-    provider = ZaiOpenAICompatProvider(settings, fallback=True)
-    assert str(provider._client.base_url) == ZAI_BASE_URL
-    assert provider._json_object_extract is True
-    assert provider._extra_body == {"thinking": {"type": "disabled"}}
-
-
-def test_zai_provider_as_primary_reads_the_primary_settings() -> None:
-    """fallback=False swaps the settings group so Z.ai can be the direct
-    primary (with another vendor failing over behind it)."""
-    settings = Settings(
-        llm_base_url="https://primary.example.test/v1",
-        llm_api_key="k",
-        llm_model="glm-4.7-flash",
-    )
-    provider = ZaiOpenAICompatProvider(settings, fallback=False)
-    assert str(provider._client.base_url) == "https://primary.example.test/v1/"
-    assert provider._model == "glm-4.7-flash"
-    assert provider._json_object_extract is True
-    assert provider._extra_body == {"thinking": {"type": "disabled"}}
-
-
-def test_zai_provider_honors_a_custom_base_url() -> None:
-    settings = Settings(
-        llm_fallback_base_url="https://proxy.example.test/v1",
-        llm_fallback_api_key="k",
-        llm_fallback_model="glm-4.7-flash",
-    )
-    provider = ZaiOpenAICompatProvider(settings, fallback=True)
-    assert str(provider._client.base_url) == "https://proxy.example.test/v1/"
-
-
-def test_zai_provider_builds_a_real_openai_client() -> None:
-    settings = Settings(llm_fallback_api_key="k", llm_fallback_model="glm-4.7-flash")
-    provider = ZaiOpenAICompatProvider(settings, fallback=True)
-    assert isinstance(provider._client, AsyncOpenAI)

@@ -2,9 +2,9 @@
 
 Free-tier chat models fail transiently in three documented ways: upstream 429s,
 the occasional malformed structured-output JSON (a pydantic ValidationError
-from the SDK's parse), and - observed live against OpenRouter - a 200 whose
-body carries ``choices: null`` because the gateway forwarded an upstream
-provider failure. Before this, any of them aborted a whole customer turn; the
+when the raw content is validated client-side), and - observed live against
+OpenRouter - a 200 whose body carries ``choices: null`` because the gateway
+forwarded an upstream provider failure. Before this, any of them aborted a whole customer turn; the
 null-choices case was the worst, since it surfaced as a bare TypeError from
 inside the SDK's own parser and killed the SSE stream with no terminal event,
 leaving the customer's chat bubble spinning forever.
@@ -113,8 +113,7 @@ async def test_extract_resamples_on_malformed_structured_output(
     except ValidationError as exc:
         malformed = exc
 
-    good = _completion("")
-    good.choices[0].message.parsed = _Schema(value="parsed")
+    good = _completion('{"value": "parsed"}')
     completions = _Completions([malformed], good)
     result = await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
     assert result.value == "parsed"
@@ -207,8 +206,7 @@ async def test_configured_caps_reach_the_wire() -> None:
     class _Schema(BaseModel):
         value: str
 
-    completions._result = _completion("")
-    completions._result.choices[0].message.parsed = _Schema(value="v")
+    completions._result = _completion('{"value": "v"}')
     await provider.extract(system_prompt="s", user_input="u", schema=_Schema)
     assert completions.kwargs[-1]["max_tokens"] == 256
 
