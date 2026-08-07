@@ -4,7 +4,8 @@
  * Surface: tenant-admin (http://app.localhost:3000)
  * Entry point: /login
  *
- * Test P0: login with each demo tenant-admin user, verify the post-login card.
+ * T-004: successful login redirects into the admin console shell at
+ * /dashboards; a signed-in user visiting /login resumes straight into it.
  */
 
 import { test, expect } from "@playwright/test";
@@ -23,21 +24,17 @@ test.describe("tenant-admin login", () => {
     test(`login as ${user.email}`, async ({ page }) => {
       await loginAsTenantAdmin(page, user);
 
-      // Verify the signed-in card is visible
-      await expect(page.getByRole("heading", { name: "Signed in" })).toBeVisible();
-
-      // Verify tenant name is shown on the card
-      await expect(page.getByText(user.tenantName!)).toBeVisible();
+      // The admin console shell is the post-login destination.
+      await expect(page.getByRole("heading", { name: "Dashboards", level: 1 })).toBeVisible();
     });
 
-    test(`sign out after login as ${user.email}`, async ({ page }) => {
+    test(`signed-in session resumes into the console from /login (${user.email})`, async ({ page }) => {
       await loginAsTenantAdmin(page, user);
 
-      // Sign out
-      await page.getByRole("button", { name: "Sign out" }).click();
-
-      // After sign out the login form should reappear
-      await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+      // A signed-in admin hitting /login is redirected straight into the console.
+      await page.goto("/login");
+      await page.waitForURL("**/dashboards");
+      await expect(page.getByRole("heading", { name: "Dashboards", level: 1 })).toBeVisible();
     });
   }
 });

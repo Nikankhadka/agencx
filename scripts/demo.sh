@@ -95,38 +95,7 @@ if [[ -z "$(env_val LLM_API_KEY "$BACKEND_ENV")" ]]; then
 fi
 
 # --- 3. start containers (db + auth + auth-proxy) ------------------------------
-say "containers"
-export SUPABASE_JWT_SECRET="$jwt_secret"  # compose interpolates this into GoTrue
-
-# db first: GoTrue's first migration assumes the `auth` schema already exists
-# (it creates tables as auth.* but does not create the schema), so the schema
-# must be present before auth starts. Creating it here is idempotent.
-docker compose up -d db
-for _ in $(seq 1 30); do
-  if docker compose exec -T db pg_isready -U postgres -d wren >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-docker compose exec -T db pg_isready -U postgres -d wren >/dev/null 2>&1 \
-  || die "postgres did not become ready. Try 'docker compose logs db'."
-docker compose exec -T db psql -U postgres -d wren -c "create schema if not exists auth;" >/dev/null \
-  || die "could not create the auth schema (GoTrue needs it before its first migration)."
-
-docker compose up -d auth auth-proxy
-
-# Wait for the GoTrue health endpoint (through the auth-proxy on 54321).
-auth_ready=false
-for _ in $(seq 1 40); do
-  if curl -fsS http://localhost:54321/health >/dev/null 2>&1; then
-    auth_ready=true
-    break
-  fi
-  sleep 1
-done
-[[ "$auth_ready" == true ]] \
-  || die "GoTrue did not become healthy on http://localhost:54321/health. Try 'docker compose logs auth'. (A JWT-secret change against an old volume is harmless - GoTrue signs at request time; if migrations are corrupted, 'docker compose exec db psql -U postgres -d wren -c \"drop schema if exists auth cascade; create schema auth;\"' then rerun.)"
-ok "db + GoTrue (auth) + auth-proxy up"
+"$ROOT/scripts/up-infra.sh"
 
 # --- 4. backend: deps + migrate + seed -----------------------------------------
 say "backend"

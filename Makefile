@@ -39,7 +39,7 @@ db: ## Start the local Postgres + pgvector container
 
 .PHONY: db-full
 db-full: ## Start db + GoTrue auth + auth-proxy (demo-ready infra)
-	docker compose up -d db auth auth-proxy
+	./scripts/up-infra.sh
 
 .PHONY: db-down
 db-down: ## Stop and remove containers + volumes (tears out persistent data)

@@ -31,7 +31,7 @@ All verified. Run from repo root via `make <target>` (the friendly entry point);
 | Dev server (frontend) | `make dev-frontend` | `cd frontend && npm run dev` |
 | Dev server (backend) | `make dev-backend` | `cd backend && uv run uvicorn app.main:app --reload` |
 | Local database | `make db` | `docker compose up -d db` |
-| DB + auth (full demo infra) | `make db-full` | `docker compose up -d db auth auth-proxy` |
+| DB + auth (full demo infra) | `make db-full` | `./scripts/up-infra.sh` |
 | Tear down DB (volumes) | `make db-down` | `docker compose down -v` |
 | Apply migrations | `make migrate` | `cd backend && uv run python -m app.shared.migrate` |
 | Seed demo world | `make seed` | `cd backend && uv run python -m seeds.seed_demo` |

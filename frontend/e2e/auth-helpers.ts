@@ -15,7 +15,6 @@ export interface DemoUser {
   email: string;
   password: string;
   surface: "tenant-admin" | "platform";
-  tenantName?: string; // expected tenant name on the post-login card (tenant-admin only)
 }
 
 export const DEMO_USERS: DemoUser[] = [
@@ -23,13 +22,11 @@ export const DEMO_USERS: DemoUser[] = [
     email: "owner@bytefix.dev",
     password: "wren-demo",
     surface: "tenant-admin",
-    tenantName: "Bytefix Repairs",
   },
   {
     email: "owner@lumident.dev",
     password: "wren-demo",
     surface: "tenant-admin",
-    tenantName: "Lumident Dental",
   },
   {
     email: "founder@wren.dev",
@@ -74,12 +71,9 @@ export async function submitLoginForm(
 export async function loginAsTenantAdmin(page: Page, user: DemoUser): Promise<void> {
   await page.goto("/login");
   await submitLoginForm(page, user.email, user.password);
-  // T-004: on success the login page renders a "Signed in" card with the
-  // tenant name and slug.
-  await page.getByRole("heading", { name: "Signed in" }).waitFor({ timeout: 10_000 });
-  if (user.tenantName) {
-    await page.getByText(user.tenantName).waitFor({ timeout: 5_000 });
-  }
+  // T-004: on success the login page proves the authed backend probe by
+  // redirecting into the admin console shell.
+  await page.waitForURL("**/dashboards");
 }
 
 /**

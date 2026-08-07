@@ -67,7 +67,8 @@
 - **GoTrue needs `auth` schema pre-created**: `create schema if not exists auth` before auth starts.
 - **`search_path` collision**: GoTrue connects as `postgres` and queries `users` unqualified -> resolves to `public.users`. Fix: `GOTRUE_DB_DATABASE_URL` carries `?options=-c%20search_path%3Dauth`.
 - **nginx auth-proxy must resolve upstream at request time**, not startup: use `resolver 127.0.0.11 valid=10s` + `set $gotrue http://auth:9999; proxy_pass $gotrue;`. The `set` MUST come BEFORE `rewrite ... break;`.
-- **`GOTRUE_JWT_SECRET` needed in the shell**: export before `docker compose up -d auth auth-proxy` (`scripts/demo.sh` does this).
+- **`GOTRUE_JWT_SECRET` needed in the shell**: export before `docker compose up -d auth auth-proxy` (`scripts/up-infra.sh` does this; `make db-full` and `scripts/demo.sh` both delegate to it).
+- **Login "Failed to fetch" = auth stack down, not a code bug**: `make dev` and `make db` never start GoTrue. Bring the stack up with `make db-full` (or `./scripts/demo.sh`). Port 54321 is only reachable when `auth` + `auth-proxy` containers run.
 
 ### LLM & Eval
 

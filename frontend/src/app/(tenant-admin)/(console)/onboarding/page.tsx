@@ -115,7 +115,6 @@ function parseOnboardingEvent(payload: string): {
  */
 export default function OnboardingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [stage, setStage] = useState<string>("identity");
   const [draft, setDraft] = useState<Record<string, Record<string, unknown>>>({});
   const [completed, setCompleted] = useState(false);
   const [input, setInput] = useState("");
@@ -127,7 +126,6 @@ export default function OnboardingPage() {
   useEffect(() => {
     apiFetch<OnboardingStateResponse>("/api/onboarding/state")
       .then((state) => {
-        setStage(state.stage);
         setDraft(state.draft);
         setCompleted(state.completed);
         if (!state.completed) {
