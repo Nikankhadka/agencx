@@ -30,3 +30,6 @@ backend/var/
 
 # gnhf run logs (transient; objective + handoff in .agents/ are tracked)
 .agents/gnhf-logs/
+
+# opencode session plan drafts (transient; decisions get archived to docs/)
+.opencode/plans/
