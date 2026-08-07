@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.migrate import _render
+from app.shared.migrate import _render
 
 SQL = "create role wren_app login password '${WREN_APP_DB_PASSWORD}';"
 

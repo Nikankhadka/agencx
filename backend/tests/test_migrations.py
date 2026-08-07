@@ -7,7 +7,7 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.core.migrate import MIGRATIONS_DIR, run_migrations
+from app.shared.migrate import MIGRATIONS_DIR, run_migrations
 
 pytestmark = pytest.mark.db
 

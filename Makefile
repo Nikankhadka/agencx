@@ -49,7 +49,7 @@ db-down: ## Stop and remove containers + volumes (tears out persistent data)
 
 .PHONY: migrate
 migrate: ## Apply forward-only DB migrations
-	cd backend && uv run python -m app.core.migrate
+	cd backend && uv run python -m app.shared.migrate
 
 .PHONY: seed
 seed: ## Seed the full demo world (two tenants, auth users, conversations)

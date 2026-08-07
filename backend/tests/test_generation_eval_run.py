@@ -19,10 +19,10 @@ import asyncpg
 import pytest
 
 from app.agents.knowledge import REFUSAL_MESSAGE
-from app.core import db
 from app.llm.provider import ChatMessage, SchemaT
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from evals.generation_eval import GenerationCase, run_eval, score_case
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder

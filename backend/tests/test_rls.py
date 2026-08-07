@@ -23,7 +23,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from app.core import db
+from app.shared import db
 from tests.conftest import _app_dsn_for
 
 pytestmark = pytest.mark.db

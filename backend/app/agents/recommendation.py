@@ -21,9 +21,9 @@ from pydantic import BaseModel, Field
 from app.agents.drafting import stream_draft
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.llm.provider import ChatMessage
 from app.retrieval.service import retrieve
+from app.shared import db
 
 REFUSAL_MESSAGE = (
     "I don't have anything that matches what you're looking for. "

@@ -17,7 +17,6 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from app.core import db
 from app.pricing.engine import (
     MAX_QUANTITY,
     MIN_QUANTITY,
@@ -26,6 +25,7 @@ from app.pricing.engine import (
     SelectionError,
     compute_quote,
 )
+from app.shared import db
 from tests.conftest import _app_dsn_for
 
 pytestmark = pytest.mark.db

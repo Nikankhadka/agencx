@@ -12,7 +12,7 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.core import db
+from app.shared import db
 from evals.trajectory_dataset import load_cases, sync_eval_cases
 from seeds.seed_tenant1_phoneshop import (
     CATALOG_ITEMS,

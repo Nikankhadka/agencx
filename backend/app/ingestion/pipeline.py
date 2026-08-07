@@ -14,13 +14,13 @@ from uuid import UUID, uuid4
 
 from starlette.concurrency import run_in_threadpool
 
-from app.core.config import get_settings
 from app.ingestion.chunker import Chunk, chunk_catalog_item, chunk_document
 from app.ingestion.embedder import embed_texts
 from app.llm.embedder import Embedder
+from app.shared.config import get_settings
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
+    from app.shared.db import AppConnection
 
 
 def _read_file(path: Path) -> bytes:

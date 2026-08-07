@@ -40,11 +40,11 @@ from starlette.concurrency import run_in_threadpool
 from app.agents.graph import build_graph
 from app.agents.spotlight import scan_input
 from app.agents.state import AgentState, GraphContext
-from app.core import config, db
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
 from app.retrieval.rerank import Reranker, get_reranker
+from app.shared import config, db
 from seeds.seed_injection_probe import SLUG, seed
 
 DATASET_PATH = Path(__file__).parent / "datasets" / "injection_set.jsonl"

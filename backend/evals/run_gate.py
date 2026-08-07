@@ -35,7 +35,7 @@ import sys
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from app.core import config, db
+from app.shared import config, db
 
 # Regression tolerance in absolute metric points (0-1 scale) for LLM-judged
 # evals - a drop larger than this vs the previous run fails the gate.

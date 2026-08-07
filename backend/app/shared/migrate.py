@@ -6,7 +6,7 @@ placeholders are substituted from the environment before execution (only
 ``0002_roles.sql`` needs this today). Idempotence lives in the runner: already
 applied files are skipped.
 
-CLI: ``uv run python -m app.core.migrate``
+CLI: ``uv run python -m app.shared.migrate``
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Any
 
 import asyncpg
 
-from app.core.config import get_settings
+from app.shared.config import get_settings
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 _VAR_RE = re.compile(r"\$\{(\w+)\}")

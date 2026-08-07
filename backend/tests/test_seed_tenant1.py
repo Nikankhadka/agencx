@@ -16,7 +16,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from app.core import db
+from app.shared import db
 from seeds.seed_tenant1_phoneshop import CATALOG_ITEMS, PRICING_RULES, SLUG, seed
 from tests.conftest import _app_dsn_for
 from tests.fakes import ZeroEmbedder

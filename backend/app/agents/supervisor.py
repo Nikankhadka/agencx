@@ -17,7 +17,7 @@ from langgraph.runtime import get_runtime
 from pydantic import BaseModel
 
 from app.agents.state import AgentState, GraphContext
-from app.core import db
+from app.shared import db
 
 _SYSTEM_PROMPT = (
     "You are the routing supervisor for a customer support assistant. Given the "

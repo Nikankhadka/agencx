@@ -21,7 +21,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
 from app.agents.state import AgentState, GraphContext
-from app.core import db
+from app.shared import db
 
 HANDOFF_MESSAGE = (
     "Thanks for your patience - a human will pick this up from here and follow up with you."

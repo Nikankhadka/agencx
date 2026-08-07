@@ -16,7 +16,7 @@ import asyncpg
 import pytest
 
 from app.agents.tools import OrderLookup, lookup_order_or_ticket
-from app.core import db
+from app.shared import db
 from tests.conftest import _app_dsn_for
 
 pytestmark = pytest.mark.db

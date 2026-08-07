@@ -15,7 +15,6 @@ from uuid import uuid4
 import asyncpg
 import pytest
 
-from app.core import db
 from app.observability.cost import (
     TokenUsage,
     collect_usage,
@@ -25,6 +24,7 @@ from app.observability.cost import (
     record_costs,
     report_usage,
 )
+from app.shared import db
 from tests.conftest import _app_dsn_for
 
 # --- pure functions -----------------------------------------------------------

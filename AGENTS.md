@@ -33,7 +33,7 @@ All verified. Run from repo root via `make <target>` (the friendly entry point);
 | Local database | `make db` | `docker compose up -d db` |
 | DB + auth (full demo infra) | `make db-full` | `docker compose up -d db auth auth-proxy` |
 | Tear down DB (volumes) | `make db-down` | `docker compose down -v` |
-| Apply migrations | `make migrate` | `cd backend && uv run python -m app.core.migrate` |
+| Apply migrations | `make migrate` | `cd backend && uv run python -m app.shared.migrate` |
 | Seed demo world | `make seed` | `cd backend && uv run python -m seeds.seed_demo` |
 | Seed tenant 1 | `make seed-tenant1` | `cd backend && uv run python -m seeds.seed_tenant1_phoneshop` |
 | Seed tenant 2 | `make seed-tenant2` | `cd backend && uv run python -m seeds.seed_tenant2_dental` |

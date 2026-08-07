@@ -13,8 +13,8 @@ from langgraph.runtime import get_runtime
 from app.agents.drafting import stream_draft
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.llm.provider import ChatMessage
+from app.shared import db
 
 _KNOWLEDGE_REFUSAL = (
     "I don't have information about that. Please contact the business directly for help."

@@ -44,11 +44,11 @@ from app.agents.graph import build_graph
 from app.agents.inspection import ESCALATION_MESSAGE
 from app.agents.knowledge import REFUSAL_MESSAGE
 from app.agents.state import AgentState, GraphContext
-from app.core import config, db
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
 from app.retrieval.rerank import Reranker, get_reranker
+from app.shared import config, db
 from seeds.seed_tenant1_phoneshop import SLUG
 
 DATASET_PATH = Path(__file__).parent / "datasets" / "tenant1_generation.jsonl"

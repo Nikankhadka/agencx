@@ -22,10 +22,10 @@ from pydantic import BaseModel, Field
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
-from app.core import db
-from app.core.limits import with_timeout
 from app.llm.provider import ChatMessage, ToolSpec
 from app.retrieval.service import retrieve
+from app.shared import db
+from app.shared.limits import with_timeout
 
 logger = logging.getLogger("app.agents.agent_node")
 

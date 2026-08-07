@@ -21,8 +21,8 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core import db
-from app.core.config import get_settings
+from app.shared import db
+from app.shared.config import get_settings
 
 logger = logging.getLogger(__name__)
 

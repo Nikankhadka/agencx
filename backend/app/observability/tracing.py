@@ -27,7 +27,7 @@ from contextlib import contextmanager
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.core.config import Settings
+from app.shared.config import Settings
 
 logger = logging.getLogger(__name__)
 

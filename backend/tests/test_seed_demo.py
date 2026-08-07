@@ -26,9 +26,9 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.core import db
-from app.core.config import get_settings
 from app.main import app
+from app.shared import db
+from app.shared.config import get_settings
 from seeds import seed_demo
 from seeds.seed_tenant1_phoneshop import SLUG as BYTEFIX_SLUG
 from tests.conftest import _app_dsn_for

@@ -22,10 +22,10 @@ from langgraph.runtime import get_runtime
 from app.agents.drafting import stream_draft
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.llm.provider import ChatMessage
 from app.retrieval.service import retrieve
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 
 # A chunk is kept only if the reranker's normalized relevance probability
 # (Reranker contract: [0, 1], same meaning on every backend) clears this

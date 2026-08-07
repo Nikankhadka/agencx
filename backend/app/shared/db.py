@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import asyncpg
 from pgvector.asyncpg import register_vector
 
-from app.core.config import get_settings
+from app.shared.config import get_settings
 
 if TYPE_CHECKING:
     # asyncpg.Pool/PoolConnectionProxy are only generic at the type-stub level

@@ -48,12 +48,12 @@ from starlette.concurrency import run_in_threadpool
 
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
-from app.core import config, db
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
 from app.pricing.validation_gate import allowed_cents, extract_monetary_figures
 from app.retrieval.rerank import Reranker, get_reranker
+from app.shared import config, db
 from evals.trajectory_dataset import TrajectoryCase, load_cases, sync_eval_cases
 from seeds.seed_tenant1_phoneshop import SLUG
 

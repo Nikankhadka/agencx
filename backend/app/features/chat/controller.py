@@ -1,0 +1,284 @@
+"""Chat orchestration: the agent-graph streaming turn.
+
+The actual retrieval/generation logic lives in app/agents/graph.py's compiled
+graph; this layer resolves the tenant/conversation, invokes the graph, and
+translates its custom-streamed events into plain JSON events for api.py to
+frame as SSE.
+
+T-021: nothing is customer-visible until Inspection clears a draft, so every
+graph event is buffered instead of forwarded immediately. A "redraft"
+(price_gate) or "inspection" event with decision "retry" means the buffered
+draft was rejected and discarded - the producing node is about to stream a
+fresh one. An "inspection" event with any other decision means the run is
+done accumulating for this pass: flush whatever is buffered (the approved
+draft, or an escalation handoff message) and persist its verdicts onto the
+assistant message row for the Surface-2 trace viewer.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections.abc import AsyncIterator
+from uuid import UUID
+
+from langgraph.errors import GraphRecursionError
+
+from app.agents.graph import get_graph
+from app.agents.spotlight import scan_input
+from app.agents.state import AgentState, GraphContext
+from app.features.chat import service
+from app.llm.embedder import Embedder
+from app.llm.provider import LLMProvider
+from app.observability.cost import TokenUsage, collect_usage
+from app.observability.tracing import get_tracer
+from app.retrieval.rerank import Reranker
+from app.shared import config
+from app.shared.limits import (
+    BUDGET_ESCALATION_REASON,
+    BUDGET_UNAVAILABLE_MESSAGE,
+    PROVIDER_ERROR_ESCALATION_REASON,
+    STEP_CAP_ESCALATION_REASON,
+    TenantLimits,
+    TimeLimitedProvider,
+)
+
+logger = logging.getLogger("app.features.chat.controller")
+
+
+def initial_state(*, conversation_id: str, tenant_id: str, message: str) -> AgentState:
+    return {
+        "conversation_id": conversation_id,
+        "tenant_id": tenant_id,
+        "messages": [{"role": "customer", "content": message}],
+        "route": None,
+        "route_confidence": None,
+        "retrieved_chunks": [],
+        "selections": [],
+        "engine_quote": None,
+        "draft_response": "",
+        "inspection": None,
+        "escalated": False,
+        "injection_suspected": scan_input(message),
+    }
+
+
+async def stream_escalated_response(*, conversation_id: UUID) -> AsyncIterator[dict[str, object]]:
+    """T-020: an already-escalated conversation is terminal - no agent turn
+    runs, the graph is never invoked. The customer's message is still
+    persisted (kept in api.py's resolve_conversation caller) so the transcript
+    stays complete for whoever picks it up on Surface 2."""
+    yield {"type": "conversation", "conversation_id": str(conversation_id)}
+    yield {"type": "escalated"}
+    yield {"type": "done"}
+
+
+async def stream_budget_escalation(
+    *, tenant_id: UUID, conversation_id: UUID
+) -> AsyncIterator[dict[str, object]]:
+    """T-028: over the daily budget - a polite handoff, never a stack trace,
+    and the graph is never invoked."""
+    yield {"type": "conversation", "conversation_id": str(conversation_id)}
+    await service.record_limit_escalation(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        reason=BUDGET_ESCALATION_REASON,
+        message=BUDGET_UNAVAILABLE_MESSAGE,
+    )
+    yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
+    yield {"type": "escalated"}
+    yield {"type": "done"}
+
+
+async def stream_chat_response(
+    *,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    message: str,
+    provider: LLMProvider,
+    embedder: Embedder,
+    reranker: Reranker,
+    limits: TenantLimits,
+) -> AsyncIterator[dict[str, object]]:
+    yield {"type": "conversation", "conversation_id": str(conversation_id)}
+
+    graph = get_graph()
+    initial_state_dict = initial_state(
+        conversation_id=str(conversation_id), tenant_id=str(tenant_id), message=message
+    )
+
+    full_text = ""
+    buffer: list[dict[str, object]] = []
+    verdicts: dict[str, object] = {}
+    tool_calls: list[dict[str, object]] = []
+    tracer = get_tracer(config.get_settings())
+    # Latency baseline. The gap between first_model_token_ms (the model started
+    # producing prose) and first_prose_ms (the customer was first allowed to see
+    # any of it) is exactly what the T-021 inspection buffer costs in perceived
+    # latency - measured rather than asserted, since the buffer is a ratified
+    # scope decision (US-060) and is not going to be removed to chase it.
+    turn_started = time.perf_counter()
+    first_model_token_ms: float | None = None
+    first_prose_ms: float | None = None
+    usages: list[TokenUsage] | None = None
+    try:
+        # T-030: one trace per turn (a no-op unless Langfuse keys are set),
+        # and collect every LLM call's token usage for the whole turn so a
+        # single cost_logs write can reconcile it against the assistant
+        # message - both spans outlive the whole graph invocation below.
+        with (
+            tracer.turn(tenant_id=tenant_id, conversation_id=conversation_id) as turn,
+            collect_usage() as usages,
+        ):
+            # T-028: every LLM call the graph makes is time-bounded by the
+            # tenant's llm_timeout via this wrapper - no node has to remember
+            # to wrap its own.
+            context = GraphContext(
+                tenant_id=tenant_id,
+                provider=TimeLimitedProvider(provider, limits.llm_timeout_s),
+                embedder=embedder,
+                reranker=reranker,
+                tool_timeout_s=limits.tool_timeout_s,
+                turn=turn,
+            )
+            # T-028 step cap: recursion_limit bounds node executions per turn,
+            # so a pathological retry/route cycle can't spin forever. Overflow
+            # is caught below and turned into the same graceful handoff as a
+            # budget stop.
+            stream = graph.astream(
+                initial_state_dict,
+                context=context,
+                stream_mode="custom",
+                config={"recursion_limit": limits.max_steps},
+            )
+            # Process events as they arrive rather than draining the whole
+            # graph first. Structured, deterministic events (citations, quote)
+            # stream live for responsiveness; prose (token/refusal) stays
+            # buffered behind Inspection, so nothing the LLM *wrote* reaches
+            # the customer until a draft is approved - the T-021 invariant is
+            # unchanged.
+            async for event in stream:
+                etype = event["type"]
+                if etype == "progress":
+                    # D5: a fixed stage key naming the node now running.
+                    # Carries no model output at all, so streaming it live
+                    # narrates the wait without letting any unverified prose
+                    # reach the customer - the T-021/US-060 invariant is
+                    # untouched.
+                    yield event
+                elif etype in ("citations", "quote"):
+                    # Non-prose, and unchanged by a redraft (the quote row and
+                    # the retrieved chunks a redraft stays grounded in don't
+                    # move, and the redraft paths never re-emit them), so it
+                    # is safe to show immediately instead of holding it back.
+                    yield event
+                elif etype == "token":
+                    if first_model_token_ms is None:
+                        first_model_token_ms = round((time.perf_counter() - turn_started) * 1000, 1)
+                    full_text += str(event["text"])
+                    buffer.append(event)
+                elif etype == "refusal":
+                    # A refusal is always a complete, standalone message for
+                    # its attempt - never combined with prior token events.
+                    full_text = str(event["text"])
+                    buffer = [event]
+                elif etype == "tool_call":
+                    # T-030: a node invoked a tool - persisted against the
+                    # assistant message below for the Surface-2 trace, never
+                    # streamed to the customer.
+                    tool_calls.append(event)
+                elif etype == "redraft":
+                    # T-018/T-021: a gate rejected the draft text already
+                    # accumulated; the producing node is about to stream fresh
+                    # prose. Only prose is discarded - the citations/quote
+                    # already streamed live stay valid.
+                    full_text = ""
+                    buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                elif etype == "inspection":
+                    verdicts = dict(event.get("verdicts", {}))
+                    if event.get("decision") == "retry":
+                        full_text = ""
+                        buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                    else:
+                        if first_prose_ms is None and any(
+                            e["type"] in ("token", "refusal") for e in buffer
+                        ):
+                            first_prose_ms = round((time.perf_counter() - turn_started) * 1000, 1)
+                        for buffered_event in buffer:
+                            yield buffered_event
+                        buffer = []
+                    # The raw "inspection" event is internal bookkeeping, never
+                    # forwarded to the customer surface.
+                else:
+                    buffer.append(event)
+    except GraphRecursionError:
+        await service.record_limit_escalation(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            reason=STEP_CAP_ESCALATION_REASON,
+            message=BUDGET_UNAVAILABLE_MESSAGE,
+        )
+        # T-030: the overflow turn still made real LLM calls before the cap
+        # tripped - by definition more than a normal turn's worth. Its usage
+        # must land in cost_logs or step-capped turns are invisible to the
+        # T-028 daily budget, which sums exactly that table.
+        if usages:
+            await service.record_turn_costs(
+                tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
+            )
+        yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
+        yield {"type": "escalated"}
+        yield {"type": "done"}
+        return
+    except Exception:
+        # Anything else that kills a turn mid-flight (observed live:
+        # OpenRouter forwarding an upstream failure as a 200 with
+        # choices=null). Without this the generator simply stopped: the SSE
+        # stream ended with no terminal event and the customer's chat bubble
+        # span forever, which reads as infinite latency. Escalate like any
+        # other dead end so the turn always terminates.
+        logger.exception("chat turn failed mid-stream; escalating")
+        await service.record_limit_escalation(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            reason=PROVIDER_ERROR_ESCALATION_REASON,
+            message=BUDGET_UNAVAILABLE_MESSAGE,
+        )
+        # The failed turn still burned tokens before it died; they belong in
+        # cost_logs for the same reason the step-cap path records its own.
+        if usages:
+            await service.record_turn_costs(
+                tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
+            )
+        yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
+        yield {"type": "escalated"}
+        yield {"type": "done"}
+        return
+
+    await service.persist_assistant_turn(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        full_text=full_text,
+        verdicts=verdicts,
+        tool_calls=tool_calls,
+        usages=usages,
+    )
+    logger.info(
+        "chat turn",
+        extra={
+            "total_ms": round((time.perf_counter() - turn_started) * 1000, 1),
+            # None when the turn produced no prose at all (a deterministic
+            # order_status/escalation draft never emits token events).
+            "first_model_token_ms": first_model_token_ms,
+            "first_prose_ms": first_prose_ms,
+            # What the inspection buffer costs this turn: prose existed this
+            # much earlier than the customer was allowed to see it.
+            "buffer_hold_ms": (
+                round(first_prose_ms - first_model_token_ms, 1)
+                if first_model_token_ms is not None and first_prose_ms is not None
+                else None
+            ),
+            "chars": len(full_text),
+        },
+    )
+    yield {"type": "done"}

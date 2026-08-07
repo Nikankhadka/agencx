@@ -28,7 +28,7 @@ import time
 
 import jwt
 
-from app.core.config import get_settings
+from app.shared.config import get_settings
 
 _ROLES = ("anon", "service_role")
 # 10 years - matches Supabase's own far-future key expiry. These are

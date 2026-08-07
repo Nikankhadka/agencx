@@ -12,7 +12,7 @@ from uuid import UUID
 from app.retrieval.types import RetrievedChunk
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
+    from app.shared.db import AppConnection
 
 DEFAULT_LIMIT = 20
 

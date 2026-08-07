@@ -48,15 +48,15 @@ from uuid import UUID, uuid4
 
 import httpx
 
-from app.core import db
-from app.core.config import get_settings
 from app.ingestion.pipeline import ingest_catalog_items, process_document
 from app.llm.embedder import Embedder, get_embedder
+from app.shared import db
+from app.shared.config import get_settings
 from seeds import seed_tenant1_phoneshop
 from seeds.supabase_keys import mint_key
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
+    from app.shared.db import AppConnection
 
 # Demo identities (password ``wren-demo`` for all; 6+ chars satisfies GoTrue's
 # default minimum). Kept here as the single source of truth for the demo

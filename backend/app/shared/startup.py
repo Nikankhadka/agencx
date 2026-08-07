@@ -9,7 +9,7 @@ loudly instead of lying dormant until the first authed request.
 
 from __future__ import annotations
 
-from app.core.config import Settings
+from app.shared.config import Settings
 
 # Environments where placeholder secrets are expected and fine.
 _DEV_ENVIRONMENTS = frozenset({"local", "ci", "test"})

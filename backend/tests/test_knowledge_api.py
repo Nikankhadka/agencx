@@ -21,10 +21,10 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.core import db
-from app.core.config import get_settings
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
+from app.shared import db
+from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ZeroEmbedder
 

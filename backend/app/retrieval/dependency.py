@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from app.core.config import get_settings
 from app.retrieval.rerank import CohereReranker, Reranker, get_reranker
+from app.shared.config import get_settings
 
 
 @lru_cache

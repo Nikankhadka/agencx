@@ -29,10 +29,10 @@ from pydantic import BaseModel, Field
 from app.agents.drafting import stream_draft
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.llm.provider import ChatMessage
 from app.pricing.engine import EngineQuote, Selection, SelectionError, compute_quote
 from app.retrieval.service import retrieve
+from app.shared import db
 
 NO_CANDIDATES_MESSAGE = (
     "I can't put together a quote for that - the business hasn't listed "

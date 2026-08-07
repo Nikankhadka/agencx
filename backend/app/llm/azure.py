@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from openai import AsyncAzureOpenAI
 
-from app.core.config import Settings
 from app.llm.openai_base import SDK_TIMEOUT, OpenAISDKProvider
+from app.shared.config import Settings
 
 _API_VERSION = "2024-10-21"
 

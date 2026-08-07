@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from openai import AsyncAzureOpenAI
     from sentence_transformers import SentenceTransformer
 
-    from app.core.config import Settings
+    from app.shared.config import Settings
 
 _AZURE_API_VERSION = "2024-10-21"
 

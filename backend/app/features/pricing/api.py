@@ -1,18 +1,10 @@
 """T-031: Surface 2's Pricing tab - pricing_rules inline editing + a
 read-only catalog_items list.
 
-Currency conversion happens ONLY at this API boundary: the client sends a
-decimal dollar string/number, this module converts it to integer cents
-server-side (never trusting a client-supplied cents value directly). This is
-the deterministic-pricing hard rule applied to admin-authored config, same
-reasoning as T-006's onboarding price extraction - an admin is the source of
-the number, arithmetic on it still never happens inside an LLM call, and here
-not even inside the client.
-
-Editing a rule's amount only affects quotes computed AFTER the edit - a
-`sent` quote's line_items/totals are already persisted verbatim and the
-quotes_immutable trigger (T-002/T-016) physically prevents them from ever
-changing.
+Currency conversion happens ONLY at this API boundary (PricingRuleUpdate):
+the client sends a decimal dollar string/number, this module converts it to
+integer cents server-side - never trusting a client-supplied cents value.
+Handlers live in controller.py, persistence in service.py.
 """
 
 from __future__ import annotations
@@ -22,11 +14,11 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Annotated
 from uuid import UUID
 
-import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 
-from app.core import auth, db
+from app.features.pricing import controller
+from app.shared import auth
 
 router = APIRouter(prefix="/api/pricing", tags=["pricing"])
 
@@ -97,13 +89,10 @@ class PricingRuleUpdate(BaseModel):
 async def list_pricing_rules(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> list[PricingRuleResponse]:
-    async with db.tenant_context(admin.tenant_id, "tenant_admin") as conn:
-        rows = await conn.fetch(
-            "select id, code, label, unit_amount_cents, unit, active, updated_at "
-            "from pricing_rules where tenant_id = $1 order by code",
-            admin.tenant_id,
-        )
-    return [PricingRuleResponse(**dict(row)) for row in rows]
+    return [
+        PricingRuleResponse(**row)
+        for row in await controller.list_rules(tenant_id=str(admin.tenant_id))
+    ]
 
 
 @router.patch("/rules/{rule_id}", response_model=PricingRuleResponse)
@@ -112,48 +101,26 @@ async def update_pricing_rule(
     body: PricingRuleUpdate,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> PricingRuleResponse:
-    updates = {
+    whitelist = {
         "code": body.code,
         "label": body.label,
         "unit_amount_cents": body.cents(),
         "unit": body.unit,
         "active": body.active,
     }
-    updates = {key: value for key, value in updates.items() if value is not None}
-    if not updates:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="no fields to update"
+    updates = {key: value for key, value in whitelist.items() if value is not None}
+    return PricingRuleResponse(
+        **await controller.update_rule(
+            tenant_id=str(admin.tenant_id), rule_id=str(rule_id), updates=updates
         )
-
-    set_clause = ", ".join(f"{key} = ${i + 3}" for i, key in enumerate(updates))
-    async with db.tenant_context(admin.tenant_id, "tenant_admin") as conn:
-        try:
-            row = await conn.fetchrow(
-                f"update pricing_rules set {set_clause} "  # noqa: S608 - keys are our own fixed whitelist
-                "where tenant_id = $1 and id = $2 "
-                "returning id, code, label, unit_amount_cents, unit, active, updated_at",
-                admin.tenant_id,
-                rule_id,
-                *updates.values(),
-            )
-        except asyncpg.UniqueViolationError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"a rule with code {updates.get('code')!r} already exists",
-            ) from exc
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pricing rule not found")
-    return PricingRuleResponse(**dict(row))
+    )
 
 
 @router.get("/catalog", response_model=list[CatalogItemResponse])
 async def list_catalog_items(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> list[CatalogItemResponse]:
-    async with db.tenant_context(admin.tenant_id, "tenant_admin") as conn:
-        rows = await conn.fetch(
-            "select id, name, description, price_cents, active, updated_at "
-            "from catalog_items where tenant_id = $1 order by name",
-            admin.tenant_id,
-        )
-    return [CatalogItemResponse(**dict(row)) for row in rows]
+    return [
+        CatalogItemResponse(**row)
+        for row in await controller.list_catalog(tenant_id=str(admin.tenant_id))
+    ]

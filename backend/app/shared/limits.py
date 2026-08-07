@@ -29,9 +29,9 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from app.core import db
-from app.core.config import Settings
 from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
+from app.shared import db
+from app.shared.config import Settings
 
 # Platform defaults - a tenant's config.limits overrides any subset of these.
 DEFAULT_DAILY_COST_USD = 5.0

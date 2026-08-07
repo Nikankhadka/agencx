@@ -28,11 +28,11 @@ from uuid import UUID
 from starlette.concurrency import run_in_threadpool
 
 from app.agents.tools import lookup_order_or_ticket
-from app.core import db
-from app.core.config import get_settings
 from app.llm.embedder import Embedder
 from app.retrieval.rerank import Reranker
 from app.retrieval.service import retrieve
+from app.shared import db
+from app.shared.config import get_settings
 from seeds.seed_leakage_pair import SECRETS_A, SECRETS_B, seed
 
 

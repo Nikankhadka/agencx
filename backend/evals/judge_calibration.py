@@ -42,9 +42,9 @@ from typing import Any
 
 from starlette.concurrency import run_in_threadpool
 
-from app.core import db
 from app.llm.dependency import get_llm_provider
 from app.llm.provider import LLMProvider
+from app.shared import db
 from evals.generation_eval import (
     CitationVerdict,
     ClaimVerdict,

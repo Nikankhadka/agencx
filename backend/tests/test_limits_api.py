@@ -1,5 +1,5 @@
 """T-028: end-to-end graceful-path tests for the cost/step caps, driven
-through app.api.chat._stream_chat_response and the DB.
+through app.features.chat.controller's stream generators and the DB.
 
 Proves the two acceptance criteria that need real wiring: a tenant at its
 step cap gets the graceful handoff (escalation row + polite message, never a
@@ -18,20 +18,20 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.api.chat import _stream_budget_escalation, _stream_chat_response
-from app.core import db
-from app.core.config import get_settings
-from app.core.limits import (
+from app.features.chat.controller import stream_budget_escalation, stream_chat_response
+from app.llm.provider import ChatMessage, SchemaT
+from app.observability.cost import report_usage
+from app.retrieval.rerank import Reranker
+from app.retrieval.types import RetrievedChunk
+from app.shared import db
+from app.shared.config import get_settings
+from app.shared.limits import (
     BUDGET_ESCALATION_REASON,
     STEP_CAP_ESCALATION_REASON,
     TenantLimits,
     clear_usage_cache,
     tenant_over_budget,
 )
-from app.llm.provider import ChatMessage, SchemaT
-from app.observability.cost import report_usage
-from app.retrieval.rerank import Reranker
-from app.retrieval.types import RetrievedChunk
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
@@ -120,9 +120,9 @@ async def test_step_cap_yields_graceful_handoff_not_a_stack_trace(
     # least one specialist + inspection), so the cap trips.
     limits = TenantLimits.resolve({"limits": {"max_steps": 2}}, get_settings())
 
-    chunks = [
-        chunk
-        async for chunk in _stream_chat_response(
+    events = [
+        event
+        async for event in stream_chat_response(
             tenant_id=tenant_id,
             conversation_id=conversation_id,
             message="What are your hours?",
@@ -132,9 +132,9 @@ async def test_step_cap_yields_graceful_handoff_not_a_stack_trace(
             limits=limits,
         )
     ]
-    body = "".join(chunks)
-    assert "escalated" in body
-    assert "Traceback" not in body
+    types = [event["type"] for event in events]
+    assert "escalated" in types
+    assert "token" not in types
 
     # The graceful path recorded a step_cap escalation and flipped the
     # conversation to escalated.
@@ -170,9 +170,9 @@ async def test_step_capped_turn_still_records_its_llm_costs(
     tenant_id, conversation_id = await _seed(superuser_conn)
     limits = TenantLimits.resolve({"limits": {"max_steps": 2}}, get_settings())
 
-    chunks = [
-        chunk
-        async for chunk in _stream_chat_response(
+    events = [
+        event
+        async for event in stream_chat_response(
             tenant_id=tenant_id,
             conversation_id=conversation_id,
             message="What are your hours?",
@@ -182,7 +182,7 @@ async def test_step_capped_turn_still_records_its_llm_costs(
             limits=limits,
         )
     ]
-    assert "escalated" in "".join(chunks)
+    assert "escalated" in [event["type"] for event in events]
 
     rows = await superuser_conn.fetch(
         "select model, input_tokens, output_tokens from cost_logs "
@@ -212,14 +212,13 @@ async def test_over_budget_tenant_is_detected_and_escalated(
         assert await tenant_over_budget(conn, tenant_id, limits)
 
     # The graceful budget path records the escalation and persists the handoff.
-    chunks = [
-        chunk
-        async for chunk in _stream_budget_escalation(
+    events = [
+        event
+        async for event in stream_budget_escalation(
             tenant_id=tenant_id, conversation_id=conversation_id
         )
     ]
-    body = "".join(chunks)
-    assert "escalated" in body
+    assert "escalated" in [event["type"] for event in events]
 
     reason = await superuser_conn.fetchval(
         "select reason from escalations where conversation_id = $1", conversation_id

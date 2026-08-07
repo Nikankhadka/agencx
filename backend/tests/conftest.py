@@ -16,8 +16,8 @@ import pytest
 import pytest_asyncio
 from pgvector.asyncpg import register_vector
 
-from app.core.config import get_settings
-from app.core.migrate import run_migrations
+from app.shared.config import get_settings
+from app.shared.migrate import run_migrations
 
 TEST_DB_NAME = "wren_test"
 

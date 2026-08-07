@@ -19,11 +19,11 @@ import json
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from app.core import db
-from app.core.config import get_settings
+from app.shared import db
+from app.shared.config import get_settings
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
+    from app.shared.db import AppConnection
 
 SLUG_A = "leakpair-a"
 SLUG_B = "leakpair-b"

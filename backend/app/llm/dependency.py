@@ -24,12 +24,12 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from app.core.config import Settings, get_settings
 from app.llm.azure import AzureOpenAIProvider
 from app.llm.embedder import Embedder, get_embedder
 from app.llm.failover import FailoverProvider
 from app.llm.openai_compat import OpenAICompatProvider
 from app.llm.provider import LLMProvider
+from app.shared.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 

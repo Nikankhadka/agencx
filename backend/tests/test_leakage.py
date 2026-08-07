@@ -25,11 +25,11 @@ import asyncpg
 import httpx
 import pytest
 
-from app.core import db
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
 from app.retrieval.dependency import get_reranker_dependency
+from app.shared import db
 from evals.leakage_eval import (
     _PassthroughReranker,
     _ZeroEmbedder,

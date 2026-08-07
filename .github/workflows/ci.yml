@@ -147,7 +147,7 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-models-bge-small-minilm-v1
       - name: Migrate CI database
-        run: uv run python -m app.core.migrate
+        run: uv run python -m app.shared.migrate
       - name: Seed tenants (retrieval + leakage)
         run: |
           uv run python -m seeds.seed_tenant1_phoneshop

@@ -14,10 +14,10 @@ import pytest_asyncio
 
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from tests.conftest import _app_dsn_for
 from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
 

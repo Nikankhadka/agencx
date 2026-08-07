@@ -25,10 +25,10 @@ from uuid import UUID
 
 from starlette.concurrency import run_in_threadpool
 
-from app.core import config, db
 from app.llm.embedder import get_embedder
 from app.retrieval.rerank import get_reranker
 from app.retrieval.service import retrieve
+from app.shared import config, db
 from seeds.seed_tenant1_phoneshop import SLUG
 
 if TYPE_CHECKING:

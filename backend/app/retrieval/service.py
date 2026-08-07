@@ -20,9 +20,9 @@ from app.retrieval.types import RetrievedChunk
 logger = logging.getLogger("app.retrieval.service")
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
     from app.llm.embedder import Embedder
     from app.retrieval.rerank import Reranker
+    from app.shared.db import AppConnection
 
 DEFAULT_TOP_K = 5
 

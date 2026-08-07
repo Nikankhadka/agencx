@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from app.core.config import get_settings
 from app.llm.embedder import Embedder
 from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
+from app.shared.config import get_settings
 
 EMBEDDING_DIM = get_settings().embedding_dim
 

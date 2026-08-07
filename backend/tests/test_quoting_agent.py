@@ -16,11 +16,11 @@ from pydantic import BaseModel
 from app.agents.graph import build_graph
 from app.agents.quoting import QuoteSelectionResult, SelectionChoice
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.ingestion.chunker import chunk_catalog_item
 from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 

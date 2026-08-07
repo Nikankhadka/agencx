@@ -28,9 +28,9 @@ import asyncio
 import json
 from uuid import UUID, uuid4
 
-from app.core import db
-from app.core.config import get_settings
 from app.llm.embedder import Embedder, get_embedder
+from app.shared import db
+from app.shared.config import get_settings
 
 SLUG = "injection-probe"
 TENANT_NAME = "Probe Repairs"

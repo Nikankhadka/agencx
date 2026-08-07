@@ -20,13 +20,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from app.core import db
-from app.core.config import get_settings
 from app.ingestion.pipeline import ingest_catalog_items, process_document
 from app.llm.embedder import Embedder, get_embedder
+from app.shared import db
+from app.shared.config import get_settings
 
 if TYPE_CHECKING:
-    from app.core.db import AppConnection
+    from app.shared.db import AppConnection
 
 SLUG = "bytefix"
 TENANT_NAME = "Bytefix Repairs"

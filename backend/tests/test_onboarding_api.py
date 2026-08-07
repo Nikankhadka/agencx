@@ -19,11 +19,11 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.core import db
-from app.core.config import get_settings
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, ToolCall, ToolSpec, ToolTurn
 from app.main import app
+from app.shared import db
+from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
 from tests.fakes import BaseFakeProvider, ZeroEmbedder
 

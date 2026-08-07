@@ -8,24 +8,22 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api import (
-    chat,
-    conversations,
-    dashboards,
-    escalations,
-    knowledge,
-    onboarding,
-    platform,
-    pricing,
-    public,
-    tenants,
-)
-from app.core import db
-from app.core.config import get_settings
-from app.core.startup import check_startup_config
+from app.features.chat.api import router as chat_router
+from app.features.conversations.api import router as conversations_router
+from app.features.dashboards.api import router as dashboards_router
+from app.features.escalations.api import router as escalations_router
+from app.features.knowledge.api import router as knowledge_router
+from app.features.onboarding.api import router as onboarding_router
+from app.features.platform.api import router as platform_router
+from app.features.pricing.api import router as pricing_router
+from app.features.tenants.api import router as tenants_router
+from app.features.tenants.public_api import router as public_router
 from app.llm.dependency import get_embedder_dependency
 from app.observability.logging import RequestContextMiddleware, configure_logging
 from app.retrieval.dependency import close_reranker, get_reranker_dependency
+from app.shared import db
+from app.shared.config import get_settings
+from app.shared.startup import check_startup_config
 
 # The frontend and backend are always different origins - three tenant-facing
 # subdomains in dev (localhost:3000) and prod ({slug|admin|app}.wren.app), none
@@ -99,16 +97,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(tenants.router)
-app.include_router(platform.router)
-app.include_router(public.router)
-app.include_router(onboarding.router)
-app.include_router(knowledge.router)
-app.include_router(chat.router)
-app.include_router(conversations.router)
-app.include_router(escalations.router)
-app.include_router(pricing.router)
-app.include_router(dashboards.router)
+app.include_router(tenants_router)
+app.include_router(platform_router)
+app.include_router(public_router)
+app.include_router(onboarding_router)
+app.include_router(knowledge_router)
+app.include_router(chat_router)
+app.include_router(conversations_router)
+app.include_router(escalations_router)
+app.include_router(pricing_router)
+app.include_router(dashboards_router)
 
 
 @app.get("/health")

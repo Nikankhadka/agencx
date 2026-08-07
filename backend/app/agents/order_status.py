@@ -21,8 +21,8 @@ from pydantic import BaseModel
 
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
-from app.core import db
-from app.core.limits import with_timeout
+from app.shared import db
+from app.shared.limits import with_timeout
 
 ASK_FOR_CODE_MESSAGE = "Could you share the order, repair, or ticket code so I can look it up?"
 NOT_FOUND_TEMPLATE = "I can't find {ref_code} - please double-check the code."

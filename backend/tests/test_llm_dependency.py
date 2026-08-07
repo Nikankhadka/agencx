@@ -14,11 +14,11 @@ from typing import Any
 
 import pytest
 
-from app.core.config import Settings
 from app.llm import dependency
 from app.llm.failover import FailoverProvider
 from app.llm.openai_compat import OpenAICompatProvider
 from app.llm.provider import LLMProvider
+from app.shared.config import Settings
 
 _THINKING_OFF = {"thinking": {"type": "disabled"}}
 

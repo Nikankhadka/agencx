@@ -15,8 +15,9 @@ from langgraph.errors import GraphRecursionError
 from langgraph.graph import START, StateGraph
 from typing_extensions import TypedDict
 
-from app.core.config import get_settings
-from app.core.limits import (
+from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
+from app.shared.config import get_settings
+from app.shared.limits import (
     DEFAULT_DAILY_COST_USD,
     DEFAULT_MAX_STEPS,
     LimitTimeout,
@@ -26,7 +27,6 @@ from app.core.limits import (
     budget_exceeded,
     with_timeout,
 )
-from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 
 # --- limit resolution -------------------------------------------------------------
 

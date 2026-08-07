@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.config import Settings
-from app.core.startup import ConfigError, check_startup_config
+from app.shared.config import Settings
+from app.shared.startup import ConfigError, check_startup_config
 
 
 def _settings(**overrides: object) -> Settings:

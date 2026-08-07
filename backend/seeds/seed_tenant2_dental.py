@@ -27,8 +27,8 @@ from uuid import UUID
 
 import httpx
 
-from app.core import db
-from app.core.config import get_settings
+from app.shared import db
+from app.shared.config import get_settings
 
 INPUTS_DIR = Path(__file__).parent / "tenant2_inputs"
 INTERVIEW_SCRIPT = INPUTS_DIR / "interview-script.md"
@@ -313,7 +313,7 @@ async def teardown() -> None:
     proof: it exists so the provisioning run above can be repeated from a
     clean slate without hand-written psql.
     """
-    from app.core import db
+    from app.shared import db
 
     await db.create_pool()
     try:

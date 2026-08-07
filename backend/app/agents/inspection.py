@@ -44,8 +44,8 @@ from langgraph.runtime import get_runtime
 from pydantic import BaseModel
 
 from app.agents.state import AgentState, GraphContext
-from app.core import db
 from app.pricing.validation_gate import validate as validate_price_provenance
+from app.shared import db
 
 ESCALATION_MESSAGE = (
     "I wasn't able to put together a reliable answer to that, so I'm handing this "

@@ -18,10 +18,10 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.api.dashboards import GATE_THRESHOLDS
-from app.core import db
-from app.core.config import get_settings
+from app.features.dashboards.service import GATE_THRESHOLDS
 from app.main import app
+from app.shared import db
+from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
 
 pytestmark = pytest.mark.db

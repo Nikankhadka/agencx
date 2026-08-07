@@ -13,10 +13,10 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.core import db
 from app.llm.provider import SchemaT
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from evals.trajectory_dataset import TrajectoryCase
 from evals.trajectory_eval import (
     CaseTrajectory,

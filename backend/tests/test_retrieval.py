@@ -19,13 +19,13 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from app.core import db
 from app.llm.embedder import Embedder
 from app.retrieval.dense import dense_search
 from app.retrieval.rerank import Reranker
 from app.retrieval.service import retrieve
 from app.retrieval.sparse import sparse_search
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM
 

@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
-from app.core.limits import TimeLimitedProvider
 from app.llm.openai_base import OpenAISDKProvider, UpstreamResponseError
 from app.llm.provider import ChatMessage, ToolSpec, ToolTurn
+from app.shared.limits import TimeLimitedProvider
 from tests.fakes import BaseFakeProvider
 
 # --- tool schemas for testing ------------------------------------------------

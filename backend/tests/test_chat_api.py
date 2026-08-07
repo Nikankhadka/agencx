@@ -21,7 +21,6 @@ import pytest
 import pytest_asyncio
 
 from app.agents.knowledge import REFUSAL_MESSAGE
-from app.core import db
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT
 from app.main import app
@@ -29,6 +28,7 @@ from app.observability.cost import report_usage
 from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.shared import db
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 

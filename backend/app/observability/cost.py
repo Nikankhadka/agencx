@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from app.core import db
+from app.shared import db
 
 
 @dataclass(frozen=True)

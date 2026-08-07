@@ -131,7 +131,7 @@ ok "db + GoTrue (auth) + auth-proxy up"
 # --- 4. backend: deps + migrate + seed -----------------------------------------
 say "backend"
 ( cd backend && uv sync )
-( cd backend && uv run python -m app.core.migrate )
+( cd backend && uv run python -m app.shared.migrate )
 ok "migrations applied"
 say "seeding demo world (first run downloads the embedder model - this can take a minute)"
 ( cd backend && uv run python -m seeds.seed_demo )

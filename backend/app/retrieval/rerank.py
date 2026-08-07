@@ -34,7 +34,7 @@ def _sigmoid(x: float) -> float:
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
 
-    from app.core.config import Settings
+    from app.shared.config import Settings
 
 _LOCAL_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 _COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
