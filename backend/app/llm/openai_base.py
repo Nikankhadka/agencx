@@ -391,7 +391,10 @@ class OpenAISDKProvider(LLMProvider):
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
         # One implementation for both structured-output modes: strict json_schema
-        # (response_format=<model>, the default) and the looser json_object mode
+        # (the explicit OpenAI wire format - a ResponseFormat-validated
+        # json_schema dict built from the pydantic model, which openai>=2.45
+        # accepts - vs passing the BaseModel class, which its
+        # validate_response_format rejects) and the looser json_object mode
         # where the schema travels in the system prompt (Z.ai's GLM Flash line).
         # The raw content is pydantic-validated here in both; a malformed JSON
         # surfaces as a ValidationError that joins the retry path exactly
@@ -407,13 +410,24 @@ class OpenAISDKProvider(LLMProvider):
                     "Output only the JSON object, no markdown, no prose."
                 )
             try:
+                response_format = (
+                    {"type": "json_object"}
+                    if embed_schema
+                    else {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": schema.__name__,
+                            "schema": schema.model_json_schema(),
+                        },
+                    }
+                )
                 completion = await self._client.chat.completions.create(
                     model=self._model,
                     messages=[
                         {"role": "system", "content": system},
                         {"role": "user", "content": user_input},
                     ],
-                    response_format={"type": "json_object"} if embed_schema else schema,
+                    response_format=response_format,
                     **self._cap(self._max_tokens_extract),
                     **self._extra_body_kwargs(),
                 )
