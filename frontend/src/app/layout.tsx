@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/AuthProvider";
 import { QueryProvider } from "@/components/QueryProvider";
 
 // Inter (variable font) is self-hosted by next/font and exposed as the
@@ -25,8 +26,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`h-full antialiased ${inter.variable}`}>
-      <body className="min-h-full flex flex-col">
-        <QueryProvider>{children}</QueryProvider>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <AuthProvider><QueryProvider>{children}</QueryProvider></AuthProvider>
       </body>
     </html>
   );

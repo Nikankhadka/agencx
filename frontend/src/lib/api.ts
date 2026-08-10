@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import { getCachedSession, setCachedSession } from "./auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -25,13 +26,18 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers.set("Content-Type", "application/json");
   }
 
-  const {
-    data: { session },
-  } = await getSupabase().auth.getSession();
+  let session = getCachedSession();
+  if (session === undefined) {
+    const { data } = await getSupabase().auth.getSession();
+    session = data.session;
+  }
   if (session) headers.set("Authorization", `Bearer ${session.access_token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) {
+    if (res.status === 401) {
+      setCachedSession(null);
+    }
     let detail = res.statusText;
     try {
       const body = (await res.json()) as { detail?: unknown };

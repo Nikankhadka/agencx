@@ -21,15 +21,15 @@ describe("resolveHost", () => {
     expect(resolveHost("ByteFix.Wren.App")).toEqual({ surface: "customer", slug: "bytefix" });
   });
 
-  it("maps the bare base host to the marketing surface", () => {
-    expect(resolveHost("localhost:3000")).toEqual({ surface: "marketing", slug: null });
-    expect(resolveHost("localhost")).toEqual({ surface: "marketing", slug: null });
-    expect(resolveHost("wren.app")).toEqual({ surface: "marketing", slug: null });
+  it("maps the bare base host to the tenant-admin surface", () => {
+    expect(resolveHost("localhost:3000")).toEqual({ surface: "tenant-admin", slug: null });
+    expect(resolveHost("localhost")).toEqual({ surface: "tenant-admin", slug: null });
+    expect(resolveHost("wren.app")).toEqual({ surface: "tenant-admin", slug: null });
   });
 
-  it("maps www to the marketing surface, never to a customer slug", () => {
-    expect(resolveHost("www.wren.app")).toEqual({ surface: "marketing", slug: null });
-    expect(resolveHost("www.localhost:3000")).toEqual({ surface: "marketing", slug: null });
+  it("maps www to the tenant-admin surface, never to a customer slug", () => {
+    expect(resolveHost("www.wren.app")).toEqual({ surface: "tenant-admin", slug: null });
+    expect(resolveHost("www.localhost:3000")).toEqual({ surface: "tenant-admin", slug: null });
   });
 
   it("returns no surface/slug for an empty host", () => {

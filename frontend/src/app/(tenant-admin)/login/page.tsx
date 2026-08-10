@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
+import { useAuth } from "@/components/AuthProvider";
 
 interface TenantMe {
   tenant_id: string;
@@ -25,18 +26,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [me, setMe] = useState<TenantMe | null>(null);
+
+  const { session, isLoading } = useAuth();
 
   useEffect(() => {
-    // Resume an existing session on load so a signed-in admin is not shown
-    // the login form again - redirect straight into the console.
-    apiFetch<TenantMe>("/api/tenants/me")
-      .then((data) => {
-        setMe(data);
-        router.replace("/dashboards");
-      })
-      .catch(() => setMe(null));
-  }, [router]);
+    if (!isLoading && session) {
+      router.replace("/onboarding");
+    }
+  }, [isLoading, session, router]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -52,11 +49,9 @@ export default function LoginPage() {
         return;
       }
       await apiFetch<TenantMe>("/api/tenants/me");
-      router.replace("/dashboards");
+      router.replace("/onboarding");
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        // Valid account, no tenant yet (e.g. confirmed email but never finished
-        // signup) - point at the recovery path instead of the raw backend detail.
         setError("This account has no business yet - finish setup on the signup page.");
       } else {
         setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
@@ -66,23 +61,15 @@ export default function LoginPage() {
     }
   }
 
-  if (me) {
+  if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
-          <h1 className="text-title-2 font-semibold">Signed in</h1>
-          <p className="mt-2 text-body-sm text-text-secondary">
-            Redirecting to the admin console...
-          </p>
-          <div className="mt-6">
-            <Button variant="secondary" onClick={() => router.push("/dashboards")}>
-              Go to Dashboards
-            </Button>
-          </div>
-        </div>
+        <div aria-busy="true" className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1" />
       </main>
     );
   }
+
+  if (session) return null;
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">

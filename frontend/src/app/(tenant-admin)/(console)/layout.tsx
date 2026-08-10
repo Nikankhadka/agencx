@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { useAuth } from "@/components/AuthProvider";
 
 /**
  * T-031: the Surface-2 admin-console shell (frontend.md 7.2). A left sidebar
@@ -14,14 +15,14 @@ import { Icon, type IconName } from "@/components/ui/Icon";
  *
  * Settings is specced (7.2) but lands later - it renders as a visibly-disabled
  * item rather than a dead link so the nav is honest about what exists today.
- * Dashboards is live as of T-034.
+ * Dashboards (T-034) is temporarily hidden too while focus is on the other
+ * surfaces; the page stays reachable by URL, the nav shows it as "soon".
  *
  * 7.2 specs "icons + labels": each item carries a Material Symbol; the active
  * item is an accent-container pill with the filled glyph, inactive items are
  * quiet text with the outlined glyph.
  */
 const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
-  { href: "/dashboards", label: "Dashboards", icon: "dashboard" },
   { href: "/onboarding", label: "Onboarding", icon: "rocket_launch" },
   { href: "/knowledge", label: "Knowledge", icon: "folder_open" },
   { href: "/conversations", label: "Conversations", icon: "forum" },
@@ -29,10 +30,23 @@ const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/pricing", label: "Pricing", icon: "sell" },
 ];
 
-const SOON_ITEMS = ["Settings"] as const;
+const SOON_ITEMS = ["Dashboards", "Settings"] as const;
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { session, isLoading, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !session) {
+      router.replace("/");
+    }
+  }, [isLoading, session, router]);
+
+  if (isLoading) {
+    return <div aria-busy="true" className="min-h-screen bg-bg" />;
+  }
+  if (!session) return null;
 
   return (
     <div className="flex min-h-screen w-full">
@@ -76,6 +90,15 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
+        <div className="mt-auto pt-4">
+          <button
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-fast"
+          >
+            <Icon name="logout" filled={false} size={20} />
+            Sign out
+          </button>
+        </div>
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>

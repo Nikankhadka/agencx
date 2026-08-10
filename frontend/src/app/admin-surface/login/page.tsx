@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
+import { useAuth } from "@/components/AuthProvider";
 
 /**
  * T-033: platform-owner login (frontend.md 7.3). Mirrors the tenant-admin
@@ -21,12 +22,13 @@ export default function PlatformLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const { session, isLoading } = useAuth();
+
   useEffect(() => {
-    // Resume an existing session on load so a signed-in admin skips the form.
-    apiFetch<{ ok: boolean }>("/api/platform/ping")
-      .then(() => router.replace("/"))
-      .catch(() => undefined);
-  }, [router]);
+    if (!isLoading && session) {
+      router.replace("/");
+    }
+  }, [isLoading, session, router]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -53,6 +55,16 @@ export default function PlatformLoginPage() {
       setBusy(false);
     }
   }
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-8">
+        <div aria-busy="true" className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1" />
+      </main>
+    );
+  }
+
+  if (session) return null;
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">

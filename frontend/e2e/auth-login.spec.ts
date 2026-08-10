@@ -1,11 +1,11 @@
 /**
  * E2E browser tests for tenant-admin login.
  *
- * Surface: tenant-admin (http://app.localhost:3000)
- * Entry point: /login
+ * Surface: tenant-admin (http://app.localhost:3000 and bare http://localhost:3000)
+ * Entry point: /login (reachable from both hosts)
  *
  * T-004: successful login redirects into the admin console shell at
- * /dashboards; a signed-in user visiting /login resumes straight into it.
+ * /onboarding; a signed-in user visiting /login resumes straight into it.
  */
 
 import { test, expect } from "@playwright/test";
@@ -16,7 +16,7 @@ import {
   tenantAdminHost,
 } from "./auth-helpers";
 
-test.describe("tenant-admin login", () => {
+test.describe("tenant-admin login (app host)", () => {
   // Tenant-admin login uses the app.localhost host.
   test.use({ baseURL: `http://${tenantAdminHost()}` });
 
@@ -25,7 +25,7 @@ test.describe("tenant-admin login", () => {
       await loginAsTenantAdmin(page, user);
 
       // The admin console shell is the post-login destination.
-      await expect(page.getByRole("heading", { name: "Dashboards", level: 1 })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Onboarding", level: 1 })).toBeVisible();
     });
 
     test(`signed-in session resumes into the console from /login (${user.email})`, async ({ page }) => {
@@ -33,10 +33,26 @@ test.describe("tenant-admin login", () => {
 
       // A signed-in admin hitting /login is redirected straight into the console.
       await page.goto("/login");
-      await page.waitForURL("**/dashboards");
-      await expect(page.getByRole("heading", { name: "Dashboards", level: 1 })).toBeVisible();
+      await page.waitForURL("**/onboarding");
+      await expect(page.getByRole("heading", { name: "Onboarding", level: 1 })).toBeVisible();
     });
   }
+});
+
+test.describe("tenant-admin login (bare host)", () => {
+  // The bare host (localhost:3000) now renders the login page too.
+  test.use({ baseURL: "http://localhost:3000" });
+
+  test("bare host renders the login page (proxy rewrite)", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+
+    await submitLoginForm(page, "owner@bytefix.dev", "wren-demo");
+    await page.waitForURL("**/onboarding");
+    await expect(
+      page.getByRole("heading", { name: "Onboarding", level: 1 }),
+    ).toBeVisible();
+  });
 });
 
 test.describe("tenant-admin login errors", () => {

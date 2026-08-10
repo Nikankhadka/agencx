@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 
 /**
  * T-033: auth guard + shell for the platform surface (frontend.md 7.3).
@@ -24,25 +25,37 @@ const SOON_ITEMS = ["Dashboards", "Settings"] as const;
 export default function PlatformConsoleLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [authed, setAuthed] = useState(false);
+  const { session, isLoading: authLoading, signOut } = useAuth();
+  const [platformAuthed, setPlatformAuthed] = useState(false);
+  const [platformChecking, setPlatformChecking] = useState(true);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- deliberate state reset on session change */
+    if (!session) {
+      setPlatformChecking(false);
+      return;
+    }
+    setPlatformAuthed(false);
+    setPlatformChecking(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
     let active = true;
     apiFetch<{ ok: boolean }>("/api/platform/ping")
       .then(() => {
-        if (active) setAuthed(true);
+        if (active) setPlatformAuthed(true);
       })
       .catch(() => {
         if (active) router.replace("/login");
+      })
+      .finally(() => {
+        if (active) setPlatformChecking(false);
       });
-    return () => {
-      active = false;
-    };
-  }, [router]);
+    return () => { active = false; };
+  }, [session, router]);
 
-  if (!authed) {
+  if (authLoading || platformChecking) {
     return <div aria-busy="true" className="min-h-screen bg-bg" />;
   }
+  if (!session || !platformAuthed) return null;
 
   return (
     <div className="flex min-h-screen w-full">
@@ -86,6 +99,15 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
             </li>
           ))}
         </ul>
+        <div className="mt-auto pt-4">
+          <button
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-fast"
+          >
+            <Icon name="logout" filled={false} size={20} />
+            Sign out
+          </button>
+        </div>
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-bg">
