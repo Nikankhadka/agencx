@@ -46,7 +46,10 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             prompt = msg.get("content", "")
             break
     if not prompt:
-        prompt = "I am ready to help set up your assistant. Tell me about your business."
+        prompt = (
+            "Hi, it's Agencx, your personal agent to set up your business agent "
+            "for you. To get started: tell me about your business."
+        )
     return {
         "stage": stage,
         "prompt": prompt,

@@ -65,8 +65,9 @@ test.describe("tenant-admin login errors", () => {
     // The supabase-js error message should appear on the password input's error
     // label (the Input component renders error text below the field).
     // We wait for any error text to appear rather than asserting a specific
-    // message since GoTrue messages may vary.
-    await expect(page.locator("text=Invalid login credentials")).toBeVisible({ timeout: 10_000 });
+    // message since GoTrue messages may vary. .first() disambiguates the
+    // inline error (p.text-danger) from the identical toast message.
+    await expect(page.locator("p.text-danger", { hasText: "Invalid login credentials" }).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("missing email shows HTML5 validation", async ({ page }) => {

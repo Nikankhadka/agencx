@@ -43,14 +43,14 @@ async def signup(*, user_id: str, slug: str, name: str) -> dict[str, str]:
     return {"tenant_id": tenant_id, "slug": slug}
 
 
-async def me(*, tenant_id: str) -> dict[str, str]:
-    """GET /api/tenants/me - the authed tenant-admin's own slug + name."""
+async def me(*, tenant_id: str) -> dict[str, Any]:
+    """GET /api/tenants/me - the authed tenant-admin's own slug + name + brand."""
     row = await service.get_tenant(tenant_id)
     if row is None:
         # Should not happen for a resolved tenant_admin (FK guarantees the
         # tenant row exists), but fail closed rather than return a null body.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-    return {"tenant_id": tenant_id, "slug": row["slug"], "name": row["name"]}
+    return {"tenant_id": tenant_id, "slug": row["slug"], "name": row["name"], "brand": row["brand"]}
 
 
 async def resolve_public(slug: str) -> dict[str, Any] | None:

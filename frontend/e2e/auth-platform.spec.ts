@@ -37,9 +37,11 @@ test.describe("platform admin login", () => {
     await submitLoginForm(page, tenantAdmin.email, tenantAdmin.password);
 
     // The platform login page should show a 403 error for a non-admin user
-    // since apiFetch("/api/platform/ping") returns 403.
+    // since apiFetch("/api/platform/ping") returns 403. The message renders on
+    // the password input's inline error (p.text-danger); .first() disambiguates
+    // it from the identical toast message.
     await expect(
-      page.getByText("This account is not a platform admin.")
+      page.locator("p.text-danger", { hasText: "This account is not a platform admin." }).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 });

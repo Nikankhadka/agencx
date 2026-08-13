@@ -14,6 +14,7 @@ interface TenantMe {
   tenant_id: string;
   slug: string;
   name: string;
+  brand?: Record<string, unknown>;
 }
 
 /**

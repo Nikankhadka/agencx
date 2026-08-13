@@ -224,12 +224,22 @@ async def test_tenant_admin_me_is_isolated_per_tenant(client: httpx.AsyncClient)
 
     me_a = await client.get("/api/tenants/me", headers={"Authorization": f"Bearer {token_a}"})
     assert me_a.status_code == 200
-    assert me_a.json() == {"tenant_id": tenant_a_id, "slug": slug_a, "name": "Tenant A"}
+    assert me_a.json() == {
+        "tenant_id": tenant_a_id,
+        "slug": slug_a,
+        "name": "Tenant A",
+        "brand": {},
+    }
     assert me_a.json()["tenant_id"] != tenant_b_id
 
     me_b = await client.get("/api/tenants/me", headers={"Authorization": f"Bearer {token_b}"})
     assert me_b.status_code == 200
-    assert me_b.json() == {"tenant_id": tenant_b_id, "slug": slug_b, "name": "Tenant B"}
+    assert me_b.json() == {
+        "tenant_id": tenant_b_id,
+        "slug": slug_b,
+        "name": "Tenant B",
+        "brand": {},
+    }
 
 
 async def test_tenant_admin_me_with_no_users_row_is_forbidden(client: httpx.AsyncClient) -> None:

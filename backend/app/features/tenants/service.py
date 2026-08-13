@@ -82,11 +82,24 @@ async def create_tenant(*, user_id: str, slug: str, name: str) -> str:
     return tenant_id
 
 
-async def get_tenant(tenant_id: str) -> dict[str, str] | None:
-    """The slug/name pair for the caller's own tenant (Surface-2 header)."""
+async def get_tenant(tenant_id: str) -> dict[str, Any] | None:
+    """The slug/name/brand triple for the caller's own tenant (Surface-2 header)."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        row = await conn.fetchrow("select slug, name from tenants where id = $1", tenant_id)
-    return dict(row) if row is not None else None
+        row = await conn.fetchrow(
+            "select t.slug, t.name, tc.brand from tenants t"
+            " left join tenant_config tc on tc.tenant_id = t.id where t.id = $1",
+            tenant_id,
+        )
+    if row is None:
+        return None
+    result = dict(row)
+    raw = result.pop("brand", None)
+    if raw is None:
+        result["brand"] = {}
+    else:
+        parsed = json.loads(raw)
+        result["brand"] = parsed if isinstance(parsed, dict) else {}
+    return result
 
 
 async def resolve_active_tenant(slug: str) -> str:

@@ -10,7 +10,7 @@ controller.py, persistence in service.py.
 from __future__ import annotations
 
 import re
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
@@ -47,6 +47,7 @@ class TenantMeResponse(BaseModel):
     tenant_id: UUID
     slug: str
     name: str
+    brand: dict[str, Any] = Field(default_factory=dict)
 
 
 @router.post("", response_model=TenantSignupResponse, status_code=status.HTTP_201_CREATED)
@@ -67,4 +68,5 @@ async def me(
         tenant_id=UUID(result["tenant_id"]),
         slug=result["slug"],
         name=result["name"],
+        brand=result["brand"],
     )

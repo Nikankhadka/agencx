@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { StreamingText } from "@/components/ui/StreamingText";
+import { Icon } from "@/components/ui/Icon";
 import { apiFetch, ApiError } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -30,63 +31,6 @@ const STAGE_LABELS: Record<string, string> = {
   escalation_threshold: "Escalation threshold",
 };
 
-function formatServices(draft: unknown): string | null {
-  if (!draft || typeof draft !== "object") return null;
-  const d = draft as Record<string, unknown>;
-  const items = d.items as Array<Record<string, unknown>> | undefined;
-  if (!items || items.length === 0) return null;
-  return items
-    .map((item) => {
-      const name = item.name ?? "Unknown";
-      const price = item.price_dollars != null ? ` at $${item.price_dollars}` : " (no price)";
-      return `${name}${price}`;
-    })
-    .join(", ");
-}
-
-function formatPricingRules(draft: unknown): string | null {
-  if (!draft || typeof draft !== "object") return null;
-  const d = draft as Record<string, unknown>;
-  const rules = d.rules as Array<Record<string, unknown>> | undefined;
-  if (!rules || rules.length === 0) return null;
-  return rules
-    .map((r) => {
-      const label = r.label ?? r.code ?? "Unknown";
-      const amount = r.unit_amount_dollars != null ? `, $${r.unit_amount_dollars}/${r.unit ?? "each"}` : " (no price)";
-      return `${label}${amount}`;
-    })
-    .join(", ");
-}
-
-function formatIdentity(draft: unknown): string | null {
-  if (!draft || typeof draft !== "object") return null;
-  const d = draft as Record<string, unknown>;
-  return (d.description as string) || null;
-}
-
-function formatTone(draft: unknown): string | null {
-  if (!draft || typeof draft !== "object") return null;
-  return (draft as Record<string, unknown>).tone as string || null;
-}
-
-function formatEscalation(draft: unknown): string | null {
-  if (!draft || typeof draft !== "object") return null;
-  const d = draft as Record<string, unknown>;
-  const posture = d.posture as string | undefined;
-  const threshold = d.threshold as number | undefined;
-  if (posture) return posture.charAt(0).toUpperCase() + posture.slice(1);
-  if (threshold != null) return `Threshold: ${threshold}`;
-  return null;
-}
-
-const FORMATTERS: Record<string, (draft: unknown) => string | null> = {
-  identity: formatIdentity,
-  tone: formatTone,
-  services: formatServices,
-  pricing_rules: formatPricingRules,
-  escalation_threshold: formatEscalation,
-};
-
 /**
  * Parses an onboarding SSE data payload. Returns null for malformed frames.
  */
@@ -107,11 +51,10 @@ function parseOnboardingEvent(payload: string): {
 }
 
 /**
- * T-006 / T-042: the Copilot onboarding chat. Chat pane on the left with SSE
- * streaming, live formatted summary panel on the right showing what is captured
- * and what is still missing. The stage-based state machine is retired; the
- * copilot now uses the agentic loop under the hood, but the frontend contract
- * remains the same.
+ * T-006 / T-042: the Agencx onboarding chat. A single centered column: heading,
+ * five stage pills as progress, the SSE-streaming chat, and the composer. The
+ * stage-based state machine is retired; the copilot now uses the agentic loop
+ * under the hood, but the frontend contract remains the same.
  */
 export default function OnboardingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -249,16 +192,40 @@ export default function OnboardingPage() {
   const isConfirmReady = !completed && capturedKeys.length >= 5;
 
   if (!loaded) {
-    return <main className="flex flex-1 items-center justify-center p-8" />;
+    return (
+      <main className="flex flex-1 items-center justify-center p-8">
+        <div aria-busy="true" className="h-8 w-8 animate-pulse rounded-full bg-surface-container" />
+      </main>
+    );
   }
 
   return (
-    <main className="flex min-h-screen flex-col gap-6 p-8 lg:flex-row">
-      <section className="flex flex-1 flex-col rounded-lg border border-border bg-surface p-6">
-        <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
-        <p className="mt-1 text-body-sm text-text-secondary">
-          Answer a few questions and your assistant will be ready to go live.
-        </p>
+    <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6 lg:py-10">
+      <div className="flex w-full max-w-2xl flex-1 flex-col">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
+          <p className="text-body-sm text-text-secondary">
+            Answer a few questions and your assistant will be ready to go live.
+          </p>
+        </div>
+
+        <ul className="mt-5 flex flex-wrap gap-2" aria-label="Onboarding progress">
+          {Object.entries(STAGE_LABELS).map(([key, label]) => {
+            const captured = capturedKeys.includes(key);
+            return (
+              <li
+                key={key}
+                className={[
+                  "flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-footnote font-medium",
+                  captured ? "text-text" : "text-text-tertiary",
+                ].join(" ")}
+              >
+                <Icon name="check_circle" filled={captured} size={16} />
+                {label}
+              </li>
+            );
+          })}
+        </ul>
 
         <div className="mt-6 flex flex-1 flex-col gap-3 overflow-y-auto">
           {completed ? (
@@ -300,29 +267,7 @@ export default function OnboardingPage() {
         ) : null}
 
         {error ? <p className="mt-3 text-footnote text-danger">{error}</p> : null}
-      </section>
-
-      <aside className="w-full rounded-lg border border-border bg-surface p-6 lg:w-80">
-        <h2 className="text-title-3 font-semibold text-text">Captured so far</h2>
-        <ul className="mt-4 flex flex-col gap-3">
-          {Object.entries(STAGE_LABELS).map(([key, label]) => {
-            const captured = key in draft;
-            const formatted = captured ? FORMATTERS[key]?.(draft[key]) : null;
-            return (
-              <li key={key} className="text-body-sm">
-                <span className="font-medium text-text">{label}</span>
-                {captured && formatted ? (
-                  <p className="text-text-secondary">{formatted}</p>
-                ) : captured ? (
-                  <p className="text-text-secondary italic">Captured</p>
-                ) : (
-                  <p className="text-text-tertiary italic">Not yet captured</p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
+      </div>
     </main>
   );
 }

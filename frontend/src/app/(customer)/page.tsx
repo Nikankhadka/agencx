@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { brandStyle } from "@/lib/brand";
 import { customerSurfaceConfig, resolveTenantBySlug, SLUG_HEADER } from "@/lib/tenant";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { CustomerChat } from "./CustomerChat";
 
 /**
@@ -39,10 +40,7 @@ export default async function CustomerHome() {
     <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col">
       {accentOverride ? <style>{accentOverride}</style> : null}
       <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- tenant-supplied, unknown dimensions
-          <img src={logoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
-        ) : null}
+        <BrandMark logoUrl={logoUrl} name={displayName} />
         <h1 className="text-title-3 font-semibold text-text">{displayName}</h1>
       </header>
       <CustomerChat

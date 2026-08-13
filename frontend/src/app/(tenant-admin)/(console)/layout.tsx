@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { useAuth } from "@/components/AuthProvider";
+import { apiFetch } from "@/lib/api";
 
 /**
  * T-031: the Surface-2 admin-console shell (frontend.md 7.2). A left sidebar
@@ -32,10 +34,17 @@ const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
 
 const SOON_ITEMS = ["Settings"] as const;
 
+interface TenantMe {
+  slug: string;
+  name: string;
+  brand?: Record<string, unknown>;
+}
+
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, isLoading, signOut } = useAuth();
+  const [tenant, setTenant] = useState<TenantMe | null>(null);
 
   useEffect(() => {
     if (!isLoading && !session) {
@@ -43,10 +52,21 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     }
   }, [isLoading, session, router]);
 
+  useEffect(() => {
+    if (!session) return;
+    apiFetch<TenantMe>("/api/tenants/me")
+      .then(setTenant)
+      .catch(() => setTenant(null));
+  }, [session]);
+
   if (isLoading) {
     return <div aria-busy="true" className="min-h-screen bg-bg" />;
   }
   if (!session) return null;
+
+  const displayName =
+    (tenant?.brand?.["display_name"] as string | undefined) ?? tenant?.name ?? "Wren";
+  const logoUrl = tenant?.brand?.["logo_url"] as string | undefined;
 
   return (
     <div className="flex min-h-screen w-full">
@@ -54,7 +74,10 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         aria-label="Console"
         className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-sunken p-4"
       >
-        <span className="px-3 py-2 text-title-3 font-semibold text-text">Wren</span>
+        <span className="flex items-center gap-2.5 px-3 py-2">
+          <BrandMark logoUrl={logoUrl} name={displayName} />
+          <span className="truncate text-title-3 font-semibold text-text">{displayName}</span>
+        </span>
         <ul className="mt-2 flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
