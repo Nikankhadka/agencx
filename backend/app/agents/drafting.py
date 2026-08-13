@@ -9,9 +9,14 @@ event shape and accumulation can never drift between nodes.
 
 from __future__ import annotations
 
+import logging
+import time
+
 from langgraph.config import get_stream_writer
 
 from app.llm.provider import ChatMessage, LLMProvider
+
+logger = logging.getLogger("app.agents.drafting")
 
 
 async def stream_draft(provider: LLMProvider, messages: list[ChatMessage]) -> str:
@@ -19,8 +24,16 @@ async def stream_draft(provider: LLMProvider, messages: list[ChatMessage]) -> st
     ``token`` event, and return the accumulated draft text. Must run inside a
     graph node (it uses the run-scoped stream writer)."""
     writer = get_stream_writer()
+    started = time.perf_counter()
     text = ""
     async for delta in provider.chat_stream(messages):
         text += delta
         writer({"type": "token", "text": delta})
+    logger.info(
+        "agent draft",
+        extra={
+            "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+            "chars": len(text),
+        },
+    )
     return text

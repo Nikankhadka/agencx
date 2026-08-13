@@ -265,14 +265,24 @@ async def run(state: AgentState) -> dict[str, Any]:
     lookup_result: dict[str, Any] | None = None
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
-        for _ in range(_MAX_ITERATIONS):
+        for iteration in range(_MAX_ITERATIONS):
             with ctx.turn.span("agent_tool_call") as span:
+                model_started = time.perf_counter()
                 turn = await ctx.provider.chat_with_tools(
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
                 )
+                model_ms = round((time.perf_counter() - model_started) * 1000, 1)
                 span.set(tool_calls=len(turn.tool_calls))
+            logger.info(
+                "agent model call",
+                extra={
+                    "iteration": iteration,
+                    "duration_ms": model_ms,
+                    "tool_calls": len(turn.tool_calls),
+                },
+            )
 
             if not turn.tool_calls:
                 break
@@ -282,6 +292,7 @@ async def run(state: AgentState) -> dict[str, Any]:
 
             for call in turn.tool_calls:
                 started = time.perf_counter()
+                failed = False
                 try:
                     if call.name == "search_knowledge":
                         sk_args = _SearchKnowledgeArgs.model_validate(call.args)
@@ -415,6 +426,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             spotlight, {"error": f"unknown tool: {call.name}"}
                         )
                 except Exception as exc:
+                    failed = True
                     logger.exception("tool %s failed", call.name)
                     result_text = _tool_result(spotlight, {"error": str(exc)})
                     writer(
@@ -427,6 +439,15 @@ async def run(state: AgentState) -> dict[str, Any]:
                             "latency_ms": int((time.perf_counter() - started) * 1000),
                         }
                     )
+
+                logger.info(
+                    "agent tool",
+                    extra={
+                        "name": call.name,
+                        "duration_ms": int((time.perf_counter() - started) * 1000),
+                        "success": not failed,
+                    },
+                )
 
                 tool_result_messages.append(
                     {

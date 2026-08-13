@@ -238,7 +238,10 @@ export default function OnboardingPage() {
           ) : (
             messages.map((message, index) => (
               <ChatBubble key={index} role={message.role}>
-                <StreamingText streaming={message.streaming ?? false}>
+                <StreamingText
+                  streaming={message.streaming ?? false}
+                  pending={message.streaming === true && !message.text}
+                >
                   {message.text || (message.streaming ? "" : "…")}
                 </StreamingText>
               </ChatBubble>

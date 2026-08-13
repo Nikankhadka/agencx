@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
@@ -76,6 +77,7 @@ async def post_message_stream(
         async def _sse(event: dict[str, object]) -> str:
             return f"data: {json.dumps(event)}\n\n"
 
+        stream_started = time.perf_counter()
         try:
             reply, _record = await controller.run_message_stream_core(
                 tenant_id=admin.tenant_id, text=body.text, provider=provider
@@ -89,9 +91,23 @@ async def post_message_stream(
             logger.exception("onboarding stream failed")
             yield await _sse({"type": "error", "detail": "internal error"})
             return
+        logger.info(
+            "onboarding stream",
+            extra={
+                "step": "reply_ready",
+                "duration_ms": round((time.perf_counter() - stream_started) * 1000, 1),
+            },
+        )
         yield await _sse({"type": "progress", "stage": "processing"})
         yield await _sse({"type": "reply", "text": reply})
         yield await _sse({"type": "done"})
+        logger.info(
+            "onboarding stream",
+            extra={
+                "step": "stream_done",
+                "duration_ms": round((time.perf_counter() - stream_started) * 1000, 1),
+            },
+        )
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
 

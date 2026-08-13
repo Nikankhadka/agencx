@@ -9,7 +9,9 @@ State: {version: 2, draft, history, off_topic_count, completed} in jsonb.
 
 from __future__ import annotations
 
+import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,8 +21,14 @@ from app.agents.spotlight import scan_input
 from app.llm.provider import ChatMessage, LLMProvider, ToolSpec
 from app.onboarding.tools import TOOL_REGISTRY, _check_completeness, request_finalize
 
+logger = logging.getLogger("app.onboarding.agent")
+
 _MAX_CALLS = 4
 _MAX_HIST = 20
+
+
+def _ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 1)
 
 
 class _NoArgs(BaseModel):
@@ -123,6 +131,11 @@ class OnboardingRecord:
 async def run_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
 ) -> tuple[OnboardingRecord, str]:
+    turn_started = time.perf_counter()
+    logger.info(
+        "onboarding turn start",
+        extra={"step": "start", "msg_len": len(admin_message)},
+    )
     if record.completed:
         return record, "Onboarding is already complete."
     scan_input(admin_message)
@@ -132,25 +145,42 @@ async def run_turn(
         messages.append({"role": entry["role"], "content": entry["content"]})
     messages.append({"role": "user", "content": admin_message})
 
+    tools_started = time.perf_counter()
     turn = await provider.chat_with_tools(messages=messages, tools=_TOOL_SPECS, tool_choice="auto")
+    logger.info(
+        "onboarding step",
+        extra={
+            "step": "tools_model",
+            "duration_ms": _ms(tools_started),
+            "tool_calls": len(turn.tool_calls),
+        },
+    )
     calls = turn.tool_calls[:_MAX_CALLS]
     directive = Directive()
 
     for call in calls:
+        call_started = time.perf_counter()
+        ok = False
         if call.name == "request_finalize":
             result = request_finalize(record.draft)
+            ok = True
             if not result.ok:
                 directive.warn = f"Still missing: {'; '.join(result.missing)}."
-            continue
-        handler_info = TOOL_REGISTRY.get(call.name)
-        if handler_info is None:
-            continue
-        handler, schema = handler_info
-        try:
-            parsed_args = schema.model_validate(call.args)
-        except Exception:
-            continue
-        record.draft = handler(record.draft, parsed_args)
+        else:
+            handler_info = TOOL_REGISTRY.get(call.name)
+            if handler_info is not None:
+                handler, schema = handler_info
+                try:
+                    parsed_args = schema.model_validate(call.args)
+                except Exception:
+                    pass
+                else:
+                    record.draft = handler(record.draft, parsed_args)
+                    ok = True
+        logger.info(
+            "onboarding step",
+            extra={"step": "tool", "name": call.name, "duration_ms": _ms(call_started), "ok": ok},
+        )
 
     if not directive.warn:
         missing = _check_completeness(record.draft)
@@ -177,15 +207,39 @@ async def run_turn(
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
     reply_msgs.append({"role": "user", "content": admin_message})
 
+    reply_started = time.perf_counter()
     reply = await provider.chat(reply_msgs)
+    logger.info(
+        "onboarding step",
+        extra={"step": "reply_compose", "duration_ms": _ms(reply_started), "chars": len(reply)},
+    )
     if _echo(reply, record.draft):
+        redraft_started = time.perf_counter()
         reply_msgs.append({"role": "assistant", "content": reply})
         reply_msgs.append({"role": "user", "content": "Redraft - drop invented figures."})
         reply = await provider.chat(reply_msgs)
+        logger.info(
+            "onboarding step",
+            extra={
+                "step": "reply_redraft",
+                "duration_ms": _ms(redraft_started),
+                "chars": len(reply),
+            },
+        )
 
     record.history.append({"role": "user", "content": admin_message})
     record.history.append({"role": "assistant", "content": reply})
     record.history = record.history[-_MAX_HIST * 2 :]
+    logger.info(
+        "onboarding turn done",
+        extra={
+            "step": "turn_done",
+            "total_ms": _ms(turn_started),
+            "tools_called": len(calls),
+            "off_topic": bool(off),
+            "reply_chars": len(reply),
+        },
+    )
     return record, reply
 
 

@@ -258,7 +258,10 @@ export function CustomerChat({
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
         {messages.map((message, index) => (
           <ChatBubble key={index} role={message.role}>
-            <StreamingText streaming={message.streaming ?? false}>
+            <StreamingText
+              streaming={message.streaming ?? false}
+              pending={message.streaming === true && message.text === ""}
+            >
               {renderWithCitations(message.text, message.citations ?? [])}
             </StreamingText>
             {message.quote ? <QuoteCard quote={message.quote} /> : null}
