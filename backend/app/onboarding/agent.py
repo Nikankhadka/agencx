@@ -69,13 +69,13 @@ def _build_specs() -> list[ToolSpec]:
     }
     for name, (_, schema) in TOOL_REGISTRY.items():
         specs.append(ToolSpec(name=name, description=descs.get(name, ""), args_schema=schema))
-        specs.append(
-            ToolSpec(
-                name="request_finalize",
-                description="Request to finalize.",
-                args_schema=_NoArgs,
-            )
+    specs.append(
+        ToolSpec(
+            name="request_finalize",
+            description="Request to finalize.",
+            args_schema=_NoArgs,
         )
+    )
     return specs
 
 

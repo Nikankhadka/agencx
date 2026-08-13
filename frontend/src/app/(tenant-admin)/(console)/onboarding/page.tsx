@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { Icon } from "@/components/ui/Icon";
-import { apiFetch, ApiError } from "@/lib/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 
 interface OnboardingStateResponse {
   stage: string;
@@ -95,13 +93,12 @@ export default function OnboardingPage() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch(`${API_URL}/api/onboarding/message/stream`, {
+      const res = await apiFetchStream("/api/onboarding/message/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) throw new Error("onboarding request failed");
+      if (!res.body) throw new Error("onboarding request failed");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -149,6 +146,14 @@ export default function OnboardingPage() {
               });
               break;
             case "error":
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === "assistant") {
+                  next[next.length - 1] = { ...last, streaming: false };
+                }
+                return next;
+              });
               setError(event.detail ?? "Something went wrong");
               break;
           }
@@ -162,7 +167,7 @@ export default function OnboardingPage() {
           return prev;
         });
       } else {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        setError(err instanceof ApiError ? err.detail : "Something went wrong");
       }
     } finally {
       abortRef.current = null;

@@ -9,6 +9,7 @@ Handlers live in controller.py, persistence in service.py.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
@@ -22,6 +23,8 @@ from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.shared import auth
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
@@ -79,6 +82,12 @@ async def post_message_stream(
             )
         except HTTPException as exc:
             yield await _sse({"type": "error", "detail": exc.detail})
+            return
+        except Exception:
+            # Never let an unexpected failure become a silent empty stream
+            # (the client would hang on a forever-streaming bubble).
+            logger.exception("onboarding stream failed")
+            yield await _sse({"type": "error", "detail": "internal error"})
             return
         yield await _sse({"type": "progress", "stage": "processing"})
         yield await _sse({"type": "reply", "text": reply})
