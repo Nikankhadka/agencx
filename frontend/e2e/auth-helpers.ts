@@ -72,8 +72,8 @@ export async function loginAsTenantAdmin(page: Page, user: DemoUser): Promise<vo
   await page.goto("/login");
   await submitLoginForm(page, user.email, user.password);
   // T-004: on success the login page proves the authed backend probe by
-  // redirecting into the admin console shell.
-  await page.waitForURL("**/dashboards");
+  // redirecting into the admin console shell at /onboarding.
+  await page.waitForURL("**/onboarding");
 }
 
 /**

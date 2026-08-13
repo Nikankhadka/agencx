@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "react-hot-toast";
 
 interface TenantMe {
   tenant_id: string;
@@ -46,16 +47,21 @@ export default function LoginPage() {
       });
       if (authError) {
         setError(authError.message);
+        toast.error(authError.message);
         return;
       }
       await apiFetch<TenantMe>("/api/tenants/me");
+      toast.success("Logged in successfully");
       router.replace("/onboarding");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setError("This account has no business yet - finish setup on the signup page.");
-      } else {
-        setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
-      }
+      const message =
+        err instanceof ApiError && err.status === 403
+          ? "This account has no business yet - finish setup on the signup page."
+          : err instanceof ApiError
+            ? err.detail
+            : "Something went wrong. Please try again.";
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }

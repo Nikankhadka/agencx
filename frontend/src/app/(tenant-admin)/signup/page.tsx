@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
+import { toast } from "react-hot-toast";
 
 interface TenantSignupResponse {
   tenant_id: string;
@@ -70,6 +71,7 @@ export default function SignupPage() {
         const { data, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) {
           setError(authError.message);
+          toast.error(authError.message);
           return;
         }
         session = data.session;
@@ -78,14 +80,19 @@ export default function SignupPage() {
         // Project has email confirmation enabled: no session yet, so the
         // tenant cannot be provisioned until the user confirms and logs in.
         setNeedsConfirm(true);
+        toast("Check your email to confirm your address");
         return;
       }
       setDone(await apiFetch<TenantSignupResponse>("/api/tenants", {
         method: "POST",
         body: JSON.stringify({ slug, name }),
       }));
+      toast.success("Your business is set up");
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
+      const message =
+        err instanceof ApiError ? err.detail : "Something went wrong. Please try again.";
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -104,7 +111,7 @@ export default function SignupPage() {
             Next: onboarding walks you through teaching it your business.
           </p>
           <div className="mt-6">
-            <Link href="/login">
+            <Link href="/onboarding">
               <Button variant="secondary">Go to your console</Button>
             </Link>
           </div>

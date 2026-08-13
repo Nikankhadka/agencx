@@ -15,8 +15,8 @@ import { useAuth } from "@/components/AuthProvider";
  *
  * Settings is specced (7.2) but lands later - it renders as a visibly-disabled
  * item rather than a dead link so the nav is honest about what exists today.
- * Dashboards (T-034) is temporarily hidden too while focus is on the other
- * surfaces; the page stays reachable by URL, the nav shows it as "soon".
+ * Dashboards (T-034) is temporarily hidden: its nav item is removed and
+ * /dashboards redirects to /onboarding (next.config.ts redirects()).
  *
  * 7.2 specs "icons + labels": each item carries a Material Symbol; the active
  * item is an accent-container pill with the filled glyph, inactive items are
@@ -30,7 +30,7 @@ const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/pricing", label: "Pricing", icon: "sell" },
 ];
 
-const SOON_ITEMS = ["Dashboards", "Settings"] as const;
+const SOON_ITEMS = ["Settings"] as const;
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

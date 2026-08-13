@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import { setCachedSession } from "@/lib/auth-session";
+import { toast } from "react-hot-toast";
 
 export interface AuthState {
   session: Session | null;
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await getSupabase().auth.signOut();
+    toast.success("Signed out");
     router.push("/");
   }, [router]);
 

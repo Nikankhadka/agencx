@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "react-hot-toast";
 
 /**
  * T-033: platform-owner login (frontend.md 7.3). Mirrors the tenant-admin
@@ -25,9 +26,16 @@ export default function PlatformLoginPage() {
   const { session, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && session) {
-      router.replace("/");
-    }
+    if (isLoading || !session) return;
+    let active = true;
+    apiFetch<{ ok: boolean }>("/api/platform/ping")
+      .then(() => {
+        if (active) router.replace("/");
+      })
+      .catch(() => {
+        /* signed in but not a platform admin - stay on the login form */
+      });
+    return () => { active = false; };
   }, [isLoading, session, router]);
 
   async function handleSubmit(event: FormEvent) {
@@ -41,16 +49,21 @@ export default function PlatformLoginPage() {
       });
       if (authError) {
         setError(authError.message);
+        toast.error(authError.message);
         return;
       }
       await apiFetch<{ ok: boolean }>("/api/platform/ping");
+      toast.success("Logged in successfully");
       router.replace("/");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setError("This account is not a platform admin.");
-      } else {
-        setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
-      }
+      const message =
+        err instanceof ApiError && err.status === 403
+          ? "This account is not a platform admin."
+          : err instanceof ApiError
+            ? err.detail
+            : "Something went wrong. Please try again.";
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -63,8 +76,6 @@ export default function PlatformLoginPage() {
       </main>
     );
   }
-
-  if (session) return null;
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
