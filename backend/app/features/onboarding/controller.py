@@ -26,6 +26,7 @@ from app.onboarding.flow import (
     resolve_threshold,
 )
 from app.onboarding.tools import request_finalize
+from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
 _ORDER = ["identity", "tone", "services", "pricing_rules", "escalation_threshold"]
 
@@ -71,9 +72,16 @@ async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> d
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
         )
-    updated, _reply = await run_turn(admin_message=text, record=onboarding, provider=provider)
+    # ponytail: use the platform default timeout rather than resolving the
+    # tenant's per-tenant llm_timeout_s; resolve TenantLimits like
+    # features/chat/controller.py if onboarding ever needs per-tenant overrides.
+    bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+    updated, _reply, persist = await run_turn(
+        admin_message=text, record=onboarding, provider=bounded
+    )
     record_data = updated.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
+    if persist:
+        await service.save_record(tenant_id=tenant_id, record=record_data)
     return record_data
 
 
@@ -89,13 +97,16 @@ async def run_message_stream_core(
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
         )
-    updated, reply = await run_turn(
+    # ponytail: platform default timeout (see run_message above).
+    bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+    updated, reply, persist = await run_turn(
         admin_message=text,
         record=onboarding,
-        provider=provider,
+        provider=bounded,
     )
     record_data = updated.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
+    if persist:
+        await service.save_record(tenant_id=tenant_id, record=record_data)
     return reply, record_data
 
 

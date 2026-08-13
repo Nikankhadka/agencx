@@ -43,8 +43,18 @@
 
 ---
 
-### T-042 `[ ]` Agentic onboarding copilot (8h)
+### T-042 `[x]` Agentic onboarding copilot (8h)
 **Deps:** T-041. **Stories:** E6 (conversational onboarding, agentic rework).
+
+> **SUPERSEDED (2026-08-14):** the tool-calling turn loop described below was
+> replaced by a single stateful `extract()` returning a `DraftUpdate`
+> (off-topic flag + non-null section updates + next_question + meta_reply),
+> because free/edge models kept answering in prose and dropping the tool args,
+> looping "what does your business do?" forever. Off-topic detection moved from
+> a hardcoded keyword list into the extraction call, and off-topic messages are
+> now answered gently (one line, then redirect) with no firmness escalation - a
+> deviation from the "redirect budget escalates firmness and terminates" accept
+> criterion below. See ADR in `docs/archive/decisions-log.md` (2026-08-14).
 
 **Read:** `backend/app/onboarding/flow.py` (schemas + resolve_threshold + the config gate - reduced, not deleted), `backend/app/api/onboarding.py`, `backend/app/api/chat.py` (SSE pattern), `frontend/src/lib/chat-events.ts` (PROGRESS_LABELS), `frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx`, `backend/seeds/seed_tenant2_dental.py`, `seeds/tenant2_inputs/interview-script.md`, `backend/app/agents/spotlight.py`, `backend/app/pricing/validation_gate.py`.
 

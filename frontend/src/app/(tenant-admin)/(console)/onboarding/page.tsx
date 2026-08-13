@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { StreamingText } from "@/components/ui/StreamingText";
-import { Icon } from "@/components/ui/Icon";
+import { SummaryPanel } from "./components/SummaryPanel";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 
 interface OnboardingStateResponse {
@@ -20,14 +20,6 @@ interface Message {
   text: string;
   streaming?: boolean;
 }
-
-const STAGE_LABELS: Record<string, string> = {
-  identity: "About your business",
-  tone: "Voice and tone",
-  services: "Services and products",
-  pricing_rules: "Pricing rules",
-  escalation_threshold: "Escalation threshold",
-};
 
 /**
  * Parses an onboarding SSE data payload. Returns null for malformed frames.
@@ -49,10 +41,11 @@ function parseOnboardingEvent(payload: string): {
 }
 
 /**
- * T-006 / T-042: the Agencx onboarding chat. A single centered column: heading,
- * five stage pills as progress, the SSE-streaming chat, and the composer. The
- * stage-based state machine is retired; the copilot now uses the agentic loop
- * under the hood, but the frontend contract remains the same.
+ * T-006 / T-042: the Agencx onboarding chat. A two-column layout - a live
+ * summary panel of captured business details on the left, the SSE-streaming
+ * chat on the right. The stage-based state machine is retired; the copilot now
+ * uses the agentic loop under the hood, and the summary updates in real time
+ * from the ``state`` SSE event.
  */
 export default function OnboardingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -193,8 +186,7 @@ export default function OnboardingPage() {
     }
   }
 
-  const capturedKeys = Object.keys(draft);
-  const isConfirmReady = !completed && capturedKeys.length >= 5;
+  const isConfirmReady = !completed && Object.keys(draft).length >= 5;
 
   if (!loaded) {
     return (
@@ -205,76 +197,64 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6 lg:py-10">
-      <div className="flex w-full max-w-2xl flex-1 flex-col">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
-          <p className="text-body-sm text-text-secondary">
-            Answer a few questions and your assistant will be ready to go live.
-          </p>
-        </div>
+    <main className="flex flex-1 flex-col px-4 py-6 sm:px-6 lg:py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:flex-row">
+        <aside className="lg:w-72 lg:shrink-0">
+          <SummaryPanel draft={draft} completed={completed} />
+        </aside>
 
-        <ul className="mt-5 flex flex-wrap gap-2" aria-label="Onboarding progress">
-          {Object.entries(STAGE_LABELS).map(([key, label]) => {
-            const captured = capturedKeys.includes(key);
-            return (
-              <li
-                key={key}
-                className={[
-                  "flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-footnote font-medium",
-                  captured ? "text-text" : "text-text-tertiary",
-                ].join(" ")}
-              >
-                <Icon name="check_circle" filled={captured} size={16} />
-                {label}
-              </li>
-            );
-          })}
-        </ul>
-
-        <div className="mt-6 flex flex-1 flex-col gap-3 overflow-y-auto">
-          {completed ? (
-            <ChatBubble role="system">You are live! Onboarding is complete.</ChatBubble>
-          ) : (
-            messages.map((message, index) => (
-              <ChatBubble key={index} role={message.role}>
-                <StreamingText
-                  streaming={message.streaming ?? false}
-                  pending={message.streaming === true && !message.text}
-                >
-                  {message.text || (message.streaming ? "" : "…")}
-                </StreamingText>
-              </ChatBubble>
-            ))
-          )}
-        </div>
-
-        {!completed ? (
-          <form onSubmit={handleSubmit} className="mt-6 flex gap-2">
-            <div className="flex-1">
-              <Input
-                label="Your reply"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={busy}
-                autoFocus
-              />
-            </div>
-            <Button type="submit" loading={busy}>
-              Send
-            </Button>
-          </form>
-        ) : null}
-
-        {!completed && isConfirmReady ? (
-          <div className="mt-4">
-            <Button onClick={handleConfirm} loading={busy}>
-              Confirm and go live
-            </Button>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
+            <p className="text-body-sm text-text-secondary">
+              Answer a few questions and your assistant will be ready to go live.
+            </p>
           </div>
-        ) : null}
 
-        {error ? <p className="mt-3 text-footnote text-danger">{error}</p> : null}
+          <div className="mt-6 flex flex-1 flex-col gap-3 overflow-y-auto">
+            {completed ? (
+              <ChatBubble role="system">You are live! Onboarding is complete.</ChatBubble>
+            ) : (
+              messages.map((message, index) => (
+                <ChatBubble key={index} role={message.role}>
+                  <StreamingText
+                    streaming={message.streaming ?? false}
+                    pending={message.streaming === true && !message.text}
+                  >
+                    {message.text || (message.streaming ? "" : "…")}
+                  </StreamingText>
+                </ChatBubble>
+              ))
+            )}
+          </div>
+
+          {!completed ? (
+            <form onSubmit={handleSubmit} className="mt-6 flex gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Your reply"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={busy}
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" loading={busy}>
+                Send
+              </Button>
+            </form>
+          ) : null}
+
+          {!completed && isConfirmReady ? (
+            <div className="mt-4">
+              <Button onClick={handleConfirm} loading={busy}>
+                Confirm and go live
+              </Button>
+            </div>
+          ) : null}
+
+          {error ? <p className="mt-3 text-footnote text-danger">{error}</p> : null}
+        </div>
       </div>
     </main>
   );

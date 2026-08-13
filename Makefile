@@ -17,11 +17,8 @@ demo: ## One-command demo: GoTrue + DB + migrate + seed + dev servers (see docs/
 # ── dev servers ─────────────────────────────────────────────────────────────────
 
 .PHONY: dev
-dev: ## Start backend + frontend dev servers concurrently (no GoTrue/seed; Ctrl-C to stop)
-	@trap 'kill 0' EXIT INT TERM; \
-	( cd backend && uv run uvicorn app.main:app --reload --port 8000 ) & \
-	( cd frontend && npm run dev ) & \
-	wait
+dev: ## Start full dev environment: infra (db+auth) + migrate + servers with reload (no seed)
+	./scripts/demo.sh --no-seed --reload
 
 .PHONY: dev-backend
 dev-backend: ## Start backend dev server only (:8000)

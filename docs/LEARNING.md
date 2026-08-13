@@ -179,7 +179,7 @@ All commands from the repo root. For the raw command behind each target, see the
 | Task | Command |
 |---|---|
 | Full demo (recommended first run) | `make demo` |
-| Dev servers (both, for iterating) | `make dev` |
+| Dev environment (infra + migrate + servers) | `make dev` |
 | Backend dev server only | `make dev-backend` |
 | Frontend dev server only | `make dev-frontend` |
 | Start database | `make db` |

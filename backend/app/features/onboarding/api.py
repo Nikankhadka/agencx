@@ -24,6 +24,7 @@ from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.shared import auth
+from app.shared.limits import LimitTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -79,17 +80,27 @@ async def post_message_stream(
 
         stream_started = time.perf_counter()
         try:
-            reply, _record = await controller.run_message_stream_core(
+            reply, record_data = await controller.run_message_stream_core(
                 tenant_id=admin.tenant_id, text=body.text, provider=provider
             )
         except HTTPException as exc:
             yield await _sse({"type": "error", "detail": exc.detail})
             return
+        except LimitTimeout:
+            yield await _sse(
+                {"type": "error", "detail": "That took too long - please send your message again."}
+            )
+            return
         except Exception:
             # Never let an unexpected failure become a silent empty stream
             # (the client would hang on a forever-streaming bubble).
             logger.exception("onboarding stream failed")
-            yield await _sse({"type": "error", "detail": "internal error"})
+            yield await _sse(
+                {
+                    "type": "error",
+                    "detail": "Something went wrong on my side - please send that again.",
+                }
+            )
             return
         logger.info(
             "onboarding stream",
@@ -100,6 +111,13 @@ async def post_message_stream(
         )
         yield await _sse({"type": "progress", "stage": "processing"})
         yield await _sse({"type": "reply", "text": reply})
+        yield await _sse(
+            {
+                "type": "state",
+                "draft": record_data.get("draft", {}),
+                "completed": record_data.get("completed", False),
+            }
+        )
         yield await _sse({"type": "done"})
         logger.info(
             "onboarding stream",

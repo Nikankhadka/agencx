@@ -27,6 +27,11 @@ from starlette.responses import JSONResponse, Response
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
+# A dedicated logger whose handler emits plain, human-readable lines (not the
+# JSON shape every other record gets). Used for the conversational transcript
+# so a human can follow a demo live instead of parsing JSON blobs.
+TRANSCRIPT_LOGGER_NAME = "app.transcript"
+
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # The attributes every LogRecord carries; anything else on a record came from a
@@ -60,6 +65,15 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+class PlainFormatter(logging.Formatter):
+    """Renders a record as a single human-readable line (timestamp + message)
+    rather than JSON - for the conversational transcript a person reads live."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        ts = time.strftime("%H:%M:%S", time.gmtime(record.created))
+        return f"{ts} {record.getMessage()}"
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Install the JSON formatter on the root logger's stdout handler. Idempotent
     - safe to call once at startup even if a handler already exists."""
@@ -74,6 +88,14 @@ def configure_logging(level: str = "INFO") -> None:
     # propagate to the root JSON handler instead of printing twice.
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers = []
+    # The transcript logger prints plain lines and does not propagate, so its
+    # records never double up as JSON on the root handler.
+    transcript = logging.getLogger(TRANSCRIPT_LOGGER_NAME)
+    transcript.propagate = False
+    transcript.setLevel(level.upper())
+    transcript_handler = logging.StreamHandler()
+    transcript_handler.setFormatter(PlainFormatter())
+    transcript.handlers = [transcript_handler]
 
 
 logger = logging.getLogger("app.request")

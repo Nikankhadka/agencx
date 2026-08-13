@@ -96,6 +96,38 @@ def _retry_after_seconds(error: RateLimitError, attempt: int) -> float:
     return min(_MAX_BACKOFF_S, 2.0 * float(2**attempt))
 
 
+def _is_daily_quota(error: RateLimitError) -> bool:
+    """True when a 429 signals a non-transient daily quota - the provider will
+    not accept this model again today, so retrying is pointless and the call
+    should fail over immediately instead of burning the backoff budget.
+
+    Distinguishes the Gemini free-tier daily cap (``RESOURCE_EXHAUSTED`` with a
+    ``GenerateRequestsPerDayPerProjectPerModel-FreeTier`` quotaId, observed as
+    ``limit: 20``) from a transient per-minute throttle, which stays retryable.
+    """
+    body = getattr(error, "body", None)
+    if not isinstance(body, dict):
+        return False
+    err = body.get("error")
+    if not isinstance(err, dict):
+        return False
+    if err.get("status") == "RESOURCE_EXHAUSTED":
+        return True
+    message = str(err.get("message", "")).lower()
+    if "per day" in message or "daily" in message:
+        return True
+    for detail in err.get("details", []) or []:
+        if not isinstance(detail, dict):
+            continue
+        for violation in detail.get("violations", []) or []:
+            if not isinstance(violation, dict):
+                continue
+            quota_id = str(violation.get("quotaId", ""))
+            if "PerDay" in quota_id or "per_day" in quota_id:
+                return True
+    return False
+
+
 async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
     """Await ``factory()``, retrying transient failures: a 429 (backed off,
     honoring Retry-After) or a malformed structured-output resample (short
@@ -113,6 +145,14 @@ async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
             )
             await asyncio.sleep(1.0)
         except RateLimitError as error:
+            if _is_daily_quota(error):
+                # Not transient - this model is out of requests until tomorrow.
+                # Raise immediately so FailoverProvider fires on the first try
+                # instead of after the full backoff budget.
+                logger.warning(
+                    "llm daily quota exhausted (not transient); failing over without retry"
+                )
+                raise
             if attempt == _RETRY_ATTEMPTS - 1:
                 raise
             delay = _retry_after_seconds(error, attempt)

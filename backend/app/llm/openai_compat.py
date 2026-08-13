@@ -50,6 +50,12 @@ class OpenAICompatProvider(OpenAISDKProvider):
             # Explicit connect timeout so a hung connect fails fast rather than
             # consuming the tenant's whole llm_timeout budget.
             timeout=SDK_TIMEOUT,
+            # Disable the SDK's own retry (default max_retries=2). Our retry
+            # and failover layers (openai_base._with_retry + FailoverProvider)
+            # already handle transient 429s and unusable bodies; the SDK's
+            # shadow retry just re-issues a failing request ~1.3s before we see
+            # it, doubling latency on a 429 that is about to fail over anyway.
+            max_retries=0,
         )
 
         super().__init__(

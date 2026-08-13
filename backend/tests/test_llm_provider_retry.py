@@ -35,6 +35,40 @@ def _rate_limit_error(retry_after: str | None = None) -> RateLimitError:
     return RateLimitError("rate limited", response=response, body=None)
 
 
+def _daily_quota_error() -> RateLimitError:
+    """A Gemini free-tier daily-quota 429: RESOURCE_EXHAUSTED with a per-day
+    quotaId - non-transient, the model stays exhausted until tomorrow."""
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(429, request=request)
+    body = {
+        "error": {
+            "code": 429,
+            "message": (
+                "Quota exceeded for metric: "
+                "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+                "limit: 20"
+            ),
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {
+                            "quotaMetric": (
+                                "generativelanguage.googleapis.com/"
+                                "generate_content_free_tier_requests"
+                            ),
+                            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                            "quotaValue": "20",
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    return RateLimitError("429", response=response, body=body)
+
+
 def _completion(content: str) -> SimpleNamespace:
     message = SimpleNamespace(content=content, parsed=None)
     return SimpleNamespace(
@@ -100,6 +134,25 @@ async def test_chat_gives_up_after_the_attempt_budget(_no_real_sleep: list[float
     with pytest.raises(RateLimitError):
         await _provider(always_429).chat([{"role": "user", "content": "q"}])
     assert always_429.calls == openai_base._RETRY_ATTEMPTS
+
+
+async def test_chat_does_not_retry_a_daily_quota(_no_real_sleep: list[float]) -> None:
+    """A non-transient daily-quota 429 must surface immediately (so the outer
+    FailoverProvider fires on the first try) instead of burning the retry
+    budget against a model that stays exhausted until tomorrow."""
+    exhausted = _Completions([_daily_quota_error()], _completion("never"))
+    with pytest.raises(RateLimitError):
+        await _provider(exhausted).chat([{"role": "user", "content": "q"}])
+    assert exhausted.calls == 1
+    assert _no_real_sleep == []  # no backoff was slept
+
+
+def test_is_daily_quota_detects_resource_exhausted() -> None:
+    assert openai_base._is_daily_quota(_daily_quota_error()) is True
+
+
+def test_is_daily_quota_ignores_a_transient_429() -> None:
+    assert openai_base._is_daily_quota(_rate_limit_error()) is False
 
 
 async def test_extract_resamples_on_malformed_structured_output(

@@ -106,6 +106,7 @@ Goal: replace the hardcoded onboarding state machine and the fixed five-speciali
 | Marketing pages (/product /pricing /demo /about) | done | `27537d7` | Four public content pages behind the marketing nav: product walkthrough, honest beta-free pricing, demo credentials mirroring `docs/DEMO.md`, trust mechanics. |
 | Reranker score normalization (retrieval-refusal bugfix) | done | `0dd266e` | Fixed a bug where the knowledge agent refused in-domain questions because the two reranker backends returned scores on different scales. Normalized both to [0,1] relevance probability with a regression test. |
 | Tenant brand in headers + onboarding polish | done | `e72de5f` | Customer chat header and tenant console sidebar show the tenant's logo when set, else an accent monogram with the business name (Wren wordmark gone from the console). Onboarding is now a clean single-column chat with five stage pills as progress, and Agencx introduces itself in the greeting. |
+| Onboarding extraction robustness fix | done | _pending commit_ | Copilot turn loop switched from tool-call extraction to a single stateful `extract()` (`DraftUpdate`), ending the "what does your business do?" loop on free/edge models; off-topic softened to a one-line answer + gentle redirect; onboarding provider time-bounded and SSE errors surface a friendly retry message. |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

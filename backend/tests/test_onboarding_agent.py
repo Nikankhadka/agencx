@@ -1,7 +1,7 @@
 """T-042: agentic onboarding copilot unit tests.
 
-Tests the agent turn loop, tool execution, completeness gate, off-topic
-detection, price echo check, and legacy state migration.
+Tests the agent turn loop (structured extraction + merge), the completeness
+gate, off-topic handling, price echo check, and legacy state migration.
 """
 
 from __future__ import annotations
@@ -10,12 +10,11 @@ from typing import Any
 
 import pytest
 
-from app.llm.provider import SchemaT, ToolCall, ToolTurn
+from app.llm.provider import ChatMessage, SchemaT
 from app.onboarding.agent import (
     Directive,
     OnboardingRecord,
     _echo,
-    _off_topic,
     run_turn,
 )
 from app.onboarding.flow import (
@@ -33,35 +32,41 @@ from tests.fakes import BaseFakeProvider
 # --- fake providers ------------------------------------------------------------
 
 
-class _ToolFake(BaseFakeProvider):
-    """Returns a sequence of tool calls then a text-only turn."""
+class _ExtractFake(BaseFakeProvider):
+    """Returns a sequence of DraftUpdate dicts, then a text-only chat reply.
 
-    def __init__(self, tool_turns: list[list[ToolCall]], replies: list[str] | None = None):
-        self._turns = tool_turns
+    Records the extract() inputs and chat() messages so tests can assert what
+    the agent loop feeds back to the model (stateful extraction context and the
+    composed directive).
+    """
+
+    def __init__(
+        self,
+        updates: list[dict[str, Any]] | None = None,
+        replies: list[str] | None = None,
+    ):
+        self._updates = list(updates or [])
         self._replies = replies or ["Got it."]
-        self._call = 0
-        self._reply = 0
+        self._update_idx = 0
+        self._reply_idx = 0
+        self.extract_inputs: list[str] = []
+        self.chat_messages: list[list[ChatMessage]] = []
 
-    async def chat_with_tools(
-        self, *, messages: Any, tools: Any, tool_choice: str = "auto"
-    ) -> ToolTurn:
-        if self._call < len(self._turns):
-            tc = self._turns[self._call]
-            self._call += 1
-            return ToolTurn(tool_calls=tc)
-        return ToolTurn()
-
-    async def chat(self, messages: Any) -> str:
-        r = self._replies[self._reply % len(self._replies)]
-        self._reply += 1
-        return r
-
-
-class _ExtractStub(BaseFakeProvider):
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
+        self.extract_inputs.append(user_input)
+        if self._update_idx < len(self._updates):
+            data = self._updates[self._update_idx]
+            self._update_idx += 1
+            return schema.model_validate(data)
         return schema.model_validate({})
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        self.chat_messages.append(messages)
+        r = self._replies[self._reply_idx % len(self._replies)]
+        self._reply_idx += 1
+        return r
 
 
 # --- tool execution ------------------------------------------------------------
@@ -140,21 +145,6 @@ def test_completeness_gate_requires_pricing_rule_amounts() -> None:
     assert any("amounts for pricing rules" in m for m in result.missing)
 
 
-# --- off-topic detection -------------------------------------------------------
-
-
-def test_onboarding_message_is_not_off_topic() -> None:
-    assert not _off_topic("we fix phones and tablets", no_tools=True)
-
-
-def test_unrelated_question_is_off_topic() -> None:
-    assert _off_topic("what is the meaning of life?", no_tools=True)
-
-
-def test_message_with_tools_is_never_off_topic() -> None:
-    assert not _off_topic("what is the meaning of life?", no_tools=False)
-
-
 # --- price echo check ----------------------------------------------------------
 
 
@@ -207,99 +197,184 @@ def test_to_jsonb_roundtrips() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_turn_captures_tool_result_and_returns_reply() -> None:
-    provider = _ToolFake(
-        tool_turns=[
-            [ToolCall(id="c1", name="save_identity", args={"description": "A phone shop"})],
+async def test_run_turn_extracts_identity_from_complex_message() -> None:
+    """The reported failure: a free-form business description must be captured
+    on the first try, not dropped because the model answered in prose."""
+    provider = _ExtractFake(
+        updates=[
+            {"identity": {"description": "A mobile phone business selling cases and more."}},
         ],
-        replies=["I've captured your business description. What's next?"],
+        replies=["Got it - a mobile phone business! How should the assistant sound?"],
     )
     record = OnboardingRecord()
-    updated, reply = await run_turn(admin_message="we fix phones", record=record, provider=provider)
+    updated, reply, persist = await run_turn(
+        admin_message=(
+            "this is a mobile phone business mostly selling phone cases and everything else"
+        ),
+        record=record,
+        provider=provider,
+    )
 
-    assert updated.draft["identity"]["description"] == "A phone shop"
-    assert "phone shop" in reply or "captured" in reply.lower()
-    assert len(updated.history) >= 2  # user + assistant messages
-
-
-@pytest.mark.asyncio
-async def test_run_turn_no_tools_asks_for_next() -> None:
-    provider = _ToolFake(tool_turns=[], replies=["What services do you offer?"])
-    record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
-    updated, reply = await run_turn(admin_message="ok go on", record=record, provider=provider)
-    # Should have asked for the next section (tone)
-    assert len(updated.draft) == 1  # only identity
+    assert updated.draft["identity"]["description"] == (
+        "A mobile phone business selling cases and more."
+    )
+    assert "mobile phone" in reply
+    assert persist is True
     assert len(updated.history) >= 2
 
 
 @pytest.mark.asyncio
-async def test_run_turn_handles_completed_record() -> None:
-    provider = _ToolFake(tool_turns=[], replies=[])
-    record = OnboardingRecord(completed=True)
-    updated, reply = await run_turn(admin_message="anything", record=record, provider=provider)
-    assert "already complete" in reply
-    assert updated.completed
+async def test_run_turn_merges_services_and_prices() -> None:
+    provider = _ExtractFake(
+        updates=[
+            {
+                "services": {
+                    "items": [{"name": "Screen repair", "price_dollars": 89.5}],
+                },
+            },
+        ],
+        replies=["Services recorded."],
+    )
+    record = OnboardingRecord()
+    updated, _reply, persist = await run_turn(
+        admin_message="I fix cracked screens for $89.50", record=record, provider=provider
+    )
+
+    items = updated.draft["services"]["items"]
+    assert items[0]["name"] == "Screen repair"
+    assert items[0]["price_dollars"] == 89.5
+    assert persist is True
 
 
 @pytest.mark.asyncio
-async def test_run_turn_off_topic_increments_count() -> None:
-    provider = _ToolFake(tool_turns=[], replies=["I'm here to help you set up the assistant."])
-    record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
-    updated, reply = await run_turn(
-        admin_message="what is the capital of France?", record=record, provider=provider
+async def test_run_turn_uses_next_question() -> None:
+    provider = _ExtractFake(
+        updates=[{"next_question": "What services do you offer?"}],
+        replies=["What services do you offer?"],
     )
-    assert updated.off_topic_count == 1
+    record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
+    _updated, reply, _persist = await run_turn(
+        admin_message="ok go on", record=record, provider=provider
+    )
+
+    assert reply == "What services do you offer?"
+    system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
+    assert any("What services do you offer?" in p for p in system_prompts)
+
+
+@pytest.mark.asyncio
+async def test_run_turn_extraction_is_stateful() -> None:
+    """The extract call sees the already-captured draft so it can fill what is
+    still missing instead of re-asking for what it has."""
+    provider = _ExtractFake(updates=[{"tone": {"tone": "friendly"}}], replies=["Tone noted."])
+    record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
+    _updated, _reply, _persist = await run_turn(
+        admin_message="keep it friendly", record=record, provider=provider
+    )
+
+    assert "A shop" in provider.extract_inputs[0]
+
+
+@pytest.mark.asyncio
+async def test_run_turn_handles_completed_record() -> None:
+    provider = _ExtractFake(updates=[], replies=[])
+    record = OnboardingRecord(completed=True)
+    updated, reply, persist = await run_turn(
+        admin_message="anything", record=record, provider=provider
+    )
+    assert "already complete" in reply
+    assert updated.completed
+    assert persist is False
+
+
+@pytest.mark.asyncio
+async def test_run_turn_off_topic_answers_gently() -> None:
+    provider = _ExtractFake(
+        updates=[
+            {
+                "off_topic": True,
+                "meta_reply": "I'm Agencx, your onboarding copilot.",
+                "next_question": "What is your business?",
+            },
+        ],
+        replies=["I'm Agencx, your onboarding copilot. What is your business?"],
+    )
+    record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
+    updated, reply, persist = await run_turn(
+        admin_message="who are you", record=record, provider=provider
+    )
+
+    assert persist is False
+    assert updated.off_topic_count == 0
+    assert updated.history == []
+    assert "Agencx" in reply
+    system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
+    assert any("Briefly answer" in p for p in system_prompts)
+
+
+@pytest.mark.asyncio
+async def test_run_turn_off_topic_keeps_prior_history() -> None:
+    """A no-op off-topic turn must not append to or drop existing history."""
+    provider = _ExtractFake(
+        updates=[
+            {
+                "off_topic": True,
+                "meta_reply": "I'm Agencx.",
+                "next_question": "What is your business?",
+            }
+        ],
+        replies=["I'm Agencx. What is your business?"],
+    )
+    record = OnboardingRecord(
+        draft={"identity": {"description": "A shop"}},
+        history=[
+            {"role": "user", "content": "I run a shop"},
+            {"role": "assistant", "content": "Got it."},
+        ],
+    )
+    updated, _reply, persist = await run_turn(admin_message="hi", record=record, provider=provider)
+
+    assert persist is False
+    assert len(updated.history) == 2
+    assert updated.draft["identity"]["description"] == "A shop"
 
 
 @pytest.mark.asyncio
 async def test_run_turn_price_echo_triggers_redraft() -> None:
     """When the model invents a price not in the draft, the reply is redrafted."""
-    provider = _ToolFake(
-        tool_turns=[
-            [ToolCall(id="c1", name="save_identity", args={"description": "A shop"})],
-        ],
+    provider = _ExtractFake(
+        updates=[{"identity": {"description": "A shop"}}],
         replies=[
             "Screen repair is $199.",  # invented price - should trigger redraft
             "Got it, I've captured your description.",
         ],
     )
     record = OnboardingRecord()
-    updated, reply = await run_turn(admin_message="we fix phones", record=record, provider=provider)
-
-    assert updated.draft["identity"]["description"] == "A shop"
-    # The final reply should be the redrafted version, not the one with an invented price
-    assert "captured" in reply.lower()
-
-
-@pytest.mark.asyncio
-async def test_run_turn_unknown_tool_is_skipped() -> None:
-    """A hallucinated tool name should not crash the turn. Both the unknown and
-    the valid tool call are in the same ToolTurn - only the known one sticks."""
-    provider = _ToolFake(
-        tool_turns=[
-            [
-                ToolCall(id="c1", name="nonexistent_tool", args={}),
-                ToolCall(id="c2", name="save_identity", args={"description": "A shop"}),
-            ],
-        ],
-        replies=["Got it."],
+    updated, reply, _persist = await run_turn(
+        admin_message="we fix phones", record=record, provider=provider
     )
-    record = OnboardingRecord()
-    updated, reply = await run_turn(admin_message="we fix phones", record=record, provider=provider)
+
     assert updated.draft["identity"]["description"] == "A shop"
+    assert "captured" in reply.lower()
 
 
 # --- directive shape -----------------------------------------------------------
 
 
 def test_directive_as_prompt_with_acknowledged() -> None:
-    d = Directive(acknowledged=["save_identity"], ask_for="assistant tone")
+    d = Directive(acknowledged=["business description"], ask_for="assistant tone")
     prompt = d.as_prompt()
-    assert "save_identity" in prompt
+    assert "business description" in prompt
     assert "assistant tone" in prompt
 
 
-def test_directive_redirect_firmness() -> None:
-    d = Directive(redirect_firmness=2)
+def test_directive_meta_answer() -> None:
+    d = Directive(meta_answer="I'm Agencx.", ask_for="business description")
     prompt = d.as_prompt()
-    assert "Decline" in prompt or "firmly" in prompt.lower()
+    assert "Briefly answer" in prompt
+    assert "business description" in prompt
+
+
+def test_directive_all_captured() -> None:
+    d = Directive()
+    assert "All info captured." in d.as_prompt()

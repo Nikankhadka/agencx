@@ -94,13 +94,3 @@ def request_finalize(draft: dict[str, Any]) -> ToolResult:
     if missing:
         return ToolResult(ok=False, missing=missing)
     return ToolResult(ok=True, message="All required sections complete.")
-
-
-# Map tool name -> (handler function, Pydantic args schema)
-TOOL_REGISTRY: dict[str, tuple[Any, type[BaseModel]]] = {
-    "save_identity": (save_identity, IdentityDraft),
-    "save_tone": (save_tone, ToneDraft),
-    "save_services": (save_services, ServicesDraft),
-    "save_pricing_rules": (save_pricing_rules, PricingRulesDraft),
-    "save_escalation": (save_escalation, EscalationDraft),
-}

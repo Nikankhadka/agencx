@@ -1,29 +1,43 @@
 """T-042: agentic onboarding copilot turn loop.
 
-Two model calls per turn: chat_with_tools for tool calls, then chat() to compose
-a conversational reply from a server-computed directive.
+Two model calls per turn: one structured ``extract()`` to pull anything the
+owner stated into the draft, then ``chat()`` to compose a conversational reply
+from a server-computed directive. Structured extraction (rather than tool
+calls) keeps capture robust on free/edge models that answer in prose; the
+server's completeness gate stays authoritative.
 
-Guardrails: scan_input, price echo check, redirection budget, bounded tool loop.
+Guardrails: scan_input, price echo check, bounded history. Off-topic/meta
+questions are answered in one line then gently redirected - no escalating
+firmness. Off-topic turns that collect nothing are not persisted (``persist``
+flag), so greeting noise never lands in the stored history.
 State: {version: 2, draft, history, off_topic_count, completed} in jsonb.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel
-
 from app.agents.spotlight import scan_input
-from app.llm.provider import ChatMessage, LLMProvider, ToolSpec
-from app.onboarding.tools import TOOL_REGISTRY, _check_completeness, request_finalize
+from app.llm.provider import ChatMessage, LLMProvider
+from app.observability.logging import TRANSCRIPT_LOGGER_NAME
+from app.onboarding.flow import DraftUpdate
+from app.onboarding.tools import (
+    _check_completeness,
+    save_escalation,
+    save_identity,
+    save_pricing_rules,
+    save_services,
+    save_tone,
+)
 
 logger = logging.getLogger("app.onboarding.agent")
+transcript = logging.getLogger(TRANSCRIPT_LOGGER_NAME)
 
-_MAX_CALLS = 4
 _MAX_HIST = 20
 
 
@@ -31,63 +45,40 @@ def _ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 1)
 
 
-class _NoArgs(BaseModel):
-    pass
-
-
 @dataclass
 class Directive:
     acknowledged: list[str] = field(default_factory=list)
-    answer_meta: str | None = None
+    meta_answer: str = ""
     ask_for: str = ""
-    warn: str = ""
-    redirect_firmness: int = 0
 
     def as_prompt(self) -> str:
         parts: list[str] = []
         if self.acknowledged:
             parts.append(f"Just captured: {', '.join(self.acknowledged)}.")
-        if self.answer_meta:
-            parts.append(f"Answer briefly: {self.answer_meta}")
+        if self.meta_answer:
+            parts.append(f"Briefly answer: {self.meta_answer}")
         parts.append(f"Ask for: {self.ask_for}" if self.ask_for else "All info captured.")
-        if self.warn:
-            parts.append(f"Warning: {self.warn}")
-        if self.redirect_firmness >= 2:
-            parts.append("Decline and firmly redirect.")
-        elif self.redirect_firmness == 1:
-            parts.append("Keep short, redirect to onboarding.")
         return " ".join(parts)
 
 
 _COPILOT = (
-    "You are Agencx, an onboarding copilot. Collect identity, tone, services "
-    "(with prices), pricing rules, and escalation posture. Call tools to record "
-    "info. Be conversational. Redirect off-topic questions. Never invent prices."
+    "You are Agencx, an onboarding copilot. Help a small-business owner describe "
+    "their business, tone, services (with prices), pricing rules, and escalation "
+    "posture. Be friendly and concise. Answer meta questions in one line, then "
+    "gently return to onboarding. Never invent prices."
 )
 
-
-def _build_specs() -> list[ToolSpec]:
-    specs: list[ToolSpec] = []
-    descs = {
-        "save_identity": "Record business description.",
-        "save_tone": "Record how the assistant should sound.",
-        "save_services": "Record services/products with prices.",
-        "save_pricing_rules": "Record specific pricing rules.",
-        "save_escalation": "Record escalation posture.",
-    }
-    for name, (_, schema) in TOOL_REGISTRY.items():
-        specs.append(ToolSpec(name=name, description=descs.get(name, ""), args_schema=schema))
-    specs.append(
-        ToolSpec(
-            name="request_finalize",
-            description="Request to finalize.",
-            args_schema=_NoArgs,
-        )
-    )
-    return specs
-
-
-_TOOL_SPECS = _build_specs()
+_EXTRACT_PROMPT = (
+    "You are extracting business information from a small-business owner who is "
+    "onboarding their AI assistant. Read the conversation and update the draft "
+    "with anything new the owner stated. Fill only what the owner actually said - "
+    "never invent a value, and never invent a price; record prices only as the "
+    "dollar figures the owner literally gave. If the message is off-topic (a "
+    "question about you, a greeting, or unrelated chat), set off_topic=true and "
+    "put a one-line answer in meta_reply. Otherwise set off_topic=false and set "
+    "next_question to the single most important question to ask next, given what "
+    "is still missing. Leave a section null when nothing new was stated."
+)
 
 
 @dataclass
@@ -128,70 +119,86 @@ class OnboardingRecord:
         }
 
 
+def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
+    lines: list[str] = []
+    if record.draft:
+        lines.append("Current draft (already captured):")
+        lines.append(json.dumps(record.draft))
+    for entry in record.history[-_MAX_HIST:]:
+        lines.append(f"{entry['role']}: {entry['content']}")
+    lines.append(f"user: {admin_message}")
+    return "\n".join(lines)
+
+
 async def run_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
-) -> tuple[OnboardingRecord, str]:
+) -> tuple[OnboardingRecord, str, bool]:
+    """Runs one copilot turn. Returns ``(record, reply, persist)``.
+
+    ``persist`` is False when the turn is off-topic and collected nothing, so
+    the caller can skip writing it: greeting/noise turns stay ephemeral and the
+    conversation effectively restarts clean on the next visit.
+    """
     turn_started = time.perf_counter()
     logger.info(
         "onboarding turn start",
         extra={"step": "start", "msg_len": len(admin_message)},
     )
+    transcript.info(f"[onboarding] admin: {admin_message}")
     if record.completed:
-        return record, "Onboarding is already complete."
+        return record, "Onboarding is already complete.", False
     scan_input(admin_message)
 
-    messages: list[ChatMessage] = [{"role": "system", "content": _COPILOT}]
-    for entry in record.history:
-        messages.append({"role": entry["role"], "content": entry["content"]})
-    messages.append({"role": "user", "content": admin_message})
-
-    tools_started = time.perf_counter()
-    turn = await provider.chat_with_tools(messages=messages, tools=_TOOL_SPECS, tool_choice="auto")
+    extract_started = time.perf_counter()
+    update = await provider.extract(
+        system_prompt=_EXTRACT_PROMPT,
+        user_input=_extraction_input(record, admin_message),
+        schema=DraftUpdate,
+    )
     logger.info(
         "onboarding step",
         extra={
-            "step": "tools_model",
-            "duration_ms": _ms(tools_started),
-            "tool_calls": len(turn.tool_calls),
+            "step": "extract",
+            "duration_ms": _ms(extract_started),
+            "off_topic": update.off_topic,
         },
     )
-    calls = turn.tool_calls[:_MAX_CALLS]
-    directive = Directive()
 
-    for call in calls:
-        call_started = time.perf_counter()
-        ok = False
-        if call.name == "request_finalize":
-            result = request_finalize(record.draft)
-            ok = True
-            if not result.ok:
-                directive.warn = f"Still missing: {'; '.join(result.missing)}."
-        else:
-            handler_info = TOOL_REGISTRY.get(call.name)
-            if handler_info is not None:
-                handler, schema = handler_info
-                try:
-                    parsed_args = schema.model_validate(call.args)
-                except Exception:
-                    pass
-                else:
-                    record.draft = handler(record.draft, parsed_args)
-                    ok = True
-        logger.info(
-            "onboarding step",
-            extra={"step": "tool", "name": call.name, "duration_ms": _ms(call_started), "ok": ok},
-        )
+    acknowledged: list[str] = []
+    if update.identity is not None:
+        record.draft = save_identity(record.draft, update.identity)
+        acknowledged.append("business description")
+    if update.tone is not None:
+        record.draft = save_tone(record.draft, update.tone)
+        acknowledged.append("assistant tone")
+    if update.services is not None:
+        record.draft = save_services(record.draft, update.services)
+        acknowledged.append("services")
+    if update.pricing_rules is not None:
+        record.draft = save_pricing_rules(record.draft, update.pricing_rules)
+        acknowledged.append("pricing rules")
+    if update.escalation is not None:
+        record.draft = save_escalation(record.draft, update.escalation)
+        acknowledged.append("escalation posture")
 
-    if not directive.warn:
-        missing = _check_completeness(record.draft)
-        directive.ask_for = missing[0] if missing else ""
+    missing = _check_completeness(record.draft)
+    persist = bool(acknowledged) or not update.off_topic
+    directive = Directive(acknowledged=acknowledged)
+    if update.off_topic:
+        if persist:
+            record.off_topic_count += 1
+        directive.meta_answer = update.meta_reply or "I'm Agencx, your onboarding copilot."
+        directive.ask_for = update.next_question or (missing[0] if missing else "")
+    else:
+        directive.ask_for = update.next_question or (missing[0] if missing else "")
 
-    off = _off_topic(admin_message, not calls)
-    if off:
-        record.off_topic_count += 1
-        directive.redirect_firmness = min(record.off_topic_count, 2)
-    elif not calls and not directive.ask_for:
-        directive.answer_meta = admin_message
+    state_parts = [
+        f"captured={', '.join(sorted(record.draft)) or 'none'}",
+        f"ask_for={directive.ask_for or 'all captured'}",
+    ]
+    if directive.meta_answer:
+        state_parts.append(f"meta={directive.meta_answer}")
+    transcript.info("[onboarding] state: " + "; ".join(state_parts))
 
     reply_msgs: list[ChatMessage] = [
         {"role": "system", "content": _COPILOT},
@@ -227,53 +234,22 @@ async def run_turn(
             },
         )
 
-    record.history.append({"role": "user", "content": admin_message})
-    record.history.append({"role": "assistant", "content": reply})
-    record.history = record.history[-_MAX_HIST * 2 :]
+    if persist:
+        record.history.append({"role": "user", "content": admin_message})
+        record.history.append({"role": "assistant", "content": reply})
+        record.history = record.history[-_MAX_HIST * 2 :]
+    transcript.info(f"[onboarding] assistant: {reply}")
     logger.info(
         "onboarding turn done",
         extra={
             "step": "turn_done",
             "total_ms": _ms(turn_started),
-            "tools_called": len(calls),
-            "off_topic": bool(off),
+            "off_topic": bool(update.off_topic),
+            "persist": persist,
             "reply_chars": len(reply),
         },
     )
-    return record, reply
-
-
-def _off_topic(msg: str, no_tools: bool) -> bool:
-    if not no_tools:
-        return False
-    signals = [
-        "business",
-        "customer",
-        "service",
-        "product",
-        "price",
-        "cost",
-        "pricing",
-        "rule",
-        "fee",
-        "charge",
-        "tone",
-        "friendly",
-        "formal",
-        "professional",
-        "escalat",
-        "hand off",
-        "human",
-        "assistant",
-        "phone",
-        "repair",
-        "shop",
-        "offer",
-        "help",
-        "dental",
-        "clinic",
-    ]
-    return not any(s in msg.lower() for s in signals)
+    return record, reply, persist
 
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:

@@ -20,6 +20,19 @@ ok()   { printf '%s%s%s\n' "$c_green" "  ✓ $*" "$c_reset"; }
 warn() { printf '%s%s%s\n' "$c_yellow" "  ! $*" "$c_reset" >&2; }
 die()  { printf '%s%s%s\n' "$c_red" "  ✗ $*" "$c_reset" >&2; exit 1; }
 
+# --- flags ---------------------------------------------------------------------
+# `--no-seed` skips the demo-world seed (used by `make dev`, where re-seeding
+# would wipe in-progress developer data); `--reload` enables uvicorn's auto-reload.
+SEED=1
+RELOAD=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-seed) SEED=0 ;;
+    --reload)  RELOAD=1 ;;
+    *) die "unknown argument: $arg (expected --no-seed, --reload)" ;;
+  esac
+done
+
 # --- 1. preflight --------------------------------------------------------------
 say "preflight"
 command -v docker >/dev/null || die "docker is not installed. Install Docker Desktop and re-run."
@@ -102,9 +115,13 @@ say "backend"
 ( cd backend && uv sync )
 ( cd backend && uv run python -m app.shared.migrate )
 ok "migrations applied"
-say "seeding demo world (first run downloads the embedder model - this can take a minute)"
-( cd backend && uv run python -m seeds.seed_demo )
-ok "demo world seeded"
+if [[ "$SEED" == 1 ]]; then
+  say "seeding demo world (first run downloads the embedder model - this can take a minute)"
+  ( cd backend && uv run python -m seeds.seed_demo )
+  ok "demo world seeded"
+else
+  warn "skipping seed (--no-seed) - run 'make seed' for the demo world"
+fi
 
 # --- 5. frontend/.env.local (targeted fix of exactly three keys) ---------------
 say "frontend env"
@@ -150,7 +167,8 @@ fi
 
 # --- 7. run (backend + frontend dev servers) -----------------------------------
 say "starting dev servers"
-( cd backend && uv run uvicorn app.main:app --port 8000 ) &
+RELOAD_FLAG=""; [[ "$RELOAD" == 1 ]] && RELOAD_FLAG="--reload"
+( cd backend && uv run uvicorn app.main:app --port 8000 $RELOAD_FLAG ) &
 BACKEND_PID=$!
 ( cd frontend && npm run dev ) &
 FRONTEND_PID=$!
@@ -169,7 +187,8 @@ trap cleanup EXIT INT TERM
 
 # Give the servers a moment, then print the banner.
 sleep 3
-cat <<EOF
+if [[ "$SEED" == 1 ]]; then
+  cat <<EOF
 
 ${c_green}${c_bold}Wren demo is up.${c_reset}
 
@@ -184,5 +203,18 @@ ${c_green}${c_bold}Wren demo is up.${c_reset}
   ${c_dim}Free-tier LLM may rate-limit live chat; seeded transcripts do not depend on it.${c_reset}
 
 EOF
+else
+  cat <<EOF
+
+${c_green}${c_bold}Wren dev is up.${c_reset}
+
+  ${c_bold}Frontend${c_reset}   http://localhost:3000
+  ${c_bold}Backend${c_reset}    http://localhost:8000/health
+
+  ${c_dim}No demo data seeded - run 'make seed' for the demo world.${c_reset}
+  ${c_dim}Ctrl-C stops both dev servers; db + auth stay up for a quick rerun.${c_reset}
+
+EOF
+fi
 
 wait

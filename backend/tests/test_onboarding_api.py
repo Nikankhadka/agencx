@@ -1,8 +1,8 @@
 """T-006 / T-042: onboarding endpoints exercised at the API level.
 
-Uses an OnboardingFakeProvider that synthesizes onboarding tool calls from
-canned draft data, one section per turn, so the API-level tests never call
-a real model.
+Uses an OnboardingFakeProvider that synthesizes onboarding extraction updates
+from canned draft data, one section per turn, so the API-level tests never
+call a real model.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pytest
 import pytest_asyncio
 
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
-from app.llm.provider import ChatMessage, ToolCall, ToolSpec, ToolTurn
+from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -32,12 +32,11 @@ pytestmark = pytest.mark.db
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
 
-_FAKE_TOOLS: list[tuple[str, dict[str, object]]] = [
-    ("save_identity", {"description": "A neighborhood phone repair shop."}),
-    ("save_tone", {"tone": "friendly"}),
-    (
-        "save_services",
-        {
+_FAKE_UPDATES: list[dict[str, object]] = [
+    {"identity": {"description": "A neighborhood phone repair shop."}},
+    {"tone": {"tone": "friendly"}},
+    {
+        "services": {
             "items": [
                 {
                     "name": "Screen repair",
@@ -46,10 +45,9 @@ _FAKE_TOOLS: list[tuple[str, dict[str, object]]] = [
                 }
             ]
         },
-    ),
-    (
-        "save_pricing_rules",
-        {
+    },
+    {
+        "pricing_rules": {
             "rules": [
                 {
                     "code": "rush-fee",
@@ -59,8 +57,8 @@ _FAKE_TOOLS: list[tuple[str, dict[str, object]]] = [
                 }
             ]
         },
-    ),
-    ("save_escalation", {"threshold": 0.6}),
+    },
+    {"escalation": {"threshold": 0.6}},
 ]
 
 _CHAT_REPLIES = [
@@ -74,38 +72,44 @@ _CHAT_REPLIES = [
 
 
 class OnboardingFakeProvider(BaseFakeProvider):
-    """Synthesizes tool calls from canned data, one section per chat_with_tools
-    call until all sections are captured."""
+    """Synthesizes extraction updates from canned data, one section per
+    extract() call until all sections are captured."""
 
     def __init__(self) -> None:
-        self._tool_idx = 0
+        self._update_idx = 0
         self._chat_idx = 0
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        if self._update_idx < len(_FAKE_UPDATES):
+            data = _FAKE_UPDATES[self._update_idx]
+            self._update_idx += 1
+            return schema.model_validate(data)
+        return schema.model_validate({})
 
     async def chat(self, messages: list[ChatMessage]) -> str:
         reply = _CHAT_REPLIES[self._chat_idx % len(_CHAT_REPLIES)]
         self._chat_idx += 1
         return reply
 
-    async def chat_with_tools(
-        self,
-        *,
-        messages: list[ChatMessage],
-        tools: list[ToolSpec],
-        tool_choice: str = "auto",
-    ) -> ToolTurn:
-        if self._tool_idx < len(_FAKE_TOOLS):
-            name, args = _FAKE_TOOLS[self._tool_idx]
-            self._tool_idx += 1
-            return ToolTurn(
-                tool_calls=[
-                    ToolCall(
-                        id=f"call_{self._tool_idx}",
-                        name=name,
-                        args=args,
-                    ),
-                ],
-            )
-        return ToolTurn()
+
+class OffTopicFakeProvider(BaseFakeProvider):
+    """Always reports the message as off-topic, collecting nothing."""
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        return schema.model_validate(
+            {
+                "off_topic": True,
+                "meta_reply": "I'm Agencx.",
+                "next_question": "What is your business?",
+            }
+        )
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        return "I'm Agencx. What is your business?"
 
 
 @pytest.fixture(autouse=True)
@@ -207,6 +211,25 @@ async def test_message_captures_identity_and_advances_stage(client: httpx.AsyncC
 
     resumed = await client.get("/api/onboarding/state", headers=headers)
     assert resumed.json()["stage"] == "tone"
+
+
+async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: OffTopicFakeProvider()
+    try:
+        response = await client.post(
+            "/api/onboarding/message", json={"text": "hi"}, headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json()["draft"] == {}
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    body = state.json()
+    assert body["draft"] == {}
+    assert body["stage"] == "identity"
 
 
 async def test_full_flow_confirm_writes_tenant_config_and_catalog(
@@ -313,4 +336,12 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     types = [e["type"] for e in events]
     assert "progress" in types
     assert "reply" in types
+    assert "state" in types
     assert "done" in types
+    state_event = next(e for e in events if e["type"] == "state")
+    state_draft = state_event["draft"]
+    assert isinstance(state_draft, dict)
+    identity = state_draft["identity"]
+    assert isinstance(identity, dict)
+    assert identity["description"] == "A neighborhood phone repair shop."
+    assert state_event["completed"] is False
