@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ChatBubble, type ChatRole } from "@/components/ui/ChatBubble";
+import { Chip } from "@/components/ui/Chip";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { CitationChip, type Citation } from "@/components/ui/CitationChip";
 import { QuoteCard, type QuotePayload } from "@/components/ui/QuoteCard";
@@ -279,14 +280,13 @@ export function CustomerChat({
         {showStarters ? (
           <div className="flex flex-wrap gap-2 pl-1">
             {starterQuestions.map((question, index) => (
-              <button
+              <Chip
                 key={index}
-                type="button"
+                label={question}
+                dashed
+                data-testid={`starter-${index}`}
                 onClick={() => void send(question)}
-                className="rounded-full border border-border bg-surface px-3 py-1.5 text-footnote text-text-secondary transition-colors hover:border-accent hover:text-accent"
-              >
-                {question}
-              </button>
+              />
             ))}
           </div>
         ) : null}
