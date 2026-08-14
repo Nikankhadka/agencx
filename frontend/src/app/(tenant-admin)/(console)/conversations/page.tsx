@@ -94,6 +94,7 @@ export default function ConversationsPage() {
         loading={isPending}
         error={errorMessage(error, "Failed to load conversations") ?? undefined}
         onRowClick={(row) => router.push(`/conversations/${row.id}`)}
+        card
         emptyState={
           <EmptyState
             title="No conversations yet"

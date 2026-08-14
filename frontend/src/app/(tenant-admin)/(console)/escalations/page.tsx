@@ -194,6 +194,7 @@ export default function EscalationsPage() {
         rowKey={(row) => row.id}
         loading={escalationsQuery.isPending}
         error={errorMessage(escalationsQuery.error, "Failed to load escalations") ?? undefined}
+        card
         emptyState={
           <EmptyState
             title="Nothing needs you right now."

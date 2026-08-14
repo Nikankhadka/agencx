@@ -124,6 +124,7 @@ export default function KnowledgePage() {
         rowKey={(doc) => doc.id}
         loading={documentsQuery.isPending}
         error={errorMessage(documentsQuery.error, "Failed to load documents") ?? undefined}
+        card
         emptyState={
           <EmptyState
             title="No documents yet"
