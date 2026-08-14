@@ -7,6 +7,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 import {
+  foldReply,
   parseOnboardingEvent,
   type InputSpec,
   type OnboardingDraft,
@@ -117,6 +118,7 @@ export default function OnboardingPage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let reply = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -133,8 +135,11 @@ export default function OnboardingPage() {
           switch (event.type) {
             case "progress":
               break; // processing indicator - no visible change needed
+            case "token":
+            case "redraft":
             case "reply":
-              updateLastAssistant(() => ({ text: event.text }));
+              reply = foldReply(reply, event);
+              updateLastAssistant(() => ({ text: reply }));
               break;
             case "state":
               applyStateFields(event);
@@ -273,6 +278,12 @@ export default function OnboardingPage() {
             </div>
           ) : !completed && input ? (
             <div className="mt-6">
+              {/* Mounted unconditionally (only the text toggles) - screen
+                  readers reliably announce changes inside an existing live
+                  region, but often miss one that appears and disappears. */}
+              <p className="h-4 text-footnote text-text-secondary" aria-live="polite">
+                {busy ? "Thinking…" : ""}
+              </p>
               <BeatComposer
                 key={stage}
                 input={input}

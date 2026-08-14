@@ -82,3 +82,23 @@ export function parseOnboardingEvent(payload: string): OnboardingStreamEvent | n
 export function isMultiSelect(input: InputSpec): boolean {
   return input.kind === "chips" && input.chips.some((chip) => chip.dashed);
 }
+
+/**
+ * Fold one stream event into the in-progress assistant reply. ``token``
+ * deltas accumulate (the typewriter); ``redraft`` clears them so the client
+ * drops the rejected draft before the replacement streams in (the price-echo
+ * guard tripped); ``reply`` is the full text the backend also emits for older
+ * clients, so it reconciles to the same string the tokens built.
+ */
+export function foldReply(reply: string, event: OnboardingStreamEvent): string {
+  switch (event.type) {
+    case "token":
+      return reply + event.text;
+    case "redraft":
+      return "";
+    case "reply":
+      return event.text;
+    default:
+      return reply;
+  }
+}

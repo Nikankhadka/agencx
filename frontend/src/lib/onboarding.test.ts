@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMultiSelect, parseOnboardingEvent } from "./onboarding";
+import { foldReply, isMultiSelect, parseOnboardingEvent } from "./onboarding";
 
 describe("parseOnboardingEvent", () => {
   it("parses a token event", () => {
@@ -64,5 +64,32 @@ describe("isMultiSelect", () => {
         cta_label: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("foldReply", () => {
+  it("accumulates token deltas into the reply", () => {
+    const tokens = ["Hello", ", ", "world"];
+    const reply = tokens.reduce(
+      (acc, text) => foldReply(acc, { type: "token", text }),
+      "",
+    );
+    expect(reply).toBe("Hello, world");
+  });
+
+  it("clears accumulated text on redraft (price-echo guard tripped)", () => {
+    const afterFirst = foldReply("", { type: "token", text: "bad price" });
+    expect(afterFirst).toBe("bad price");
+    expect(foldReply(afterFirst, { type: "redraft", reason: "echo" })).toBe("");
+  });
+
+  it("reconciles the full reply event to the same text the tokens built", () => {
+    const fromTokens = foldReply("Hello", { type: "token", text: "!" });
+    expect(foldReply(fromTokens, { type: "reply", text: "Hello!" })).toBe("Hello!");
+  });
+
+  it("ignores non-text events", () => {
+    expect(foldReply("abc", { type: "done" })).toBe("abc");
+    expect(foldReply("abc", { type: "progress", stage: "processing" })).toBe("abc");
   });
 });
