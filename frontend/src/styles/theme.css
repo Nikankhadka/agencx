@@ -48,6 +48,7 @@
   /* amber - warm warning ramp (kept from the prior system) */
   --amber-100: #F7EEDC;
   --amber-300: #D9B36A;
+  --amber-400: #F5A623; /* prototype notification dot / rating / overdue */
   --amber-500: #B07C24;
 
   /* neutral - surface + text stack (warm-leaning greys) */
@@ -76,8 +77,8 @@
   --white: #FFFFFF;
   --scrim: rgb(0 0 0 / 0.4);
 
-  --font-sans: var(--font-inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
-  --font-display: var(--font-inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
+  --font-sans: var(--font-jakarta, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
+  --font-display: var(--font-jakarta, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
 
   /* type scale (docs/design/frontend.md section 4) - exposed as Tailwind
@@ -90,8 +91,20 @@
   --text-body-lg-size: 18px;    --text-body-lg-leading: 28px;
   --text-title-3-size: 18px;    --text-title-3-leading: 26px;
   --text-title-2-size: 22px;    --text-title-2-leading: 28px;
-  --text-title-1-size: 32px;    --text-title-1-leading: 40px;   --text-title-1-tracking: -0.01em;
-  --text-display-size: 48px;    --text-display-leading: 56px;   --text-display-tracking: -0.02em;
+  --text-title-1-size: clamp(28px, 3.5vw, 32px); --text-title-1-leading: 40px; --text-title-1-tracking: -0.01em;
+  --text-display-size: clamp(36px, 8vw, 48px);   --text-display-leading: 56px; --text-display-tracking: -0.02em;
+
+  /* Agencx mobile-first type additions (docs/design/prototypes/design.md §Type
+     scale). Weight is applied by the component (font-bold/semibold/medium);
+     these tokens only fix size, leading, and the prototype's negative tracking. */
+  --text-greeting-size: 36px;   --text-greeting-leading: 40px;  --text-greeting-tracking: -0.03em;   /* 700 */
+  --text-display-sm-size: 24px; --text-display-sm-leading: 26px; --text-display-sm-tracking: -0.012em; /* 700 */
+  --text-row-title-size: 20px;  --text-row-title-leading: 20px;  --text-row-title-tracking: -0.008em; /* 500 */
+  --text-card-hl-size: 15px;    --text-card-hl-leading: 22px;   /* 500 15/1.45 */
+  --text-chip-size: 13px;       --text-chip-leading: 13px;      /* 500 13/1 */
+  --text-meta-size: 12px;       --text-meta-leading: 17px;      /* 400 12/1.4 */
+  --text-prose-size: 16px;      --text-prose-leading: 26px;     /* 400 16/1.62 */
+  --text-timestamp-size: 11.5px; --text-timestamp-leading: 17px; /* 400 11.5/1.45 */
 }
 
 /* ============ LAYER 2: SEMANTIC - LIGHT (default) ============ */
@@ -132,13 +145,39 @@
   --radius-lg: 16px;
   --radius-full: 9999px;
 
+  /* Agencx surface radii (docs/design/prototypes/design.md §Radii) */
+  --radius-card: 18px;
+  --radius-chip: 20px;
+  --radius-pill: 30px;
+  --radius-bubble: 18px;
+  --radius-bubble-tip: 4px;
+  --border-chip: 1.5px;
+
+  --gutter: 24px;
+
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-2: 0 2px 8px rgb(0 0 0 / 0.07);
   --shadow-3: 0 8px 24px rgb(0 0 0 / 0.10);
 
+  /* Agencx elevations. The pill ring is a spread shadow, NOT a border -
+     ring + border shifts geometry; the spread keeps the layout intact. */
+  --shadow-card: 0 2px 16px rgb(0 0 0 / 0.055);
+  --shadow-pill: 0 0 0 1.5px rgb(0 0 0 / 0.06), 0 2px 12px rgb(0 0 0 / 0.06);
+  --shadow-drawer: 4px 0 32px rgb(0 0 0 / 0.12);
+  --shadow-sheet: 0 -6px 40px rgb(0 0 0 / 0.13);
+
   --duration-fast: 150ms;
   --duration-base: 250ms;
+  --duration-beat: 220ms;
+  --duration-push: 280ms;
   --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-push: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  /* chat bubble surfaces (Agencx inbound/outbound roles, re-tinted to crimson) */
+  --color-bubble-out: var(--primary-40);        /* outgoing (owner/customer) - filled */
+  --color-bubble-in: var(--neutral-94);         /* incoming assistant - light neutral */
+  --color-bubble-agent-in: var(--primary-95);   /* incoming human agent - light crimson */
+  --color-highlight: var(--amber-400);          /* notification dot / rating / overdue */
 }
 
 /* Dark mode overrides are disabled for now. See git history for the full dark

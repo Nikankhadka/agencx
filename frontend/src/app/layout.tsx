@@ -1,16 +1,17 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { QueryProvider } from "@/components/QueryProvider";
 import { Toaster } from "@/components/Toaster";
 
-// Inter (variable font) is self-hosted by next/font and exposed as the
-// --font-inter CSS variable, which theme.css picks up for --font-sans and
+// Plus Jakarta Sans (self-hosted by next/font) is exposed as the
+// --font-jakarta CSS variable, which theme.css picks up for --font-sans and
 // --font-display. First build fetches the font once over the network.
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-jakarta",
+  weight: ["400", "500", "700"],
   display: "swap",
 });
 
@@ -20,13 +21,19 @@ export const metadata: Metadata = {
     "A private, branded AI support and sales agent for any business.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`h-full antialiased ${inter.variable}`}>
+    <html lang="en" className={`h-full antialiased ${jakarta.variable}`}>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AuthProvider><QueryProvider>{children}</QueryProvider></AuthProvider>
         <Toaster />
