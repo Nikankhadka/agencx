@@ -50,13 +50,23 @@ async def _replace_chunks(
 
 
 async def process_document(
-    conn: AppConnection, *, tenant_id: UUID, document_id: UUID, embedder: Embedder
+    conn: AppConnection,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    embedder: Embedder,
+    extension: str | None = None,
+    source: str | None = None,
 ) -> None:
     """Chunk + embed one document's file, replacing any existing chunks.
 
     Marks the document ``failed`` (with a readable error) on any exception
     rather than letting it propagate, so a bad upload never crashes the
     caller - the admin sees the failure in the documents table.
+
+    ``extension``/``source`` default to values derived from the documents row's
+    ``filename``; URL ingestion (T-056) overrides both because its stored
+    filename is a URL, not a disk path, and its disk file is always ``.txt``.
     """
     row = await conn.fetchrow(
         "select filename from documents where id = $1 and tenant_id = $2", document_id, tenant_id
@@ -67,10 +77,10 @@ async def process_document(
     await conn.execute("update documents set status = 'processing' where id = $1", document_id)
 
     try:
-        ext = Path(row["filename"]).suffix.lower()
+        ext = extension if extension is not None else Path(row["filename"]).suffix.lower()
         path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}{ext}"
         body = await run_in_threadpool(_read_file, path)
-        chunks = chunk_document(body, ext, source=row["filename"])
+        chunks = chunk_document(body, ext, source=source or row["filename"])
         if not chunks:
             raise ValueError("no extractable content in this file")  # noqa: TRY301
 
