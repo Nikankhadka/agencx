@@ -135,7 +135,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
           </button>
           <span className="truncate text-title-3 font-semibold text-text">Wren</span>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-8 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">{children}</main>
       </div>
     </div>
   );
