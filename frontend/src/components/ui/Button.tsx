@@ -17,8 +17,8 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: "text-body-sm px-3 py-1.5 gap-1.5",
-  md: "text-body px-4 py-2 gap-2",
+  sm: "text-body-sm px-3 py-1.5 gap-1.5 min-h-[34px]",
+  md: "text-body px-4 py-2 gap-2 min-h-11",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -48,7 +48,7 @@ export function Button({
       aria-busy={loading || undefined}
       className={[
         "relative inline-flex items-center justify-center font-medium rounded-md",
-        "transition-colors duration-fast select-none",
+        "transition-colors duration-fast select-none active:opacity-85",
         "disabled:opacity-50 disabled:pointer-events-none",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],

@@ -24,7 +24,7 @@ export function ErrorRecovery({
   return (
     <div
       role="alert"
-      className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-6 text-center"
+      className="flex min-h-[60dvh] flex-col items-center justify-center gap-3 px-6 text-center"
     >
       <span
         className="flex h-10 w-10 items-center justify-center rounded-full bg-danger-subtle text-danger"

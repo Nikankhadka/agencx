@@ -28,7 +28,10 @@ export type IconName =
   | "verified_user"
   | "lock"
   | "logout"
-  | "menu";
+  | "menu"
+  | "add"
+  | "arrow_upward"
+  | "attach_file";
 
 /** A glyph is one outlined `path`, plus an optional `filled` variant used by
  * nav icons when their item is active. */
@@ -111,6 +114,15 @@ const ICONS: Record<IconName, Glyph> = {
   },
   menu: {
     path: "M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z",
+  },
+  add: {
+    path: "M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z",
+  },
+  arrow_upward: {
+    path: "M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z",
+  },
+  attach_file: {
+    path: "M720-330q0 104-73 177T470-80q-104 0-177-73t-73-177v-370q0-75 52.5-127.5T400-880q75 0 127.5 52.5T580-700v350q0 46-32 78t-78 32q-46 0-78-32t-32-78v-370h80v370q0 13 8.5 21.5T470-320q13 0 21.5-8.5T500-350v-350q-1-42-29.5-71T400-800q-42 0-71 29t-29 71v370q-1 71 49.5 120.5T470-160q71 0 120.5-49.5T640-330v-390h80v390Z",
   },
 };
 

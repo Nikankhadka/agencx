@@ -519,3 +519,55 @@ Ordered, each stage verified before the next begins. Automated: `make check` cle
 
 - 2026-08-14 (onboarding robustness fix, user-reported): the T-042 tool-calling copilot looped forever on free/edge models - the model answered in prose instead of calling `save_identity`, the args were silently dropped (`except: pass`), `_check_completeness` kept reporting "business description" missing, and the agent re-asked "what does your business do?" indefinitely. Off-topic detection was also a hardcoded, vertical-biased keyword list (`_off_topic`) that flagged legitimate domain-agnostic answers and escalated into a firm "decline and firmly redirect" loop. Fix: the turn loop now runs a single stateful `extract()` (the industry-standard slot-filling / dialogue-state-tracking pattern) returning a `DraftUpdate` (off_topic flag, non-null section updates, next_question, meta_reply); the server merges into the draft and the completeness gate stays authoritative. Off-topic is softened - answer meta questions in one line, then gently redirect, no escalating firmness - a deliberate deviation from T-042's "redirect budget escalates firmness and terminates" accept-criteria (flagged to founder). The onboarding provider is also time-bounded (`TimeLimitedProvider`, default 45s) and the SSE catch-all now returns a friendly retry message instead of "internal error". Tool calling stays on the customer-chat supervisor path (T-044); only onboarding stopped using it.
 - Schema unchanged: the persisted `draft` jsonb shape (`identity`/`tone`/`services`/`pricing_rules`/`escalation_threshold`) is untouched; `DraftUpdate` is transient and never stored. `save_*` merge helpers, `_check_completeness`, and `request_finalize` are reused verbatim; `TOOL_REGISTRY` and `_off_topic` were removed.
+
+## ADR: UI rebuild - mobile-first Agencx visual system + Stage 2 onboarding beats pulled forward (2026-08-14)
+
+### The problem
+
+Wren's frontend is a desktop-shaped admin console. Across 14 route files there are 13 responsive utility classes total, zero `md:` breakpoints, zero `dvh`, zero safe-area handling, and no mobile e2e coverage. The console shell is a hard-coded `w-56 shrink-0` sidebar with no collapse mechanism, so at a 375px viewport every console page gets 375 - 224 - 64 (`p-8`) = 87px of usable content width. `docs/design/frontend.md:244` already records this as a known deferred defect. Meanwhile `docs/design/prototypes/` holds a complete, specified mobile design system plus a working HTML prototype with exact values, and none of it has been implemented. The goal is to rebuild every surface mobile-first to the prototype's look and interaction vocabulary, keeping Wren's crimson primary, with the onboarding flow as the showpiece.
+
+### Scope precedent
+
+`docs/phases/phase-2-onboarding-agent.md:190` gates on "Payment/price/tax fields are NOT captured (these are Stage 2)", and `docs/source/stage-2-backlog.md:68` names `tenant_tax_profiles` as a Stage 2 table. The rebuild's picked beats (business number, tax registration, payment mode, terms, deposit %, inbound channels) sit outside that gate. Per `docs/INDEX.md` precedence rule 2, frozen docs win on scope, and `conventions.md` section 4 requires scope changes to be flagged to the founder. The founder has ruled: proceed with the pull-forward.
+
+### What changes
+
+- Foundation: token layer (Agencx radii/type scale/shadows mapped onto the existing crimson/neutral ramps), Plus Jakarta Sans replaces Inter, definite-height `h-dvh` shells with safe-area handling, and a 288px drawer replacing the fixed console sidebar below `lg`.
+- Onboarding becomes a server-driven beat system: the server picks the composer widget per turn deterministically from the completeness gate's missing list, chips replace free-prose enum extraction, and replies stream as real tokens (SSE).
+- New data: `business`/`tax`/`payment` draft sections, with `tenants.business_name` and `tenants.payment_processing_mode` columns pulled into the spine.
+- URL ingestion ("paste a link" beat) via httpx + selectolax feeding the existing chunker/embedder.
+
+### What supersedes the frozen-doc position
+
+This ADR supersedes `phase-2-onboarding-agent.md:190` (the Stage 2 field gate) and `stage-2-backlog.md:57` (the ABN/GST fork deferral) for the specific fields named above. The frozen docs are NOT edited; this ADR is the authoritative record. Partial cover already exists: `stage-2-backlog.md:51` says to keep the `payment_processing_mode` column in the spine even though only DIRECT is built in Stage 1 - stripping mode-awareness to "simplify" is the one shortcut that forces a rewrite later.
+
+### Design decisions ratified during review (2026-08-14)
+
+1. **Typewriter reconciliation.** `docs/design/frontend.md:155` forbids per-token animation; `docs/design/prototypes/design.md:76` requires a 46ms/word typewriter. Resolution: neither - wire real SSE token streaming, which onboarding does not have today (the controller is fully awaited before the first event fires). Real streaming gives the typewriter feel without the gimmick and satisfies both docs. Both lines are reconciled post-build.
+
+2. **Visual system override.** The Agencx look (Plus Jakarta Sans, 18/20/30px radii, negative tracking) overrides `frontend.md`'s LuxeStay M3 (Inter, 8/12/16 radii). The override is recorded here; `frontend.md`'s visual sections are re-pointed to match the shipped code post-build.
+
+3. **Crimson alpha tints become ramp steps.** The prototype's visual system is `--c-teal` at ~40 alpha tints (.28 chip border, .07 press, .06 pill ring). Crimson at those alphas reads pink, which reads as error/warning. Wren already ships a full crimson tonal ramp, so tints come from ramp steps (`--primary-90`, `--primary-95`) instead of alpha. Chip borders and press states get visual tuning at review time rather than a mechanical alpha port.
+
+4. **KYC is stubbed, not built.** The prototype simulates ID verification; real verification needs a third-party provider (Stripe Identity, Persona) plus credentials - founder-blocked in the same way T-036 is. The KYC beat renders its CTA ("Start ID check") and records intent, with no verification performed. UI copy flags it as not-yet-available rather than faking completion. The beat only appears when payment mode = PLATFORM.
+
+5. **Locale-neutral field names.** `business_number` not `abn`, `tax_registered` not `gst`. ABN/GST are Australian concepts; hardcoding them puts a jurisdiction in the schema. The display label comes from tenant locale config (`design.md`'s `tenants.config` "locale" slot) when it exists.
+
+6. **Tax data goes to jsonb, not a table** (ponytail). `stage-2-backlog.md:68` names `tenant_tax_profiles`. Until invoicing forks document type off `has_business_number`/`tax_registered` (`stage-2-backlog.md:57`), tax fields live in the existing `tenant_config.config` jsonb. Ceiling: no relational integrity or query path on tax fields; upgrade when invoicing lands.
+
+7. **44px touch targets override the prototype's ~29px chips.** WCAG AA / 44px min target (frontend.md) wins over pixel fidelity. Chips are 44px tall; recorded here as a deliberate deviation from the prototype.
+
+8. **Deposit percentage is integer percent, never money.** `deposit_pct` is an integer 1-100; the pricing engine applies it in integer cents per the deterministic-pricing hard rule. It never becomes a money amount in prose or in the model's hands.
+
+9. **Deterministic beats never touch the LLM.** Read-back, KYC CTA, and the activation summary are synthesized server-side from the draft, not generated by the model. Completeness and widget selection stay Python's call, never the model's - the same guarantee as the T-042 ADR.
+
+### Verification strategy
+
+`make check` clean at every stage; `make ci` before each commit; `npm run check:tokens` as the hard gate. A new mobile Playwright project (iPhone 13, 390x844) asserts per page at 375px and 390px: no horizontal overflow, interactive controls >= 44px, composer pinned with a long conversation. The onboarding e2e drives every beat end to end, asserts the thread survives a mid-conversation refresh, and `make seed-tenant2` must still onboard by config alone (domain-agnostic hard rule). Visual pass in light and `prefers-reduced-motion`.
+
+### Tickets
+
+- `docs/PROGRESS.md` - one row per ticket, T-045 through T-064
+- `docs/design/frontend.md` - visual sections re-pointed to the shipped system post-build
+- `docs/design/prototypes/design.md:76` - typewriter line reconciled post-build
+- `.agents/memory.md` - new beat-system invariants and the mobile-first shell pattern

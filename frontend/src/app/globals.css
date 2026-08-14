@@ -39,6 +39,10 @@
   --color-info: var(--color-info);
   --color-info-subtle: var(--color-info-subtle);
   --color-scrim: var(--color-scrim);
+  --color-bubble-out: var(--color-bubble-out);
+  --color-bubble-in: var(--color-bubble-in);
+  --color-bubble-agent-in: var(--color-bubble-agent-in);
+  --color-highlight: var(--color-highlight);
 
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
@@ -66,14 +70,50 @@
   --text-display--line-height: var(--text-display-leading);
   --text-display--letter-spacing: var(--text-display-tracking);
 
+  --text-greeting: var(--text-greeting-size);
+  --text-greeting--line-height: var(--text-greeting-leading);
+  --text-greeting--letter-spacing: var(--text-greeting-tracking);
+  --text-display-sm: var(--text-display-sm-size);
+  --text-display-sm--line-height: var(--text-display-sm-leading);
+  --text-display-sm--letter-spacing: var(--text-display-sm-tracking);
+  --text-row-title: var(--text-row-title-size);
+  --text-row-title--line-height: var(--text-row-title-leading);
+  --text-row-title--letter-spacing: var(--text-row-title-tracking);
+  --text-card-hl: var(--text-card-hl-size);
+  --text-card-hl--line-height: var(--text-card-hl-leading);
+  --text-chip: var(--text-chip-size);
+  --text-chip--line-height: var(--text-chip-leading);
+  --text-meta: var(--text-meta-size);
+  --text-meta--line-height: var(--text-meta-leading);
+  --text-prose: var(--text-prose-size);
+  --text-prose--line-height: var(--text-prose-leading);
+  --text-timestamp: var(--text-timestamp-size);
+  --text-timestamp--line-height: var(--text-timestamp-leading);
+
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-full: var(--radius-full);
+  --radius-card: var(--radius-card);
+  --radius-chip: var(--radius-chip);
+  --radius-pill: var(--radius-pill);
+  --radius-bubble: var(--radius-bubble);
+  --radius-bubble-tip: var(--radius-bubble-tip);
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
   --shadow-3: var(--shadow-3);
+  --shadow-card: var(--shadow-card);
+  --shadow-pill: var(--shadow-pill);
+  --shadow-drawer: var(--shadow-drawer);
+  --shadow-sheet: var(--shadow-sheet);
+
+  --duration-fast: var(--duration-fast);
+  --duration-base: var(--duration-base);
+  --duration-beat: var(--duration-beat);
+  --duration-push: var(--duration-push);
+  --ease-out: var(--ease-out);
+  --ease-push: var(--ease-push);
 }
 
 body {
@@ -87,6 +127,20 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
+}
+
+/* Agencx thinking-dot pulse (prototype v6 `tp` keyframe): 7px dots, 1.3s
+   loop, 220ms stagger, -2.5px travel. Zeroed by the reduced-motion guard. */
+@keyframes thinking-dot {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2.5px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

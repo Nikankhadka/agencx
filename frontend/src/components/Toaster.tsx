@@ -26,6 +26,7 @@ export function Toaster() {
           boxShadow: "var(--shadow-3)",
           borderRadius: "var(--radius-md)",
           fontSize: "var(--text-body-sm-size)",
+          marginTop: "env(safe-area-inset-top)",
         },
         success: {
           iconTheme: { primary: "var(--color-success)", secondary: "var(--color-success-subtle)" },

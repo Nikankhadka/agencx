@@ -60,7 +60,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   }, [session]);
 
   if (isLoading) {
-    return <div aria-busy="true" className="min-h-screen bg-bg" />;
+    return <div aria-busy="true" className="h-dvh bg-bg" />;
   }
   if (!session) return null;
 
@@ -69,7 +69,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const logoUrl = tenant?.brand?.["logo_url"] as string | undefined;
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-dvh w-full">
       <nav
         aria-label="Console"
         className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-sunken p-4"
@@ -124,7 +124,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
     </div>
   );
 }
