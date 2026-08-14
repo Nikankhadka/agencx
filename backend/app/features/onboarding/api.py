@@ -17,12 +17,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.features.onboarding import controller
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding.beats import InputSpec
 from app.shared import auth
 from app.shared.limits import LimitTimeout
 
@@ -36,10 +37,25 @@ class OnboardingStateResponse(BaseModel):
     prompt: str
     draft: dict[str, dict[str, object]]
     completed: bool
+    history: list[dict[str, str]]
+    input: InputSpec | None
+    can_confirm: bool
+
+
+class SelectionPayload(BaseModel):
+    beat: str
+    values: list[str] = Field(default_factory=list)
 
 
 class OnboardingMessageRequest(BaseModel):
-    text: str = Field(min_length=1)
+    text: str | None = None
+    selection: SelectionPayload | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_of_text_or_selection(self) -> OnboardingMessageRequest:
+        if (self.text is None) == (self.selection is None):
+            raise ValueError("provide exactly one of 'text' or 'selection'")
+        return self
 
 
 class OnboardingConfirmResponse(BaseModel):
@@ -62,9 +78,16 @@ async def post_message(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> OnboardingStateResponse:
-    record_data = await controller.run_message(
-        tenant_id=admin.tenant_id, text=body.text, provider=provider
-    )
+    if body.selection is not None:
+        record_data = await controller.run_selection(
+            tenant_id=admin.tenant_id,
+            selection=controller.Selection(beat=body.selection.beat, values=body.selection.values),
+        )
+    else:
+        assert body.text is not None
+        record_data = await controller.run_message(
+            tenant_id=admin.tenant_id, text=body.text, provider=provider
+        )
     return OnboardingStateResponse(**controller.response_from_record(record_data))
 
 
@@ -74,6 +97,10 @@ async def post_message_stream(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> StreamingResponse:
+    if body.text is None:
+        raise HTTPException(status_code=400, detail="stream accepts text messages only")
+    text = body.text
+
     async def _stream() -> AsyncIterator[str]:
         async def _sse(event: dict[str, object]) -> str:
             return f"data: {json.dumps(event)}\n\n"
@@ -81,7 +108,7 @@ async def post_message_stream(
         stream_started = time.perf_counter()
         try:
             reply, record_data = await controller.run_message_stream_core(
-                tenant_id=admin.tenant_id, text=body.text, provider=provider
+                tenant_id=admin.tenant_id, text=text, provider=provider
             )
         except HTTPException as exc:
             yield await _sse({"type": "error", "detail": exc.detail})

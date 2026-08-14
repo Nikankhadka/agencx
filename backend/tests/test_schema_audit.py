@@ -29,7 +29,12 @@ pytestmark = pytest.mark.db
 # identity differently and get their own named-policy assertions instead.
 SPECIAL_CASED_TABLES = {"tenants", "platform_admins"}
 
-EXPECTED_TENANTS_POLICIES = {"tenant_self_read", "platform_admin_all", "service_signup_insert"}
+EXPECTED_TENANTS_POLICIES = {
+    "tenant_self_read",
+    "tenant_self_update",
+    "platform_admin_all",
+    "service_signup_insert",
+}
 EXPECTED_PLATFORM_ADMINS_POLICIES = {"platform_admin_only"}
 
 # The single allowed exception to "every monetary column is *_cents integer"

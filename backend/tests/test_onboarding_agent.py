@@ -18,12 +18,14 @@ from app.onboarding.agent import (
     run_turn,
 )
 from app.onboarding.flow import (
+    BusinessDraft,
     CatalogItemDraft,
     IdentityDraft,
     ServicesDraft,
 )
 from app.onboarding.tools import (
     request_finalize,
+    save_business,
     save_identity,
     save_services,
 )
@@ -93,18 +95,49 @@ def test_save_services_stores_items_with_optional_prices() -> None:
     assert items[1]["price_dollars"] is None
 
 
+def test_save_business_stores_business_section() -> None:
+    draft: dict[str, Any] = {}
+    result = save_business(
+        draft,
+        BusinessDraft(
+            name="Bytefix Repairs",
+            is_team=True,
+            hours="Mon-Fri 9-6",
+            contact="555-0100",
+            inbound_channels=["website"],
+        ),
+    )
+    assert result["business"]["name"] == "Bytefix Repairs"
+    assert result["business"]["is_team"] is True
+    assert result["business"]["inbound_channels"] == ["website"]
+
+
 # --- completeness gate ---------------------------------------------------------
 
 
-def test_completeness_gate_passes_when_all_sections_present() -> None:
-    draft = {
+def _complete_draft() -> dict[str, Any]:
+    return {
+        "business": {
+            "name": "Bytefix Repairs",
+            "is_team": True,
+            "hours": "Mon-Fri 9-6",
+            "contact": "555-0100",
+            "inbound_channels": ["website", "phone"],
+        },
         "identity": {"description": "A shop"},
-        "tone": {"tone": "friendly"},
+        "readback": {"confirmed": True},
         "services": {"items": [{"name": "Fix", "price_dollars": 50.0}]},
         "pricing_rules": {"rules": [{"code": "rush", "unit_amount_dollars": 25.0}]},
+        "tax": {"has_business_number": False, "business_number": "", "tax_registered": True},
+        "payment": {"processing_mode": "DIRECT", "terms": "full_before", "deposit_pct": None},
+        "kyc": {"requested": False, "skipped": False},
+        "tone": {"tone": "friendly"},
         "escalation_threshold": {"_resolved_threshold": 0.5},
     }
-    result = request_finalize(draft)
+
+
+def test_completeness_gate_passes_when_all_sections_present() -> None:
+    result = request_finalize(_complete_draft())
     assert result.ok
     assert result.missing == []
 
@@ -116,30 +149,20 @@ def test_completeness_gate_fails_when_missing_sections() -> None:
     result = request_finalize(draft)
     assert not result.ok
     assert len(result.missing) > 0
-    assert any("assistant tone" in m for m in result.missing)
+    assert any("business name" in m for m in result.missing)
 
 
 def test_completeness_gate_requires_service_price() -> None:
-    draft = {
-        "identity": {"description": "A shop"},
-        "tone": {"tone": "friendly"},
-        "services": {"items": [{"name": "Fix", "price_dollars": None}]},
-        "pricing_rules": {"rules": []},
-        "escalation_threshold": {"_resolved_threshold": 0.5},
-    }
+    draft = _complete_draft()
+    draft["services"] = {"items": [{"name": "Fix", "price_dollars": None}]}
     result = request_finalize(draft)
     assert not result.ok
-    assert any("prices for" in m for m in result.missing)
+    assert any("at least one service or product with a price" in m for m in result.missing)
 
 
 def test_completeness_gate_requires_pricing_rule_amounts() -> None:
-    draft = {
-        "identity": {"description": "A shop"},
-        "tone": {"tone": "friendly"},
-        "services": {"items": [{"name": "Fix", "price_dollars": 50.0}]},
-        "pricing_rules": {"rules": [{"code": "rush", "unit_amount_dollars": None}]},
-        "escalation_threshold": {"_resolved_threshold": 0.5},
-    }
+    draft = _complete_draft()
+    draft["pricing_rules"] = {"rules": [{"code": "rush", "unit_amount_dollars": None}]}
     result = request_finalize(draft)
     assert not result.ok
     assert any("amounts for pricing rules" in m for m in result.missing)
@@ -224,6 +247,22 @@ async def test_run_turn_extracts_identity_from_complex_message() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_turn_extracts_business_name() -> None:
+    provider = _ExtractFake(
+        updates=[{"business": {"name": "Bytefix Repairs"}}],
+        replies=["Got it - Bytefix Repairs!"],
+    )
+    record = OnboardingRecord()
+    updated, reply, persist = await run_turn(
+        admin_message="we are called Bytefix Repairs", record=record, provider=provider
+    )
+
+    assert updated.draft["business"]["name"] == "Bytefix Repairs"
+    assert "Bytefix Repairs" in reply
+    assert persist is True
+
+
+@pytest.mark.asyncio
 async def test_run_turn_merges_services_and_prices() -> None:
     provider = _ExtractFake(
         updates=[
@@ -293,11 +332,11 @@ async def test_run_turn_off_topic_answers_gently() -> None:
         updates=[
             {
                 "off_topic": True,
-                "meta_reply": "I'm Agencx, your onboarding copilot.",
+                "meta_reply": "I'm Wren, your onboarding copilot.",
                 "next_question": "What is your business?",
             },
         ],
-        replies=["I'm Agencx, your onboarding copilot. What is your business?"],
+        replies=["I'm Wren, your onboarding copilot. What is your business?"],
     )
     record = OnboardingRecord(draft={"identity": {"description": "A shop"}})
     updated, reply, persist = await run_turn(
@@ -307,7 +346,7 @@ async def test_run_turn_off_topic_answers_gently() -> None:
     assert persist is False
     assert updated.off_topic_count == 0
     assert updated.history == []
-    assert "Agencx" in reply
+    assert "Wren" in reply
     system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
     assert any("Briefly answer" in p for p in system_prompts)
 
@@ -319,11 +358,11 @@ async def test_run_turn_off_topic_keeps_prior_history() -> None:
         updates=[
             {
                 "off_topic": True,
-                "meta_reply": "I'm Agencx.",
+                "meta_reply": "I'm Wren.",
                 "next_question": "What is your business?",
             }
         ],
-        replies=["I'm Agencx. What is your business?"],
+        replies=["I'm Wren. What is your business?"],
     )
     record = OnboardingRecord(
         draft={"identity": {"description": "A shop"}},
@@ -369,7 +408,7 @@ def test_directive_as_prompt_with_acknowledged() -> None:
 
 
 def test_directive_meta_answer() -> None:
-    d = Directive(meta_answer="I'm Agencx.", ask_for="business description")
+    d = Directive(meta_answer="I'm Wren.", ask_for="business description")
     prompt = d.as_prompt()
     assert "Briefly answer" in prompt
     assert "business description" in prompt

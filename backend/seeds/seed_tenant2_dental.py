@@ -48,10 +48,13 @@ KNOWLEDGE_DOCS: tuple[tuple[str, str], ...] = (
 # The stage names the script must cover. knowledge_prompt is not a data stage
 # - it's the final prompt before confirm.
 EXPECTED_STAGES: tuple[str, ...] = (
+    "business_name",
+    "hours_contact",
     "identity",
     "tone",
     "services",
     "pricing_rules",
+    "business_number",
     "escalation_threshold",
     "knowledge_prompt",
 )
@@ -82,6 +85,23 @@ def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
     """
     draft: dict[str, Any] = {}
 
+    # business: name, team, hours, contact, and inbound channels. The owner's
+    # answer carries the name and the hours/contact lines; the rest is fixed
+    # config for this proof (a multi-chair clinic reachable by web and phone).
+    business_name = answers.get("business_name", "").strip() or TENANT_NAME
+    hours_lines = [
+        line.strip()
+        for line in answers.get("hours_contact", "").strip().split("\n")
+        if line.strip()
+    ]
+    draft["business"] = {
+        "name": business_name,
+        "is_team": True,
+        "hours": hours_lines[0] if hours_lines else "",
+        "contact": " / ".join(hours_lines[1:]) if len(hours_lines) > 1 else "",
+        "inbound_channels": ["website", "phone"],
+    }
+
     # identity: extract the business description from the answer
     draft["identity"] = {"description": answers["identity"].strip()}
 
@@ -100,12 +120,9 @@ def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
             items.append({"name": name, "description": "", "price_dollars": price})
     draft["services"] = {"items": items}
 
-    # pricing_rules: parse rules and merge followup if present
+    # pricing_rules: parse rules from the answer
     rules_raw = answers.get("pricing_rules", "")
     rules: list[dict[str, Any]] = _parse_pricing_rules(rules_raw)
-    followup_raw = answers.get("pricing_rules.followup", "")
-    if followup_raw:
-        rules = _merge_pricing_followup(rules, followup_raw)
     draft["pricing_rules"] = {"rules": rules}
 
     # escalation: store the admin's described posture
@@ -115,6 +132,23 @@ def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
         "threshold": None,
         "_resolved_threshold": 0.75,
     }
+
+    # tax: the clinic has a business number and is tax-registered.
+    draft["tax"] = {
+        "has_business_number": True,
+        "business_number": answers.get("business_number", "").strip(),
+        "tax_registered": True,
+    }
+
+    # payment: collects directly, full payment before the visit, no deposit.
+    draft["payment"] = {
+        "processing_mode": "DIRECT",
+        "terms": "full_before",
+        "deposit_pct": None,
+    }
+
+    # readback: the owner has reviewed and confirmed the captured details.
+    draft["readback"] = {"confirmed": True}
 
     return draft
 
@@ -170,24 +204,6 @@ def _parse_pricing_rules(text: str) -> list[dict[str, Any]]:
                     "unit": unit,
                 }
             )
-    return rules
-
-
-def _merge_pricing_followup(rules: list[dict[str, Any]], followup: str) -> list[dict[str, Any]]:
-    """Merge followup amounts into existing rules where the initial answer
-    didn't include the price."""
-    import re as _re
-
-    for rule in rules:
-        if rule["unit_amount_dollars"] is not None:
-            continue
-        pat = _re.compile(
-            _re.escape(rule["label"].lower()) + r".*?(\d+(?:\.\d{1,2})?)\s*(?:dollar)",
-            _re.IGNORECASE,
-        )
-        m = pat.search(followup.lower())
-        if m:
-            rule["unit_amount_dollars"] = float(m.group(1))
     return rules
 
 
