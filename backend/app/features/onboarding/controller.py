@@ -9,6 +9,7 @@ app/onboarding/agent.py; chip selections merge deterministically here.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -19,7 +20,13 @@ from app.features.onboarding import service
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding import beats
-from app.onboarding.agent import OnboardingRecord, run_turn
+from app.onboarding.agent import (
+    OnboardingRecord,
+    _assistant_reply_for,
+    prepare_turn,
+    run_turn,
+    stream_reply,
+)
 from app.onboarding.flow import (
     BusinessDraft,
     EscalationDraft,
@@ -43,10 +50,6 @@ class Selection:
 
 def _cents(dollars: float) -> int:
     return round(dollars * 100)
-
-
-def _fmt_dollars(dollars: float) -> str:
-    return f"{dollars:g}"
 
 
 def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
@@ -87,67 +90,6 @@ def _selection_user_message(beat: beats.Beat, values: list[str]) -> str:
     return ", ".join(chip.label for chip in beat.chips if chip.value in values)
 
 
-def _readback_summary(draft: dict[str, Any]) -> str:
-    business = draft.get("business") or {}
-    identity = draft.get("identity") or {}
-    services = draft.get("services") or {}
-    tone = draft.get("tone") or {}
-    lines: list[str] = []
-    if business.get("name"):
-        lines.append(f"Your business: {business['name']}")
-    if identity.get("description"):
-        lines.append(f"What you do: {identity['description']}")
-    is_team = business.get("is_team")
-    if is_team is not None:
-        lines.append("You're a team" if is_team else "It's just you")
-    items = services.get("items") or []
-    priced = [i for i in items if i.get("price_dollars") is not None]
-    if priced:
-        lines.append(
-            "Services: "
-            + ", ".join(f"{i['name']} at ${_fmt_dollars(i['price_dollars'])}" for i in priced)
-        )
-    if tone.get("tone"):
-        lines.append(f"Tone: {tone['tone']}")
-    lines.append("Does everything look right?")
-    return "\n".join(lines)
-
-
-def _activation_summary(draft: dict[str, Any]) -> str:
-    business = draft.get("business") or {}
-    name = business.get("name")
-    if name:
-        intro = f"Your agent for {name} is ready to go live."
-    else:
-        intro = "Your agent is ready to go live."
-    return f"{intro} Hit confirm to publish it."
-
-
-def _assistant_reply_for(draft: dict[str, Any]) -> str:
-    nxt = beats.next_beat(draft)
-    if nxt is None:
-        return _activation_summary(draft)
-    if nxt.key == "readback":
-        return _readback_summary(draft)
-    return f"Got it. {nxt.ask}"
-
-
-def _finalize_reply(updated: OnboardingRecord, reply: str) -> tuple[OnboardingRecord, str]:
-    """Replace the LLM reply with a deterministic summary at readback/completion.
-
-    The readback recap and the activation summary are server-synthesized from the
-    draft (never the model) - the same guarantee as the T-042 ADR. Only runs on
-    persisted turns, so a no-op off-topic turn is never rewritten.
-    """
-    nxt = beats.next_beat(updated.draft)
-    if nxt is None or nxt.key == "readback":
-        summary = _assistant_reply_for(updated.draft)
-        if updated.history and updated.history[-1].get("role") == "assistant":
-            updated.history[-1]["content"] = summary
-        return updated, summary
-    return updated, reply
-
-
 async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
@@ -160,11 +102,9 @@ async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> d
     # tenant's per-tenant llm_timeout_s; resolve TenantLimits like
     # features/chat/controller.py if onboarding ever needs per-tenant overrides.
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
-    updated, reply, persist = await run_turn(
+    updated, _reply, persist = await run_turn(
         admin_message=text, record=onboarding, provider=bounded
     )
-    if persist:
-        updated, reply = _finalize_reply(updated, reply)
     record_data = updated.to_jsonb()
     if persist:
         await service.save_record(tenant_id=tenant_id, record=record_data)
@@ -201,11 +141,16 @@ async def run_selection(*, tenant_id: UUID, selection: Selection) -> dict[str, A
     return record_data
 
 
-async def run_message_stream_core(
+async def run_message_stream(
     *, tenant_id: UUID, text: str, provider: LLMProvider
-) -> tuple[str, dict[str, Any]]:
-    """Shared streaming core: returns (reply_text, record_data). The SSE
-    framing stays in api.py."""
+) -> AsyncIterator[dict[str, object]]:
+    """Streams one text turn as SSE-shaped events.
+
+    Event order: ``progress`` -> ``token``* -> [``redraft``] -> ``token``* ->
+    ``reply`` -> ``state`` -> ``done``. Two short DB writes per turn: the draft
+    plus the user message persist before the stream starts (so a refresh
+    mid-conversation survives), the assistant reply persists after the stream.
+    """
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
@@ -215,17 +160,38 @@ async def run_message_stream_core(
         )
     # ponytail: platform default timeout (see run_message above).
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
-    updated, reply, persist = await run_turn(
-        admin_message=text,
-        record=onboarding,
-        provider=bounded,
-    )
-    if persist:
-        updated, reply = _finalize_reply(updated, reply)
-    record_data = updated.to_jsonb()
-    if persist:
-        await service.save_record(tenant_id=tenant_id, record=record_data)
-    return reply, record_data
+    plan = await prepare_turn(admin_message=text, record=onboarding, provider=bounded)
+    if plan.persist:
+        await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+
+    yield {"type": "progress", "stage": "processing"}
+
+    full = ""
+    async for kind, payload in stream_reply(plan=plan, provider=bounded):
+        if kind == "redraft":
+            full = ""
+            yield {"type": "redraft", "reason": payload}
+        else:
+            full += payload
+            yield {"type": "token", "text": payload}
+    # Kept for the old client; the new client reassembles ``token`` events.
+    yield {"type": "reply", "text": full}
+
+    if plan.persist:
+        plan.record.history.append({"role": "assistant", "content": full})
+        await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+
+    record_data = plan.record.to_jsonb()
+    completed = record_data.get("completed", False)
+    nxt = beats.next_beat(plan.record.draft)
+    yield {
+        "type": "state",
+        "draft": record_data.get("draft", {}),
+        "completed": completed,
+        "input": beats.input_spec(nxt).model_dump() if nxt else None,
+        "can_confirm": nxt is None and not completed,
+    }
+    yield {"type": "done"}
 
 
 async def confirm(*, tenant_id: UUID, embedder: Embedder) -> dict[str, Any]:

@@ -2,7 +2,10 @@
 
 The T-006 state machine is retired; turn logic lives in app/onboarding/agent.py.
 JSON contract on POST /api/onboarding/message unchanged.
-New: POST /api/onboarding/message/stream returns SSE.
+POST /api/onboarding/message/stream returns SSE in this event order:
+``progress`` -> ``token``* -> [``redraft``] -> ``token``* -> ``reply`` ->
+``state`` -> ``done``. ``token`` deltas reassemble into the reply; ``redraft``
+signals the price-echo guard tripped and the client should drop tokens so far.
 Handlers live in controller.py, persistence in service.py.
 """
 
@@ -107,9 +110,10 @@ async def post_message_stream(
 
         stream_started = time.perf_counter()
         try:
-            reply, record_data = await controller.run_message_stream_core(
+            async for event in controller.run_message_stream(
                 tenant_id=admin.tenant_id, text=text, provider=provider
-            )
+            ):
+                yield await _sse(event)
         except HTTPException as exc:
             yield await _sse({"type": "error", "detail": exc.detail})
             return
@@ -129,23 +133,6 @@ async def post_message_stream(
                 }
             )
             return
-        logger.info(
-            "onboarding stream",
-            extra={
-                "step": "reply_ready",
-                "duration_ms": round((time.perf_counter() - stream_started) * 1000, 1),
-            },
-        )
-        yield await _sse({"type": "progress", "stage": "processing"})
-        yield await _sse({"type": "reply", "text": reply})
-        yield await _sse(
-            {
-                "type": "state",
-                "draft": record_data.get("draft", {}),
-                "completed": record_data.get("completed", False),
-            }
-        )
-        yield await _sse({"type": "done"})
         logger.info(
             "onboarding stream",
             extra={

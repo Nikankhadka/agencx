@@ -6,6 +6,7 @@ gate, off-topic handling, price echo check, and legacy state migration.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -15,7 +16,9 @@ from app.onboarding.agent import (
     Directive,
     OnboardingRecord,
     _echo,
+    prepare_turn,
     run_turn,
+    stream_reply,
 )
 from app.onboarding.flow import (
     BusinessDraft,
@@ -53,6 +56,7 @@ class _ExtractFake(BaseFakeProvider):
         self._reply_idx = 0
         self.extract_inputs: list[str] = []
         self.chat_messages: list[list[ChatMessage]] = []
+        self.stream_calls: list[list[ChatMessage]] = []
 
     async def extract(
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
@@ -69,6 +73,14 @@ class _ExtractFake(BaseFakeProvider):
         r = self._replies[self._reply_idx % len(self._replies)]
         self._reply_idx += 1
         return r
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        self.stream_calls.append(messages)
+        r = self._replies[self._reply_idx % len(self._replies)]
+        self._reply_idx += 1
+        mid = max(1, len(r) // 2)
+        yield r[:mid]
+        yield r[mid:]
 
 
 # --- tool execution ------------------------------------------------------------
@@ -395,6 +407,71 @@ async def test_run_turn_price_echo_triggers_redraft() -> None:
 
     assert updated.draft["identity"]["description"] == "A shop"
     assert "captured" in reply.lower()
+
+
+# --- streaming split (prepare_turn / stream_reply) -----------------------------
+
+
+@pytest.mark.asyncio
+async def test_prepare_turn_sets_summary_at_readback() -> None:
+    provider = _ExtractFake(updates=[{}], replies=[])
+    record = OnboardingRecord(
+        draft={
+            "business": {"name": "Bytefix Repairs", "is_team": True},
+            "identity": {"description": "A phone repair shop."},
+        }
+    )
+    plan = await prepare_turn(admin_message="looks good", record=record, provider=provider)
+
+    assert plan.persist is True
+    assert plan.summary is not None
+    assert "Bytefix Repairs" in plan.summary
+    assert plan.reply_msgs is None
+    # The user message is already on the record; the assistant reply is not.
+    assert plan.record.history[-1]["role"] == "user"
+
+
+@pytest.mark.asyncio
+async def test_stream_reply_yields_summary_without_llm() -> None:
+    provider = _ExtractFake(updates=[{}], replies=[])
+    record = OnboardingRecord(
+        draft={
+            "business": {"name": "Bytefix Repairs", "is_team": True},
+            "identity": {"description": "A phone repair shop."},
+        }
+    )
+    plan = await prepare_turn(admin_message="looks good", record=record, provider=provider)
+
+    events = [event async for event in stream_reply(plan=plan, provider=provider)]
+
+    assert plan.summary is not None
+    assert events == [("token", plan.summary)]
+    assert provider.stream_calls == []
+
+
+@pytest.mark.asyncio
+async def test_stream_reply_price_echo_redrafts() -> None:
+    provider = _ExtractFake(
+        updates=[{"identity": {"description": "A shop"}}],
+        replies=[
+            "Screen repair is $199.",  # invented price - should trigger redraft
+            "Got it, I've captured your description.",
+        ],
+    )
+    record = OnboardingRecord()
+    plan = await prepare_turn(admin_message="we fix phones", record=record, provider=provider)
+
+    events = [event async for event in stream_reply(plan=plan, provider=provider)]
+    kinds = [kind for kind, _ in events]
+    assert "redraft" in kinds
+    redraft_idx = kinds.index("redraft")
+    assert events[redraft_idx] == ("redraft", "price_echo")
+
+    before = "".join(payload for kind, payload in events[:redraft_idx] if kind == "token")
+    assert "$199" in before
+    after = "".join(payload for kind, payload in events[redraft_idx + 1 :] if kind == "token")
+    assert "captured" in after
+    assert len(provider.stream_calls) == 2
 
 
 # --- directive shape -----------------------------------------------------------
