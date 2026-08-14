@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Table, type TableColumn } from "@/components/ui/Table";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import { formatCents } from "@/lib/money";
@@ -50,10 +49,12 @@ const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-2 py-1 text-body-sm text-text transition-colors duration-fast hover:border-border-strong";
 
 /**
- * T-031: Pricing tab (frontend.md 7.2). pricing_rules with inline editing +
- * read-only catalog_items. The client sends decimal dollars; the backend does
- * the cents conversion (deterministic-pricing rule). Validation errors from
- * the PATCH render inline, never as an alert.
+ * T-031 / T-060: Pricing tab (frontend.md 7.2), rebuilt as a card list rather
+ * than a table. Each pricing rule is a card with the code, label, amount +
+ * unit, active state, and an inline editor; catalog items are simpler cards.
+ * The client sends decimal dollars; the backend does the cents conversion
+ * (deterministic-pricing rule). Validation errors from the PATCH render
+ * inline, never as an alert.
  */
 export default function PricingPage() {
   const rulesQuery = useApiQuery<PricingRule[]>("/api/pricing/rules");
@@ -109,146 +110,6 @@ export default function PricingPage() {
     }
   }
 
-  const ruleColumns: TableColumn<PricingRule>[] = [
-    {
-      key: "code",
-      header: "Code",
-      render: (rule) =>
-        editingId === rule.id && draft ? (
-          <input
-            aria-label="Code"
-            className={INPUT_CLASS}
-            value={draft.code}
-            onChange={(e) => setDraft({ ...draft, code: e.target.value })}
-          />
-        ) : (
-          <span className="font-mono text-caption text-text">{rule.code}</span>
-        ),
-    },
-    {
-      key: "label",
-      header: "Label",
-      render: (rule) =>
-        editingId === rule.id && draft ? (
-          <input
-            aria-label="Label"
-            className={INPUT_CLASS}
-            value={draft.label}
-            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          />
-        ) : (
-          rule.label
-        ),
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      render: (rule) =>
-        editingId === rule.id && draft ? (
-          <input
-            aria-label="Amount in dollars"
-            type="number"
-            step="0.01"
-            min="0"
-            className={`${INPUT_CLASS} w-28 tabular-nums`}
-            value={draft.amount}
-            onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-          />
-        ) : (
-          <span className="tabular-nums">{formatCents(rule.unit_amount_cents)}</span>
-        ),
-    },
-    {
-      key: "unit",
-      header: "Unit",
-      render: (rule) =>
-        editingId === rule.id && draft ? (
-          <input
-            aria-label="Unit"
-            className={`${INPUT_CLASS} w-24`}
-            value={draft.unit}
-            onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
-          />
-        ) : (
-          <span className="text-text-secondary">{rule.unit}</span>
-        ),
-    },
-    {
-      key: "active",
-      header: "Active",
-      render: (rule) =>
-        editingId === rule.id && draft ? (
-          <label className="flex items-center gap-2 text-body-sm text-text">
-            <input
-              type="checkbox"
-              className="accent-accent"
-              checked={draft.active}
-              onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
-            />
-            Active
-          </label>
-        ) : (
-          <Badge tone={rule.active ? "success" : "neutral"}>
-            {rule.active ? "active" : "inactive"}
-          </Badge>
-        ),
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (rule) =>
-        editingId === rule.id ? (
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-2">
-              <Button size="sm" loading={saving} onClick={() => saveEdit(rule.id)}>
-                Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                Cancel
-              </Button>
-            </div>
-            {editError ? <p className="text-footnote text-danger">{editError}</p> : null}
-          </div>
-        ) : (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={editingId !== null}
-            onClick={() => startEdit(rule)}
-          >
-            Edit
-          </Button>
-        ),
-    },
-  ];
-
-  const catalogColumns: TableColumn<CatalogItem>[] = [
-    { key: "name", header: "Name", render: (item) => item.name },
-    {
-      key: "description",
-      header: "Description",
-      render: (item) => <span className="text-text-secondary">{item.description}</span>,
-    },
-    {
-      key: "price",
-      header: "Price",
-      render: (item) => (
-        <span className="tabular-nums">
-          {item.price_cents === null ? "-" : formatCents(item.price_cents)}
-        </span>
-      ),
-    },
-    {
-      key: "active",
-      header: "Active",
-      render: (item) => (
-        <Badge tone={item.active ? "success" : "neutral"}>
-          {item.active ? "active" : "inactive"}
-        </Badge>
-      ),
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-6 p-8">
       <div>
@@ -267,36 +128,174 @@ export default function PricingPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-title-3 font-semibold text-text">Pricing rules</h2>
-        <Table
-          columns={ruleColumns}
-          rows={rules}
-          rowKey={(rule) => rule.id}
-          loading={rulesQuery.isPending}
-          error={errorMessage(rulesQuery.error, "Failed to load pricing rules") ?? undefined}
-          emptyState={
-            <EmptyState
-              title="No pricing rules yet"
-              description="Pricing rules are captured during onboarding and power deterministic quotes."
-            />
-          }
-        />
+        {rulesQuery.isPending ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-20 animate-pulse rounded-card border border-border bg-surface"
+              />
+            ))}
+          </div>
+        ) : errorMessage(rulesQuery.error, "Failed to load pricing rules") ? (
+          <p className="text-body-sm text-danger">
+            {errorMessage(rulesQuery.error, "Failed to load pricing rules")}
+          </p>
+        ) : rules.length === 0 ? (
+          <EmptyState
+            title="No pricing rules yet"
+            description="Pricing rules are captured during onboarding and power deterministic quotes."
+          />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {rules.map((rule) => {
+              const editing = editingId === rule.id && draft !== null;
+              return (
+                <li
+                  key={rule.id}
+                  className="rounded-card border border-border bg-surface p-4 shadow-card"
+                >
+                  {editing && draft ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-footnote text-text-secondary">Code</span>
+                          <input
+                            aria-label="Code"
+                            className={INPUT_CLASS}
+                            value={draft.code}
+                            onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-footnote text-text-secondary">Label</span>
+                          <input
+                            aria-label="Label"
+                            className={INPUT_CLASS}
+                            value={draft.label}
+                            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-footnote text-text-secondary">Amount in dollars</span>
+                          <input
+                            aria-label="Amount in dollars"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className={`${INPUT_CLASS} tabular-nums`}
+                            value={draft.amount}
+                            onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-footnote text-text-secondary">Unit</span>
+                          <input
+                            aria-label="Unit"
+                            className={INPUT_CLASS}
+                            value={draft.unit}
+                            onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex items-center gap-2 text-body-sm text-text">
+                          <input
+                            type="checkbox"
+                            className="accent-accent"
+                            checked={draft.active}
+                            onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
+                          />
+                          Active
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" loading={saving} onClick={() => saveEdit(rule.id)}>
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                      {editError ? <p className="text-footnote text-danger">{editError}</p> : null}
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-caption text-text-secondary">
+                            {rule.code}
+                          </span>
+                          <Badge tone={rule.active ? "success" : "neutral"}>
+                            {rule.active ? "active" : "inactive"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-row-title font-medium text-text">{rule.label}</p>
+                        <p className="mt-0.5 text-body text-text">
+                          <span className="tabular-nums">{formatCents(rule.unit_amount_cents)}</span>{" "}
+                          <span className="text-text-tertiary">/ {rule.unit}</span>
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={editingId !== null}
+                        onClick={() => startEdit(rule)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-title-3 font-semibold text-text">Catalog items</h2>
-        <Table
-          columns={catalogColumns}
-          rows={catalog}
-          rowKey={(item) => item.id}
-          loading={catalogQuery.isPending}
-          error={errorMessage(catalogQuery.error, "Failed to load catalog") ?? undefined}
-          emptyState={
-            <EmptyState
-              title="No catalog items yet"
-              description="Products and services you offer will appear here once added."
-            />
-          }
-        />
+        {catalogQuery.isPending ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 animate-pulse rounded-card border border-border bg-surface"
+              />
+            ))}
+          </div>
+        ) : errorMessage(catalogQuery.error, "Failed to load catalog") ? (
+          <p className="text-body-sm text-danger">
+            {errorMessage(catalogQuery.error, "Failed to load catalog")}
+          </p>
+        ) : catalog.length === 0 ? (
+          <EmptyState
+            title="No catalog items yet"
+            description="Products and services you offer will appear here once added."
+          />
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {catalog.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-card border border-border bg-surface p-4 shadow-card"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-row-title font-medium text-text">{item.name}</p>
+                  <Badge tone={item.active ? "success" : "neutral"}>
+                    {item.active ? "active" : "inactive"}
+                  </Badge>
+                </div>
+                {item.description ? (
+                  <p className="mt-1 text-body-sm text-text-secondary">{item.description}</p>
+                ) : null}
+                <p className="mt-2 text-body tabular-nums text-text">
+                  {item.price_cents === null ? "-" : formatCents(item.price_cents)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );
