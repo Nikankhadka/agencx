@@ -129,6 +129,20 @@ body {
   outline-offset: 2px;
 }
 
+/* Agencx thinking-dot pulse (prototype v6 `tp` keyframe): 7px dots, 1.3s
+   loop, 220ms stagger, -2.5px travel. Zeroed by the reduced-motion guard. */
+@keyframes thinking-dot {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2.5px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
