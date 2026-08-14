@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -120,6 +121,73 @@ class OnboardingRecord:
         }
 
 
+@dataclass
+class TurnPlan:
+    """Everything ``prepare_turn`` computed, ready for either the streamed or
+    non-streamed reply path.
+
+    ``summary`` is set when the turn lands on readback or completion - the
+    reply is server-synthesized from the draft and never touches the model.
+    ``reply_msgs`` is set otherwise and is what the reply path feeds the LLM.
+    ``off_topic`` mirrors the extraction verdict for logging.
+    """
+
+    record: OnboardingRecord
+    persist: bool
+    summary: str | None
+    reply_msgs: list[ChatMessage] | None
+    off_topic: bool = False
+
+
+def _fmt_dollars(dollars: float) -> str:
+    return f"{dollars:g}"
+
+
+def _readback_summary(draft: dict[str, Any]) -> str:
+    business = draft.get("business") or {}
+    identity = draft.get("identity") or {}
+    services = draft.get("services") or {}
+    tone = draft.get("tone") or {}
+    lines: list[str] = []
+    if business.get("name"):
+        lines.append(f"Your business: {business['name']}")
+    if identity.get("description"):
+        lines.append(f"What you do: {identity['description']}")
+    is_team = business.get("is_team")
+    if is_team is not None:
+        lines.append("You're a team" if is_team else "It's just you")
+    items = services.get("items") or []
+    priced = [i for i in items if i.get("price_dollars") is not None]
+    if priced:
+        lines.append(
+            "Services: "
+            + ", ".join(f"{i['name']} at ${_fmt_dollars(i['price_dollars'])}" for i in priced)
+        )
+    if tone.get("tone"):
+        lines.append(f"Tone: {tone['tone']}")
+    lines.append("Does everything look right?")
+    return "\n".join(lines)
+
+
+def _activation_summary(draft: dict[str, Any]) -> str:
+    business = draft.get("business") or {}
+    name = business.get("name")
+    if name:
+        intro = f"Your agent for {name} is ready to go live."
+    else:
+        intro = "Your agent is ready to go live."
+    return f"{intro} Hit confirm to publish it."
+
+
+def _assistant_reply_for(draft: dict[str, Any]) -> str:
+    nxt = beats.next_beat(draft)
+    if nxt is None:
+        return _activation_summary(draft)
+    if nxt.key == "readback":
+        return _readback_summary(draft)
+    return f"Got it. {nxt.ask}"
+
+
 def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
     lines: list[str] = []
     if record.draft:
@@ -131,23 +199,29 @@ def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
     return "\n".join(lines)
 
 
-async def run_turn(
+async def prepare_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
-) -> tuple[OnboardingRecord, str, bool]:
-    """Runs one copilot turn. Returns ``(record, reply, persist)``.
+) -> TurnPlan:
+    """Runs the pre-reply half of a copilot turn.
 
-    ``persist`` is False when the turn is off-topic and collected nothing, so
-    the caller can skip writing it: greeting/noise turns stay ephemeral and the
-    conversation effectively restarts clean on the next visit.
+    Extracts and merges the owner's message into the draft, composes the
+    directive, decides ``persist``, and appends the user message to history (if
+    persisting). Then it decides whether the reply is a server-synthesized
+    summary (readback/completion) or a model-composed reply - without touching
+    the LLM for the reply. Returns a :class:`TurnPlan` the reply path consumes.
     """
-    turn_started = time.perf_counter()
     logger.info(
         "onboarding turn start",
         extra={"step": "start", "msg_len": len(admin_message)},
     )
     transcript.info(f"[onboarding] admin: {admin_message}")
     if record.completed:
-        return record, "Onboarding is already complete.", False
+        return TurnPlan(
+            record=record,
+            persist=False,
+            summary="Onboarding is already complete.",
+            reply_msgs=None,
+        )
     scan_input(admin_message)
 
     extract_started = time.perf_counter()
@@ -219,42 +293,123 @@ async def run_turn(
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
     reply_msgs.append({"role": "user", "content": admin_message})
 
-    reply_started = time.perf_counter()
-    reply = await provider.chat(reply_msgs)
+    if persist:
+        record.history.append({"role": "user", "content": admin_message})
+
+    if nxt is None or nxt.key == "readback":
+        return TurnPlan(
+            record=record,
+            persist=persist,
+            summary=_assistant_reply_for(record.draft),
+            reply_msgs=None,
+            off_topic=update.off_topic,
+        )
+    return TurnPlan(
+        record=record,
+        persist=persist,
+        summary=None,
+        reply_msgs=reply_msgs,
+        off_topic=update.off_topic,
+    )
+
+
+async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterator[tuple[str, str]]:
+    """Streams the reply as ``(kind, payload)`` pairs.
+
+    ``kind`` is ``"token"`` for a text delta, or ``"redraft"`` for a flag that
+    the price-echo guard tripped and the client should drop what it has so far.
+    A deterministic summary streams as a single token with no LLM call; a
+    model reply streams deltas from ``chat_stream`` and, on echo, does one
+    redraft pass over the original messages plus the flagged reply.
+    """
+    if plan.summary is not None:
+        yield ("token", plan.summary)
+        return
+
+    assert plan.reply_msgs is not None
+    stream_started = time.perf_counter()
+    full = ""
+    async for delta in provider.chat_stream(plan.reply_msgs):
+        full += delta
+        yield ("token", delta)
     logger.info(
         "onboarding step",
-        extra={"step": "reply_compose", "duration_ms": _ms(reply_started), "chars": len(reply)},
+        extra={"step": "reply_compose", "duration_ms": _ms(stream_started), "chars": len(full)},
     )
-    if _echo(reply, record.draft):
+    if _echo(full, plan.record.draft):
         redraft_started = time.perf_counter()
-        reply_msgs.append({"role": "assistant", "content": reply})
-        reply_msgs.append({"role": "user", "content": "Redraft - drop invented figures."})
-        reply = await provider.chat(reply_msgs)
+        plan.reply_msgs.append({"role": "assistant", "content": full})
+        plan.reply_msgs.append({"role": "user", "content": "Redraft - drop invented figures."})
+        yield ("redraft", "price_echo")
+        full = ""
+        async for delta in provider.chat_stream(plan.reply_msgs):
+            full += delta
+            yield ("token", delta)
         logger.info(
             "onboarding step",
             extra={
                 "step": "reply_redraft",
                 "duration_ms": _ms(redraft_started),
+                "chars": len(full),
+            },
+        )
+    transcript.info(f"[onboarding] assistant: {full}")
+
+
+async def run_turn(
+    *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
+) -> tuple[OnboardingRecord, str, bool]:
+    """Runs one copilot turn (non-streamed). Returns ``(record, reply, persist)``.
+
+    ``persist`` is False when the turn is off-topic and collected nothing, so
+    the caller can skip writing it: greeting/noise turns stay ephemeral and the
+    conversation effectively restarts clean on the next visit.
+    """
+    turn_started = time.perf_counter()
+    plan = await prepare_turn(admin_message=admin_message, record=record, provider=provider)
+
+    if plan.summary is not None:
+        reply = plan.summary
+    else:
+        assert plan.reply_msgs is not None
+        reply_started = time.perf_counter()
+        reply = await provider.chat(plan.reply_msgs)
+        logger.info(
+            "onboarding step",
+            extra={
+                "step": "reply_compose",
+                "duration_ms": _ms(reply_started),
                 "chars": len(reply),
             },
         )
+        if _echo(reply, plan.record.draft):
+            redraft_started = time.perf_counter()
+            plan.reply_msgs.append({"role": "assistant", "content": reply})
+            plan.reply_msgs.append({"role": "user", "content": "Redraft - drop invented figures."})
+            reply = await provider.chat(plan.reply_msgs)
+            logger.info(
+                "onboarding step",
+                extra={
+                    "step": "reply_redraft",
+                    "duration_ms": _ms(redraft_started),
+                    "chars": len(reply),
+                },
+            )
 
-    if persist:
-        record.history.append({"role": "user", "content": admin_message})
-        record.history.append({"role": "assistant", "content": reply})
-        record.history = record.history[-_MAX_HIST * 2 :]
+    if plan.persist:
+        plan.record.history.append({"role": "assistant", "content": reply})
     transcript.info(f"[onboarding] assistant: {reply}")
     logger.info(
         "onboarding turn done",
         extra={
             "step": "turn_done",
             "total_ms": _ms(turn_started),
-            "off_topic": bool(update.off_topic),
-            "persist": persist,
+            "off_topic": plan.off_topic,
+            "persist": plan.persist,
             "reply_chars": len(reply),
         },
     )
-    return record, reply, persist
+    return plan.record, reply, plan.persist
 
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:

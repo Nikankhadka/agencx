@@ -122,6 +122,13 @@ class OnboardingFakeProvider(BaseFakeProvider):
         self._chat_idx += 1
         return reply
 
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        reply = _CHAT_REPLIES[self._chat_idx % len(_CHAT_REPLIES)]
+        self._chat_idx += 1
+        mid = len(reply) // 2
+        yield reply[:mid]
+        yield reply[mid:]
+
 
 class OffTopicFakeProvider(BaseFakeProvider):
     """Always reports the message as off-topic, collecting nothing."""
@@ -474,6 +481,15 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     assert "reply" in types
     assert "state" in types
     assert "done" in types
+    tokens = [e for e in events if e["type"] == "token"]
+    assert tokens, "stream must emit token deltas"
+    token_texts: list[str] = []
+    for token_event in tokens:
+        text = token_event["text"]
+        assert isinstance(text, str)
+        token_texts.append(text)
+    reply_event = next(e for e in events if e["type"] == "reply")
+    assert "".join(token_texts) == reply_event["text"]
     state_event = next(e for e in events if e["type"] == "state")
     state_draft = state_event["draft"]
     assert isinstance(state_draft, dict)
