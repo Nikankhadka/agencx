@@ -25,9 +25,10 @@ from typing import Any
 from app.agents.spotlight import scan_input
 from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
+from app.onboarding import beats
 from app.onboarding.flow import DraftUpdate
 from app.onboarding.tools import (
-    _check_completeness,
+    save_business,
     save_escalation,
     save_identity,
     save_pricing_rules,
@@ -62,7 +63,7 @@ class Directive:
 
 
 _COPILOT = (
-    "You are Agencx, an onboarding copilot. Help a small-business owner describe "
+    "You are Wren, an onboarding copilot. Help a small-business owner describe "
     "their business, tone, services (with prices), pricing rules, and escalation "
     "posture. Be friendly and concise. Answer meta questions in one line, then "
     "gently return to onboarding. Never invent prices."
@@ -165,6 +166,9 @@ async def run_turn(
     )
 
     acknowledged: list[str] = []
+    if update.business is not None:
+        record.draft = save_business(record.draft, update.business)
+        acknowledged.append("business details")
     if update.identity is not None:
         record.draft = save_identity(record.draft, update.identity)
         acknowledged.append("business description")
@@ -181,16 +185,17 @@ async def run_turn(
         record.draft = save_escalation(record.draft, update.escalation)
         acknowledged.append("escalation posture")
 
-    missing = _check_completeness(record.draft)
+    nxt = beats.next_beat(record.draft)
+    ask_for = nxt.ask if nxt else ""
     persist = bool(acknowledged) or not update.off_topic
     directive = Directive(acknowledged=acknowledged)
     if update.off_topic:
         if persist:
             record.off_topic_count += 1
-        directive.meta_answer = update.meta_reply or "I'm Agencx, your onboarding copilot."
-        directive.ask_for = update.next_question or (missing[0] if missing else "")
+        directive.meta_answer = update.meta_reply or "I'm Wren, your onboarding copilot."
+        directive.ask_for = update.next_question or ask_for
     else:
-        directive.ask_for = update.next_question or (missing[0] if missing else "")
+        directive.ask_for = update.next_question or ask_for
 
     state_parts = [
         f"captured={', '.join(sorted(record.draft)) or 'none'}",

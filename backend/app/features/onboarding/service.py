@@ -52,6 +52,9 @@ async def apply_confirmation(
     system_prompt: str,
     tone: str,
     escalation_threshold: float,
+    business_name: str | None,
+    processing_mode: str,
+    config_extra: dict[str, Any],
     services: list[dict[str, Any]],
     pricing_rules: list[dict[str, Any]],
     embedder: Embedder,
@@ -69,6 +72,20 @@ async def apply_confirmation(
             tone,
             escalation_threshold,
         )
+        await conn.execute(
+            "update tenants set business_name=$2, payment_processing_mode=$3 where id=$1",
+            tenant_id,
+            business_name,
+            processing_mode,
+        )
+        for key, value in config_extra.items():
+            await conn.execute(
+                "update tenant_config set config = jsonb_set(config, $2::text[], $3::jsonb, true), "
+                "updated_at = now() where tenant_id = $1",
+                tenant_id,
+                [key],
+                json.dumps(value),
+            )
         for item in services:
             await conn.execute(
                 "insert into catalog_items (tenant_id, name, description, "

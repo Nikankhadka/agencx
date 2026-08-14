@@ -38,8 +38,8 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # resolvers; 0010 retargets embeddings to the 384-dim provider-agnostic
     # contract; 0011 adds T-020's escalation dedupe index; 0012 adds T-021's
     # messages.metadata column; 0013 adds T-033's platform_admin write access
-    # on tenant_config.
-    assert len(on_disk) == 13, "expected migrations 0001-0013"
+    # on tenant_config; 0014 adds T-052's onboarding business fields.
+    assert len(on_disk) == 14, "expected migrations 0001-0014"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

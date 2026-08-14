@@ -6,11 +6,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.onboarding import beats
 from app.onboarding.flow import (
+    BusinessDraft,
     EscalationDraft,
     IdentityDraft,
+    KycDraft,
+    PaymentDraft,
     PricingRulesDraft,
+    ReadbackDraft,
     ServicesDraft,
+    TaxDraft,
     ToneDraft,
     _incomplete_rules,
     resolve_threshold,
@@ -25,6 +31,31 @@ class ToolResult(BaseModel):
 
 def save_identity(draft: dict[str, Any], args: IdentityDraft) -> dict[str, Any]:
     draft["identity"] = args.model_dump()
+    return draft
+
+
+def save_business(draft: dict[str, Any], args: BusinessDraft) -> dict[str, Any]:
+    draft["business"] = args.model_dump()
+    return draft
+
+
+def save_tax(draft: dict[str, Any], args: TaxDraft) -> dict[str, Any]:
+    draft["tax"] = args.model_dump()
+    return draft
+
+
+def save_payment(draft: dict[str, Any], args: PaymentDraft) -> dict[str, Any]:
+    draft["payment"] = args.model_dump()
+    return draft
+
+
+def save_readback(draft: dict[str, Any], args: ReadbackDraft) -> dict[str, Any]:
+    draft["readback"] = args.model_dump()
+    return draft
+
+
+def save_kyc(draft: dict[str, Any], args: KycDraft) -> dict[str, Any]:
+    draft["kyc"] = args.model_dump()
     return draft
 
 
@@ -55,38 +86,7 @@ def save_escalation(draft: dict[str, Any], args: EscalationDraft) -> dict[str, A
 
 
 def _check_completeness(draft: dict[str, Any]) -> list[str]:
-    missing: list[str] = []
-    identity = draft.get("identity")
-    tone = draft.get("tone")
-    services = draft.get("services")
-    pricing = draft.get("pricing_rules")
-    escalation = draft.get("escalation_threshold")
-
-    if not identity or not identity.get("description"):
-        missing.append("business description")
-    if not tone or not tone.get("tone"):
-        missing.append("assistant tone")
-
-    items = services.get("items", []) if services and isinstance(services, dict) else []
-    if not items:
-        missing.append("at least one service or product with a price")
-    else:
-        unpriced = [i.get("name", "unknown") for i in items if i.get("price_dollars") is None]
-        if unpriced:
-            missing.append(f"prices for services: {', '.join(unpriced)}")
-
-    rules = pricing.get("rules", []) if pricing and isinstance(pricing, dict) else []
-    unpriced_rules = [
-        r.get("code", r.get("label", "unknown"))
-        for r in rules
-        if r.get("unit_amount_dollars") is None or r.get("unit_amount_dollars", 0) <= 0
-    ]
-    if unpriced_rules:
-        missing.append(f"amounts for pricing rules: {', '.join(unpriced_rules)}")
-
-    if not escalation or not escalation.get("_resolved_threshold"):
-        missing.append("escalation posture")
-    return missing
+    return beats.check_completeness(draft)
 
 
 def request_finalize(draft: dict[str, Any]) -> ToolResult:

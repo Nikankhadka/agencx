@@ -12,6 +12,35 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class BusinessDraft(BaseModel):
+    name: str = ""
+    is_team: bool | None = None
+    hours: str = ""
+    contact: str = ""
+    inbound_channels: list[str] = Field(default_factory=list)
+
+
+class TaxDraft(BaseModel):
+    has_business_number: bool | None = None
+    business_number: str = ""
+    tax_registered: bool | None = None
+
+
+class PaymentDraft(BaseModel):
+    processing_mode: Literal["PLATFORM", "DIRECT", "DEFERRED"] | None = None
+    terms: Literal["deposit", "full_before", "full_after", "later"] | None = None
+    deposit_pct: int | None = None
+
+
+class ReadbackDraft(BaseModel):
+    confirmed: bool = False
+
+
+class KycDraft(BaseModel):
+    requested: bool = False
+    skipped: bool = False
+
+
 class IdentityDraft(BaseModel):
     description: str
 
@@ -56,6 +85,7 @@ class DraftUpdate(BaseModel):
     """
 
     off_topic: bool = False
+    business: BusinessDraft | None = None
     identity: IdentityDraft | None = None
     tone: ToneDraft | None = None
     services: ServicesDraft | None = None
@@ -83,12 +113,3 @@ def resolve_threshold(draft: EscalationDraft) -> float:
 
 def _incomplete_rules(rules: list[PricingRuleDraft]) -> list[PricingRuleDraft]:
     return [r for r in rules if r.unit_amount_dollars is None or r.unit_amount_dollars <= 0]
-
-
-_REQUIRED_SECTIONS: dict[str, type[BaseModel]] = {
-    "identity": IdentityDraft,
-    "tone": ToneDraft,
-    "services": ServicesDraft,
-    "pricing_rules": PricingRulesDraft,
-    "escalation_threshold": EscalationDraft,
-}
