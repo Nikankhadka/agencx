@@ -255,7 +255,7 @@ export function CustomerChat({
 
   return (
     <>
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
         {messages.map((message, index) => (
           <ChatBubble key={index} role={message.role}>
             <StreamingText
@@ -297,7 +297,7 @@ export function CustomerChat({
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-2 border-t border-border p-4"
+          className="flex shrink-0 flex-col gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           {/* Mounted unconditionally (only the text toggles) - screen readers
               reliably announce content changes inside an existing live

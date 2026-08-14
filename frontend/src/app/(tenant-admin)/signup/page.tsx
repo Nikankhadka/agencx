@@ -100,7 +100,7 @@ export default function SignupPage() {
 
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
+      <main className="flex min-h-dvh items-center justify-center p-8">
         <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
           <h1 className="text-title-2 font-semibold">You&apos;re in</h1>
           <p className="mt-2 text-body-sm text-text-secondary">
@@ -122,7 +122,7 @@ export default function SignupPage() {
 
   if (needsConfirm) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
+      <main className="flex min-h-dvh items-center justify-center p-8">
         <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
           <h1 className="text-title-2 font-semibold">Check your email</h1>
           <p className="mt-2 text-body-sm text-text-secondary">
@@ -140,7 +140,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="flex min-h-dvh items-center justify-center p-8">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
         <h1 className="text-title-2 font-semibold">Create your business</h1>
         <p className="mt-1 text-body-sm text-text-secondary">

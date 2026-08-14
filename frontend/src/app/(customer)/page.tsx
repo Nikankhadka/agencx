@@ -37,7 +37,7 @@ export default async function CustomerHome() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col">
+    <main className="mx-auto flex h-dvh w-full max-w-[720px] flex-col">
       {accentOverride ? <style>{accentOverride}</style> : null}
       <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
         <BrandMark logoUrl={logoUrl} name={displayName} />
