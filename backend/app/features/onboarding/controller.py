@@ -186,6 +186,7 @@ async def run_message_stream(
     nxt = beats.next_beat(plan.record.draft)
     yield {
         "type": "state",
+        "stage": nxt.key if nxt else "confirm",
         "draft": record_data.get("draft", {}),
         "completed": completed,
         "input": beats.input_spec(nxt).model_dump() if nxt else None,

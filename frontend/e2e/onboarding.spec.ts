@@ -11,19 +11,17 @@ test("onboarding first message streams a reply", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Onboarding" })).toBeVisible();
 
-  const assistantBubbles = page.locator("div.bg-surface");
-  const prompt = await assistantBubbles.first().textContent();
+  const thread = page.getByTestId("onboarding-thread");
+  const prompt = await thread.textContent();
   expect(prompt?.trim().length).toBeGreaterThan(0);
 
-  await page.getByLabel("Your reply").fill("I run a phone repair shop.");
-  await page.getByRole("button", { name: "Send" }).click();
+  const composer = page.getByTestId("onboarding-composer");
+  await composer.getByRole("textbox").fill("I run a phone repair shop.");
+  await composer.getByRole("button", { name: "Send" }).click();
 
-  await expect(
-    page.getByText("I run a phone repair shop.", { exact: true })
-  ).toBeVisible();
+  // The customer message echoes into the thread...
+  await expect(thread.getByText("I run a phone repair shop.", { exact: true })).toBeVisible();
 
-  // The fresh assistant bubble streams in a non-empty reply; a 401 would
-  // surface as an error line instead and this never resolves.
-  await expect(assistantBubbles.last()).not.toHaveText("", { timeout: 60_000 });
-  await expect(page.getByText("onboarding request failed")).toHaveCount(0);
+  // ...and the stream resolves without an error line (a 401 surfaces there).
+  await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
 });

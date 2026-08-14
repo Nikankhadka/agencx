@@ -497,3 +497,6 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     assert isinstance(business, dict)
     assert business["name"] == "Bytefix Repairs"
     assert state_event["completed"] is False
+    # The client needs the current beat key to submit a chip selection after a
+    # text turn, so the SSE state event carries it (matching /state's shape).
+    assert state_event["stage"] == "team"

@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { ChatBubble } from "@/components/ui/ChatBubble";
+import { Sheet } from "@/components/ui/Sheet";
 import { StreamingText } from "@/components/ui/StreamingText";
-import { SummaryPanel } from "./components/SummaryPanel";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
-
-interface OnboardingStateResponse {
-  stage: string;
-  prompt: string;
-  draft: Record<string, Record<string, unknown>>;
-  completed: boolean;
-}
+import {
+  parseOnboardingEvent,
+  type InputSpec,
+  type OnboardingDraft,
+  type OnboardingState,
+} from "@/lib/onboarding";
+import { BeatComposer } from "./components/BeatComposer";
+import { ShowBack } from "./components/ShowBack";
 
 interface Message {
   role: "assistant" | "customer";
@@ -21,48 +21,61 @@ interface Message {
   streaming?: boolean;
 }
 
-/**
- * Parses an onboarding SSE data payload. Returns null for malformed frames.
- */
-function parseOnboardingEvent(payload: string): {
-  type: string;
-  text?: string;
-  draft?: Record<string, Record<string, unknown>>;
-  completed?: boolean;
-  detail?: string;
-} | null {
-  try {
-    const parsed = JSON.parse(payload);
-    if (parsed && typeof parsed === "object" && typeof parsed.type === "string") {
-      return parsed;
-    }
-  } catch { /* skip */ }
-  return null;
+/** A state snapshot without history[] - the SSE ``state`` event carries these. */
+interface StateFields {
+  stage: string;
+  draft: OnboardingDraft;
+  completed: boolean;
+  input: InputSpec | null;
+  can_confirm: boolean;
+}
+
+function historyToMessages(
+  history: { role: string; content: string }[] | undefined,
+): Message[] {
+  return (history ?? []).map((message) => ({
+    role: message.role === "user" ? "customer" : "assistant",
+    text: message.content,
+  }));
 }
 
 /**
- * T-006 / T-042: the Agencx onboarding chat. A two-column layout - a live
- * summary panel of captured business details on the left, the SSE-streaming
- * chat on the right. The stage-based state machine is retired; the copilot now
- * uses the agentic loop under the hood, and the summary updates in real time
- * from the ``state`` SSE event.
+ * T-057: the onboarding interview, rebuilt around the server's beat system.
+ * A bare-prose thread on the right; the "show-back" (what the assistant has
+ * captured) is a desktop aside, and on mobile it lives in a bottom Business
+ * Sheet opened from the header. The composer renders whatever widget the
+ * server's InputSpec asks for (BeatComposer); confirm is server-gated via
+ * ``can_confirm`` rather than a client-side draft-length guess.
  */
 export default function OnboardingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState<Record<string, Record<string, unknown>>>({});
+  const [draft, setDraft] = useState<OnboardingDraft>({});
   const [completed, setCompleted] = useState(false);
-  const [input, setInput] = useState("");
+  const [stage, setStage] = useState("");
+  const [input, setInput] = useState<InputSpec | null>(null);
+  const [canConfirm, setCanConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  function applyStateFields(fields: StateFields) {
+    setDraft(fields.draft);
+    setCompleted(fields.completed);
+    setStage(fields.stage);
+    setInput(fields.input);
+    setCanConfirm(fields.can_confirm);
+  }
+
   useEffect(() => {
-    apiFetch<OnboardingStateResponse>("/api/onboarding/state")
+    apiFetch<OnboardingState>("/api/onboarding/state")
       .then((state) => {
-        setDraft(state.draft);
-        setCompleted(state.completed);
-        if (!state.completed) {
+        applyStateFields(state);
+        const restored = historyToMessages(state.history);
+        if (restored.length > 0) {
+          setMessages(restored);
+        } else if (!state.completed) {
           setMessages([{ role: "assistant", text: state.prompt }]);
         }
       })
@@ -70,12 +83,20 @@ export default function OnboardingPage() {
       .finally(() => setLoaded(true));
   }, []);
 
-  async function send(text: string) {
+  function updateLastAssistant(update: (last: Message) => Partial<Message>) {
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === "assistant") next[next.length - 1] = { ...last, ...update(last) };
+      return next;
+    });
+  }
+
+  async function sendText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     setError(null);
     setBusy(true);
-    setInput("");
     setMessages((prev) => [
       ...prev,
       { role: "customer", text: trimmed },
@@ -113,40 +134,16 @@ export default function OnboardingPage() {
             case "progress":
               break; // processing indicator - no visible change needed
             case "reply":
-              if (event.text) {
-                setMessages((prev) => {
-                  const next = [...prev];
-                  const last = next[next.length - 1];
-                  if (last && last.role === "assistant") {
-                    next[next.length - 1] = { ...last, text: event.text!, streaming: false };
-                  }
-                  return next;
-                });
-              }
+              updateLastAssistant(() => ({ text: event.text }));
               break;
             case "state":
-              if (event.draft) setDraft(event.draft);
-              if (event.completed) setCompleted(event.completed);
+              applyStateFields(event);
               break;
             case "done":
-              setMessages((prev) => {
-                const next = [...prev];
-                const last = next[next.length - 1];
-                if (last && last.role === "assistant") {
-                  next[next.length - 1] = { ...last, streaming: false };
-                }
-                return next;
-              });
+              updateLastAssistant(() => ({ streaming: false }));
               break;
             case "error":
-              setMessages((prev) => {
-                const next = [...prev];
-                const last = next[next.length - 1];
-                if (last && last.role === "assistant") {
-                  next[next.length - 1] = { ...last, streaming: false };
-                }
-                return next;
-              });
+              updateLastAssistant(() => ({ streaming: false }));
               setError(event.detail ?? "Something went wrong");
               break;
           }
@@ -154,10 +151,13 @@ export default function OnboardingPage() {
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
+        // Stop before the first token leaves an empty bubble - drop it.
         setMessages((prev) => {
           const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && !last.text) return prev.slice(0, -1);
-          return prev;
+          if (last && last.role === "assistant" && last.text === "") return prev.slice(0, -1);
+          const next = [...prev];
+          if (last) next[next.length - 1] = { ...last, streaming: false };
+          return next;
         });
       } else {
         setError(err instanceof ApiError ? err.detail : "Something went wrong");
@@ -168,9 +168,26 @@ export default function OnboardingPage() {
     }
   }
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    void send(input);
+  async function sendSelection(values: string[]) {
+    if (busy || !stage) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const state = await apiFetch<OnboardingState>("/api/onboarding/message", {
+        method: "POST",
+        body: JSON.stringify({ selection: { beat: stage, values } }),
+      });
+      applyStateFields(state);
+      setMessages(historyToMessages(state.history));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleStop() {
+    abortRef.current?.abort();
   }
 
   async function handleConfirm() {
@@ -179,14 +196,14 @@ export default function OnboardingPage() {
     try {
       await apiFetch("/api/onboarding/confirm", { method: "POST" });
       setCompleted(true);
+      setCanConfirm(false);
+      setInput(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);
     }
   }
-
-  const isConfirmReady = !completed && Object.keys(draft).length >= 5;
 
   if (!loaded) {
     return (
@@ -197,21 +214,37 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col px-4 py-6 sm:px-6 lg:py-10">
+    <main className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:py-10">
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:flex-row">
-        <aside className="lg:w-72 lg:shrink-0">
-          <SummaryPanel draft={draft} completed={completed} />
+        <aside className="hidden shrink-0 lg:block lg:w-72">
+          <div className="rounded-card border border-border bg-surface p-4 shadow-card">
+            <ShowBack draft={draft} completed={completed} />
+          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
-            <p className="text-body-sm text-text-secondary">
-              Answer a few questions and your assistant will be ready to go live.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
+              <p className="text-body-sm text-text-secondary">
+                Answer a few questions and your assistant will be ready to go live.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setSheetOpen(true)}
+              className="lg:hidden"
+              data-testid="onboarding-show-back"
+            >
+              Your business
+            </Button>
           </div>
 
-          <div className="mt-6 flex flex-1 flex-col gap-3 overflow-y-auto">
+          <div
+            className="mt-6 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+            data-testid="onboarding-thread"
+          >
             {completed ? (
               <ChatBubble role="system">You are live! Onboarding is complete.</ChatBubble>
             ) : (
@@ -228,34 +261,40 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          {!completed ? (
-            <form onSubmit={handleSubmit} className="mt-6 flex gap-2">
-              <div className="flex-1">
-                <Input
-                  label="Your reply"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  disabled={busy}
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" loading={busy}>
-                Send
-              </Button>
-            </form>
-          ) : null}
-
-          {!completed && isConfirmReady ? (
-            <div className="mt-4">
-              <Button onClick={handleConfirm} loading={busy}>
+          {!completed && canConfirm ? (
+            <div className="mt-6">
+              <Button
+                onClick={handleConfirm}
+                loading={busy}
+                data-testid="onboarding-confirm"
+              >
                 Confirm and go live
               </Button>
             </div>
+          ) : !completed && input ? (
+            <div className="mt-6">
+              <BeatComposer
+                key={stage}
+                input={input}
+                busy={busy}
+                onText={(text) => void sendText(text)}
+                onSelect={(values) => void sendSelection(values)}
+                onStop={handleStop}
+              />
+            </div>
           ) : null}
 
-          {error ? <p className="mt-3 text-footnote text-danger">{error}</p> : null}
+          {error ? (
+            <p className="mt-3 text-footnote text-danger" data-testid="onboarding-error">
+              {error}
+            </p>
+          ) : null}
         </div>
       </div>
+
+      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Your business">
+        <ShowBack draft={draft} completed={completed} />
+      </Sheet>
     </main>
   );
 }

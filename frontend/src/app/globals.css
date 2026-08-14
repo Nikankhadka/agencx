@@ -143,6 +143,20 @@ body {
   }
 }
 
+/* Beat composer cross-fade: the widget for a new beat fades up in 80ms (the
+   old widget unmounts with its beat key, so this reads as a cross-fade).
+   Zeroed by the reduced-motion guard below. */
+@keyframes beat-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
