@@ -57,3 +57,27 @@ async def reprocess_document(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
     return row
+
+
+async def upload_url(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    url: str,
+    embedder: Embedder,
+) -> dict[str, Any]:
+    """URL ingestion pass-through. ValueError (bad scheme, oversize, no content)
+    becomes a 422; a missing resulting row a 500."""
+    try:
+        row = await service.upload_url(
+            tenant_id=tenant_id, document_id=document_id, url=url, embedder=embedder
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="document not created"
+        )
+    return row

@@ -180,7 +180,7 @@ create table documents (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
   filename     text not null,
-  doc_type     text not null check (doc_type in ('policy', 'faq', 'catalog', 'price_list', 'other')),
+  doc_type     text not null check (doc_type in ('policy', 'faq', 'catalog', 'price_list', 'other', 'website')),
   status       text not null default 'pending' check (status in ('pending', 'processing', 'ready', 'failed')),
   error        text,
   uploaded_at  timestamptz not null default now()

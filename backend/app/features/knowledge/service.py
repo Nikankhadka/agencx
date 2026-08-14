@@ -19,6 +19,7 @@ from uuid import UUID
 from starlette.concurrency import run_in_threadpool
 
 from app.ingestion.pipeline import process_document
+from app.ingestion.url import extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.shared import db
 from app.shared.config import get_settings
@@ -71,6 +72,60 @@ async def upload_document(
         )
         await process_document(
             conn, tenant_id=tenant_id, document_id=document_id, embedder=embedder
+        )
+        row = await conn.fetchrow(
+            f"select {_SELECT_COLUMNS} from documents where id = $1", document_id
+        )
+    return dict(row) if row is not None else None
+
+
+async def upload_url(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    url: str,
+    embedder: Embedder,
+) -> dict[str, Any] | None:
+    """Fetch a URL, extract its main text, and ingest it as a 'website' document.
+
+    The extracted text is written to disk as ``{document_id}.txt`` (never a
+    client-controlled path - same posture as ``upload_document``); the documents
+    row stores the URL as its display filename only. Idempotent: re-pasting a
+    URL this tenant already ingested returns the existing row untouched.
+    Raises ``ValueError`` when the page has no extractable text.
+    """
+    html = await fetch_page(url)
+    text = extract_main_text(html)
+    if not text:
+        raise ValueError("no extractable content at this URL")
+    title = extract_title(html) or url
+
+    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}.txt"
+    await run_in_threadpool(_write_upload, document_path, text.encode("utf-8"))
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        existing = await conn.fetchrow(
+            f"select {_SELECT_COLUMNS} from documents "
+            "where tenant_id = $1 and doc_type = 'website' and filename = $2",
+            tenant_id,
+            url,
+        )
+        if existing is not None:
+            return dict(existing)
+        await conn.execute(
+            "insert into documents (id, tenant_id, filename, doc_type, status) "
+            "values ($1, $2, $3, 'website', 'pending')",
+            document_id,
+            tenant_id,
+            url,
+        )
+        await process_document(
+            conn,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            embedder=embedder,
+            extension=".txt",
+            source=title,
         )
         row = await conn.fetchrow(
             f"select {_SELECT_COLUMNS} from documents where id = $1", document_id

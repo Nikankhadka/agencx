@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -23,7 +24,7 @@ from app.shared import auth
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 ALLOWED_EXTENSIONS = frozenset({".md", ".txt", ".pdf", ".csv", ".json"})
-ALLOWED_DOC_TYPES = frozenset({"policy", "faq", "catalog", "price_list", "other"})
+ALLOWED_DOC_TYPES = frozenset({"policy", "faq", "catalog", "price_list", "other", "website"})
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
@@ -33,6 +34,10 @@ class DocumentResponse(BaseModel):
     doc_type: str
     status: str
     error: str | None
+
+
+class UrlIngestRequest(BaseModel):
+    url: str
 
 
 @router.get("", response_model=list[DocumentResponse])
@@ -101,5 +106,24 @@ async def reprocess_document(
 ) -> DocumentResponse:
     row = await controller.reprocess_document(
         tenant_id=admin.tenant_id, document_id=document_id, embedder=embedder
+    )
+    return DocumentResponse(**row)
+
+
+@router.post("/urls", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def ingest_url(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+    payload: UrlIngestRequest,
+) -> DocumentResponse:
+    url = payload.url.strip()
+    if urlparse(url).scheme.lower() not in ("http", "https"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="url must be an absolute http:// or https:// URL",
+        )
+    document_id = uuid4()
+    row = await controller.upload_url(
+        tenant_id=admin.tenant_id, document_id=document_id, url=url, embedder=embedder
     )
     return DocumentResponse(**row)
