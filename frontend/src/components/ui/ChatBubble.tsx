@@ -15,7 +15,7 @@ const ROLE_CLASSES: Record<ChatRole, string> = {
 };
 
 // The 4px corner always points at the speaker: inbound (assistant) tips
-// top-left, outbound (owner/customer) tips top-right (prototype v6 L146-148).
+// top-left, outbound (owner/customer) tips top-right.
 const RADIUS_CLASSES: Record<ChatRole, string> = {
   customer:
     "rounded-[var(--radius-bubble)_var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)]",
@@ -27,7 +27,7 @@ const RADIUS_CLASSES: Record<ChatRole, string> = {
 };
 
 /**
- * docs/design/frontend.md section 6 + Agencx prototype: owner/customer bubbles
+ * docs/design/frontend.md section 6: owner/customer bubbles (filled, right)
  * (filled, right) with a top-right tip, assistant bubbles (light, left) with a
  * top-left tip, human_agent (light crimson, labeled), system (centered
  * caption). Streaming arrives with StreamingText.

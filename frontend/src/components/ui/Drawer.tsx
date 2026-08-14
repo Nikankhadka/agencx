@@ -12,10 +12,9 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Console nav drawer (docs/design/prototypes/design.md, Agencx look): a 288px
- * panel sliding in from the left behind a scrim. The scrim animates its
- * background-colour (bg-transparent -> bg-scrim) rather than opacity, matching
- * the prototype's drawer; the panel slides on translate-x. Focus management
+ * Console nav drawer: a 288px panel sliding in from the left behind a scrim.
+ * The scrim animates its background-colour (bg-transparent -> bg-scrim) rather
+ * than opacity; the panel slides on translate-x. Focus management
  * mirrors Modal.tsx - open saves document.activeElement and focuses the first
  * focusable in the panel, close restores it, Escape closes, Tab wraps within
  * the panel.

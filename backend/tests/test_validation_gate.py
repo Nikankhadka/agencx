@@ -1,6 +1,6 @@
 """T-044: price-provenance validation gate tests.
 
-RELEASE CRITERION (docs/phases/phase-2-agents-pricing.md T-018): this test
+RELEASE CRITERION (T-018): this test
 file is never deleted or skipped. It proves a planted model-authored figure
 is caught, redrafted away or escalated, and that clean engine-derived
 responses pass with zero false positives.

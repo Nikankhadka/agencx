@@ -2,12 +2,12 @@
 
 **The one page to check to know where the build is.** Every ticket in the project is listed below with its status, the commit that delivered it, and a one-line plain-English summary of what that commit actually did.
 
-**Right now:** Phases 1 and 2 are fully done. Phase 3 (Eval, CI & console) is done except T-024, which is committed but blocked pending founder hand-labeling (see its phase-file status note). Phase 4 (Ship) is nearly complete: T-032 done, T-033 done (backend + frontend), T-034 done (backend + frontend dashboards), T-035 Terraform + lean image landed (live apply pending founder AWS secrets), CI/CD split into a development gate (`ci.yml`) and a production pipeline (`deploy.yml`, T-036 skeleton, dormant until T-035's secrets exist), T-037 generalization proof done. The portfolio artifacts are written: T-038 eval report and T-039 security write-up are done; T-040 README + LEARNINGS are done with only the demo-video recording (a founder step) outstanding. The two remaining gates on shipping are both external: T-036 live deploy (needs AWS/Vercel/Supabase secrets) and clean HEAD-fresh LLM-judged eval numbers (needs a paid/Azure key - the free tier throttles the re-runs).
+**Right now:** Phases 1-2 are done; Phase 3 is done except T-024 (blocked on founder hand-labeling). Phase 4 is nearly complete: T-032 through T-035 and T-037 are done, with CI split into a development gate (`ci.yml`) and a production pipeline (`deploy.yml`, dormant until secrets exist). Portfolio artifacts are written (T-038 eval report, T-039 security write-up, T-040 README + LEARNINGS); only the demo-video recording remains. The two remaining shipping gates are both external: T-036 live deploy (needs AWS/Vercel/Supabase secrets) and clean LLM-judged eval numbers (needs a paid/Azure key - the free tier throttles re-runs).
 
 ## How to read this file
 
 - The whole build is 40 tickets (T-001 to T-040), grouped into 4 phases. One ticket = one commit, and the commit message always starts with the ticket number (e.g. `T-015: Recommendation Agent`), so `git log --oneline` lines up 1:1 with this table.
-- For the full technical detail of any ticket, open its entry in the matching `docs/phases/` file. For the full story of any commit, run `git show <hash>` - commit bodies are written in plain language.
+- For the full story of any commit, run `git show <hash>` - commit bodies are written in plain language.
 - **Statuses:** `done` | `in progress` | `not started` | `blocked (why)` | `deferred (why)`.
 - **Keeping it updated:** whoever commits a ticket (human or agent) fills in that ticket's row - status, commit hash, one-line summary.
 
@@ -88,7 +88,7 @@ Goal: polish all three surfaces, deploy to real infrastructure, and prove domain
 
 ## Phase 5 - Agentic conversation layer (in progress)
 
-Goal: replace the hardcoded onboarding state machine and the fixed five-specialist customer-chat supervisor with fully agentic, tool-driven conversations on both surfaces, with strong Python-level guardrails. The frozen docs' Phase 2 "open-ended interviewer" is pulled forward per ADR in `docs/archive/decisions-log.md` (2026-07-30).
+Goal: replace the hardcoded onboarding state machine and the fixed five-specialist customer-chat supervisor with fully agentic, tool-driven conversations on both surfaces, with strong Python-level guardrails.
 
 | Ticket | Status | Commit | What was done |
 |---|---|---|---|
@@ -105,7 +105,7 @@ Goal: replace the hardcoded onboarding state machine and the fixed five-speciali
 | Full visual rebrand (LuxeStay M3 system) | done | `cc30fc5`, `86b03d9`, `5d2bb7d` | Material 3 tonal role ramp system (crimson primary, teal secondary, green tertiary) with Inter font, bento MetricCards, pill Badges, vendored Material Symbols icons. Component code was untouched by design (tokens-only change). |
 | Marketing pages (/product /pricing /demo /about) | done | `27537d7` | Four public content pages behind the marketing nav: product walkthrough, honest beta-free pricing, demo credentials mirroring `docs/DEMO.md`, trust mechanics. |
 | Reranker score normalization (retrieval-refusal bugfix) | done | `0dd266e` | Fixed a bug where the knowledge agent refused in-domain questions because the two reranker backends returned scores on different scales. Normalized both to [0,1] relevance probability with a regression test. |
-| Tenant brand in headers + onboarding polish | done | `e72de5f` | Customer chat header and tenant console sidebar show the tenant's logo when set, else an accent monogram with the business name (Wren wordmark gone from the console). Onboarding is now a clean single-column chat with five stage pills as progress, and Agencx introduces itself in the greeting. |
+| Tenant brand in headers + onboarding polish | done | `e72de5f` | Customer chat header and tenant console sidebar show the tenant's logo when set, else an accent monogram with the business name (Wren wordmark gone from the console). Onboarding is now a clean single-column chat with five stage pills as progress, and Wren introduces itself in the greeting. |
 | Onboarding extraction robustness fix | done | _pending commit_ | Copilot turn loop switched from tool-call extraction to a single stateful `extract()` (`DraftUpdate`), ending the "what does your business do?" loop on free/edge models; off-topic softened to a one-line answer + gentle redirect; onboarding provider time-bounded and SSE errors surface a friendly retry message. |
 
 ## Known gaps (not ticket failures - waiting on external setup)

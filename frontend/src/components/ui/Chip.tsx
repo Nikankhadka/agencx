@@ -5,7 +5,7 @@ import type { ButtonHTMLAttributes } from "react";
 export interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick"> {
   label: string;
   value?: string;
-  /** Dashed suggestion chip (multi-select hints, prototype .c-suggest). */
+  /** Dashed suggestion chip (multi-select hints). */
   dashed?: boolean;
   /** Read-only "sent" chip - records a committed selection, no interaction. */
   sent?: boolean;
@@ -28,10 +28,10 @@ const VARIANT_CLASSES = {
 } as const;
 
 /**
- * docs/design/prototypes/design.md §component wall: the enum-shaped beat widget.
- * Three variants - solid (selectable), dashed (suggestion), sent (committed).
- * 1.5px border via --border-chip, radius --radius-chip, 44px min target (an
- * intentional deviation from the prototype's ~29px chips, ratified in the ADR).
+ * The enum-shaped beat widget. Three variants - solid (selectable), dashed
+ * (suggestion), sent (committed). 1.5px border via --border-chip, radius
+ * --radius-chip, 44px min target (an intentional deviation from the earlier
+ * ~29px chips).
  */
 export function Chip({
   label,

@@ -1,6 +1,6 @@
 """T-022 [EDD]: cross-tenant leakage test - 100% or red.
 
-RELEASE CRITERION (docs/phases/phase-2-agents-pricing.md T-022): this test
+RELEASE CRITERION (T-022): this test
 file is never deleted, skipped, or given a tolerance. It proves - through
 the app's real code paths, not a re-derivation of test_rls.py's raw-SQL
 proof - that with app.tenant_id set to one of seeds/seed_leakage_pair.py's

@@ -73,22 +73,19 @@ See [`.agents/map.md`](.agents/map.md) for the full generated file tree.
 
 ## How the docs work
 
-The project was fully planned up front, then built ticket by ticket. The docs split into three layers, from "why" to "do this now":
+The docs are split into three layers, from "why" to "what now":
 
 | Read this... | ...to answer |
 |---|---|
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | Where is the build right now? What did each commit do? |
-| [`docs/INDEX.md`](docs/INDEX.md) | Which docs do I need for the phase I'm working on? (the router - every work session starts here) |
 | [`docs/conventions.md`](docs/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
-| [`docs/phases/`](docs/phases/) | What exactly do I build next? 40 tickets (T-001..T-040) in 4 weekly phase files, each with steps, files, and acceptance criteria |
 | [`docs/design/`](docs/design/) | How is it designed? `database.md` (schema, security policies) and `frontend.md` (design system, components, screens) |
-| [`docs/source/`](docs/source/) | Why was it planned this way? The original frozen planning docs: `product-requirements.md`, `architecture.md`, `sprint-plan.md`, `research.md`. Reference only - the layers above already distill them |
+| [`docs/source/`](docs/source/) | Why was it planned this way? The frozen planning docs: `product-requirements.md` and `architecture.md`. Reference only - the layers above already distill them |
 
 ## How to follow progress
 
 - **One ticket = one commit.** Commit messages start with the ticket number (`T-015: Recommendation Agent`), so `git log --oneline` reads as a build diary. Commit bodies explain what changed and why in plain language - `git show <hash>` for the full story.
 - [`docs/PROGRESS.md`](docs/PROGRESS.md) is the same diary as a table, updated with every ticket commit.
-- Inside each `docs/phases/` file, tickets carry status markers: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]` blocked, `[-]` deferred.
 - Decisions and gotchas discovered along the way are logged with dates in [`.agents/memory.md`](.agents/memory.md).
 
 ## Running it locally

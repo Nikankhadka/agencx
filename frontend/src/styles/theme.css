@@ -94,9 +94,9 @@
   --text-title-1-size: clamp(28px, 3.5vw, 32px); --text-title-1-leading: 40px; --text-title-1-tracking: -0.01em;
   --text-display-size: clamp(36px, 8vw, 48px);   --text-display-leading: 56px; --text-display-tracking: -0.02em;
 
-  /* Agencx mobile-first type additions (docs/design/prototypes/design.md §Type
-     scale). Weight is applied by the component (font-bold/semibold/medium);
-     these tokens only fix size, leading, and the prototype's negative tracking. */
+  /* Mobile-first type additions. Weight is applied by the component
+     (font-bold/semibold/medium); these tokens only fix size, leading, and
+     negative tracking. */
   --text-greeting-size: 36px;   --text-greeting-leading: 40px;  --text-greeting-tracking: -0.03em;   /* 700 */
   --text-display-sm-size: 24px; --text-display-sm-leading: 26px; --text-display-sm-tracking: -0.012em; /* 700 */
   --text-row-title-size: 20px;  --text-row-title-leading: 20px;  --text-row-title-tracking: -0.008em; /* 500 */
@@ -145,7 +145,7 @@
   --radius-lg: 16px;
   --radius-full: 9999px;
 
-  /* Agencx surface radii (docs/design/prototypes/design.md §Radii) */
+  /* Surface radii */
   --radius-card: 18px;
   --radius-chip: 20px;
   --radius-pill: 30px;
@@ -159,7 +159,7 @@
   --shadow-2: 0 2px 8px rgb(0 0 0 / 0.07);
   --shadow-3: 0 8px 24px rgb(0 0 0 / 0.10);
 
-  /* Agencx elevations. The pill ring is a spread shadow, NOT a border -
+  /* Elevations. The pill ring is a spread shadow, NOT a border -
      ring + border shifts geometry; the spread keeps the layout intact. */
   --shadow-card: 0 2px 16px rgb(0 0 0 / 0.055);
   --shadow-pill: 0 0 0 1.5px rgb(0 0 0 / 0.06), 0 2px 12px rgb(0 0 0 / 0.06);
@@ -173,7 +173,7 @@
   --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-push: cubic-bezier(0.25, 0.1, 0.25, 1);
 
-  /* chat bubble surfaces (Agencx inbound/outbound roles, re-tinted to crimson) */
+  /* chat bubble surfaces (inbound/outbound roles, re-tinted to crimson) */
   --color-bubble-out: var(--primary-40);        /* outgoing (owner/customer) - filled */
   --color-bubble-in: var(--neutral-94);         /* incoming assistant - light neutral */
   --color-bubble-agent-in: var(--primary-95);   /* incoming human agent - light crimson */

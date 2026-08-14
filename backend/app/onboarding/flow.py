@@ -1,8 +1,7 @@
 """T-006 / T-042: onboarding schemas + threshold resolver + completeness gate.
 
 The old T-006 state machine (advance, OnboardingState, PROMPTS, STAGE_ORDER,
-next_prompt) is retired and replaced by agent.py - see ADR in
-docs/archive/decisions-log.md (2026-07-30).
+next_prompt) is retired and replaced by agent.py (2026-07-30).
 """
 
 from __future__ import annotations

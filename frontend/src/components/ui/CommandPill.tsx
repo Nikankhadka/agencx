@@ -19,8 +19,7 @@ export interface CommandPillProps {
 const MAX_HEIGHT_PX = 96;
 
 /**
- * docs/design/prototypes/design.md §command pill: the per-beat composer. A
- * textarea that auto-grows to 96px (Enter submits, Shift+Enter newlines), a
+ * The per-beat composer. A textarea that auto-grows to 96px (Enter submits, Shift+Enter newlines), a
  * "+" affordance on the left (18px), and a right cluster that swaps between
  * nothing (empty), a 34px filled send circle (non-empty), and a Stop square
  * (busy). Spread-ring shadow via --shadow-pill, not a border.

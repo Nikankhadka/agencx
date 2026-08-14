@@ -1,10 +1,10 @@
 """T-037 / T-042: provision Tenant 2 (a dental clinic) through the public API.
 
 The onboarding conversation portion pre-populates the agentic v2 jsonb state
-directly (bypassing the LLM-driven copilot, per the ADR in
-docs/archive/decisions-log.md), then calls the confirm endpoint through the
-public API. The confirm validation and relational write path is identical to
-a real admin's browser flow - only the state population method differs.
+directly (bypassing the LLM-driven copilot, per the 2026-07-30 decision), then
+calls the confirm endpoint through the public API. The confirm validation and
+relational write path is identical to a real admin's browser flow - only the
+state population method differs.
 
 Knowledge upload remains unchanged (real API calls).
 

@@ -1,7 +1,7 @@
 """T-022: cross-tenant leakage eval against seeds/seed_leakage_pair.py's
 two throwaway tenants.
 
-RELEASE CRITERION (docs/phases/phase-2-agents-pricing.md T-022): 100% pass
+RELEASE CRITERION (T-022): 100% pass
 or red - never skipped, never tolerance-ed. Mirrors evals/retrieval_eval.py's
 shape (pure metric helper, DB-backed run, eval_runs write, --gate CLI), but
 the "metric" here is a pass rate over structural leakage probes, not a

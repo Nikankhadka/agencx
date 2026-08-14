@@ -1,11 +1,10 @@
 import type { CSSProperties } from "react";
 
 /**
- * docs/design/prototypes/design.md: three pulsing dots inside the assistant
- * bubble while a turn is pending. Prototype values: 7px dots, 5px gap, 1.3s
- * ease-in-out loop, 220ms stagger, -2.5px travel (keyframe `thinking-dot` in
- * globals.css). Decorative only (aria-hidden); the global prefers-reduced-
- * motion guard zeroes the animation.
+ * Three pulsing dots inside the assistant bubble while a turn is pending.
+ * 7px dots, 5px gap, 1.3s ease-in-out loop, 220ms stagger, -2.5px travel
+ * (keyframe `thinking-dot` in globals.css). Decorative only (aria-hidden);
+ * the global prefers-reduced-motion guard zeroes the animation.
  */
 const dotStyle = (delay: string): CSSProperties => ({
   animation: "thinking-dot 1.3s ease-in-out infinite",

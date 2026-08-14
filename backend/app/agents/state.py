@@ -1,5 +1,4 @@
-"""T-012: LangGraph state schema and per-invocation context (shared contract,
-docs/phases/phase-2-agents-pricing.md).
+"""T-012: LangGraph state schema and per-invocation context (shared contract).
 
 ``AgentState`` is the graph's data - plain, serializable, passed between
 nodes. ``GraphContext`` is run-scoped dependencies (DB access info, LLM

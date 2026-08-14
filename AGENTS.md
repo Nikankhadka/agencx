@@ -4,9 +4,9 @@
 
 ## Project Context
 
-Wren is a domain-agnostic, multi-tenant SaaS where any small business (dentist, butcher, phone repair shop, online store) self-onboards through a conversation and gets its own private, branded AI support-and-sales agent at `{slug}.wren.app` that recommends, answers from the business's own knowledge, produces deterministic quotes, and escalates to a human when it should. Solo portfolio venture (Ronin Khadka) on a 30-day build clock for a polished end-to-end core. **Phase 0 (docs + scaffold) is complete; implementation proceeds phase by phase through `docs/phases/`.**
+Wren is a domain-agnostic, multi-tenant SaaS where any small business (dentist, butcher, phone repair shop, online store) self-onboards through a conversation and gets its own private, branded AI support-and-sales agent at `{slug}.wren.app` that recommends, answers from the business's own knowledge, produces deterministic quotes, and escalates to a human when it should. Solo portfolio venture (Ronin Khadka) on a 30-day build clock for a polished end-to-end core. **Phase 0 (docs + scaffold) is complete; implementation proceeds phase by phase.**
 
-**Do not load the frozen planning docs (`docs/source/`) into context.** Start at `docs/INDEX.md` - it routes each phase to exactly the documents it needs (design docs, phase ticket files) and states the precedence rules. The only doc that always binds in full is `docs/conventions.md` (summarized under Conventions below). Human-readable progress lives in `docs/PROGRESS.md` - update its row for a ticket whenever you commit one.
+**Do not load the frozen planning docs (`docs/source/`) into context.** Start at `README.md`, then `docs/PROGRESS.md` for progress. The only doc that always binds in full is `docs/conventions.md` (summarized under Conventions below). Human-readable progress lives in `docs/PROGRESS.md` - update its row for a ticket whenever you commit one.
 
 ## Stack
 
@@ -61,7 +61,7 @@ Run `make help` for the full list with descriptions.
 
 ## Structure
 
-- `docs/` - documentation system; start at `docs/INDEX.md` (phase router). Progress tracker at `docs/PROGRESS.md`, binding conventions at `docs/conventions.md`, design docs in `docs/design/`, executable tickets in `docs/phases/`, frozen planning docs in `docs/source/`.
+- `docs/` - documentation. Progress tracker at `docs/PROGRESS.md`, binding conventions at `docs/conventions.md`, design docs in `docs/design/`, frozen planning docs in `docs/source/`.
 - `frontend/` - Next.js app (three surfaces via route groups; tokens in `src/styles/theme.css`)
 - `backend/` - FastAPI app (`app/`), tests, and (from phase 1) migrations, seeds, evals
 - `infra/` - Terraform (7-file AWS stack: VPC, ALB, ECR, ECS Fargate, IAM, Secrets Manager)
