@@ -187,7 +187,7 @@ export default function PlatformHome() {
         <Button onClick={openProvision}>Provision tenant</Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:max-w-md">
+      <div className="grid grid-cols-1 gap-4 sm:max-w-md sm:grid-cols-2">
         <MetricCard
           label="Tenants"
           value={metrics ? String(metrics.tenant_count) : ""}
@@ -210,6 +210,7 @@ export default function PlatformHome() {
         rowKey={(t) => t.id}
         loading={tenantsQuery.isPending}
         error={errorMessage(tenantsQuery.error, "Failed to load tenants") ?? undefined}
+        card
         emptyState={
           <EmptyState
             icon="groups"

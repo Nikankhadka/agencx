@@ -61,7 +61,7 @@ export default function ConversationDetailPage() {
 
   if (isPending) {
     return (
-      <div className="flex flex-col gap-3 p-8">
+      <div className="flex flex-col gap-3 p-4 sm:p-6 lg:p-8">
         <div className="h-6 w-48 animate-pulse rounded bg-surface-sunken" />
         <div className="h-4 w-64 animate-pulse rounded bg-surface-sunken" />
       </div>
@@ -70,7 +70,7 @@ export default function ConversationDetailPage() {
 
   if (notFound) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <EmptyState
           title="Conversation not found"
           description="It may have been removed, or it belongs to a different business."
@@ -89,7 +89,7 @@ export default function ConversationDetailPage() {
 
   if (error || !conversation) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="rounded-lg border border-border bg-surface p-6 text-body-sm text-danger">
           {errorMessage(error, "Failed to load conversation") ?? "Failed to load conversation"}
         </div>
@@ -98,7 +98,7 @@ export default function ConversationDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-2">
         <Link
           href="/conversations"

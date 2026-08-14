@@ -120,7 +120,7 @@ export default function DashboardsPage() {
     : 0;
 
   return (
-    <div className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 p-4 sm:p-8">
       <div>
         <h1 className="text-title-2 font-semibold text-text">Dashboards</h1>
         <p className="mt-1 text-body-sm text-text-secondary">
