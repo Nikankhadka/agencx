@@ -29,7 +29,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * docs/design/frontend.md section 6: primary/secondary/ghost/destructive, sm/md.
+ * docs/agencx/design/frontend.md section 6: primary/secondary/ghost/destructive, sm/md.
  * Loading replaces the label with a spinner while keeping the width stable
  * (label goes invisible instead of unmounting).
  */

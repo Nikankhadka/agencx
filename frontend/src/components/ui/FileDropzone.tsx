@@ -9,7 +9,7 @@ export interface FileDropzoneProps {
 }
 
 /**
- * docs/design/frontend.md section 6: idle, drag-over, disabled. Per-file
+ * docs/agencx/design/frontend.md section 6: idle, drag-over, disabled. Per-file
  * upload progress / done / rejected is the caller's list to render below
  * the dropzone (this component is just the drop/browse surface).
  */

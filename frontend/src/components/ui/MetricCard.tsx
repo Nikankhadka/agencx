@@ -20,7 +20,7 @@ export interface MetricCardProps {
 }
 
 /**
- * docs/design/frontend.md section 6: bento stat card - big number + label,
+ * docs/agencx/design/frontend.md section 6: bento stat card - big number + label,
  * optional accent icon chip, directional trend footnote, and a footer slot.
  * Backward compatible with the label/value/loading/error API used by the
  * platform metrics (T-033); the icon/trend/footer additions serve T-034's

@@ -27,7 +27,7 @@ const RADIUS_CLASSES: Record<ChatRole, string> = {
 };
 
 /**
- * docs/design/frontend.md section 6: owner/customer bubbles (filled, right)
+ * docs/agencx/design/frontend.md section 6: owner/customer bubbles (filled, right)
  * (filled, right) with a top-right tip, assistant bubbles (light, left) with a
  * top-left tip, human_agent (light crimson, labeled), system (centered
  * caption). Streaming arrives with StreamingText.

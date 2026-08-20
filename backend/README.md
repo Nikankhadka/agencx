@@ -32,4 +32,4 @@ make test-backend    # pytest
 make eval            # eval gate
 ```
 
-See `../docs/DEMO.md` for the full demo walkthrough and `../Makefile` for all targets.
+See `../docs/archive/DEMO.md` for the full demo walkthrough and `../Makefile` for all targets.

@@ -13,7 +13,7 @@ export interface CitationChipProps {
 }
 
 /**
- * docs/design/frontend.md section 6: inline [n]-style chip after cited
+ * docs/agencx/design/frontend.md section 6: inline [n]-style chip after cited
  * sentences; popover shows the chunk source + snippet on hover/focus.
  */
 export function CitationChip({ citation }: CitationChipProps) {

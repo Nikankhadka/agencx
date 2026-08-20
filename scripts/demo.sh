@@ -6,7 +6,7 @@
 # servers. Ctrl-C cleanly stops both dev servers (the DB + auth stay up for a
 # quick rerun; `docker compose down` tears them out fully).
 #
-# See docs/DEMO.md for the scripted walkthrough and troubleshooting.
+# See docs/archive/DEMO.md for the scripted walkthrough and troubleshooting.
 set -euo pipefail
 
 # All paths resolve from the repo root, no matter where the script is invoked.
@@ -198,7 +198,7 @@ ${c_green}${c_bold}Wren demo is up.${c_reset}
                 http://app.localhost:3000/login   owner@lumident.dev / wren-demo
   ${c_bold}Platform${c_reset}        http://admin.localhost:3000      founder@wren.dev   / wren-demo
 
-  ${c_dim}Guide: docs/DEMO.md${c_reset}
+  ${c_dim}Guide: docs/archive/DEMO.md${c_reset}
   ${c_dim}Ctrl-C stops both dev servers; db + auth stay up for a quick rerun.${c_reset}
   ${c_dim}Free-tier LLM may rate-limit live chat; seeded transcripts do not depend on it.${c_reset}
 

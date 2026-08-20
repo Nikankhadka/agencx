@@ -9,7 +9,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 /**
- * docs/design/frontend.md section 6: label above, help/error text below;
+ * docs/agencx/design/frontend.md section 6: label above, help/error text below;
  * default, focus, error (danger border + text), disabled states.
  */
 export function Input({ label, help, error, id, className = "", ...rest }: InputProps) {

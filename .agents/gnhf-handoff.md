@@ -7,7 +7,7 @@ work, and overwrite it at the end of your iteration per .agents/gnhf-objective.m
 ## Phase
 
 No active run. Last real run ended at T-015; project is now past T-037.
-Re-derive current state from `docs/PROGRESS.md` before starting a new run -
+Re-derive current state from `docs/agencx/progress.md` before starting a new run -
 do not resume from old content here.
 
 ## Last completed
@@ -16,7 +16,7 @@ do not resume from old content here.
 
 ## Next intended ticket
 
-- (none - re-derive from `docs/PROGRESS.md`)
+- (none - re-derive from `docs/agencx/progress.md`)
 
 ## Branch
 

@@ -38,7 +38,7 @@ function skeletonBlocks(count: number, lines: number): ReactNode {
 }
 
 /**
- * docs/design/frontend.md section 6: sticky header, row hover; loading
+ * docs/agencx/design/frontend.md section 6: sticky header, row hover; loading
  * (skeleton rows), empty (EmptyState inside), error. Collapses to horizontal
  * scroll within the card at 768px (frontend.md section 8) via the wrapping
  * overflow-x-auto - never the page itself. With `card`, drops to stacked

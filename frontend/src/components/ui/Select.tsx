@@ -15,7 +15,7 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
 }
 
 /**
- * docs/design/frontend.md section 6: label above, help/error text below -
+ * docs/agencx/design/frontend.md section 6: label above, help/error text below -
  * mirrors Input's layout so forms mixing the two stay visually consistent.
  */
 export function Select({ label, options, help, error, id, className = "", ...rest }: SelectProps) {

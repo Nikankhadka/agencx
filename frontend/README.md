@@ -25,4 +25,4 @@ make test-frontend    # vitest
 make test-e2e         # Playwright e2e tests
 ```
 
-See `../docs/DEMO.md` for the full demo walkthrough and `../Makefile` for all targets.
+See `../docs/archive/DEMO.md` for the full demo walkthrough and `../Makefile` for all targets.

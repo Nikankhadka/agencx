@@ -3,7 +3,7 @@ export interface EscalationBannerProps {
 }
 
 /**
- * docs/design/frontend.md section 6: in-chat handoff state - "A human will
+ * docs/agencx/design/frontend.md section 6: in-chat handoff state - "A human will
  * take it from here" + position/status. Replaces the composer once a
  * conversation escalates (frontend.md 7.1's Escalated row: "EscalationBanner
  * replaces composer state messaging; conversation stays readable").

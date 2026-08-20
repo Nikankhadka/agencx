@@ -9,7 +9,7 @@ const TONE_CLASSES: Record<BadgeTone, string> = {
 };
 
 /**
- * docs/design/frontend.md section 6: status pill mapping every status
+ * docs/agencx/design/frontend.md section 6: status pill mapping every status
  * vocabulary in database.md to functional tokens - info = open/sent;
  * warning = escalated/claimed/processing/provisioning; success =
  * resolved/closed/active/ready; danger = failed/suspended; neutral =

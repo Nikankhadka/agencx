@@ -1,7 +1,7 @@
 """Tenant 1 (anchor) seed: Bytefix Repairs, a phone repair shop.
 
 Not owned by any single phase-1 ticket's file list, but required by T-010's
-golden retrieval set (docs/design/database.md's seeds section fully
+golden retrieval set (docs/agencx/design/database.md's seeds section fully
 specifies this script's contents; see .agents/memory.md's T-010 entry for
 why it's created here rather than earlier).
 

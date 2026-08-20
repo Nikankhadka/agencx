@@ -1,5 +1,5 @@
 /**
- * docs/design/frontend.md section 6: a dependency-free inline-SVG sparkline for
+ * docs/agencx/design/frontend.md section 6: a dependency-free inline-SVG sparkline for
  * the T-034 dashboards 30-day cost trend. No chart library - just a polyline
  * (plus an optional low-opacity area fill) drawn on a fixed 100x28 viewBox and
  * stretched to fit its container via `preserveAspectRatio="none"`.

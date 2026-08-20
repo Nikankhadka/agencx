@@ -1,8 +1,8 @@
 > **NAVIGATION:** Always binding - this is the one source doc every session obeys in full (root `AGENTS.md` summarizes it).
 
 # WREN - Agent Conventions
- > **Version:** 2.0 | **Applies to:** any AI agent executing work against the PRD (`docs/source/product-requirements.md`) and Architecture Doc (`docs/source/architecture.md`).
-> Read this alongside those documents, not instead of them. Where a ticket's acceptance criteria and this document seem to conflict, this document wins on *how* work is done; the PRD/Architecture docs win on *what* is being built.
+ > **Version:** 2.0 | **Applies to:** any AI agent executing work against the Agencx PRD (`docs/agencx/prd.md`) and Architecture Doc (`docs/agencx/architecture.md`).
+ > Read this alongside those documents, not instead of them. Where a ticket's acceptance criteria and this document seem to conflict, this document wins on *how* work is done; the PRD/Architecture docs win on *what* is being built.
 
 ---
 
@@ -63,7 +63,7 @@ A single vertical-branch in agent or tool logic invalidates the platform's centr
 
 ## 10. Where this shows up in the existing docs
 
-- The PRD's (`product-requirements.md`) Release Criteria section should be read as including: no known lint errors, and no failing or flaky tests, in CI at the time v1 is called shipped, and zero model-authored monetary figures (per section 8 above).
+- The PRD's (`docs/agencx/prd.md`) keep/pivot/stop signals should be read as including: no known lint errors, and no failing or flaky tests, in CI at the time v1 is called shipped, and zero model-authored monetary figures (per section 8 above).
 - Engineering hygiene (section 7 above) is maintained continuously, not swept up at the end of a phase.
 - Any ticket touching a customer- or tenant-facing surface should be read as including: fix visibly broken UI encountered along the way, per section 6 above.
 - Any ticket touching agent, tool, retrieval, or pricing logic should be read as including: no vertical-specific branching, per section 9 above.

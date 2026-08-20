@@ -10,7 +10,7 @@ export interface EmptyStateProps {
 }
 
 /**
- * docs/design/frontend.md section 6: icon + one-line explanation + primary
+ * docs/agencx/design/frontend.md section 6: icon + one-line explanation + primary
  * action - never a bare "No data". Callers that pass an `icon` get it in an
  * accent chip; the rest fall back to a plain accent dot.
  */

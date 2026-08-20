@@ -29,7 +29,7 @@ export interface TraceTreeProps {
 }
 
 /**
- * docs/design/frontend.md section 6: collapsible run tree - agent node -> tool
+ * docs/agencx/design/frontend.md section 6: collapsible run tree - agent node -> tool
  * calls (name, args, latency, success), mono font, with loading/error/empty
  * states. The real per-message trace (T-031's conversations detail) is flatter
  * than a full multi-level graph, so the tree is one collapsed row (node name +

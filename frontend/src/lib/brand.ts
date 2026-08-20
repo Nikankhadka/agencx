@@ -1,5 +1,5 @@
 /**
- * T-032 (docs/design/frontend.md section 5): per-tenant runtime branding.
+ * T-032 (docs/agencx/design/frontend.md section 5): per-tenant runtime branding.
  *
  * `tenant_config.brand.accent` (validated server-side as #RRGGBB at write
  * time, re-validated here defensively) becomes a CSS override injected

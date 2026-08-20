@@ -1,5 +1,5 @@
 """Demo world seed: both tenants, auth users, membership, and realistic
-conversations/escalations/costs - the data behind docs/DEMO.md's walkthrough.
+conversations/escalations/costs - the data behind docs/archive/DEMO.md's walkthrough.
 
 Run with ``uv run python -m seeds.seed_demo`` (after scripts/demo.sh has
 started GoTrue + the DB). It is wipe-and-recreate idempotent: re-running
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
 # Demo identities (password ``wren-demo`` for all; 6+ chars satisfies GoTrue's
 # default minimum). Kept here as the single source of truth for the demo
-# banner, docs/DEMO.md, and the tests' fake create_auth_user.
+# banner, docs/archive/DEMO.md, and the tests' fake create_auth_user.
 BYTEFIX_OWNER_EMAIL = "owner@bytefix.dev"
 LUMIDENT_OWNER_EMAIL = "owner@lumident.dev"
 FOUNDER_EMAIL = "founder@wren.dev"

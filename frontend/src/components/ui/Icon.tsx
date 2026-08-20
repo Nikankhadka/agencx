@@ -135,7 +135,7 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
 }
 
 /**
- * docs/design/frontend.md section 6: inline Material Symbols icons vendored as
+ * docs/agencx/design/frontend.md section 6: inline Material Symbols icons vendored as
  * SVG paths (no icon font). `fill="currentColor"` so an icon inherits its text
  * color; nav icons carry a `filled` variant for the active state. Decorative by
  * default (aria-hidden); pass an `aria-label` to expose it to assistive tech.

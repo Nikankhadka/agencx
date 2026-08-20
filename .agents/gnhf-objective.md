@@ -19,8 +19,8 @@ Done block passes, or when gnhf's iteration/token limits are hit.
 For each ticket, in this exact order:
 
 1. PLAN - Read docs/INDEX.md, the current phase file, the ticket's own
-   read-list (per-ticket sections of docs/design/database.md and/or
-   docs/design/frontend.md), docs/conventions.md, .agents/memory.md, and this
+   read-list (per-ticket sections of docs/agencx/design/database.md and/or
+   docs/agencx/design/frontend.md), docs/conventions.md, .agents/memory.md, and this
    file. Decide the smallest correct change set. If a ticket is genuinely
    independent of the others (its inputs are already in place), you may start
    it on its own; otherwise sequence after the ticket that produces its inputs.
@@ -52,7 +52,7 @@ For each ticket, in this exact order:
    marker in the phase file: [ ] -> [x] (or [!] blocked with a note, or [-]
    deferred with a note). If a definition-of-done checklist item in the phase
    file is now satisfied, mark it too. Update the ticket's row in
-   docs/PROGRESS.md: status, commit hash (fill it in right after step 7's
+   docs/agencx/progress.md: status, commit hash (fill it in right after step 7's
    commit), and a one-line plain-English summary of what the commit did -
    written for a junior engineer, no internal codenames. Record any durable
    discovery (decision, gotcha, convention) in .agents/memory.md under the

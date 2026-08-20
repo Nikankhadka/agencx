@@ -1,8 +1,16 @@
-# Wren
+# Wren -> Agencx
 
-Wren is a multi-tenant SaaS: any small business - a dentist, a butcher, a phone repair shop, an online store - signs up, describes itself in a conversation, and gets its own private, branded AI support-and-sales agent at `{slug}.wren.app`. The agent answers questions from the business's own uploaded knowledge (with citations), recommends products, produces quotes, and hands off to a human when it should.
+This repo is **Agencx**: a multi-tenant SaaS where any small business - a
+dentist, a butcher, a phone repair shop, an online store - signs up, describes
+itself in a conversation, and gets its own private, branded support-and-sales
+agent at `{slug}.agencx.app`. The agent answers questions from the business's
+own uploaded knowledge (with citations), hands off to a human when it should,
+and can recommend, quote, and track orders when the owner turns those on. The
+codebase and its roles keep the `wren` names it was built with (standing names
+note in [`docs/agencx/README.md`](docs/agencx/README.md)); the product is
+Agencx on every user-facing surface.
 
-**Where the build is right now: see [`docs/PROGRESS.md`](docs/PROGRESS.md)** - one page listing every ticket, its status, its commit, and what that commit did in plain English.
+**Where the build is right now: see [`docs/agencx/progress.md`](docs/agencx/progress.md)** - one page marking every feature BUILT (with commit evidence), CHANGING, or NEW, plus the status of every Agencx ticket.
 
 ## Architecture at a glance
 
@@ -51,9 +59,9 @@ dedicated eval and a non-negotiable test. See the artifacts below.
 
 | Document | What it proves |
 |---|---|
-| [`docs/artifacts/eval-report.md`](docs/artifacts/eval-report.md) | Every quality number traced to its `eval_runs` row: retrieval, generation, injection, leakage, trajectory, with honest analysis of the free-tier misses |
-| [`docs/artifacts/security.md`](docs/artifacts/security.md) | OWASP LLM Top 10 mapping, each control pointing at the code and the test that proves it; deliberate deferrals stated as decisions |
-| [`docs/artifacts/generalization-proof.md`](docs/artifacts/generalization-proof.md) | A dental clinic brought live on identical code through the public API alone - the domain-agnostic hard rule, demonstrated |
+| [`docs/archive/artifacts/eval-report.md`](docs/archive/artifacts/eval-report.md) | Every quality number traced to its `eval_runs` row: retrieval, generation, injection, leakage, trajectory, with honest analysis of the free-tier misses |
+| [`docs/archive/artifacts/security.md`](docs/archive/artifacts/security.md) | OWASP LLM Top 10 mapping, each control pointing at the code and the test that proves it; deliberate deferrals stated as decisions |
+| [`docs/archive/artifacts/generalization-proof.md`](docs/archive/artifacts/generalization-proof.md) | A dental clinic brought live on identical code through the public API alone - the domain-agnostic hard rule, demonstrated |
 
 **Demo walkthrough video:** _to be recorded_ (a 5-10 minute pass over the three
 surfaces, a quote with trace drill-down, the generalization proof, and the eval
@@ -73,19 +81,22 @@ See [`.agents/map.md`](.agents/map.md) for the full generated file tree.
 
 ## How the docs work
 
-The docs are split into three layers, from "why" to "what now":
+The canonical set lives in `docs/agencx/`; everything pre-Agencx is archived in `docs/archive/` (indexed there) and is reference-only.
 
 | Read this... | ...to answer |
 |---|---|
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Where is the build right now? What did each commit do? |
+| [`docs/agencx/progress.md`](docs/agencx/progress.md) | Where is the build right now? What is built, changing, or new? |
+| [`docs/agencx/prd.md`](docs/agencx/prd.md) | What is Agencx? Why, who, what is in Stage 1 scope, and what signals decide next steps? |
+| [`docs/agencx/architecture.md`](docs/agencx/architecture.md) | How does it work? Invariants, agent flow, providers, latency budget, eval gates |
+| [`docs/agencx/design/`](docs/agencx/design/) | How is it designed? `database.md`, `frontend.md`, `decisions.md` (the decision ledger + ADRs) |
+| [`docs/agencx/spec/`](docs/agencx/spec/) | What is the work? Every ticket with detailed user stories and acceptance criteria |
 | [`docs/conventions.md`](docs/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
-| [`docs/design/`](docs/design/) | How is it designed? `database.md` (schema, security policies) and `frontend.md` (design system, components, screens) |
-| [`docs/source/`](docs/source/) | Why was it planned this way? The frozen planning docs: `product-requirements.md` and `architecture.md`. Reference only - the layers above already distill them |
+| [`docs/archive/`](docs/archive/) | What came before? The pre-Agencx planning and design docs, kept for provenance |
 
 ## How to follow progress
 
-- **One ticket = one commit.** Commit messages start with the ticket number (`T-015: Recommendation Agent`), so `git log --oneline` reads as a build diary. Commit bodies explain what changed and why in plain language - `git show <hash>` for the full story.
-- [`docs/PROGRESS.md`](docs/PROGRESS.md) is the same diary as a table, updated with every ticket commit.
+- **One ticket = one commit.** Commit messages start with the ticket number (`T-015: Recommendation Agent`, or the Agencx ids like `P-2: ...`), so `git log --oneline` reads as a build diary. Commit bodies explain what changed and why in plain language - `git show <hash>` for the full story.
+- [`docs/agencx/progress.md`](docs/agencx/progress.md) is the same diary as a table, updated with every ticket commit.
 - Decisions and gotchas discovered along the way are logged with dates in [`.agents/memory.md`](.agents/memory.md).
 
 ## Running it locally
@@ -100,7 +111,7 @@ make demo
 
 Starts a local GoTrue (Supabase Auth) + the database, fixes env files, runs
 migrations and a seeded demo world (two tenants, three logins), and brings up
-the backend + frontend. See [`docs/DEMO.md`](docs/DEMO.md) for the full
+the backend + frontend. See [`docs/archive/DEMO.md`](docs/archive/DEMO.md) for the full
 walkthrough, credentials, and troubleshooting.
 
 ### Manual (step by step)
@@ -125,7 +136,7 @@ make seed             # full demo world (two tenants + auth users)
 ```
 
 Open http://bytefix.localhost:3000 after seeding. The full demo world needs
-local GoTrue - see [`docs/DEMO.md`](docs/DEMO.md).
+local GoTrue - see [`docs/archive/DEMO.md`](docs/archive/DEMO.md).
 
 ## The two rules everything else bends around
 
@@ -150,5 +161,5 @@ scope, and why" per the project's own rule.
 | Fine-tuning, SSO / SOC2 certs, multi-language | Poor time-to-signal for a solo 30-day portfolio core; documented as deliberate. |
 
 The security-specific deferrals (guardrails framework, formal red team,
-automated dependency scanning) are in [`docs/artifacts/security.md`](docs/artifacts/security.md),
+automated dependency scanning) are in [`docs/archive/artifacts/security.md`](docs/archive/artifacts/security.md),
 each stated as a decision with when it would matter.

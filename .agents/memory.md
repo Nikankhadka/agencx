@@ -6,10 +6,10 @@
 
 ## Key Architectural Decisions (still in effect)
 
-- **Documentation consolidated** (2026-08-14): `README.md` is the entry point, `docs/PROGRESS.md` is progress, `docs/conventions.md` is binding, `docs/design/` is working truth, `docs/source/` is frozen planning. The old phase-router (`docs/INDEX.md`) and per-ticket `docs/phases/` files were removed.
+- **Agencx docs restructured** (2026-08-21): `docs/agencx/` is the canonical set (prd, architecture, progress, design/{database,frontend,decisions}, spec/ with per-ticket files); everything pre-Agencx moved to `docs/archive/` (indexed, never loaded into context, never edited). New decisions D12-D17 (lean whole-corpus flow, supervisor-with-tools, pre-load context package, provider tiers, 4s/10s first-wins failover, rebrand). Entry points (README, AGENTS.md, conventions header) re-pointed.
 - **All visual values in theme.css** (2026-07-10): 3-layer tokens (tonal ramps -> semantic -> utilities); components use semantic tokens only; CI-enforced by `check:tokens`. Enables per-tenant runtime branding.
 - **Python 3.12 pinned** (2026-07-10): GenAI deps (RAGAS, torch cross-encoders) lag on newest Python versions.
-- **Domain-agnostic schema** (2026-07-10): tenant_id denormalized on messages/tool_calls; orders use ref_code/kind/status/details (generic shape); quotes immutable-except-status via trigger. See `docs/design/database.md`.
+- **Domain-agnostic schema** (2026-07-10): tenant_id denormalized on messages/tool_calls; orders use ref_code/kind/status/details (generic shape); quotes immutable-except-status via trigger. See `docs/agencx/design/database.md`.
 - **Provider abstraction** (2026-07-11): `LLMProvider` / `Embedder` / `Reranker` ABCs. `openai_compat` is the proven default (OpenRouter/Groq/Ollama); Azure is supported. Embeddings split out into own seam; local embedder is keyless `bge-small-en-v1.5`, reranker is `ms-marco-MiniLM`. See `backend/app/llm/`.
 - **Deterministic pricing** (2026-07-11): pricing engine (`backend/app/pricing/engine.py`) computes all totals in integer cents; agents select rule codes/item ids/quantities, never see prices. Enforced at agent, inspection, and API layers.
 - **LangGraph context, not state** (2026-07-11): node dependencies (DB, LLM, reranker) thread through `GraphContext` + `get_runtime()`, never through serialized state. State stays plain/serializable.
@@ -30,7 +30,7 @@
 
 ### Database & Auth
 
-- **Every tenant table needs FORCE ROW LEVEL SECURITY** and the API must connect as `wren_app` role (not `postgres`). `docs/design/database.md` section 2.
+- **Every tenant table needs FORCE ROW LEVEL SECURITY** and the API must connect as `wren_app` role (not `postgres`). `docs/agencx/design/database.md` section 2.
 - **`tenant_context` (app/core/db.py)**: the ONLY place tenant context is set; do NOT nest it (each level acquires another pooled connection, 30s timeout). Tests prove no context leaks.
 - **Postgres roles are cluster-global**: `0002_roles.sql` guards CREATE ROLE with if-not-exists. `wren_app` password is set by whichever DB migrates first.
 - **Supabase JWT verification MUST pass `options={"require": ["exp"]}`** to jwt.decode - PyJWT validates exp only if present. Regression test in `test_auth_api.py`.

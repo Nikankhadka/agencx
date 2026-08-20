@@ -13,7 +13,7 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * docs/design/frontend.md section 6: shadow-3, scrim token, open/close
+ * docs/agencx/design/frontend.md section 6: shadow-3, scrim token, open/close
  * transition, focus trap. Escape and a scrim click both close; focus returns
  * to whatever triggered the open. The Sheet (mobile) variant is deferred
  * until a surface actually needs it.

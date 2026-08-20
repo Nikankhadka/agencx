@@ -12,7 +12,7 @@ export interface StreamingTextProps {
 }
 
 /**
- * docs/design/frontend.md section 6: renders SSE tokens with a caret pulse
+ * docs/agencx/design/frontend.md section 6: renders SSE tokens with a caret pulse
  * while streaming; `aria-live="polite"` so assistive tech announces new
  * text without interrupting. Interrupted/retry is the caller's concern
  * (rendered as a sibling affordance in the bubble, not by this component).

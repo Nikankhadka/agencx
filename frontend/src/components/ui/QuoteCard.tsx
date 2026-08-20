@@ -21,7 +21,7 @@ export interface QuotePayload {
 }
 
 /**
- * docs/design/frontend.md section 6: renders pricing-engine output verbatim.
+ * docs/agencx/design/frontend.md section 6: renders pricing-engine output verbatim.
  * Every figure shown is an engine-computed *_cents value passed through
  * formatCents - no arithmetic happens here, ever (deterministic-pricing
  * rule in UI form).
