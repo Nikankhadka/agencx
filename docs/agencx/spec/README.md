@@ -1,9 +1,9 @@
 # Agencx - Spec & User Stories (the tickets)
 
-The complete ticket set for the Agencx change build. Each ticket file holds a
-detailed spec with user stories, acceptance criteria, tests, files touched, and
-a definition of done. One ticket = one commit; the commit message starts with
-the ticket id.
+The complete ticket set for the Agencx change build, organized by build phase.
+Each ticket is a section inside its phase file with a detailed spec: user
+stories, acceptance criteria, tests, files touched, and a definition of done.
+One ticket = one commit; the commit message starts with the ticket id.
 
 ## How to read a ticket
 
@@ -17,6 +17,22 @@ the ticket id.
 | Files touched | Expected files/modules (discovered precisely at implementation time) |
 | Definition of done | The checklist that closes the ticket |
 
+## Phase files
+
+Each file holds one build phase and its tickets (each ticket keeps its id as a
+`## <ID>: <Title>` section).
+
+| Phase file | Tickets |
+|---|---|
+| `01-foundation.md` | A-1, A-2 |
+| `02-onboarding.md` | O-1, O-2 |
+| `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
+| `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4 |
+| `05-business-page.md` | E-1, E-2 |
+| `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
+| `07-hygiene.md` | F-1 |
+| `08-deferred.md` | B-2, D-1, D-3, D-4 |
+
 ## Phases and dependencies
 
 ### Phase 1 - the three pillars (build now)
@@ -26,20 +42,20 @@ Phase 1 ships only: **(1) business onboarding, (2) customer chat query handling,
 leads, quotes, payments, scheduling, or invoicing as default flows). Everything
 else defers to Phase 2 / Stage 2 backlog.
 
-| Order | Tickets | Pillar | Blocked by |
+| Order | Phase file | Pillar | Blocked by |
 |---|---|---|---|
-| 1 | A-1, A-2 | Foundation (docs restructure) - **done** | - |
-| 2 | O-1, O-2 | Onboarding: login-in-chat + one-tool loop | A (O-2 before O-1 in the flow) |
-| 3 | P-3, P-1, P-2, P-4, P-5 | Chat spine: context pre-load (keystone), providers, failover, versioning, indicator | A (P-1 before P-2/P-3; P-3 before P-5) |
-| 4 | O-3, O-4, C-1, C-2, C-3, C-4 | Chat grounding: ingest + whole-corpus fast path + money guardrail (honest price answers) | P-3 |
-| 5 | E-1, E-2 | Business page: Chat + Business tabs, advanced screens hidden | A |
-| 6 | B-1, B-3, E-3, D-2, F-2, G-1 | Polish/quality: Agencx copy, colour convention, platform minimal, lean default, CI boundary, eval | C, P |
-| 7 | F-1 | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
+| 1 | `01-foundation.md` | Foundation (docs restructure) - **done** | - |
+| 2 | `02-onboarding.md` | Onboarding: login-in-chat + one-tool loop | A (O-2 before O-1 in the flow) |
+| 3 | `03-chat-spine.md` | Chat spine: context pre-load (keystone), providers, failover, versioning, indicator | A (P-1 before P-2/P-3; P-3 before P-5) |
+| 4 | `04-chat-grounding.md` | Chat grounding: ingest + whole-corpus fast path + money guardrail (honest price answers) | P-3 |
+| 5 | `05-business-page.md` | Business page: Chat + Business tabs, advanced screens hidden | A |
+| 6 | `06-polish.md` | Polish/quality: Agencx copy, colour convention, platform minimal, lean default, CI boundary, eval | C, P |
+| 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
 C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 
-**Deferred (not Phase 1):**
+**Deferred (not Phase 1)** - see `08-deferred.md`:
 
 | Ticket | Why deferred |
 |---|---|
@@ -48,35 +64,72 @@ C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 | D-2 | *Kept in Phase 1*: flips the tenant default to the lean toolset so quoting/pricing stays OFF by accident - one-line migration 0016 |
 | Payments, quoting, scheduling, invoicing, leads, money screens | No tickets; unticketed Stage 2 backlog (`docs/archive/agencx-planning/stage-2-backlog.md`) - not built now |
 
-## Ticket list
+## Ticket list (by phase)
 
-| Id | Title | File |
-|---|---|---|
-| A-1 | Docs restructure + archive | `A-1.md` |
-| A-2 | Pointer updates | `A-2.md` |
-| B-1 | Copy rename to Agencx | `B-1.md` |
-| B-2 | Domain + CORS to agencx.app | `B-2.md` |
-| B-3 | Semantic colour convention + lighter primary | `B-3.md` |
-| C-1 | Money guardrail: allow figures verbatim from owner material | `C-1.md` |
-| C-2 | Route knowledge answers through the same figure check | `C-2.md` |
-| C-3 | Assistant states figures only exactly as listed, never computes | `C-3.md` |
-| C-4 | Money guardrail test matrix | `C-4.md` |
-| D-1 | Tools built from the tenant enabled set | `D-1.md` |
-| D-2 | Lean default for new + legacy tenants | `D-2.md` |
-| D-3 | Business-tab tool toggle UI | `D-3.md` |
-| D-4 | Tool gating tests | `D-4.md` |
-| E-1 | Tenant console -> Chat + Business | `E-1.md` |
-| E-2 | Hide advanced screens, keep code | `E-2.md` |
-| E-3 | Platform admin stays minimal | `E-3.md` |
-| F-1 | Delete dead agent code | `F-1.md` |
-| F-2 | Import boundary in CI | `F-2.md` |
-| G-1 | Eval cases for the lean toolset | `G-1.md` |
-| P-1 | Provider layer: Google/Groq/Cerebras tiers | `P-1.md` |
-| P-2 | Latency budget + first-wins failover | `P-2.md` |
-| P-3 | Agent-ready pre-load (context package) | `P-3.md` |
-| P-4 | knowledge_version + invalidation | `P-4.md` |
-| P-5 | Failover typing indicator (client) | `P-5.md` |
-| O-1 | Onboarding: one tool + LLM turn loop | `O-1.md` |
-| O-2 | Login-in-chat: email + 6-digit code | `O-2.md` |
-| O-3 | Knowledge ingest: URL scrape + document upload | `O-3.md` |
-| O-4 | Whole-corpus fast path + threshold | `O-4.md` |
+### Foundation (`01-foundation.md`)
+
+| Id | Title |
+|---|---|
+| A-1 | Docs restructure + archive |
+| A-2 | Pointer updates |
+
+### Onboarding (`02-onboarding.md`)
+
+| Id | Title |
+|---|---|
+| O-1 | Onboarding: one tool + LLM turn loop |
+| O-2 | Login-in-chat: email + 6-digit code |
+
+### Chat spine (`03-chat-spine.md`)
+
+| Id | Title |
+|---|---|
+| P-3 | Agent-ready pre-load (context package) |
+| P-1 | Provider layer: Google/Groq/Cerebras tiers |
+| P-2 | Latency budget + first-wins failover |
+| P-4 | knowledge_version + invalidation |
+| P-5 | Failover typing indicator (client) |
+
+### Chat grounding (`04-chat-grounding.md`)
+
+| Id | Title |
+|---|---|
+| O-3 | Knowledge ingest: URL scrape + document upload |
+| O-4 | Whole-corpus fast path + threshold |
+| C-1 | Money guardrail: allow figures verbatim from owner material |
+| C-2 | Route knowledge answers through the same figure check |
+| C-3 | Assistant states figures only exactly as listed, never computes |
+| C-4 | Money guardrail test matrix |
+
+### Business page (`05-business-page.md`)
+
+| Id | Title |
+|---|---|
+| E-1 | Tenant console -> Chat + Business |
+| E-2 | Hide advanced screens, keep code |
+
+### Polish (`06-polish.md`)
+
+| Id | Title |
+|---|---|
+| B-1 | Copy rename to Agencx |
+| B-3 | Semantic colour convention + lighter primary |
+| E-3 | Platform admin stays minimal |
+| D-2 | Lean default for new + legacy tenants |
+| F-2 | Import boundary in CI |
+| G-1 | Eval cases for the lean toolset |
+
+### Hygiene (`07-hygiene.md`)
+
+| Id | Title |
+|---|---|
+| F-1 | Delete dead agent code |
+
+### Deferred (`08-deferred.md`)
+
+| Id | Title |
+|---|---|
+| B-2 | Domain + CORS to agencx.app |
+| D-1 | Tools built from the tenant enabled set |
+| D-3 | Business-tab tool toggle UI |
+| D-4 | Tool gating tests |
