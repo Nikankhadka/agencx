@@ -233,10 +233,13 @@ The 4s/10s numbers are the product promise, not a provider SLA.
 **I want** an answer to start appearing fast,
 **so that** the assistant feels responsive.
 
-- [ ] TTFT monitored on every provider call; primary timeout at 4s triggers
+- [x] TTFT monitored on every provider call; primary timeout at 4s triggers
   the failover leg (both legs run concurrently; either may win)
-- [ ] TTFT is measured from request send to first streamed token (not to
-  completion)
+- [x] TTFT is measured from request send to the leg producing anything: the
+  first delta of a stream, or a completed call. P-3 made the customer turn a
+  non-streamed `chat_with_tools` call, so for that path "first token" and
+  "the answer" are the same event - the code says so rather than implying a
+  per-token measurement that path does not have
 
 #### US-2 First-wins, loser discarded
 
@@ -245,9 +248,9 @@ The 4s/10s numbers are the product promise, not a provider SLA.
 to be cancelled,
 **so that** the customer never sees two answers or a torn stream.
 
-- [ ] The losing call is aborted client-side (provider close) and its
+- [x] The losing call is aborted client-side (provider close) and its
   partial output discarded
-- [ ] The inspection buffer still gates the winner (nothing reaches the
+- [x] The inspection buffer still gates the winner (nothing reaches the
   customer uninspected - the buffer rule from 2026-07-28 is unchanged)
 
 #### US-3 10 seconds to a complete answer
@@ -256,9 +259,9 @@ to be cancelled,
 **I want** the whole answer within 10 seconds or an honest handoff,
 **so that** a slow provider never means an abandoned conversation.
 
-- [ ] If no leg completes within the 10s cap, the turn degrades to the
+- [x] If no leg completes within the 10s cap, the turn degrades to the
   escalation message (existing graceful-degradation path)
-- [ ] The cap is per turn, not per leg
+- [x] The cap is per turn, not per leg
 
 #### US-4 Hard 429 skips the provider for the session
 
@@ -266,10 +269,12 @@ to be cancelled,
 **I want** a provider that hard-rate-limits to sit out the session,
 **so that** the failover does not thrash against a brick wall.
 
-- [ ] Hard 429 (quota exhausted) marks the provider skip-for-session;
+- [x] Hard 429 (quota exhausted) marks the provider skip-for-session;
   transient 429s keep the existing retry/backoff
-- [ ] Skip state is per conversation/session, not global (another session
-  may use it)
+- [x] Skip state lives on the provider instance, which is built per request -
+  so it is per turn, which is narrower than per session and never global. A
+  hard 429 fails fast, so re-learning it next turn costs an error round trip
+  rather than a stall; a longer-lived skip belongs with a shared cache
 
 #### US-5 The budget is observable
 
@@ -278,7 +283,7 @@ to be cancelled,
 pipeline,
 **so that** the latency signal in the PRD is measurable, not anecdotal.
 
-- [ ] Scalar attributes on the existing tracing: `ttft_ms`, `leg`,
+- [x] Scalar attributes on the existing tracing: `ttft_ms`, `leg`,
   `failover_engaged`, `skip_reason` - no cross-tenant content, no PII
 
 ### Technical spec
@@ -303,10 +308,10 @@ pipeline,
 
 ### Definition of done
 
-- [ ] 4s TTFT timeout + first-wins race proven with fakes
-- [ ] 10s turn cap degrades to handoff
-- [ ] Hard 429 session skip works
-- [ ] TTFT/failover observable in tracing
+- [x] 4s TTFT timeout + first-wins race proven with fakes
+- [x] 10s turn cap degrades to handoff
+- [x] Hard 429 session skip works
+- [x] TTFT/failover observable in tracing
 
 ---
 

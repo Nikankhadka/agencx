@@ -81,6 +81,7 @@ def _limits(**kw: float) -> TenantLimits:
         "max_steps": 8,
         "llm_timeout_s": 45.0,
         "tool_timeout_s": 15.0,
+        "turn_budget_s": 10.0,
     }
     base.update(kw)
     return TenantLimits(**base)  # type: ignore[arg-type]

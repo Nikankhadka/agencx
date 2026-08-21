@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     llm_failover_api_key: str = ""
     llm_failover_model: str = ""
 
+    # P-2: how long the primary leg gets to produce a first token before the
+    # next leg starts racing it (PRD section 9's 4s promise). Configurable
+    # because it is a product decision about how long a customer waits before
+    # the system hedges, not a property of any provider.
+    llm_ttft_budget_s: float = 4.0
+
     # P-1: the standing budget for live model testing, in whole dollars (D16).
     # The cost dashboard warns at 80% of it. Free tiers report zero cost, so
     # this only ever bites once a paid key is in play - which is the moment it

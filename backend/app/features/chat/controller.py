@@ -17,6 +17,7 @@ assistant message row for the Surface-2 trace viewer.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -29,6 +30,7 @@ from app.agents.spotlight import scan_input
 from app.agents.state import AgentState, GraphContext
 from app.features.chat import service
 from app.llm.embedder import Embedder
+from app.llm.failover import collect_legs
 from app.llm.provider import LLMProvider
 from app.observability.cost import TokenUsage, collect_usage
 from app.observability.tracing import get_tracer
@@ -39,6 +41,7 @@ from app.shared.limits import (
     BUDGET_UNAVAILABLE_MESSAGE,
     PROVIDER_ERROR_ESCALATION_REASON,
     STEP_CAP_ESCALATION_REASON,
+    TURN_BUDGET_ESCALATION_REASON,
     TenantLimits,
     TimeLimitedProvider,
 )
@@ -50,6 +53,10 @@ logger = logging.getLogger("app.features.chat.controller")
 # already the last row (resolve_conversation persisted it), so this is the whole
 # window the agent sees, not a window plus one.
 HISTORY_MESSAGES = 10
+
+
+def _ms_since(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 1)
 
 
 def initial_state(
@@ -155,6 +162,9 @@ async def stream_chat_response(
         with (
             tracer.turn(tenant_id=tenant_id, conversation_id=conversation_id) as turn,
             collect_usage() as usages,
+            # P-2: which leg answered, how fast it produced anything, and whether
+            # the race was needed. Scalars only - no prompts, no completions.
+            collect_legs() as legs,
         ):
             # T-028: every LLM call the graph makes is time-bounded by the
             # tenant's llm_timeout via this wrapper - no node has to remember
@@ -183,60 +193,86 @@ async def stream_chat_response(
             # buffered behind Inspection, so nothing the LLM *wrote* reaches
             # the customer until a draft is approved - the T-021 invariant is
             # unchanged.
-            async for event in stream:
-                etype = event["type"]
-                if etype == "progress":
-                    # D5: a fixed stage key naming the node now running.
-                    # Carries no model output at all, so streaming it live
-                    # narrates the wait without letting any unverified prose
-                    # reach the customer - the T-021/US-060 invariant is
-                    # untouched.
-                    yield event
-                elif etype in ("citations", "quote"):
-                    # Non-prose, and unchanged by a redraft (the quote row and
-                    # the retrieved chunks a redraft stays grounded in don't
-                    # move, and the redraft paths never re-emit them), so it
-                    # is safe to show immediately instead of holding it back.
-                    yield event
-                elif etype == "token":
-                    if first_model_token_ms is None:
-                        first_model_token_ms = round((time.perf_counter() - turn_started) * 1000, 1)
-                    full_text += str(event["text"])
-                    buffer.append(event)
-                elif etype == "refusal":
-                    # A refusal is always a complete, standalone message for
-                    # its attempt - never combined with prior token events.
-                    full_text = str(event["text"])
-                    buffer = [event]
-                elif etype == "tool_call":
-                    # T-030: a node invoked a tool - persisted against the
-                    # assistant message below for the Surface-2 trace, never
-                    # streamed to the customer.
-                    tool_calls.append(event)
-                elif etype == "redraft":
-                    # T-018/T-021: a gate rejected the draft text already
-                    # accumulated; the producing node is about to stream fresh
-                    # prose. Only prose is discarded - the citations/quote
-                    # already streamed live stay valid.
-                    full_text = ""
-                    buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
-                elif etype == "inspection":
-                    verdicts = dict(event.get("verdicts", {}))
-                    if event.get("decision") == "retry":
+            # P-2: the whole turn is capped, not each call - the cap is a promise
+            # about the answer, and a turn is what the customer is waiting for. A
+            # turn that blows it raises TimeoutError, which the handler below turns
+            # into the same graceful handoff every other dead end gets.
+            async with asyncio.timeout(limits.turn_budget_s):
+                async for event in stream:
+                    etype = event["type"]
+                    if etype == "progress":
+                        # D5: a fixed stage key naming the node now running.
+                        # Carries no model output at all, so streaming it live
+                        # narrates the wait without letting any unverified prose
+                        # reach the customer - the T-021/US-060 invariant is
+                        # untouched.
+                        yield event
+                    elif etype in ("citations", "quote"):
+                        # Non-prose, and unchanged by a redraft (the quote row and
+                        # the retrieved chunks a redraft stays grounded in don't
+                        # move, and the redraft paths never re-emit them), so it
+                        # is safe to show immediately instead of holding it back.
+                        yield event
+                    elif etype == "token":
+                        if first_model_token_ms is None:
+                            first_model_token_ms = _ms_since(turn_started)
+                        full_text += str(event["text"])
+                        buffer.append(event)
+                    elif etype == "refusal":
+                        # A refusal is always a complete, standalone message for
+                        # its attempt - never combined with prior token events.
+                        full_text = str(event["text"])
+                        buffer = [event]
+                    elif etype == "tool_call":
+                        # T-030: a node invoked a tool - persisted against the
+                        # assistant message below for the Surface-2 trace, never
+                        # streamed to the customer.
+                        tool_calls.append(event)
+                    elif etype == "redraft":
+                        # T-018/T-021: a gate rejected the draft text already
+                        # accumulated; the producing node is about to stream fresh
+                        # prose. Only prose is discarded - the citations/quote
+                        # already streamed live stay valid.
                         full_text = ""
                         buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                    elif etype == "inspection":
+                        verdicts = dict(event.get("verdicts", {}))
+                        if event.get("decision") == "retry":
+                            full_text = ""
+                            buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
+                        else:
+                            if first_prose_ms is None and any(
+                                e["type"] in ("token", "refusal") for e in buffer
+                            ):
+                                first_prose_ms = _ms_since(turn_started)
+                            for buffered_event in buffer:
+                                yield buffered_event
+                            buffer = []
+                        # The raw "inspection" event is internal bookkeeping, never
+                        # forwarded to the customer surface.
                     else:
-                        if first_prose_ms is None and any(
-                            e["type"] in ("token", "refusal") for e in buffer
-                        ):
-                            first_prose_ms = round((time.perf_counter() - turn_started) * 1000, 1)
-                        for buffered_event in buffer:
-                            yield buffered_event
-                        buffer = []
-                    # The raw "inspection" event is internal bookkeeping, never
-                    # forwarded to the customer surface.
-                else:
-                    buffer.append(event)
+                        buffer.append(event)
+    except TimeoutError:
+        # P-2: no leg produced a complete answer inside the turn budget. The
+        # customer gets the handoff rather than a longer wait, and the reason
+        # says which limit stopped it.
+        logger.warning(
+            "chat turn exceeded its %.1fs budget; escalating", limits.turn_budget_s
+        )
+        await service.record_limit_escalation(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            reason=TURN_BUDGET_ESCALATION_REASON,
+            message=BUDGET_UNAVAILABLE_MESSAGE,
+        )
+        if usages:
+            await service.record_turn_costs(
+                tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
+            )
+        yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
+        yield {"type": "escalated"}
+        yield {"type": "done"}
+        return
     except GraphRecursionError:
         await service.record_limit_escalation(
             tenant_id=tenant_id,
@@ -292,7 +328,7 @@ async def stream_chat_response(
     logger.info(
         "chat turn",
         extra={
-            "total_ms": round((time.perf_counter() - turn_started) * 1000, 1),
+            "total_ms": _ms_since(turn_started),
             # None when the turn produced no prose at all (a deterministic
             # order_status/escalation draft never emits token events).
             "first_model_token_ms": first_model_token_ms,
@@ -305,6 +341,10 @@ async def stream_chat_response(
                 else None
             ),
             "chars": len(full_text),
+            # P-2: which leg answered and whether the race was needed. The rest
+            # of the turn's latency story is on this line already; the provider
+            # half belongs next to it, not in a separate stream.
+            **legs.as_attributes(),
         },
     )
     yield {"type": "done"}

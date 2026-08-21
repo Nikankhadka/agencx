@@ -132,7 +132,7 @@ def get_llm_provider() -> LLMProvider:
     ]
     chain = legs[-1]
     for leg in reversed(legs[:-1]):
-        chain = FailoverProvider(leg, chain)
+        chain = FailoverProvider(leg, chain, ttft_budget_s=settings.llm_ttft_budget_s)
     return chain
 
 

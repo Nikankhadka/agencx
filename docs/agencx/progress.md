@@ -83,9 +83,9 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 | Judge calibration | BLOCKED | `19d68e0` - needs founder hand-labeling (circular if agent-generated) |
 | Golden agent-task set + trajectory scorer | BUILT | `22f9cae`, `cd868c4`; **CHANGING** - G-1 updates for the supervisor-with-tools shape |
 | Prompt-injection defense + adversarial set | BUILT | `598f3a7` |
-| Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; **CHANGING** - P-2 replaces the timeout behavior with the 4s/10s first-wins failover budget |
+| Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
-| Tracing + cost accounting | BUILT | `e2f5034`; **CHANGING** - P-1/P-2 track per-provider TTFT and failover events |
+| Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
@@ -110,7 +110,7 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 |---|---|---|
 | Google AI Studio primary provider | BUILT | P-1 (gemini-3.5-flash-lite, documented tier matrix in `.env.example`) |
 | Groq / Cerebras fallback + OpenRouter failover tiers | BUILT | P-1 (`LLM_FAILOVER_*` third leg; legs nest into one chain, Cerebras documented as a candidate) |
-| 4s TTFT timeout + first-wins race + 10s cap | NEW | P-2 |
+| 4s TTFT timeout + first-wins race + 10s cap | BUILT | P-2 (`llm/failover.py` race + `turn_budget_s` cap; live-verified on Gemini/Groq) |
 | Context-package pre-load on chat open | BUILT | P-3 (`services/context_package.py`, primed by the public tenant lookup) |
 | knowledge_version derivation + invalidation | BUILT | P-4 (migration 0018 + `services/knowledge_version.py`) |
 | Failover typing indicator (client) | NEW | P-5 |
@@ -142,7 +142,8 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | G-1 Eval cases for the lean toolset | not started | |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
-| P-1 Provider layer: Google/Groq/OpenRouter tiers | done | this commit |
+| P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
+| P-2 Latency budget + first-wins failover | done | this commit |
 | P-1, P-2, P-3, P-5 Providers, failover, pre-load, indicator | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
