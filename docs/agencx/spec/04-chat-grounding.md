@@ -12,6 +12,7 @@ Tickets in this file (in build order):
 - C-2: Route knowledge answers through the same figure check
 - C-3: Assistant states figures only exactly as listed - never computes
 - C-4: Money guardrail test matrix
+- C-5: Non-blocking escalation - the chat continues after a handoff
 
 ---
 
@@ -488,7 +489,8 @@ gate.
 **so that** the handoff is visible and auditable.
 
 - [ ] Rewrite-once: first violation rewrites; second violation creates an
-  `escalations` row with the guardrail reason and flips the conversation
+  `escalations` row with the guardrail reason and records the handoff per C-5
+  (honest customer message; the conversation itself stays open)
 - [ ] The customer sees the honest handoff, never a raw figure
 
 #### US-4 The suite has teeth and is never skipped
@@ -522,3 +524,120 @@ gate.
 - [ ] Fail matrix green (every invented figure fails)
 - [ ] Escalation contract verified
 - [ ] Suite wired into the absolute gate, never skippable
+
+---
+
+## C-5: Non-blocking escalation - the chat continues after a handoff
+
+### Summary
+
+Change escalation from a terminal conversation state into a recorded handoff
+that does not stop the chat. When the assistant escalates (supervisor route,
+`create_escalation` tool, or the money guardrail's second violation), it says
+so honestly and keeps the door open ("I need to check with the owner on that -
+meanwhile I can help with other things"), writes the `escalations` row for the
+owner queue, and the conversation stays active: the customer's next message
+gets a full agent turn. Only limit/cap escalations (T-028) keep the terminal
+behavior.
+
+### Why
+
+Today every agent-side escalation flips `conversations.status` to
+`'escalated'`, and from then on each customer message gets a bare
+`{"type": "escalated"}` with no agent turn; the customer surface disables the
+composer. One unanswerable pricing question can therefore dead-end an entire
+support session even though the assistant works fine for everything else. The
+product promise is a support-and-sales agent that keeps helping - a handoff on
+one topic should not end the session. Founder request, 2026-08-21. This ticket
+supersedes the terminal-flip wording in C-2 US-2 and C-4 US-3.
+
+### User stories
+
+#### US-1 A handoff does not lock the customer out
+
+**As** Alex asking "how much for X?" when the figure is not in the owner's
+material,
+**I want** the assistant to say it will check with the owner and then keep
+chatting,
+**so that** one missing price does not end my whole conversation.
+
+- [ ] Agent/tool/guardrail escalations write the `escalations` row and the
+  conversational handoff message; `conversations.status` stays `'active'`
+- [ ] The next customer message gets a normal agent turn (knowledge, tools,
+  guardrail all live)
+- [ ] Handoff copy names the topic and offers to continue; never "the owner
+  will reply here" as a conversation-ending sign-off
+
+#### US-2 The owner still sees and answers the handoff
+
+**As** Sam checking his escalations queue,
+**I want** pending escalations listed with their conversations,
+**so that** my answer reaches the customer while the chat is still open.
+
+- [ ] The escalations queue surface is unchanged (rows carry reason +
+  conversation)
+- [ ] The resolve flow's `human_agent` message reaches the open chat (the
+  existing polling path, extended to non-terminal escalations)
+
+#### US-3 Caps stay hard stops
+
+**As** the platform owner,
+**I want** limit/cap escalations to stay terminal,
+**so that** over-budget usage actually stops.
+
+- [ ] The T-028 path is unchanged: status flips, composer locks, the
+  `{"type": "escalated"}` stream behavior is preserved for this reason only
+
+#### US-4 Guardrail authority is unchanged
+
+**As** the maintainer,
+**I want** the second guardrail violation to escalate just as reliably as
+today,
+**so that** C-5 softens only what happens after the escalation, never whether
+it happens.
+
+- [ ] The C-4 matrix stays green with the new post-escalation behavior
+  asserted (conversation still `'active'` after a second violation)
+
+### Technical spec
+
+- `backend/app/agents/agent_node.py`: `create_escalation` no longer flips
+  `conversations.status`; the graph routes past an escalation to a normal
+  reply turn instead of ending it; the system prompt gains the
+  continue-the-conversation rule (C-3 pattern: prompt text, guardrail stays
+  the floor)
+- `backend/app/agents/price_gate.py`: `GATE_ESCALATION_MESSAGE` becomes the
+  conversational handoff; drop `escalated=True` from the decision (keep
+  `escalation_reason` for the row)
+- `backend/app/features/chat/controller.py`: `stream_escalated_response`
+  remains for limit escalations only; agent escalations emit a non-terminal
+  handoff notice event (contract change documented in the api docstring)
+- `frontend/src/app/(customer)/CustomerChat.tsx`: composer locks only on a
+  limit escalation; human-reply polling keys off unresolved escalations
+  instead of conversation status
+- `'escalated'` remains a valid `conversations.status` value (limit path and
+  legacy rows); agent/guardrail paths stop writing it
+
+### Tests
+
+- Trajectory: escalate, then ask something else -> normal grounded answer on
+  the same conversation
+- Guardrail: second violation -> `escalations` row + handoff text + status
+  still `'active'`
+- Limit-escalation regression: still terminal end to end
+- E2E: pricing question -> handoff bubble -> follow-up question answered;
+  owner resolve inserts the human message into the open chat
+
+### Files touched
+
+- `backend/app/agents/**` (agent_node, price_gate, supervisor routing, prompts)
+- `backend/app/features/chat/**` (controller, service)
+- `frontend/src/app/(customer)/CustomerChat.tsx`, `frontend/src/lib/chat-events.ts`
+- `backend/tests/**`, `frontend/e2e/**`, escalation trajectory evals
+
+### Definition of done
+
+- [ ] No agent/guardrail path writes `conversations.status = 'escalated'`
+- [ ] The chat verifiably continues after every non-limit escalation
+- [ ] Owner queue + resolve flow work against an open conversation
+- [ ] Limit escalation still terminal; C-4 matrix green
