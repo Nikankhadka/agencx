@@ -109,6 +109,13 @@ class Settings(BaseSettings):
     # Uploads root (T-007)
     uploads_dir: str = "var/uploads"
 
+    # O-4 whole-corpus fast path: the total prompt budget, in tokens, a tenant's
+    # corpus is allowed to occupy before retrieval scoring is worth its latency.
+    # A corpus that fits is handed to the model whole (no embed, no rerank); one
+    # that does not runs the hybrid pipeline unchanged. This is a measured token
+    # count, never a branch on business size - see app/services/retrieval.py.
+    corpus_fast_path_max_tokens: int = 7500
+
     # Observability (T-030): Langfuse tracing is opt-in - empty keys mean the
     # tracer no-ops, so the free-first stack runs with zero external tracing.
     langfuse_public_key: str = ""

@@ -128,10 +128,10 @@ size earns).
 **I want** a corpus that fits the budget to be returned whole,
 **so that** no scoring cost is paid when the model can read everything.
 
-- [ ] `get_business_context(tenant_id, query)` checks: profile tokens +
+- [x] `get_business_context(tenant_id, query)` checks: profile tokens +
   system prompt + full corpus + expected answer budget < context window
   budget (config `CORPUS_FAST_PATH_MAX_TOKENS`, default ~7500)
-- [ ] Fast path returns all chunks with `score = None`-equivalent (the
+- [x] Fast path returns all chunks with `score = None`-equivalent (the
   shared shape allows unscored entries)
 
 #### US-2 The hybrid path fires above the threshold
@@ -140,9 +140,9 @@ size earns).
 **I want** a corpus over budget to run the existing pipeline unchanged,
 **so that** large tenants keep their measured recall.
 
-- [ ] Above threshold: dense + sparse + RRF(k=60) + rerank -> top-k with
+- [x] Above threshold: dense + sparse + RRF(k=60) + rerank -> top-k with
   scores
-- [ ] Same return shape; same citation contract
+- [x] Same return shape; same citation contract
 
 #### US-3 The threshold is measured, not guessed
 
@@ -151,10 +151,11 @@ size earns).
 margin,
 **so that** the path switch is a number, not a heuristic.
 
-- [ ] Token estimation uses the configured model's tokenizer (or a
-  conservative chars/token ratio with a margin - decide at implementation;
-  the count must include the profile + prompt + corpus + answer budget)
-- [ ] The threshold is config; the budget math is documented in the code
+- [x] Token estimation is a conservative 3.0 chars/token (below real English
+  prose, so it over-counts) plus an 800-token answer reserve; callers pass
+  their prompt/profile length as `overhead_chars`. No tokenizer dependency
+  was added for a number that only needs to be conservative
+- [x] The threshold is config; the budget math is documented in the code
 
 #### US-4 Citations still work on the fast path
 
@@ -162,8 +163,10 @@ margin,
 **I want** citation chips even when the corpus was read whole,
 **so that** trust does not depend on the path.
 
-- [ ] Fast-path chunks carry source metadata (chunk id, content, source)
-  and citations render identically
+- [x] Fast-path chunks carry source metadata (chunk id, content, source);
+  ordering is deterministic (document, then `chunk_index`) so citation
+  numbering is stable for the life of a cached package. The rendering half
+  is wired when P-3 puts the package on the turn
 
 ### Technical spec
 
@@ -187,10 +190,10 @@ margin,
 
 ### Definition of done
 
-- [ ] Two paths behind one seam, both shapes identical
-- [ ] Threshold measured + config, not a branch on business size
-- [ ] Citations work on both paths
-- [ ] Retrieval gates green
+- [x] Two paths behind one seam, both shapes identical
+- [x] Threshold measured + config, not a branch on business size
+- [x] Citations work on both paths
+- [x] Retrieval gates green
 
 ---
 

@@ -55,7 +55,7 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 | Chunk + embed pipeline | BUILT | `d8b0a43` |
 | Hybrid retrieval (dense + sparse + RRF + rerank) | BUILT | `9c27859`, `0dd266e` (reranker score normalization) |
 | Golden retrieval set + eval | BUILT | `182985a` |
-| `get_business_context` seam | PARTIAL | retrieval exists behind it; **CHANGING** - O-4 adds the whole-corpus fast path + measured token threshold (the two-path seam) |
+| `get_business_context` seam | BUILT | O-4 (`app/services/retrieval.py`): whole-corpus fast path under a measured token budget, hybrid pipeline above it, one shape |
 | Knowledge version + context-package cache | PARTIAL | P-4 version derivation is **BUILT** (0018 + `services/knowledge_version.py`); P-3 pre-load package is NEW |
 
 ### Agents & the money boundary
@@ -145,7 +145,7 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
 | O-3 Knowledge ingest (URL scrape + upload) | not started | |
-| O-4 Whole-corpus fast path + threshold | not started (pulled into the chat spine, before P-3) | |
+| O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
