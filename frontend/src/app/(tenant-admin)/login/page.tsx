@@ -2,13 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChatBubble } from "@/components/ui/ChatBubble";
 import { CodeInput } from "@/components/ui/CodeInput";
 import { CommandPill } from "@/components/ui/CommandPill";
+import {
+  AgentLine,
+  LedeMessage,
+  OwnerBubble,
+  Thread,
+  ThreadVeil,
+  TypingLine,
+} from "@/components/ui/Thread";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/**
+ * Arms the send circle when the text CONTAINS something address-shaped, rather
+ * than when the whole field is an address. The composer is a chat pill, so
+ * "it's sam@shop.com" is a normal answer and must not sit there un-sendable.
+ *
+ * This is a liveness gate, not the validator: app/services/email_address.py on
+ * the backend is the authority, and it answers a bad address with one calm line
+ * that this page renders verbatim. Keeping the gate loose and the check
+ * server-side is what stops the two from disagreeing.
+ */
+const LOOKS_LIKE_EMAIL = /[^\s@]*@[^\s@]+\.[^\s@]+/;
+
+/** Matches the onboarding thread's opening pace (prototype `agentMsg()`). */
+const OPENING_PACE_MS = 820;
 
 interface VerifyResponse {
   access_token: string;
@@ -18,19 +38,27 @@ interface VerifyResponse {
 
 /**
  * O-2: login-in-chat. The owner authenticates inside the conversation - type an
- * email, receive a 6-digit code, type it back - instead of a sign-up form. The
- * agent's first message is rendered up front (no welcome screen).
+ * email, receive a 6-digit code, type it back - instead of a sign-up form.
+ *
+ * This is the first half of the same conversation the onboarding interview
+ * continues, so it renders on the same thread primitives as /onboarding: the
+ * prototype's full-bleed thread, bare-prose agent turns, crimson owner bubbles
+ * and pinned composer. The send circle dims rather than disappears until the
+ * email parses - design/frontend.md section 6: "the inactive send state is the
+ * only validation signal - no red error text".
  */
 export default function LoginPage() {
   const router = useRouter();
   const { session, isLoading, signInWithCode } = useAuth();
 
   const [phase, setPhase] = useState<"email" | "code">("email");
+  const [draft, setDraft] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [resendReady, setResendReady] = useState(false);
+  const [opened, setOpened] = useState(false);
   const resendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -39,6 +67,13 @@ export default function LoginPage() {
     }
   }, [isLoading, session, router]);
 
+  // The opening message is static, so it gets the same typing hold a streamed
+  // one would (design/frontend.md section 9).
+  useEffect(() => {
+    const timer = setTimeout(() => setOpened(true), OPENING_PACE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (resendTimer.current) clearTimeout(resendTimer.current);
@@ -46,22 +81,29 @@ export default function LoginPage() {
   }, []);
 
   async function submitEmail(value: string) {
-    const trimmed = value.trim().toLowerCase();
-    if (!EMAIL_RE.test(trimmed) || busy) return;
-    setEmail(trimmed);
+    const typed = value.trim();
+    if (!typed || busy) return;
     setStatus(null);
     setBusy(true);
     try {
-      await apiFetch("/api/auth/login-code", {
+      // The server normalizes and returns the address it actually used, so the
+      // thread echoes what the code was sent to - not what was typed.
+      const { email: resolved } = await apiFetch<{ email: string }>("/api/auth/login-code", {
         method: "POST",
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({ email: typed }),
       });
+      setEmail(resolved);
+      setDraft("");
       setPhase("code");
       setResendReady(false);
       resendTimer.current = setTimeout(() => setResendReady(true), 30_000);
-    } catch {
-      // calm - no red chrome; the pill simply stays put
-      setStatus("Something went wrong - try again.");
+    } catch (err) {
+      // A bad address comes back as one calm line from the server - show it
+      // verbatim. No red chrome, and the pill keeps what was typed so it can
+      // be corrected rather than retyped.
+      setStatus(
+        err instanceof ApiError ? err.detail : "Something went wrong - try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -93,6 +135,7 @@ export default function LoginPage() {
 
   function handleWrongEmail() {
     setPhase("email");
+    setDraft(email);
     setEmail("");
     setCode("");
     setStatus(null);
@@ -100,56 +143,73 @@ export default function LoginPage() {
 
   if (isLoading || session) return null;
 
+  // Never let the opening message still be "typing" once the conversation has
+  // moved past it - a fast answer would otherwise pop the lede in AFTER the
+  // reply it precedes.
+  const openingShown = opened || phase === "code";
+
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4 sm:p-8">
-      <div className="flex w-full max-w-md flex-col gap-4">
-        <div className="flex flex-col gap-3">
-          <ChatBubble role="assistant">
-            Hi, I&apos;ll get you set up. What&apos;s your email?
-          </ChatBubble>
+    <main className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-surface">
+      <ThreadVeil started={phase === "code"} />
 
-          {phase === "code" ? (
-            <ChatBubble role="system">
-              Code sent to <span className="font-medium text-text">{email}</span>
-            </ChatBubble>
-          ) : null}
-        </div>
-
-        {phase === "email" ? (
-          <CommandPill
-            value={email}
-            onChange={setEmail}
-            onSubmit={submitEmail}
-            placeholder="you@example.com"
-            busy={busy}
-            canSubmit={EMAIL_RE.test(email.trim())}
-          />
+      <Thread label="Sign-in conversation" watch={phase} data-testid="login-thread">
+        {openingShown ? (
+          <LedeMessage question="What's your email?">
+            Hi, glad you made it here. I&apos;ll get your business set up and then answer for you,
+            so the messages that eat your day stop landing on you.
+          </LedeMessage>
         ) : (
-          <div className="flex flex-col gap-3">
-            <CodeInput value={code} onChange={setCode} onComplete={submitCode} disabled={busy} />
-            <div className="flex items-center justify-between text-footnote">
-              <button
-                type="button"
-                onClick={handleWrongEmail}
-                className="font-medium text-accent hover:text-accent-hover"
-              >
-                Wrong email?
-              </button>
+          <TypingLine />
+        )}
+
+        {phase === "code" ? (
+          <>
+            <OwnerBubble>{email}</OwnerBubble>
+            <AgentLine>Code sent. Pop the six digits in below.</AgentLine>
+          </>
+        ) : null}
+      </Thread>
+
+      <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+        <div className="mx-auto flex w-full max-w-thread flex-col gap-3">
+          {phase === "email" ? (
+            <CommandPill
+              variant="field"
+              value={draft}
+              onChange={setDraft}
+              onSubmit={submitEmail}
+              placeholder="you@example.com"
+              busy={busy}
+              canSubmit={LOOKS_LIKE_EMAIL.test(draft)}
+            />
+          ) : (
+            <>
+              {/* The prototype's `.otp-top`: destination and the escape hatch on
+                  one centered row above the cells. */}
+              <div className="flex items-center justify-center gap-3 text-meta">
+                <span className="text-ink-a40">Code sent to {email}</span>
+                <button type="button" onClick={handleWrongEmail} className="text-accent">
+                  Wrong email?
+                </button>
+              </div>
+              <CodeInput value={code} onChange={setCode} onComplete={submitCode} disabled={busy} />
+              {/* `.otp-hint`: inactive for 30s, and deliberately without the
+                  prototype's visible countdown (O-2's spec). */}
               <button
                 type="button"
                 onClick={() => void submitEmail(email)}
                 disabled={!resendReady || busy}
-                className="font-medium text-text-secondary disabled:opacity-50"
+                className="text-center text-meta text-accent disabled:pointer-events-none disabled:text-ink-a40"
               >
                 Didn&apos;t get it? Resend
               </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
 
-        <p className="h-4 text-footnote text-text-secondary" aria-live="polite">
-          {status ?? ""}
-        </p>
+          <p role="status" className="h-4 text-center text-meta text-text-secondary">
+            {status ?? ""}
+          </p>
+        </div>
       </div>
     </main>
   );

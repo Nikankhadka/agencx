@@ -29,7 +29,7 @@ export function Input({ label, help, error, id, className = "", ...rest }: Input
         aria-describedby={message ? messageId : undefined}
         className={[
           "w-full rounded-md border bg-surface px-3 py-2 text-body text-text min-h-11",
-          "placeholder:text-text-tertiary transition-colors duration-fast",
+          "placeholder:text-text-tertiary transition-colors duration-(--duration-fast)",
           "disabled:opacity-50 disabled:bg-surface-sunken",
           error ? "border-danger" : "border-border hover:border-border-strong",
           className,

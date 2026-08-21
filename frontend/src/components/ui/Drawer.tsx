@@ -72,7 +72,7 @@ export function Drawer({ open, onClose, children }: DrawerProps) {
         aria-hidden="true"
         onClick={onClose}
         className={[
-          "absolute inset-0 transition-colors duration-push ease-push",
+          "absolute inset-0 transition-colors duration-(--duration-push) ease-push",
           open ? "bg-scrim" : "pointer-events-none bg-transparent",
         ].join(" ")}
       />
@@ -83,7 +83,7 @@ export function Drawer({ open, onClose, children }: DrawerProps) {
         tabIndex={-1}
         className={[
           "absolute inset-y-0 left-0 flex h-full w-[288px] flex-col gap-1 rounded-r-[44px] bg-surface p-4 shadow-drawer",
-          "transition-transform duration-push ease-push",
+          "transition-transform duration-(--duration-push) ease-push",
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >

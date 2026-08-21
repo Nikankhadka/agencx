@@ -12,10 +12,36 @@ One ticket = one commit; the commit message starts with the ticket id.
 | Summary | One paragraph: what the ticket delivers |
 | Why | The motivation - the product promise or measured problem it serves |
 | User stories | Persona-tagged, with acceptance criteria embedded in each story |
+| Design reference | UI tickets only: the prototype screen the ticket is built from |
 | Technical spec | The implementation shape: modules, seams, migration ids, config |
 | Tests | What must be green for the ticket to be done |
 | Files touched | Expected files/modules (discovered precisely at implementation time) |
 | Definition of done | The checklist that closes the ticket |
+
+## Building UI: the prototype is the source, not a mood board
+
+Every screen in this build already exists as a prototype in
+`docs/agencx/design/prototypes/`. **A UI ticket is implemented by reading its
+prototype screen and porting it, never by designing from the ticket text.** The
+ticket says what the screen must do; the prototype says what it looks like and
+how it behaves.
+
+- `agencx-prototype-v6.html` - **current.** Tenant app: onboarding thread, Chat
+  (list + thread), Business hub, Booking page, Settings, plus the Stage 2
+  screens (Schedule, Money, Plan) that Phase 1 hides. Trusted for screen
+  inventory, states, interaction vocabulary, mobile chrome (D18), and the
+  shipped crimson identity (D17).
+- `agencx-storefront-customer-v3.html` - **superseded.** Customer storefront;
+  trusted for storefront interaction vocabulary only, never for nav (pre-D18).
+
+Two standing rules: copy in both files is demo copy for the Sababa reference
+tenant (take structure and behaviour, never strings), and every visual value
+still lands as a `theme.css` token - porting a prototype never means porting its
+hex codes (CI enforces this via `check:tokens`).
+
+Each UI ticket carries a **Design reference** section naming its exact screen or
+render function. A ticket with no prototype screen says so explicitly - that is
+a deliberate "do not invent one", not an omission.
 
 ## Phase files
 
@@ -25,9 +51,9 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | Phase file | Tickets |
 |---|---|
 | `01-foundation.md` | A-1, A-2 |
-| `02-onboarding.md` | O-1, O-2 |
+| `02-onboarding.md` | O-1, O-2, O-5 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
-| `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4 |
+| `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5 |
 | `05-business-page.md` | E-1, E-2 |
 | `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
 | `07-hygiene.md` | F-1 |
@@ -53,7 +79,7 @@ else defers to Phase 2 / Stage 2 backlog.
 | 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
-C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
+C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 
 **Deferred (not Phase 1)** - see `08-deferred.md`:
 
@@ -100,6 +126,7 @@ C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 | C-2 | Route knowledge answers through the same figure check |
 | C-3 | Assistant states figures only exactly as listed, never computes |
 | C-4 | Money guardrail test matrix |
+| C-5 | Non-blocking escalation - chat continues after handoff |
 
 ### Business page (`05-business-page.md`)
 

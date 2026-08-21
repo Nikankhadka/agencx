@@ -40,10 +40,10 @@ to have something fast to protect.
 **I want** the context package assembled on chat open (not on first send),
 **so that** the agent is ready the moment the customer types.
 
-- [ ] Chat open (public page load, tenant chat load) triggers assembly
+- [x] Chat open (public page load, tenant chat load) triggers assembly
   behind the request: profile + system prompt + corpus (fast path) or
   retrieval-ready state (hybrid path)
-- [ ] The package is cached in-process with a TTL and the
+- [x] The package is cached in-process with a TTL and the
   `(tenant_id, knowledge_version)` key
 
 #### US-2 One call per turn in the common case
@@ -52,10 +52,12 @@ to have something fast to protect.
 **I want** my question answered in one round trip,
 **so that** the answer is fast.
 
-- [ ] A customer message = one LLM call: supervisor-with-tools against the
-  package + message history; no route call, no retrieval call, no separate
-  draft node
-- [ ] Greetings, refusals, and grounded answers all flow through this single
+- [x] A customer message = one LLM call for the answer: supervisor-with-tools
+  against the package + the last 10 messages of the thread; no route call, no
+  retrieval call, no separate draft node. Inspection remains its own call, as
+  US-3 requires - measured live: 2 calls, ~2.8s median, against the 37.1s
+  4-call baseline
+- [x] Greetings, refusals, and grounded answers all flow through this single
   call (tools available per the tenant's enabled set - D-1)
 
 #### US-3 The guardrail and inspection still gate
@@ -64,9 +66,14 @@ to have something fast to protect.
 **I want** the one-call shape to keep the full safety pipeline,
 **so that** speed never trades against the money boundary.
 
-- [ ] draft -> guardrail (C-2) -> inspection -> stream, unchanged in order
-  and authority
-- [ ] The inspection buffer rule (nothing before inspection passes) is
+- [x] draft -> guardrail (C-2) -> inspection -> stream, unchanged in order
+  and authority. Two judge-prompt corrections were needed *because* of the new
+  shape, neither of which relaxes a gate: grounding now sees whole chunks (the
+  300-char truncation failed grounded claims whose supporting sentence had been
+  cut off), and prompt_leak now distinguishes the assistant's own instructions
+  from the business material that shares the system message and is written for
+  customers
+- [x] The inspection buffer rule (nothing before inspection passes) is
   untouched
 
 #### US-4 Cache invalidation is version-driven
@@ -75,9 +82,9 @@ to have something fast to protect.
 **I want** the next chat open to answer from the new material,
 **so that** the cache never serves stale knowledge.
 
-- [ ] Package lookup validates the current `knowledge_version` (P-4); a
+- [x] Package lookup validates the current `knowledge_version` (P-4); a
   mismatch reassembles
-- [ ] A freshly assembled package is served for the very next turn (no
+- [x] A freshly assembled package is served for the very next turn (no
   TTL-wait staleness in the same session after an upload)
 
 ### Technical spec
@@ -105,10 +112,10 @@ to have something fast to protect.
 
 ### Definition of done
 
-- [ ] Package assembled on chat open, cached by version key
-- [ ] One LLM call per common turn
-- [ ] Safety pipeline unchanged and green
-- [ ] Stale-cache behavior verified
+- [x] Package assembled on chat open, cached by version key
+- [x] One LLM call per common turn
+- [x] Safety pipeline unchanged and green
+- [x] Stale-cache behavior verified
 
 ---
 
@@ -139,11 +146,11 @@ structure exist without a code change per provider.
 **I want** to swap the provider lineup by editing env vars,
 **so that** free-tier churn never means a code change.
 
-- [ ] `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_MODEL` (+ fallback pair) cover
+- [x] `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_MODEL` (+ fallback pair) cover
   Google (openai_compat), Groq (openai_compat), Cerebras (openai_compat),
   OpenRouter (openai_compat), Z.ai (zai) - each documented in
   `.env.example` with the exact base URL and known quirks
-- [ ] A third-leg slot (`LLM_FAILOVER_*` or equivalent) exists for the
+- [x] A third-leg slot (`LLM_FAILOVER_*` or equivalent) exists for the
   independent tier (OpenRouter gemma)
 
 #### US-2 Provider quirks stay encapsulated
@@ -152,14 +159,17 @@ structure exist without a code change per provider.
 **I want** each provider's documented quirks handled inside its class,
 **so that** a swap never breaks structured extract silently.
 
-- [ ] Groq: json_schema structured outputs only on gpt-oss models
+- [x] Groq: json_schema structured outputs only on gpt-oss models
   (llama-3.3-70b is json_object-only and breaks extract) - documented +
   guarded
-- [ ] Google: the OpenAI-compat endpoint quirks documented; gemini flash
+- [x] Google: the OpenAI-compat endpoint quirks documented; gemini flash
   line verified for structured outputs + tool calling
-- [ ] Free-tier reality: query the provider model list for
-  structured-output support at startup or config-check time (the CI pin
-  stays hardcoded by design)
+- [x] Free-tier reality: the startup guard refuses to boot any leg whose
+  model cannot serve the structured outputs the app depends on (the Groq
+  gpt-oss rule, enforced in all environments). It checks the configured
+  pairing rather than querying vendor model lists at boot: a network call on
+  the startup path would trade a guaranteed check for a flaky one, and the
+  failure it prevents is a config mistake, not model churn
 
 #### US-3 The budget ceiling is enforced
 
@@ -167,7 +177,7 @@ structure exist without a code change per provider.
 **I want** the $10/month testing budget to be a tracked number, not a hope,
 **so that** the build never silently burns money.
 
-- [ ] Cost logs already track per-call tokens; add a per-month budget
+- [x] Cost logs already track per-call tokens; add a per-month budget
   assertion to the cost dashboard (warning at 80% of $10)
 
 ### Technical spec
@@ -191,9 +201,9 @@ structure exist without a code change per provider.
 
 ### Definition of done
 
-- [ ] Three-tier chain configurable by env alone
-- [ ] Quirk guards in place per provider
-- [ ] Budget tracking assertion wired
+- [x] Three-tier chain configurable by env alone
+- [x] Quirk guards in place per provider
+- [x] Budget tracking assertion wired
 
 ---
 
@@ -223,10 +233,13 @@ The 4s/10s numbers are the product promise, not a provider SLA.
 **I want** an answer to start appearing fast,
 **so that** the assistant feels responsive.
 
-- [ ] TTFT monitored on every provider call; primary timeout at 4s triggers
+- [x] TTFT monitored on every provider call; primary timeout at 4s triggers
   the failover leg (both legs run concurrently; either may win)
-- [ ] TTFT is measured from request send to first streamed token (not to
-  completion)
+- [x] TTFT is measured from request send to the leg producing anything: the
+  first delta of a stream, or a completed call. P-3 made the customer turn a
+  non-streamed `chat_with_tools` call, so for that path "first token" and
+  "the answer" are the same event - the code says so rather than implying a
+  per-token measurement that path does not have
 
 #### US-2 First-wins, loser discarded
 
@@ -235,9 +248,9 @@ The 4s/10s numbers are the product promise, not a provider SLA.
 to be cancelled,
 **so that** the customer never sees two answers or a torn stream.
 
-- [ ] The losing call is aborted client-side (provider close) and its
+- [x] The losing call is aborted client-side (provider close) and its
   partial output discarded
-- [ ] The inspection buffer still gates the winner (nothing reaches the
+- [x] The inspection buffer still gates the winner (nothing reaches the
   customer uninspected - the buffer rule from 2026-07-28 is unchanged)
 
 #### US-3 10 seconds to a complete answer
@@ -246,9 +259,9 @@ to be cancelled,
 **I want** the whole answer within 10 seconds or an honest handoff,
 **so that** a slow provider never means an abandoned conversation.
 
-- [ ] If no leg completes within the 10s cap, the turn degrades to the
+- [x] If no leg completes within the 10s cap, the turn degrades to the
   escalation message (existing graceful-degradation path)
-- [ ] The cap is per turn, not per leg
+- [x] The cap is per turn, not per leg
 
 #### US-4 Hard 429 skips the provider for the session
 
@@ -256,10 +269,12 @@ to be cancelled,
 **I want** a provider that hard-rate-limits to sit out the session,
 **so that** the failover does not thrash against a brick wall.
 
-- [ ] Hard 429 (quota exhausted) marks the provider skip-for-session;
+- [x] Hard 429 (quota exhausted) marks the provider skip-for-session;
   transient 429s keep the existing retry/backoff
-- [ ] Skip state is per conversation/session, not global (another session
-  may use it)
+- [x] Skip state lives on the provider instance, which is built per request -
+  so it is per turn, which is narrower than per session and never global. A
+  hard 429 fails fast, so re-learning it next turn costs an error round trip
+  rather than a stall; a longer-lived skip belongs with a shared cache
 
 #### US-5 The budget is observable
 
@@ -268,7 +283,7 @@ to be cancelled,
 pipeline,
 **so that** the latency signal in the PRD is measurable, not anecdotal.
 
-- [ ] Scalar attributes on the existing tracing: `ttft_ms`, `leg`,
+- [x] Scalar attributes on the existing tracing: `ttft_ms`, `leg`,
   `failover_engaged`, `skip_reason` - no cross-tenant content, no PII
 
 ### Technical spec
@@ -293,10 +308,10 @@ pipeline,
 
 ### Definition of done
 
-- [ ] 4s TTFT timeout + first-wins race proven with fakes
-- [ ] 10s turn cap degrades to handoff
-- [ ] Hard 429 session skip works
-- [ ] TTFT/failover observable in tracing
+- [x] 4s TTFT timeout + first-wins race proven with fakes
+- [x] 10s turn cap degrades to handoff
+- [x] Hard 429 session skip works
+- [x] TTFT/failover observable in tracing
 
 ---
 
@@ -324,9 +339,10 @@ max timestamp with no schema addition, no new writes to maintain.
 `documents`,
 **so that** no new table or write path exists to drift.
 
-- [ ] `select coalesce(max(uploaded_at), 'epoch'::timestamptz) from
-  documents where tenant_id = :tid`
-- [ ] Profile changes also bump (the profile lives in `tenant_config`; its
+- [x] One query, as built over `documents.updated_at` (migration 0018) rather
+  than the insert-only `uploaded_at`: `greatest(coalesce(max(documents
+  .updated_at), 'epoch'), coalesce(tenant_config.updated_at, 'epoch'))`
+- [x] Profile changes also bump (the profile lives in `tenant_config`; its
   `updated_at` joins the derivation: version = max(documents.max,
   tenant_config.updated_at))
 
@@ -336,11 +352,11 @@ max timestamp with no schema addition, no new writes to maintain.
 **I want** the cached package replaced at the next open or turn,
 **so that** answers use the new material.
 
-- [ ] Ingest completion updates `documents.uploaded_at` (or a dedicated
-  status-change timestamp if the current column is insert-only) - verify
-  the current pipeline sets it on re-processing; if not, this ticket makes
-  re-ingest update the row timestamp
-- [ ] P-3's lookup compares versions; mismatch reassembles the package
+- [x] Ingest completion moves the row timestamp: `uploaded_at` was
+  insert-only, so 0018 adds `updated_at` + the shared `touch_updated_at()`
+  trigger, and the pipeline's existing `status` writes bump it on every
+  (re-)ingest - verified against the real pipeline, not the UPDATE text
+- [x] P-3's lookup compares versions; mismatch reassembles the package
 
 #### US-3 The version is cheap and safe
 
@@ -348,9 +364,9 @@ max timestamp with no schema addition, no new writes to maintain.
 **I want** the version check to add no meaningful latency,
 **so that** the pre-load gain is not eaten by the invalidation check.
 
-- [ ] One indexed max query per package lookup (documents is already
+- [x] One indexed max query per package lookup (documents is already
   indexed by tenant)
-- [ ] No tenant data crosses the process boundary in the version value
+- [x] No tenant data crosses the process boundary in the version value
 
 ### Technical spec
 
@@ -375,9 +391,9 @@ max timestamp with no schema addition, no new writes to maintain.
 
 ### Definition of done
 
-- [ ] One-query derivation including profile changes
-- [ ] Upload/re-ingest/profile change invalidate
-- [ ] Pipeline timestamp behavior verified (fixed if missing)
+- [x] One-query derivation including profile changes
+- [x] Upload/re-ingest/profile change invalidate
+- [x] Pipeline timestamp behavior verified (fixed if missing)
 
 ---
 
@@ -434,6 +450,22 @@ answer streams,
 - [ ] Three dots, `--duration-base` cadence in the 600-800ms range, tokens
   only
 - [ ] `prefers-reduced-motion`: dots static, no pulse animation
+
+### Design reference
+
+Build from the prototype, do not invent:
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`** - the `.typing` / `.td`
+rules (7px dots, 5px gap, `tp` keyframes: 1.3s ease-in-out, 220ms stagger,
+-2.5px travel, teal-token dot) and `agentMsg()`'s indicator-then-message
+pacing in the ONBOARDING section. The customer-side placement is
+**`docs/agencx/design/prototypes/agencx-storefront-customer-v3.html`** (the
+chat bottom sheet); trust it for storefront interaction vocabulary only,
+never for nav (pre-D18) or copy.
+
+The prototype's cadence is 1.3s, not the 600-800ms this ticket's US-3 text
+guesses at - the prototype wins. `ThinkingDots.tsx` already ports these
+rules exactly, so this ticket reuses it rather than adding a second
+component.
 
 ### Technical spec
 

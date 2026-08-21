@@ -7,14 +7,19 @@ Routers and their request/response schemas live in api.py / public_api.py.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 
 from app.features.tenants import service
+from app.services import context_package
 
 logger = logging.getLogger(__name__)
+
+_preload_tasks: set[asyncio.Task[None]] = set()
 
 
 async def signup(*, user_id: str, slug: str, name: str) -> dict[str, str]:
@@ -60,5 +65,23 @@ async def resolve_public(slug: str) -> dict[str, Any] | None:
     back with their status (including ``suspended``) so the frontend renders
     the right customer-surface state rather than treating a suspended tenant
     as an error.
+
+    P-3: this is the request the customer page makes as it loads, which makes it
+    the moment the chat opens - so it also warms the tenant's context package.
+    The assembly runs behind the response (nothing awaits it) because a page
+    load must never wait on it, and a failure costs a cold first message, not an
+    error.
     """
-    return await service.resolve_slug(slug)
+    result = await service.resolve_slug(slug)
+    if result is not None and result["status"] == "active":
+        _preload_package(result["id"])
+    return result
+
+
+def _preload_package(tenant_id: UUID) -> None:
+    task = asyncio.create_task(context_package.prime(tenant_id))
+    # asyncio only holds a weak reference to a running task, so a fire-and-forget
+    # task can be garbage collected mid-flight; keeping it in a set until it is
+    # done is the documented way to stop that.
+    _preload_tasks.add(task)
+    task.add_done_callback(_preload_tasks.discard)

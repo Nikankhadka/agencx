@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 /**
  * Three pulsing dots inside the assistant bubble while a turn is pending.
- * 7px dots, 5px gap, 1.3s ease-in-out loop, 220ms stagger, -2.5px travel
+ * 7px accent dots, 5px gap, 1.3s ease-in-out loop, 220ms stagger, -2.5px travel
  * (keyframe `thinking-dot` in globals.css). Decorative only (aria-hidden);
  * the global prefers-reduced-motion guard zeroes the animation.
  */
@@ -14,9 +14,9 @@ const dotStyle = (delay: string): CSSProperties => ({
 export function ThinkingDots() {
   return (
     <span aria-hidden="true" className="flex items-center gap-[5px]">
-      <span className="h-[7px] w-[7px] rounded-full bg-text-secondary" style={dotStyle("0ms")} />
-      <span className="h-[7px] w-[7px] rounded-full bg-text-secondary" style={dotStyle("220ms")} />
-      <span className="h-[7px] w-[7px] rounded-full bg-text-secondary" style={dotStyle("440ms")} />
+      <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("0ms")} />
+      <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("220ms")} />
+      <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("440ms")} />
     </span>
   );
 }

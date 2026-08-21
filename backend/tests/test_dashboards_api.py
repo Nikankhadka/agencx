@@ -18,7 +18,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.features.dashboards.service import GATE_THRESHOLDS
+from app.features.dashboards.service import GATE_THRESHOLDS, budget_usage
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -368,3 +368,17 @@ def test_gate_thresholds_match_each_evals_module_constant() -> None:
     assert GATE_THRESHOLDS["trajectory"]["tool_correctness"] == TOOL_CORRECTNESS_GATE
     assert GATE_THRESHOLDS["injection"]["pass_rate"] == PASS_GATE
     assert GATE_THRESHOLDS["leakage"]["pass_rate"] == 1.0
+
+
+# --- P-1: the monthly testing budget -------------------------------------------
+
+
+def test_budget_usage_warns_at_eighty_percent() -> None:
+    assert budget_usage(7.9, 10.0)["warning"] is False
+    assert budget_usage(8.0, 10.0)["warning"] is True
+    assert budget_usage(8.0, 10.0)["fraction"] == 0.8
+
+
+def test_budget_usage_without_a_budget_is_not_a_warning() -> None:
+    # A zero budget means "not tracking", never "everything is over budget".
+    assert budget_usage(50.0, 0.0) == {"fraction": None, "warning": False}

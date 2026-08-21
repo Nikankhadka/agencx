@@ -19,7 +19,7 @@ import asyncpg
 import pytest
 
 from app.agents.knowledge import REFUSAL_MESSAGE
-from app.llm.provider import ChatMessage, SchemaT
+from app.llm.provider import ChatMessage, SchemaT, ToolSpec, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from app.shared import db
@@ -56,6 +56,18 @@ class FakeGenerationProvider(ToolAwareFakeProvider):
                 )
             return schema.model_validate({"verdicts": [{"citation_index": 1, "supported": True}]})
         return schema.model_validate({})
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        # P-3: a fast-path tenant's corpus is already in this call's prompt, so
+        # the answer comes back here - the eval exercises the one-call turn the
+        # customer surface actually runs.
+        return ToolTurn(text="We are open weekdays [1].")
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         for delta in ["We are ", "open weekdays", " [1]."]:
@@ -132,9 +144,14 @@ async def test_run_eval_orchestration_produces_metrics_and_writes_eval_cases(
     # Exact values, not ranges - the fakes are deterministic: one claim
     # judged supported (1.0), one citation judged supported (1.0), and
     # ZeroEmbedder's zero vectors make every cosine similarity 0.0.
+    #
+    # citation_faithfulness was 0.0 before P-3 for a reason that was never
+    # about citations: the answer reached the customer with no chunks behind
+    # it, so there was nothing to judge. The one-call turn answers from the
+    # package's corpus, so the cited chunk now exists and is judged supported.
     assert metrics["faithfulness"] == 1.0
     assert metrics["answer_relevancy"] == 0.0
-    assert metrics["citation_faithfulness"] == 0.0
+    assert metrics["citation_faithfulness"] == 1.0
     assert results[0].answer == "We are open weekdays [1]."
 
     case_rows = await superuser_conn.fetch(

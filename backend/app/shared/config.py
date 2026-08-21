@@ -64,6 +64,29 @@ class Settings(BaseSettings):
     llm_fallback_api_key: str = ""
     llm_fallback_model: str = ""
 
+    # P-1 third leg: the independent failover tier (D15's OpenRouter gemma).
+    # Primary and fallback are usually the two fastest free tiers, which is
+    # exactly why they are the two most likely to be rate-limited on the same
+    # afternoon; the third leg exists to be somebody else's infrastructure. Same
+    # rules as the fallback: model + key set = enabled, empty = the chain is two
+    # legs long.
+    llm_failover_provider: str = "openai_compat"
+    llm_failover_base_url: str = ""
+    llm_failover_api_key: str = ""
+    llm_failover_model: str = ""
+
+    # P-2: how long the primary leg gets to produce a first token before the
+    # next leg starts racing it (PRD section 9's 4s promise). Configurable
+    # because it is a product decision about how long a customer waits before
+    # the system hedges, not a property of any provider.
+    llm_ttft_budget_s: float = 4.0
+
+    # P-1: the standing budget for live model testing, in whole dollars (D16).
+    # The cost dashboard warns at 80% of it. Free tiers report zero cost, so
+    # this only ever bites once a paid key is in play - which is the moment it
+    # matters.
+    llm_monthly_budget_usd: float = 10.0
+
     # Output caps, 0 = uncapped (the default, and the behavior before these
     # existed).
     #
@@ -108,6 +131,13 @@ class Settings(BaseSettings):
 
     # Uploads root (T-007)
     uploads_dir: str = "var/uploads"
+
+    # O-4 whole-corpus fast path: the total prompt budget, in tokens, a tenant's
+    # corpus is allowed to occupy before retrieval scoring is worth its latency.
+    # A corpus that fits is handed to the model whole (no embed, no rerank); one
+    # that does not runs the hybrid pipeline unchanged. This is a measured token
+    # count, never a branch on business size - see app/services/retrieval.py.
+    corpus_fast_path_max_tokens: int = 7500
 
     # Observability (T-030): Langfuse tracing is opt-in - empty keys mean the
     # tracer no-ops, so the free-first stack runs with zero external tracing.

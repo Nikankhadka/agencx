@@ -23,7 +23,7 @@ test.describe("bare host (was marketing, now login-in-chat)", () => {
     await page.goto(`${APEX}/`);
     await loginInChat(page, request, "owner@bytefix.dev");
     await expect(
-      page.getByRole("heading", { name: "Onboarding", level: 1 }),
+      page.getByRole("log", { name: "Onboarding conversation" }),
     ).toBeVisible();
   });
 

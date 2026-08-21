@@ -35,7 +35,7 @@ export function Select({ label, options, help, error, id, className = "", ...res
         aria-describedby={message ? messageId : undefined}
         className={[
           "w-full rounded-md border bg-surface px-3 py-2 text-body text-text min-h-11",
-          "transition-colors duration-fast",
+          "transition-colors duration-(--duration-fast)",
           "disabled:opacity-50 disabled:bg-surface-sunken",
           error ? "border-danger" : "border-border hover:border-border-strong",
           className,

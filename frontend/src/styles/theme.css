@@ -16,10 +16,10 @@
 :root {
   /* primary - crimson, the brand accent ramp */
   --primary-20: #67001B;
-  --primary-30: #870027;
-  --primary-35: #A1002F;
-  --primary-40: #BA0036;
-  --primary-45: #E21E4A;
+  --primary-30: #8F0029;
+  --primary-35: #A80033;
+  --primary-40: #C1123F;
+  --primary-45: #E8385E;
   --primary-60: #E14A69;
   --primary-70: #F76F86;
   --primary-80: #FFB2BC;
@@ -58,7 +58,7 @@
   --neutral-94:  #F0EDED;
   --neutral-92:  #EAE7E7;
   --neutral-90:  #E5E2E1;
-  --neutral-10:  #1B1C1C;
+  --neutral-10:  #1A1A18;
 
   /* neutral-variant - secondary/tertiary text + strong borders */
   --neutral-variant-30: #5C3F41;
@@ -76,6 +76,13 @@
 
   --white: #FFFFFF;
   --scrim: rgb(0 0 0 / 0.4);
+
+  /* Channel triples. The prototype expresses every soft surface as ONE hue at an
+     alpha step (rgba(193,18,63,X) / rgba(26,26,24,X)), so the Layer 2 alpha
+     ladder derives from these two lines. Re-point the hue here and every step
+     in the ladder follows - that is the whole point of keeping them. */
+  --primary-40-rgb: 193 18 63;
+  --neutral-10-rgb: 26 26 24;
 
   --font-sans: var(--font-jakarta, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
   --font-display: var(--font-jakarta, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif);
@@ -105,6 +112,11 @@
   --text-meta-size: 12px;       --text-meta-leading: 17px;      /* 400 12/1.4 */
   --text-prose-size: 16px;      --text-prose-leading: 26px;     /* 400 16/1.62 */
   --text-timestamp-size: 11.5px; --text-timestamp-leading: 17px; /* 400 11.5/1.45 */
+
+  /* Onboarding thread type, fixed by the prototype. */
+  --text-lede-size: 19px;       --text-lede-leading: 30px;      --text-lede-tracking: -0.005em; /* #first-msg 400 19/1.58 -.1px */
+  --text-lede-q-size: 19px;     --text-lede-q-leading: 27px;    /* #first-msg-q 500 19/1.4 */
+  --text-bubble-size: 15px;     --text-bubble-leading: 21px;    /* .u-bubble 400 15/1.4 */
 }
 
 /* ============ LAYER 2: SEMANTIC - LIGHT (default) ============ */
@@ -126,7 +138,7 @@
   --color-accent-hover:          var(--primary-35);
   --color-accent-active:         var(--primary-30);
   --color-accent-subtle:         var(--primary-90);
-  --color-accent-container:      var(--primary-45); /* pairs with text-inverse: white on #E21E4A ~4.65:1 */
+  --color-accent-container:      var(--primary-45); /* pairs with text-inverse: white on #E8385E ~4.5:1 */
   --color-focus-ring:            var(--primary-40);
 
   --color-success:        var(--tertiary-40);
@@ -139,6 +151,28 @@
   --color-info-subtle:    var(--secondary-90);
 
   --color-scrim:          var(--scrim);
+
+  /* ---- The prototype's alpha ladder (agencx-prototype-v6.html ONBOARDING) ----
+     Named by alpha step rather than by role: the prototype reuses each step in
+     several places, so a numeric name stays honest instead of inventing a role
+     vocabulary that the next screen would contradict. Only the steps the
+     onboarding thread actually uses are defined - add a step when a screen
+     needs it, never speculatively. */
+  --color-accent-a07:  rgb(var(--primary-40-rgb) / 0.07);  /* chip :active fill */
+  --color-accent-a09:  rgb(var(--primary-40-rgb) / 0.09);  /* #s1-grad stop, action pill fill */
+  --color-accent-a12:  rgb(var(--primary-40-rgb) / 0.12);  /* inactive send circle (.sc) */
+  --color-accent-a16:  rgb(var(--primary-40-rgb) / 0.16);  /* idle code-cell border */
+  --color-accent-a28:  rgb(var(--primary-40-rgb) / 0.28);  /* chip border */
+  --color-accent-a45:  rgb(var(--primary-40-rgb) / 0.45);  /* filled code-cell border */
+  --color-accent-a50:  rgb(var(--primary-40-rgb) / 0.50);  /* inactive send arrow */
+
+  /* The prototype's --c-muted is warm ink at 40%, NOT the mauve
+     --color-text-tertiary. Every muted string on a thread surface uses these. */
+  --color-ink-a05:  rgb(var(--neutral-10-rgb) / 0.05);  /* .sys-pill fill */
+  --color-ink-a07:  rgb(var(--neutral-10-rgb) / 0.07);  /* pill inner divider */
+  --color-ink-a12:  rgb(var(--neutral-10-rgb) / 0.12);  /* .edit-btn border */
+  --color-ink-a35:  rgb(var(--neutral-10-rgb) / 0.35);  /* .proc-txt */
+  --color-ink-a40:  rgb(var(--neutral-10-rgb) / 0.40);  /* --c-muted: placeholders, meta, hints */
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -155,6 +189,21 @@
 
   --gutter: 24px;
 
+  /* Thread geometry, read off the prototype's onboarding screen. The gaps are
+     deliberately off the 4px grid (14px/18px) - the prototype's values win over
+     the grid guidance where they disagree. */
+  --radius-bubble-lg: 20px;      /* .u-bubble - the operator thread keeps 18px */
+  --space-thread-gap: 14px;      /* .a-prose / .u-bubble margin-top */
+  --space-thread-gap-lg: 16px;   /* .typing margin-top */
+  --space-thread-lede-gap: 18px; /* #first-msg-q margin-top */
+  --space-thread-top: 44px;      /* #first-msg padding-top */
+  --space-thread-tail: 20px;     /* .th-space */
+  --size-send: 34px;             /* .sc */
+  --size-send-hit: 52px;         /* .fsend */
+  --size-code-cell-w: 46px;      /* .otp-cell */
+  --size-code-cell-h: 52px;
+  --width-thread: 640px;         /* desktop content column; mobile is full width + --gutter */
+
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-2: 0 2px 8px rgb(0 0 0 / 0.07);
   --shadow-3: 0 8px 24px rgb(0 0 0 / 0.10);
@@ -170,6 +219,8 @@
   --duration-base: 250ms;
   --duration-beat: 220ms;
   --duration-push: 280ms;
+  --duration-rise-fast: 180ms;   /* fsu on .u-bubble + .typing */
+  --duration-veil: 700ms;        /* #s1-grad fade-out */
   --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-push: cubic-bezier(0.25, 0.1, 0.25, 1);
 

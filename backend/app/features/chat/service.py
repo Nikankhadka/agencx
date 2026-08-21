@@ -151,6 +151,29 @@ async def persist_assistant_turn(
         await record_costs(conn, tenant_id, conversation_id, usages)
 
 
+async def recent_messages(
+    *, tenant_id: UUID, conversation_id: UUID, limit: int
+) -> list[dict[str, str]]:
+    """The tail of a conversation, oldest first, as plain role/content dicts.
+
+    The agent's view of the thread (P-3). Ordered newest-first in SQL so the
+    limit keeps the *recent* messages, then reversed for the prompt, where
+    chronological order is what the model needs.
+    """
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        rows = await conn.fetch(
+            "select role, content from messages "
+            "where tenant_id = $1 and conversation_id = $2 "
+            "and role in ('customer', 'assistant', 'human_agent') "
+            "order by created_at desc, id desc "
+            "limit $3",
+            tenant_id,
+            conversation_id,
+            limit,
+        )
+    return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
+
+
 async def list_messages(
     *,
     tenant_id: UUID,

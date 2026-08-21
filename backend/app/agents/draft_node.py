@@ -169,7 +169,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_deterministic": True,
             }
         citations = [
-            {"index": i + 1, "source": _citation_source(c), "snippet": c["content"][:200]}
+            {"index": i + 1, "source": citation_source(c), "snippet": c["content"][:200]}
             for i, c in enumerate(retrieved_chunks)
         ]
         writer({"type": "citations", "citations": citations})
@@ -287,7 +287,9 @@ async def run(state: AgentState) -> dict[str, Any]:
     return {"draft_response": text, "draft_deterministic": False, **clear_violations}
 
 
-def _citation_source(chunk: dict[str, Any]) -> str:
+def citation_source(chunk: dict[str, Any]) -> str:
+    """The label a citation chip shows for a chunk. Shared with agent_node,
+    whose one-call answers cite from the same chunk shape."""
     metadata = chunk.get("metadata", {})
     if metadata.get("kind") == "catalog_item":
         return "catalog"

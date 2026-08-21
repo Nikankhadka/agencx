@@ -24,7 +24,13 @@ import { apiFetch } from "@/lib/api";
  * 7.2 specs "icons + labels": each item carries a Material Symbol; the active
  * item is an accent-container pill with the filled glyph, inactive items are
  * quiet text with the outlined glyph.
+ *
+ * /onboarding is the exception: it renders chrome-free. In the prototype the
+ * app has no navigation at all until the business is live (the bottom tab bar
+ * appears only on `#phone.post`), and the onboarding thread is the entire
+ * screen. The auth guard below still runs for it - only the chrome is dropped.
  */
+const CHROME_FREE = new Set(["/onboarding"]);
 const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/onboarding", label: "Onboarding", icon: "rocket_launch" },
   { href: "/knowledge", label: "Knowledge", icon: "folder_open" },
@@ -71,6 +77,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     return <div aria-busy="true" className="h-dvh bg-bg" />;
   }
   if (!session) return null;
+  if (CHROME_FREE.has(pathname)) return <>{children}</>;
 
   const displayName =
     (tenant?.brand?.["display_name"] as string | undefined) ?? tenant?.name ?? "Wren";
@@ -91,7 +98,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium transition-colors duration-fast",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium transition-colors duration-(--duration-fast)",
                   active
                     ? "bg-accent-container text-text-inverse"
                     : "text-text-secondary hover:bg-surface-container hover:text-text",
@@ -120,7 +127,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       <div className="mt-auto pt-4">
         <button
           onClick={() => signOut()}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-fast"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-(--duration-fast)"
         >
           <Icon name="logout" filled={false} size={20} />
           Sign out

@@ -39,6 +39,11 @@ DEFAULT_DAILY_TOKENS = 2_000_000
 DEFAULT_MAX_STEPS = 8
 DEFAULT_LLM_TIMEOUT_S = 45.0
 DEFAULT_TOOL_TIMEOUT_S = 15.0
+# P-2: the hard cap on a whole turn (PRD section 9). Distinct from
+# llm_timeout_s, which bounds one call: this is what the customer is actually
+# waiting through, and blowing it means an honest handoff rather than a longer
+# wait. Per-tenant overridable like every other limit.
+DEFAULT_TURN_BUDGET_S = 10.0
 
 # How long a summed-usage reading stays cached per tenant. Short enough that a
 # tenant crossing its cap is stopped within seconds, long enough that a burst
@@ -47,6 +52,8 @@ _USAGE_CACHE_TTL_S = 10.0
 
 BUDGET_ESCALATION_REASON = "budget"
 STEP_CAP_ESCALATION_REASON = "step_cap"
+# The turn ran past its latency cap - no leg produced a complete answer in time.
+TURN_BUDGET_ESCALATION_REASON = "turn_budget"
 # An unexpected failure mid-turn (provider returned garbage, a node raised).
 # The turn cannot be completed, so it escalates like any other dead end rather
 # than leaving the customer's stream hanging with no terminal event.
@@ -76,6 +83,7 @@ class TenantLimits:
     max_steps: int
     llm_timeout_s: float
     tool_timeout_s: float
+    turn_budget_s: float
 
     @classmethod
     def resolve(cls, config: dict[str, Any] | None, settings: Settings) -> TenantLimits:
@@ -92,6 +100,7 @@ class TenantLimits:
             max_steps=int(_num(limits.get("max_steps"), DEFAULT_MAX_STEPS)),
             llm_timeout_s=_num(limits.get("llm_timeout_s"), DEFAULT_LLM_TIMEOUT_S),
             tool_timeout_s=_num(limits.get("tool_timeout_s"), DEFAULT_TOOL_TIMEOUT_S),
+            turn_budget_s=_num(limits.get("turn_budget_s"), DEFAULT_TURN_BUDGET_S),
         )
 
 

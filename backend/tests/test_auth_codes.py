@@ -116,12 +116,59 @@ async def test_login_code_endpoint_accepts_valid_email(client: httpx.AsyncClient
     assert resp.status_code == 202
 
 
-@pytest.mark.parametrize("bad_email", ["not-an-email", "a@b", ""])
-async def test_login_code_endpoint_rejects_invalid_email(
+@pytest.mark.parametrize("bad_email", ["not-an-email", "a@b", "bob@gmial", "bob@.com"])
+async def test_login_code_endpoint_answers_unreadable_email_conversationally(
     client: httpx.AsyncClient, bad_email: str
 ) -> None:
+    """A typo gets one calm line, never a 422 validation dump (the thread shows
+    ``detail`` verbatim)."""
     resp = await client.post("/api/auth/login-code", json={"email": bad_email})
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert isinstance(detail, str) and detail
+    assert "@" not in detail  # the refusal never echoes the address back
+
+
+async def test_login_code_endpoint_rejects_empty_body_field(client: httpx.AsyncClient) -> None:
+    """An empty field is a malformed request, not a conversational mistake."""
+    resp = await client.post("/api/auth/login-code", json={"email": ""})
     assert resp.status_code == 422
+
+
+async def test_login_code_endpoint_reads_an_email_out_of_prose(
+    client: httpx.AsyncClient,
+) -> None:
+    """The composer is a chat pill, so the owner may answer in a sentence."""
+    local = f"sam.{uuid.uuid4().hex}"
+    resp = await client.post(
+        "/api/auth/login-code", json={"email": f"it's {local}@Example.com, thanks!"}
+    )
+    assert resp.status_code == 202
+    # The code is filed under the normalized address, not the sentence.
+    issued = await client.get(f"/api/auth/dev-login-code?email={local}@example.com")
+    assert issued.status_code == 200
+
+
+async def test_issue_and_verify_agree_on_one_normalized_key(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issuing from one spelling and verifying from another must not desync -
+    normalization happens once, at the edge, for both routes."""
+    user_id = str(uuid.uuid4())
+
+    async def _fake_ensure_auth_user(email: str) -> str:
+        return user_id
+
+    monkeypatch.setattr("app.services.identity.ensure_auth_user", _fake_ensure_auth_user)
+
+    local = f"sam-{uuid.uuid4().hex}"
+    await client.post("/api/auth/login-code", json={"email": f"  {local.upper()}@EXAMPLE.com "})
+    code = (await client.get(f"/api/auth/dev-login-code?email={local}@example.com")).json()["code"]
+
+    verify = await client.post(
+        "/api/auth/verify-code", json={"email": f"mailto:{local}@Example.com.", "code": code}
+    )
+    assert verify.status_code == 200
 
 
 async def test_verify_code_mints_session_for_existing_user(

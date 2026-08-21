@@ -72,7 +72,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
         aria-hidden="true"
         onClick={onClose}
         className={[
-          "absolute inset-0 transition-colors duration-push ease-push",
+          "absolute inset-0 transition-colors duration-(--duration-push) ease-push",
           open ? "bg-scrim" : "pointer-events-none bg-transparent",
         ].join(" ")}
       />
@@ -84,7 +84,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
         tabIndex={-1}
         className={[
           "absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-[28px] bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet",
-          "transition-transform duration-push ease-push",
+          "transition-transform duration-(--duration-push) ease-push",
           open ? "translate-y-0" : "translate-y-full",
         ].join(" ")}
       >

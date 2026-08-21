@@ -5,9 +5,12 @@ import type { OnboardingDraft } from "@/lib/onboarding";
 
 /**
  * The "show-back" surface: what the assistant has captured about the business,
- * so the owner can trust and correct it. Rendered as the desktop aside and as
- * the mobile Business Sheet body. Ordered by beat so it always mirrors the
- * interview; a field that is not yet captured shows an "awaiting" hint.
+ * so the owner can trust and correct it. This belongs to the Business tab (S2),
+ * NOT to the onboarding thread - design/frontend.md section 9 is explicit that
+ * the thread is the only progress indicator onboarding gets, so there is no
+ * captured-count, no bar, and no percentage here. Ordered by beat so it always
+ * mirrors the interview; a field that is not yet captured shows an "awaiting"
+ * hint.
  *
  * The rows mirror BEAT_ORDER in app/onboarding/beats.py - one per lean profile
  * field. Nothing here branches on a business vertical (I8): business type is
@@ -36,8 +39,6 @@ export function ShowBack({
     const value = draft[field.key];
     return { ...field, values: value ? [value] : [] };
   });
-  const capturedCount = rows.filter((row) => row.values.length > 0).length;
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -47,14 +48,10 @@ export function ShowBack({
             <Icon name="check_circle" size={16} />
             Live
           </span>
-        ) : (
-          <span className="text-footnote text-text-tertiary">
-            {capturedCount}/{rows.length} captured
-          </span>
-        )}
+        ) : null}
       </div>
 
-      <ol className="flex flex-col gap-3" aria-label="Onboarding progress" data-testid="show-back">
+      <ol className="flex flex-col gap-3" aria-label="What we know about your business" data-testid="show-back">
         {rows.map((row) => {
           const captured = row.values.length > 0;
           return (

@@ -2,9 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { ChatBubble } from "@/components/ui/ChatBubble";
-import { Sheet } from "@/components/ui/Sheet";
-import { StreamingText } from "@/components/ui/StreamingText";
+import {
+  AgentLine,
+  LedeMessage,
+  OwnerBubble,
+  Thread,
+  ThreadVeil,
+  TypingLine,
+} from "@/components/ui/Thread";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 import {
   foldReply,
@@ -14,7 +19,6 @@ import {
   type OnboardingState,
 } from "@/lib/onboarding";
 import { BeatComposer } from "./components/BeatComposer";
-import { ShowBack } from "./components/ShowBack";
 
 interface Message {
   role: "assistant" | "customer";
@@ -31,6 +35,15 @@ interface StateFields {
   can_confirm: boolean;
 }
 
+/**
+ * The prototype's `agentMsg()` holds the typing indicator before a message even
+ * when that message is static, so pacing reads the same from the first beat
+ * (design/frontend.md section 9). Only the opening message of a fresh
+ * conversation is paced - restored history renders at once, per the S1 spec's
+ * drop-off/return row.
+ */
+const OPENING_PACE_MS = 820;
+
 function historyToMessages(
   history: { role: string; content: string }[] | undefined,
 ): Message[] {
@@ -41,16 +54,19 @@ function historyToMessages(
 }
 
 /**
- * T-057: the onboarding interview, rebuilt around the server's beat system.
- * A bare-prose thread on the right; the "show-back" (what the assistant has
- * captured) is a desktop aside, and on mobile it lives in a bottom Business
- * Sheet opened from the header. The composer renders whatever widget the
- * server's InputSpec asks for (BeatComposer); confirm is server-gated via
- * ``can_confirm`` rather than a client-side draft-length guess.
+ * The onboarding interview. Ported from the ONBOARDING section of
+ * docs/agencx/design/prototypes/agencx-prototype-v6.html: a full-bleed thread
+ * that IS the screen - no title, no nav, and no progress surface of any kind
+ * (design/frontend.md section 9: "the thread is the progress indicator"). The
+ * composer renders whatever widget the server's InputSpec asks for
+ * (BeatComposer); confirm is server-gated via ``can_confirm`` rather than a
+ * client-side draft-length guess.
+ *
+ * The captured profile is shown back on the Business tab (S2), not here.
  */
 export default function OnboardingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState<OnboardingDraft>({});
+  const [opening, setOpening] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [stage, setStage] = useState("");
   const [input, setInput] = useState<InputSpec | null>(null);
@@ -58,11 +74,10 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [openingPaced, setOpeningPaced] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   function applyStateFields(fields: StateFields) {
-    setDraft(fields.draft);
     setCompleted(fields.completed);
     setStage(fields.stage);
     setInput(fields.input);
@@ -75,14 +90,23 @@ export default function OnboardingPage() {
         applyStateFields(state);
         const restored = historyToMessages(state.history);
         if (restored.length > 0) {
+          // A returning owner sees the whole thread at once - never re-paced.
           setMessages(restored);
+          setOpeningPaced(true);
         } else if (!state.completed) {
-          setMessages([{ role: "assistant", text: state.prompt }]);
+          setOpening(state.prompt);
         }
       })
       .catch((err) => setError(err instanceof ApiError ? err.detail : "Failed to load onboarding"))
       .finally(() => setLoaded(true));
   }, []);
+
+  // Hold the typing indicator ahead of the (static) opening message.
+  useEffect(() => {
+    if (!opening || openingPaced) return;
+    const timer = setTimeout(() => setOpeningPaced(true), OPENING_PACE_MS);
+    return () => clearTimeout(timer);
+  }, [opening, openingPaced]);
 
   function updateLastAssistant(update: (last: Message) => Partial<Message>) {
     setMessages((prev) => {
@@ -134,7 +158,7 @@ export default function OnboardingPage() {
 
           switch (event.type) {
             case "progress":
-              break; // processing indicator - no visible change needed
+              break; // the typing indicator is already up - nothing to change
             case "token":
             case "redraft":
             case "reply":
@@ -210,102 +234,87 @@ export default function OnboardingPage() {
     }
   }
 
+  // The veil lifts for good once the owner has answered once (prototype
+  // `#phone.started`).
+  const started = messages.some((message) => message.role === "customer");
+  // Never let the opening message still be "typing" once the conversation has
+  // moved past it - a fast answer would otherwise pop the lede in AFTER the
+  // reply it precedes.
+  const openingShown = openingPaced || messages.length > 0;
+
   if (!loaded) {
     return (
-      <main className="flex flex-1 items-center justify-center p-8">
+      <main className="flex flex-1 items-center justify-center bg-surface p-8">
         <div aria-busy="true" className="h-8 w-8 animate-pulse rounded-full bg-surface-container" />
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 lg:py-10">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:flex-row">
-        <aside className="hidden shrink-0 lg:block lg:w-72">
-          <div className="rounded-card border border-border bg-surface p-4 shadow-card">
-            <ShowBack draft={draft} completed={completed} />
-          </div>
-        </aside>
+    <main className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-surface">
+      <ThreadVeil started={started} />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-title-2 font-semibold text-text">Onboarding</h1>
-              <p className="text-body-sm text-text-secondary">
-                Answer a few questions and your assistant will be ready to go live.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setSheetOpen(true)}
-              className="lg:hidden"
-              data-testid="onboarding-show-back"
-            >
-              Your business
-            </Button>
-          </div>
-
-          <div
-            className="mt-6 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
-            data-testid="onboarding-thread"
-          >
-            {completed ? (
-              <ChatBubble role="system">You are live! Onboarding is complete.</ChatBubble>
-            ) : (
-              messages.map((message, index) => (
-                <ChatBubble key={index} role={message.role}>
-                  <StreamingText
-                    streaming={message.streaming ?? false}
-                    pending={message.streaming === true && !message.text}
-                  >
-                    {message.text || (message.streaming ? "" : "…")}
-                  </StreamingText>
-                </ChatBubble>
-              ))
+      <Thread
+        label="Onboarding conversation"
+        watch={messages}
+        data-testid="onboarding-thread"
+      >
+        {completed ? (
+          <AgentLine>You are live. Your assistant is answering for you now.</AgentLine>
+        ) : (
+          <>
+            {opening ? (
+              openingShown ? (
+                <LedeMessage>{opening}</LedeMessage>
+              ) : (
+                <TypingLine />
+              )
+            ) : null}
+            {messages.map((message, index) =>
+              message.role === "customer" ? (
+                <OwnerBubble key={index}>{message.text}</OwnerBubble>
+              ) : message.streaming && !message.text ? (
+                <TypingLine key={index} />
+              ) : (
+                <AgentLine key={index} streaming={message.streaming ?? false}>
+                  {message.text}
+                </AgentLine>
+              ),
             )}
-          </div>
+          </>
+        )}
+      </Thread>
 
+      <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+        <div className="mx-auto w-full max-w-thread">
           {!completed && canConfirm ? (
-            <div className="mt-6">
-              <Button
-                onClick={handleConfirm}
-                loading={busy}
-                data-testid="onboarding-confirm"
-              >
-                Confirm and go live
-              </Button>
-            </div>
+            <Button onClick={handleConfirm} loading={busy} data-testid="onboarding-confirm">
+              Confirm and go live
+            </Button>
           ) : !completed && input ? (
-            <div className="mt-6">
-              {/* Mounted unconditionally (only the text toggles) - screen
-                  readers reliably announce changes inside an existing live
-                  region, but often miss one that appears and disappears. */}
-              <p className="h-4 text-footnote text-text-secondary" aria-live="polite">
-                {busy ? "Thinking…" : ""}
-              </p>
-              <BeatComposer
-                key={stage}
-                input={input}
-                busy={busy}
-                onText={(text) => void sendText(text)}
-                onSelect={(values) => void sendSelection(values)}
-                onStop={handleStop}
-              />
-            </div>
+            <BeatComposer
+              key={stage}
+              input={input}
+              busy={busy}
+              onText={(text) => void sendText(text)}
+              onSelect={(values) => void sendSelection(values)}
+              onStop={handleStop}
+            />
           ) : null}
 
-          {error ? (
-            <p className="mt-3 text-footnote text-danger" data-testid="onboarding-error">
-              {error}
-            </p>
-          ) : null}
+          {/* Mounted unconditionally (only the text toggles) - screen readers
+              reliably announce changes inside an existing live region, but
+              often miss one that appears and disappears. Sits outside the
+              thread's role="log" so the two never compete. */}
+          <p
+            role="status"
+            data-testid={error ? "onboarding-error" : undefined}
+            className="mt-2 h-4 text-meta text-text-secondary"
+          >
+            {error ?? (busy ? "Answering…" : "")}
+          </p>
         </div>
       </div>
-
-      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Your business">
-        <ShowBack draft={draft} completed={completed} />
-      </Sheet>
     </main>
   );
 }

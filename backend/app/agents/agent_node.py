@@ -1,16 +1,34 @@
-"""T-044: Tool-driven agent node.
+"""T-044/P-3: tool-driven agent node - one call per turn in the common case.
 
 One node that replaces the old supervisor + six-specialist topology. Runs a
 tool-calling loop (max 8 iterations) - the LLM decides which tools to call,
 each gets executed in Python, results feed back to the conversation. When the
 model returns prose instead of tool calls, the loop ends and a route is
 determined from the set of tools that were invoked.
+
+P-3 puts the tenant's context package (system prompt + owner profile + corpus)
+into that first call. When the corpus fits the budget (O-4's fast path) it is
+already in the prompt, so ``search_knowledge`` is not offered at all - there is
+nothing for it to fetch - and the model's prose answer *is* the draft: the turn
+is one LLM call, and the draft node is skipped entirely. Everything after the
+draft is unchanged: the price gate and inspection still run, in the same order,
+with the same authority, and nothing reaches the customer until inspection
+passes.
+
+Above the budget the package carries no corpus, ``search_knowledge`` is offered,
+and the turn keeps its previous shape (agent call -> tool -> draft call).
+
+The draft is not streamed token by token here, and that costs the customer
+nothing: the inspection buffer (T-021/US-060) holds every token until the whole
+draft has been judged, so streaming out of this node would only stream into a
+buffer. The prose is emitted as one ``token`` event when the call returns.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 from uuid import UUID
@@ -19,24 +37,32 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 from pydantic import BaseModel, Field
 
+from app.agents.draft_node import citation_source
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
 from app.llm.provider import ChatMessage, ToolSpec
 from app.retrieval.service import retrieve
+from app.services.context_package import ContextPackage, get_package
+from app.services.retrieval import get_business_context
 from app.shared import db
 from app.shared.limits import with_timeout
 
 logger = logging.getLogger("app.agents.agent_node")
 
+_CITATION_RE = re.compile(r"\[(\d+)\]")
+
 _MAX_ITERATIONS = 8
 _REFUSAL_SCORE_THRESHOLD = 0.05
 
-_SYSTEM_PROMPT = (
-    "You are a customer-support and sales assistant for a business. You have "
-    "access to tools that let you answer questions, recommend items, produce "
-    "price quotes, look up order status, or escalate to a human. Decide which "
-    "tool(s) to call based on what the customer asked:\n"
+# How much of the conversation goes back into the prompt. Enough for a customer
+# to say "and how much is that one?" and be understood, short enough that a long
+# thread never crowds out the business material it has to share the budget with.
+_HISTORY_MESSAGES = 10
+
+_TOOL_GUIDANCE = (
+    "You have tools available. Decide which (if any) to call based on what the "
+    "customer asked:\n"
     "- search_knowledge: look up general information, policies, or FAQs\n"
     "- recommend_items: help choose products or services based on preferences\n"
     "- get_quote_inputs: produce a price quote for specific items\n"
@@ -45,6 +71,33 @@ _SYSTEM_PROMPT = (
     "If the customer is just greeting, saying thanks, or asking what you can do, "
     "respond directly without calling any tool. If you are unsure or the message "
     "is unclear, escalate."
+)
+
+# The customer bubble renders plain text with citation chips - it does not parse
+# markdown, so asterisks and hyphens arrive on screen as asterisks and hyphens.
+# frontend.md section 9 makes that a rule rather than a rendering accident: chat
+# output is prose, and anything structured belongs in a UI component.
+_STYLE_GUIDANCE = (
+    "Write the way a person types in a chat: plain sentences, no markdown, no "
+    "bullet points, no headings, no bold or italic markers, no tables, no code "
+    "blocks. When you have several things to say, say them in sentences. Keep "
+    "answers short - a few sentences unless the customer asked for detail."
+)
+
+_FAST_PATH_GUIDANCE = (
+    "The business's own material is included below in full - it is everything "
+    "the business has published to you, so do not look for a search tool. Answer "
+    "from that material and from the business facts above it, citing each factual "
+    "claim with its bracket number, e.g. [1]. If the answer is not there, say so "
+    "plainly and offer to have a human follow up - never invent an answer, a "
+    "policy, or a price.\n"
+    "You are this business's assistant, not a general assistant: answer only "
+    "questions about the business, its products, services, policies, and orders. "
+    "For anything else - general knowledge, trivia, other companies, advice "
+    "unrelated to this business - do not answer it even if you know it. Say that "
+    "you can only help with this business and offer to help with something you "
+    "can. Greetings, thanks, and questions about what you can do are fine to "
+    "answer directly."
 )
 
 
@@ -96,7 +149,15 @@ async def _search_knowledge_impl(
     embedder: Any,
     reranker: Any,
 ) -> list[dict[str, Any]]:
-    results = await retrieve(
+    """Turn-time retrieval, through O-4's seam.
+
+    Only reached on the hybrid path (a fast-path package already carries the
+    corpus, so this tool is not offered), but it calls the seam rather than
+    ``retrieve`` directly so there is exactly one way grounding material is
+    fetched. The relevance threshold applies to scored results only - nothing
+    unscored ever comes back here.
+    """
+    context = await get_business_context(
         conn,
         tenant_id=tenant_id,
         query=query,
@@ -104,7 +165,11 @@ async def _search_knowledge_impl(
         reranker=reranker,
         top_k=5,
     )
-    relevant = [chunk for chunk in results if chunk.score > _REFUSAL_SCORE_THRESHOLD]
+    relevant = [
+        chunk
+        for chunk in context.chunks
+        if context.fast_path or chunk.score > _REFUSAL_SCORE_THRESHOLD
+    ]
     return [
         {"id": str(chunk.id), "content": chunk.content, "metadata": chunk.metadata}
         for chunk in relevant
@@ -198,9 +263,12 @@ async def _create_escalation_impl(
     )
 
 
-def _determine_route(called_tools: set[str]) -> str:
+def _determine_route(called_tools: set[str], *, has_corpus: bool = False) -> str:
     if not called_tools:
-        return "conversation"
+        # With the corpus already in the prompt (fast path), an answer with no
+        # tool call is a grounded answer, not small talk - inspection must judge
+        # it against that material, which the "knowledge" route is what selects.
+        return "knowledge" if has_corpus else "conversation"
     if "create_escalation" in called_tools:
         return "escalation"
     if "get_quote_inputs" in called_tools:
@@ -214,28 +282,49 @@ def _determine_route(called_tools: set[str]) -> str:
     return "conversation"
 
 
-async def run(state: AgentState) -> dict[str, Any]:
-    runtime = get_runtime(GraphContext)
-    ctx = runtime.context
-    writer = get_stream_writer()
+# messages rows carry the transcript's own roles; the wire takes user/assistant.
+# A human agent replying for the business is the assistant side of the
+# conversation as far as the model is concerned.
+_WIRE_ROLES = {"customer": "user", "assistant": "assistant", "human_agent": "assistant"}
 
-    # One spotlight per turn: every tool result below is wrapped with it, and
-    # the instruction that explains the delimiters ships in the same prompt.
-    spotlight = new_spotlight()
 
-    tail = state["messages"][-3:] if len(state["messages"]) > 3 else state["messages"]
-    messages: list[ChatMessage] = [
-        ChatMessage(role="system", content=f"{_SYSTEM_PROMPT}\n{spotlight.instruction()}"),
-    ]
-    for m in tail:
-        messages.append(ChatMessage(role=m["role"], content=m["content"]))
+def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
+    """The turn's system prompt, built fresh so the spotlight token is fresh."""
+    parts = [package.system_prompt, f"Tone: {package.tone}."]
+    profile = package.profile_text()
+    if profile:
+        parts.append(f"Business facts the owner gave you:\n{profile}")
+    parts.append(_TOOL_GUIDANCE)
+    parts.append(_STYLE_GUIDANCE)
+    if package.fast_path and package.chunks:
+        parts.append(_FAST_PATH_GUIDANCE)
+        parts.append(
+            "Business material:\n"
+            + "\n\n".join(
+                f"[{i + 1}] {spotlight.wrap(chunk.content)}"
+                for i, chunk in enumerate(package.chunks)
+            )
+        )
+    elif package.fast_path:
+        # Fast path with nothing in it: the tenant has published no material at
+        # all. Say so rather than letting the model fill the gap.
+        parts.append(
+            "The business has not published any material to you yet. Answer only "
+            "from the business facts above; for anything else, say you do not "
+            "have that information and offer to have a human follow up."
+        )
+    parts.append(spotlight.instruction())
+    return "\n\n".join(parts)
 
+
+def _tools_for(package: ContextPackage) -> list[ToolSpec]:
+    """The tool set for this turn.
+
+    ``search_knowledge`` is offered only when the package did not already bring
+    the corpus: on the fast path there is nothing left for it to find, and
+    offering it would buy a round trip for material already in the prompt.
+    """
     tools = [
-        ToolSpec(
-            name="search_knowledge",
-            description="Search the business knowledge base for policies or FAQs",
-            args_schema=_SearchKnowledgeArgs,
-        ),
         ToolSpec(
             name="recommend_items",
             description="Recommend products/services based on customer preferences",
@@ -257,14 +346,69 @@ async def run(state: AgentState) -> dict[str, Any]:
             args_schema=_CreateEscalationArgs,
         ),
     ]
+    if package.fast_path:
+        return tools
+    return [
+        ToolSpec(
+            name="search_knowledge",
+            description="Search the business knowledge base for policies or FAQs",
+            args_schema=_SearchKnowledgeArgs,
+        ),
+        *tools,
+    ]
+
+
+def _cited_chunks(answer: str, chunks: list[Any]) -> list[dict[str, Any]]:
+    """The chunks the answer actually cited, in citation order.
+
+    A fast-path package can hold the whole corpus; the customer's citation chips
+    should name what the answer used, not everything the model could have read.
+    """
+    seen: list[int] = []
+    for match in _CITATION_RE.finditer(answer):
+        index = int(match.group(1))
+        if 1 <= index <= len(chunks) and index not in seen:
+            seen.append(index)
+    return [
+        {
+            "id": str(chunks[index - 1].id),
+            "content": chunks[index - 1].content,
+            "metadata": chunks[index - 1].metadata,
+        }
+        for index in seen
+    ]
+
+
+async def run(state: AgentState) -> dict[str, Any]:
+    runtime = get_runtime(GraphContext)
+    ctx = runtime.context
+    writer = get_stream_writer()
+
+    # One spotlight per turn: every tool result below is wrapped with it, and
+    # the instruction that explains the delimiters ships in the same prompt.
+    spotlight = new_spotlight()
 
     called_tools: set[str] = set()
     retrieved_chunks: list[dict[str, Any]] = []
     selections: list[dict[str, Any]] = []
     engine_quote: dict[str, Any] | None = None
     lookup_result: dict[str, Any] | None = None
+    answer_text = ""
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
+        # P-3: assembled at chat open and cached by (tenant, knowledge_version),
+        # so this is normally a version check, not an assembly.
+        package = await get_package(conn, ctx.tenant_id)
+        tools = _tools_for(package)
+        messages: list[ChatMessage] = [
+            ChatMessage(role="system", content=_system_prompt(package, spotlight)),
+        ]
+        tail = state["messages"][-_HISTORY_MESSAGES:]
+        for m in tail:
+            messages.append(
+                ChatMessage(role=_WIRE_ROLES.get(m["role"], "user"), content=m["content"])
+            )
+
         for iteration in range(_MAX_ITERATIONS):
             with ctx.turn.span("agent_tool_call") as span:
                 model_started = time.perf_counter()
@@ -285,6 +429,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             )
 
             if not turn.tool_calls:
+                answer_text = (turn.text or "").strip()
                 break
 
             called_tools.update(call.name for call in turn.tool_calls)
@@ -476,7 +621,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             if "create_escalation" in called_tools:
                 break
 
-    route = _determine_route(called_tools)
+    route = _determine_route(called_tools, has_corpus=bool(package.chunks))
 
     if route == "escalation":
         return {
@@ -484,6 +629,64 @@ async def run(state: AgentState) -> dict[str, Any]:
             "escalated": True,
             "escalation_reason": "tool_requested",
         }
+
+    if answer_text and not called_tools:
+        # P-3: the model answered straight from the package, so its prose is the
+        # draft and the draft node is skipped - one LLM call for the whole turn.
+        #
+        # Only a turn that called no tools qualifies, for two hard reasons.
+        # Prose after ``search_knowledge`` is not grounded in anything the model
+        # read: that tool hands back a match *count*, never the chunks, and
+        # draft_node is where the retrieved text actually enters a prompt. And
+        # prose after a money tool would bypass draft_node's quoting rules,
+        # which are what keep figures off the model (the quote card is the sole
+        # source of numbers). Saving a call is never worth either.
+        #
+        # Everything after the draft is untouched: this text still goes through
+        # inspection before a customer sees any of it.
+        grounding = [
+            {"id": str(chunk.id), "content": chunk.content, "metadata": chunk.metadata}
+            for chunk in package.chunks
+        ]
+        cited = _cited_chunks(answer_text, package.chunks) if package.chunks else []
+        if cited:
+            writer(
+                {
+                    "type": "citations",
+                    "citations": [
+                        {
+                            "index": i + 1,
+                            "source": citation_source(chunk),
+                            "snippet": chunk["content"][:200],
+                        }
+                        for i, chunk in enumerate(cited)
+                    ],
+                }
+            )
+        writer({"type": "token", "text": answer_text})
+        logger.info(
+            "agent direct answer",
+            extra={"route": route, "chars": len(answer_text), "cited": len(cited)},
+        )
+        return {
+            "route": route,
+            "draft_response": answer_text,
+            "draft_deterministic": False,
+            "retrieved_chunks": grounding,
+            "selections": selections,
+            "engine_quote": engine_quote,
+            "lookup": lookup_result,
+        }
+
+    if route == "knowledge" and not retrieved_chunks:
+        # The package brought the corpus but the model returned no prose to use
+        # it (an empty completion, or it stopped after a non-search tool). The
+        # draft node can still write a grounded answer from that material, so
+        # hand it over rather than letting the turn refuse with nothing in hand.
+        retrieved_chunks = [
+            {"id": str(chunk.id), "content": chunk.content, "metadata": chunk.metadata}
+            for chunk in package.chunks
+        ]
 
     return {
         "route": route,

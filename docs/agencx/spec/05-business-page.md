@@ -71,6 +71,22 @@ narrow-mobile sidebar squeeze is gone.
 - [ ] All states from the frontend spec (S1/S2 states) verified visually at
   375px and desktop
 
+### Design reference
+
+Build from the prototype, do not invent:
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`**.
+
+| Surface | Prototype anchor |
+|---|---|
+| Chat tab (thread list) | `renderScreen('chats')` - topbar, All / Action needed / Unread filter row, `.chat-row` (name, timestamp, unread dot, preview line) |
+| Chat thread | `renderThreadScreen()` - `.bbl-a` / `.bbl-t` bubbles, `.thr-pill` system stamps, handling vs "You're replying" status, `.tick-sent` / `.tick-read` receipts |
+| Business tab (hub) | `renderScreen('business')` - `.bh-row` list (icon, label, chevron) |
+| Composer | `buildCmdPill()` - the WhatsApp-pattern command pill (camera+mic when empty, send arrow when typing) |
+| Bottom tab bar | The `.post` phone chrome + D18 tab bar (frontend.md section 7) |
+
+Copy in the prototype is demo (Sababa reference tenant) - take structure,
+states, spacing, and interaction vocabulary from it, not strings.
+
 ### Technical spec
 
 - `frontend/src/app/(tenant-admin)/` nav model re-cut; routes behind hidden
@@ -145,6 +161,15 @@ and cost,
 
 - [ ] The advanced screens' existing test coverage stays green and in CI
   (they still exist and must still work; F-1 handles genuinely dead code)
+
+### Design reference
+
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`**,
+`renderScreen('business')`: the hub rows that stay in Stage 1 are
+**Booking page** and **Settings** (`renderScreen('booking')`,
+`renderScreen('settings')`). **Schedule**, **Money**, and **Plan** are the
+Stage 2 rows this ticket hides - they exist in the prototype so the hub's
+shape is right, not because Phase 1 ships them.
 
 ### Technical spec
 

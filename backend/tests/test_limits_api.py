@@ -10,6 +10,7 @@ test_limits.py.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -28,6 +29,7 @@ from app.shared.config import get_settings
 from app.shared.limits import (
     BUDGET_ESCALATION_REASON,
     STEP_CAP_ESCALATION_REASON,
+    TURN_BUDGET_ESCALATION_REASON,
     TenantLimits,
     clear_usage_cache,
     tenant_over_budget,
@@ -245,3 +247,77 @@ async def test_under_budget_tenant_is_not_flagged(
     limits = TenantLimits.resolve({"limits": {"daily_cost_usd": 5.0}}, get_settings())
     async with db.tenant_context(tenant_id, "customer") as conn:
         assert not await tenant_over_budget(conn, tenant_id, limits)
+
+
+# --- P-2: the per-turn latency cap ---------------------------------------------
+
+
+class _SlowKnowledge(_AlwaysRouteKnowledge):
+    """A provider that never answers inside any sane turn budget."""
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[Any],
+        tools: list[Any],
+        tool_choice: str = "auto",
+    ) -> Any:
+        await asyncio.sleep(10.0)
+        return await super().chat_with_tools(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
+
+
+async def test_turn_over_its_latency_budget_hands_off_gracefully(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed(superuser_conn)
+    limits = TenantLimits.resolve({"limits": {"turn_budget_s": 0.05}}, get_settings())
+
+    events = [
+        event
+        async for event in stream_chat_response(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            message="What are your hours?",
+            provider=_SlowKnowledge(),
+            embedder=ZeroEmbedder(),
+            reranker=_PassthroughReranker(),
+            limits=limits,
+        )
+    ]
+
+    types = [event["type"] for event in events]
+    # The customer gets an honest handoff and a terminal event, never a hung
+    # stream and never a stack trace.
+    assert types[-3:] == ["refusal", "escalated", "done"]
+    assert "token" not in types
+
+    row = await superuser_conn.fetchrow(
+        "select reason from escalations where conversation_id = $1", conversation_id
+    )
+    assert row is not None and row["reason"] == TURN_BUDGET_ESCALATION_REASON
+
+
+async def test_a_turn_inside_its_budget_is_untouched(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed(superuser_conn)
+    limits = TenantLimits.resolve({"limits": {"turn_budget_s": 30.0}}, get_settings())
+
+    events = [
+        event
+        async for event in stream_chat_response(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            message="What are your hours?",
+            provider=_AlwaysRouteKnowledge(),
+            embedder=ZeroEmbedder(),
+            reranker=_PassthroughReranker(),
+            limits=limits,
+        )
+    ]
+
+    types = [event["type"] for event in events]
+    assert "token" in types
+    assert "escalated" not in types

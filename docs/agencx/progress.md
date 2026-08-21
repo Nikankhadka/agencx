@@ -26,9 +26,15 @@ credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
 a human). The Agencx change work - rebrand, money guardrail loosening, tool
 gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
-Foundation (A-1/A-2), login-in-chat (O-2), and the lean onboarding re-cut (O-1)
-are landed. The next group is the chat spine (`03-chat-spine.md`), starting
-with P-3.
+Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
+the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
+in progress on `feat/chat-spine`, in the order P-4 -> O-4 -> P-3 -> P-1 -> P-2 ->
+P-5 (O-4 is pulled forward from `04-chat-grounding.md` because P-3's fast path
+calls its `get_business_context` seam).
+
+O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
+prototype the onboarding thread is ported from carries that ramp - B-3 stays
+open for US-2, the `STATUS_TONE` map.
 
 ## Feature status matrix
 
@@ -42,7 +48,8 @@ with P-3.
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGING** - B-2 points the public domain to agencx.app |
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile` |
-| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI) |
+| Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
+| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI); O-5 adds `services/email_address.py` - prose extraction + syntax validation, answered as one calm line |
 | URL scrape knowledge ingest path | NEW | O-3 (document upload path is built; URL fetch is a new ingest route) |
 
 ### Knowledge & retrieval
@@ -53,14 +60,14 @@ with P-3.
 | Chunk + embed pipeline | BUILT | `d8b0a43` |
 | Hybrid retrieval (dense + sparse + RRF + rerank) | BUILT | `9c27859`, `0dd266e` (reranker score normalization) |
 | Golden retrieval set + eval | BUILT | `182985a` |
-| `get_business_context` seam | PARTIAL | retrieval exists behind it; **CHANGING** - O-4 adds the whole-corpus fast path + measured token threshold (the two-path seam) |
-| Knowledge version + context-package cache | NEW | P-4 (version derivation), P-3 (pre-load package) |
+| `get_business_context` seam | BUILT | O-4 (`app/services/retrieval.py`): whole-corpus fast path under a measured token budget, hybrid pipeline above it, one shape |
+| Knowledge version + context-package cache | BUILT | P-4 derivation (0018 + `services/knowledge_version.py`) + P-3 package cache keyed by `(tenant_id, knowledge_version)` |
 
 ### Agents & the money boundary
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| LangGraph graph skeleton | BUILT | `82322b9`; **CHANGING** - P-3/P-1 re-cut to supervisor-with-tools, one call per turn (the Wren 3-5-call topology is replaced) |
+| LangGraph graph skeleton | BUILT | `82322b9`; re-cut by P-3 to supervisor-with-tools: a fast-path turn is one call plus inspection, and the draft node is skipped (it still serves tool routes and every redraft) |
 | Supervisor routing | BUILT | `731b622`, `27662e8` (conversation capability); **CHANGING** - D-1/D-2 build tools from the tenant enabled set; lean default |
 | Knowledge agent | BUILT | `0b99a71` |
 | Recommendation agent | BUILT | `c023918`; **CHANGING** - optional per-tenant tool (D-1), off by default |
@@ -81,9 +88,9 @@ with P-3.
 | Judge calibration | BLOCKED | `19d68e0` - needs founder hand-labeling (circular if agent-generated) |
 | Golden agent-task set + trajectory scorer | BUILT | `22f9cae`, `cd868c4`; **CHANGING** - G-1 updates for the supervisor-with-tools shape |
 | Prompt-injection defense + adversarial set | BUILT | `598f3a7` |
-| Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; **CHANGING** - P-2 replaces the timeout behavior with the 4s/10s first-wins failover budget |
+| Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
-| Tracing + cost accounting | BUILT | `e2f5034`; **CHANGING** - P-1/P-2 track per-provider TTFT and failover events |
+| Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
@@ -106,11 +113,11 @@ with P-3.
 
 | Feature | Status | Ticket |
 |---|---|---|
-| Google AI Studio primary provider | NEW | P-1 |
-| Groq / Cerebras fallback + OpenRouter failover tiers | PARTIAL (Groq fallback wired in env; Cerebras candidate) | P-1 |
-| 4s TTFT timeout + first-wins race + 10s cap | NEW | P-2 |
-| Context-package pre-load on chat open | NEW | P-3 |
-| knowledge_version derivation + invalidation | NEW | P-4 |
+| Google AI Studio primary provider | BUILT | P-1 (gemini-3.5-flash-lite, documented tier matrix in `.env.example`) |
+| Groq / Cerebras fallback + OpenRouter failover tiers | BUILT | P-1 (`LLM_FAILOVER_*` third leg; legs nest into one chain, Cerebras documented as a candidate) |
+| 4s TTFT timeout + first-wins race + 10s cap | BUILT | P-2 (`llm/failover.py` race + `turn_budget_s` cap; live-verified on Gemini/Groq) |
+| Context-package pre-load on chat open | BUILT | P-3 (`services/context_package.py`, primed by the public tenant lookup) |
+| knowledge_version derivation + invalidation | BUILT | P-4 (migration 0018 + `services/knowledge_version.py`) |
 | Failover typing indicator (client) | NEW | P-5 |
 
 ## Spec ticket status
@@ -122,7 +129,7 @@ the ticket id.
 chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
-P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3,
+P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
 D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 
 | Ticket | Status | Commit |
@@ -131,17 +138,24 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
 | B-1 Copy rename to Agencx | not started | |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
-| B-3 Semantic colour convention + lighter primary | not started | |
+| B-3 Semantic colour convention + lighter primary | US-1 done (O-5), US-2 not started | |
 | C-1..C-4 Money guardrail allowed-set loosening | not started | |
+| C-5 Non-blocking escalation (chat continues after handoff) | not started | |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
-| P-1..P-5 Providers, failover, pre-load, versioning, indicator | not started | |
+| P-4 knowledge_version + invalidation | done | `9960a9d` |
+| P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
+| P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
+| P-2 Latency budget + first-wins failover | done | this commit |
+| P-5 Typing indicator through the failover window | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
-| O-1 Onboarding: one tool + LLM turn loop | done | this commit |
-| O-3, O-4 Knowledge ingest, whole-corpus fast path | not started | |
+| O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
+| O-5 Onboarding UI: prototype thread port | done | this commit |
+| O-3 Knowledge ingest (URL scrape + upload) | not started | |
+| O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

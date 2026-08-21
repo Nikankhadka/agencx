@@ -80,11 +80,37 @@ When a screen needs a status the component maps the status string to a tone via
 statuses fall back to neutral. (This convention lands in shipped code via ticket
 B-3; the reference prototypes already reflect it.)
 
-**Lighter primary (B-3).** The shipped brand accent moves from `#BA0036` to
-`#C1123F` (a touch lighter, still crimson, white-text AA on primary), with the
-derived ramp hover `#A1002F`->`#A80033`, active `#870027`->`#8F0029`,
-accent-container `#E21E4A`->`#E8385E`; subtle `#FFD9DC`/`#FFECEE` unchanged.
-Applied to the reference prototypes now; the shipped token change ships with B-3.
+**Lighter primary - SHIPPED (O-5, was B-3 US-1).** The brand accent is
+`#C1123F` (a touch lighter than the original `#BA0036`, still crimson, white-text
+AA on primary), with the derived ramp hover `#A80033`, active `#8F0029`,
+accent-container `#E8385E`; subtle `#FFD9DC`/`#FFECEE` unchanged. Landed with
+O-5 rather than B-3, because the onboarding thread is ported from a prototype
+carrying that exact ramp. `--neutral-10` also moved to the prototype's warmer
+ink `#1A1A18`.
+
+**The alpha ladder (O-5).** The prototype expresses every soft surface as one
+hue at an alpha step, so `theme.css` carries two channel triples -
+`--primary-40-rgb` and `--neutral-10-rgb` - and derives a ladder from them:
+`--color-accent-a07/09/12/16/28/45/50` and
+`--color-ink-a05/07/12/35/40`. These are named by alpha step rather than by role
+because the prototype reuses each step in several places; a numeric name stays
+honest where an invented role vocabulary would not. Only steps a shipped screen
+uses are defined - add one when a screen needs it, never speculatively. Note
+that `--color-ink-a40` (the prototype's `--c-muted`) is what thread surfaces use
+for muted text, NOT the mauve `--color-text-tertiary`.
+
+**Thread tokens (O-5).** The onboarding thread's type (`--text-lede`,
+`--text-lede-q`, `--text-bubble`), geometry (`--radius-bubble-lg`,
+`--space-thread-*`, `--size-send*`, `--size-code-cell-*`, `--width-thread`) and
+motion (`--duration-rise-fast`, `--duration-veil`) are all prototype values. Some
+gaps are deliberately off the 4px grid (14px, 18px) - where the prototype and
+the grid guidance in section 4 disagree, the prototype wins.
+
+**Tailwind v4 has no `--duration` namespace.** `duration-fast` is not a real
+utility and silently does nothing; the form that reads a token is
+`duration-(--duration-fast)`. `--animate-*` IS a namespace, so named animations
+(`animate-rise`, `animate-beat-in`) are declared in `globals.css` and used
+directly.
 
 **Dark mode:** the two dark blocks (`:root[data-theme="dark"]` and the
 `prefers-color-scheme` media block) must stay literally identical - a header
@@ -140,6 +166,7 @@ Every component takes only semantic tokens. Each lists its required states.
 |---|---|---|
 | `Button` | primary / secondary / ghost / destructive; sm/md | default, hover, active, focus ring, disabled, loading |
 | `Input`, `Textarea`, `Select` | label above, help/error below; the inactive send state is the only validation signal - no red error text | default, focus, error, disabled |
+| `CommandPill` | `command` (send circle appears with text) and `field` (circle always present, dimmed until valid) variants; the pill carries the focus ring, never a rectangle inside it | empty, typing, armed, busy/stop, disabled |
 | `Card` | surface + border + radius-lg + shadow-1 | default, interactive |
 | `Table` | sticky header, row hover | loading, empty, error |
 | `Badge` | status pill; maps every status vocabulary to a tone (info=open/sent, warning=escalated/claimed/processing/provisioning, success=resolved/closed/active/ready, danger=failed/suspended, neutral=pending/draft/expired) | n/a |
@@ -152,7 +179,8 @@ Every component takes only semantic tokens. Each lists its required states.
 | `MetricCard` | bento stat card: big number + label + optional icon/trend/footer | loading, empty, error |
 | `Sparkline` | dependency-free inline-SVG polyline, strokes `currentColor` | n/a |
 | `FileDropzone` | drag target; accepted PDF, PNG/JPG, DOCX (+ URL paste detection) | idle, drag-over, uploading, done, rejected |
-| `ChatBubble` | customer (accent-subtle, right), assistant (surface, left), human_agent (info-subtle), system (centered caption) | static, streaming |
+| `ChatBubble` | the OPERATOR thread idiom: customer (accent-subtle, right), assistant (surface, left), human_agent (info-subtle), system (centered caption); 18px radius, tip at the top | static, streaming |
+| `Thread` (O-5) | the ONBOARDING thread idiom, a separate design: `Thread`, `LedeMessage`, `AgentLine` (bare prose), `OwnerBubble` (20px, tip bottom-right), `TypingLine`, `ThreadPill`, `ThreadVeil`. Never merge with `ChatBubble` | static, streaming, pending |
 | `StreamingText` | renders SSE tokens, `aria-live="polite"` | streaming, done, interrupted |
 | `TypingIndicator` | **NEW (P-5):** three pulsing dots (600-800ms) shown while a turn is in flight, sustained through the failover window - never a spinner, never a blank | active |
 | `CitationChip` | inline `[1]` chip; popover shows source + snippet | default, hover |
@@ -190,10 +218,35 @@ conversation IS the product.
 The thread is the progress indicator: no progress bars, no "% complete"
 anywhere. After go-live the app has exactly two tabs: Chat and Business.
 
+**Shipped shape (O-5).** Both halves of this conversation - `/login`
+(login-in-chat) and `/onboarding` (the interview) - render on the shared
+primitives in `frontend/src/components/ui/Thread.tsx`, ported from the
+prototype's ONBOARDING screen. The thread IS the screen: `/onboarding` renders
+chrome-free (no sidebar, no hamburger header), there is no title, and there is no
+progress surface of any kind. Assistant turns are bare prose; only the owner's
+turns get a bubble. A crimson veil (`#s1-grad`) sits over the bottom 56% and
+fades for good once the owner has answered once.
+
+`Thread.tsx` is deliberately NOT `ChatBubble`: the operator thread's two-bubble
+idiom (18px radius, tip at the top) and the onboarding thread's idiom (bare prose
+plus a 20px owner bubble tipped bottom-right) are different designs in the
+prototype. Do not unify them.
+
+**Email in a chat composer (O-5).** The client gate on the login pill is
+*liveness only* - it arms the send circle when the text contains something
+address-shaped, so "it's sam@shop.com" is sendable. The authority is
+`backend/app/services/email_address.py`, which extracts an address from prose,
+normalizes it, and validates syntax; a bad address comes back as a 400 with one
+calm conversational line the thread renders verbatim, and the typed text stays
+put so it can be corrected. Deliverability is not checked - the code itself is
+that test, and "Wrong email?" is already on screen.
+
 | State | Spec |
 |---|---|
 | Resolving tenant | full-page skeleton; no flash of default branding (brand injected server-side) |
 | Login / no valid session | chat surface present with the agent's first message already rendered - no welcome screen |
+| Opening message | held behind the typing indicator for 820ms, then revealed as the lede - static messages are paced like streamed ones (section 9). Never re-paced for restored history |
+| Bad email typed | one calm line under the composer from the server; typed text kept |
 | Streaming | StreamingText in assistant bubble; TypingIndicator up while the turn is in flight (through the failover window, P-5); composer disabled with "answering..." hint; stop button |
 | Escalated | EscalationBanner replaces composer; conversation stays readable |
 | Error / disconnect | inline retry in the failed bubble, never a blank screen |

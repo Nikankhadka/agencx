@@ -35,6 +35,8 @@ Before writing a fix for any bug (during the 30-day build or in the post-launch 
 
 Whenever end-to-end testing the product (the customer chat surface, the tenant admin console, the platform-owner surface, the escalation flow, the dashboards), be exacting about the UI. If something looks visibly off - misaligned, inconsistent spacing, a broken state, a confusing empty state - fix it along the way even if it isn't related to the current ticket. This applies most directly to E10/E11/E12 (the three surfaces) and the Week 4 polish pass.
 
+Building a screen is a separate discipline from testing one: **UI is ported from the prototype, never designed from ticket text.** Every Phase 1 screen already exists in `docs/agencx/design/prototypes/` (`agencx-prototype-v6.html` is current; `agencx-storefront-customer-v3.html` is the superseded storefront, good for interaction vocabulary only), and each UI ticket names its exact screen or render function in a "Design reference" section. Read that screen before writing the component and match its structure, states, spacing, and interaction vocabulary. Take behaviour, never strings (prototype copy is demo copy), and never hex values - visual values land as `theme.css` tokens, which CI enforces.
+
 ## 7. Engineering hygiene
 
 Treat lint errors, failing tests, and flaky tests as blocking wherever they're encountered, regardless of whether the current ticket caused them. Fix them as part of the work rather than working around or ignoring them. This applies to the CI regression gate and everywhere else in the codebase.

@@ -10,8 +10,9 @@ the real local cross-encoder's actual judgment.
 from __future__ import annotations
 
 import json
+import os
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import replace
 from typing import Any
 
@@ -28,7 +29,9 @@ from app.observability.cost import report_usage
 from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.services import context_package
 from app.shared import db
+from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
 from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
@@ -80,6 +83,29 @@ def _without_progress(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     the customer actually receives. Their own contract is pinned in
     test_inspection.py rather than re-asserted in every stream test."""
     return [event for event in events if event["type"] != "progress"]
+
+
+@pytest.fixture
+def hybrid_path() -> Iterator[None]:
+    """Force retrieval scoring on, whatever the corpus size.
+
+    O-4's fast path hands a small corpus to the model whole and does no
+    scoring at all, so a relevance threshold means nothing there - the model
+    decides, backstopped by grounding inspection. A test whose subject *is* the
+    threshold has to put the tenant on the hybrid path, which is what a real
+    tenant with a large corpus gets.
+    """
+    original = os.environ.get("CORPUS_FAST_PATH_MAX_TOKENS")
+    os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = "1"
+    get_settings.cache_clear()
+    context_package.clear_cache()
+    yield
+    if original is None:
+        os.environ.pop("CORPUS_FAST_PATH_MAX_TOKENS", None)
+    else:
+        os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = original
+    get_settings.cache_clear()
+    context_package.clear_cache()
 
 
 @pytest_asyncio.fixture
@@ -174,7 +200,7 @@ async def test_chat_persists_customer_and_assistant_messages(
 
 
 async def test_chat_refuses_when_nothing_is_relevant(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], hybrid_path: None
 ) -> None:
     slug = f"chat-{uuid.uuid4().hex[:8]}"
     await _seed_tenant_with_chunk(superuser_conn, slug=slug)

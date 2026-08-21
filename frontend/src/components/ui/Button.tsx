@@ -48,7 +48,7 @@ export function Button({
       aria-busy={loading || undefined}
       className={[
         "relative inline-flex items-center justify-center font-medium rounded-md",
-        "transition-colors duration-fast select-none active:opacity-85",
+        "transition-colors duration-(--duration-fast) select-none active:opacity-85",
         "disabled:opacity-50 disabled:pointer-events-none",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],

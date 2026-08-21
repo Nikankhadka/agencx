@@ -16,22 +16,26 @@ export interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>,
 
 const BASE = [
   "inline-flex min-h-11 items-center justify-center gap-2",
-  "border-[length:var(--border-chip)] border-accent-subtle",
-  "text-chip font-medium transition-colors duration-fast select-none",
-  "active:bg-accent-subtle",
+  "rounded-chip border-[length:var(--border-chip)] border-accent-a28",
+  "text-chip font-medium transition-colors duration-(--duration-fast) select-none",
+  "active:bg-accent-a07",
 ].join(" ");
 
 const VARIANT_CLASSES = {
-  solid: "text-accent px-[14px] hover:bg-accent-subtle",
-  dashed: "border-dashed text-accent px-4 hover:bg-accent-subtle",
-  sent: "pointer-events-none text-text-tertiary px-[14px]",
+  solid: "text-accent px-[14px] hover:bg-accent-a07",
+  dashed: "border-dashed text-accent px-4 hover:bg-accent-a07",
+  sent: "pointer-events-none border-accent-a16 text-ink-a40 px-[14px]",
 } as const;
 
 /**
- * The enum-shaped beat widget. Three variants - solid (selectable), dashed
- * (suggestion), sent (committed). 1.5px border via --border-chip, radius
- * --radius-chip, 44px min target (an intentional deviation from the earlier
- * ~29px chips).
+ * The enum-shaped beat widget, ported from the prototype's `.c-reply` /
+ * `.c-suggest` / `.a-chip.sent`. Three variants - solid (selectable), dashed
+ * (suggestion), sent (committed). 1.5px accent-a28 border via --border-chip,
+ * radius --radius-chip.
+ *
+ * The one deliberate deviation from the prototype: a 44px minimum touch target
+ * (the prototype's chips are ~29px, below the accessibility floor in
+ * design/frontend.md section 10).
  */
 export function Chip({
   label,
@@ -50,7 +54,7 @@ export function Chip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected ? true : undefined}
-      className={[BASE, VARIANT_CLASSES[variant], selected ? "bg-accent-subtle" : "", className].join(
+      className={[BASE, VARIANT_CLASSES[variant], selected ? "bg-accent-a07" : "", className].join(
         " ",
       )}
       {...rest}
