@@ -19,20 +19,34 @@ the ticket id.
 
 ## Phases and dependencies
 
-| Phase | Tickets | What it does | Blocked by |
-|---|---|---|---|
-| **A - Docs** | A-1, A-2 | The restructure itself; canonical set + pointers | - |
-| **B - Rebrand** | B-1, B-2 | Agencx name on every surface; domain + CORS | A |
-| **C - Money guardrail** | C-1, C-2, C-3, C-4 | Allow figures verbatim from owner material; engine output becomes one allowed source | A |
-| **D - Tool gating** | D-1, D-2, D-3, D-4 | Tools built from the tenant enabled set; lean default | A |
-| **E - Screens** | E-1, E-2, E-3 | Chat + Business tabs; advanced screens hidden; platform minimal | A |
-| **F - Hygiene** | F-1, F-2 | Delete dead agent code; import boundary in CI | A |
-| **G - Eval** | G-1 | Re-cut eval cases for the lean toolset | C, D |
-| **P - Performance & providers** | P-1, P-2, P-3, P-4, P-5 | Provider tiers, failover budget, pre-load, versioning, indicator | A (P-1 before P-2/P-3; P-3 before P-5) |
-| **O - Flow & onboarding** | O-1, O-2, O-3, O-4 | Onboarding tool loop, login-in-chat, ingest paths, fast path | A (O-2 before O-1 in the flow) |
+### Phase 1 - the three pillars (build now)
 
-Suggested build order: A -> {B, C, D, E, F} in parallel -> {G, P, O}. P and O
-are independent; G-1 lands after C/D change the toolset.
+Phase 1 ships only: **(1) business onboarding, (2) customer chat query handling,
+(3) the business page** (PRD Stage 1: Chat + Business tabs + public page; no
+leads, quotes, payments, scheduling, or invoicing as default flows). Everything
+else defers to Phase 2 / Stage 2 backlog.
+
+| Order | Tickets | Pillar | Blocked by |
+|---|---|---|---|
+| 1 | A-1, A-2 | Foundation (docs restructure) - **done** | - |
+| 2 | O-1, O-2 | Onboarding: login-in-chat + one-tool loop | A (O-2 before O-1 in the flow) |
+| 3 | P-3, P-1, P-2, P-4, P-5 | Chat spine: context pre-load (keystone), providers, failover, versioning, indicator | A (P-1 before P-2/P-3; P-3 before P-5) |
+| 4 | O-3, O-4, C-1, C-2, C-3, C-4 | Chat grounding: ingest + whole-corpus fast path + money guardrail (honest price answers) | P-3 |
+| 5 | E-1, E-2 | Business page: Chat + Business tabs, advanced screens hidden | A |
+| 6 | B-1, B-3, E-3, D-2, F-2, G-1 | Polish/quality: Agencx copy, colour convention, platform minimal, lean default, CI boundary, eval | C, P |
+| 7 | F-1 | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
+
+Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
+C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
+
+**Deferred (not Phase 1):**
+
+| Ticket | Why deferred |
+|---|---|
+| B-2 | Domain + CORS to `agencx.app` - needs external DNS/Vercel founder step; local dev unaffected |
+| D-1, D-3, D-4 | Tool-gating machinery + toggle UI + tests - Phase 2 (merge-plan open question) |
+| D-2 | *Kept in Phase 1*: flips the tenant default to the lean toolset so quoting/pricing stays OFF by accident - one-line migration 0016 |
+| Payments, quoting, scheduling, invoicing, leads, money screens | No tickets; unticketed Stage 2 backlog (`docs/archive/agencx-planning/stage-2-backlog.md`) - not built now |
 
 ## Ticket list
 
@@ -42,6 +56,7 @@ are independent; G-1 lands after C/D change the toolset.
 | A-2 | Pointer updates | `A-2.md` |
 | B-1 | Copy rename to Agencx | `B-1.md` |
 | B-2 | Domain + CORS to agencx.app | `B-2.md` |
+| B-3 | Semantic colour convention + lighter primary | `B-3.md` |
 | C-1 | Money guardrail: allow figures verbatim from owner material | `C-1.md` |
 | C-2 | Route knowledge answers through the same figure check | `C-2.md` |
 | C-3 | Assistant states figures only exactly as listed, never computes | `C-3.md` |

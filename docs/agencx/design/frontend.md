@@ -6,9 +6,11 @@ clarity** - warm-leaning neutrals, a **crimson primary** with teal and green
 functional accents, generous whitespace, Plus Jakarta Sans throughout (D17).
 
 The system below is the shipped Wren frontend carried forward; the Agencx
-changes are the three-screen manifest (S1/S2/S3), the font swap, and the
-failover typing indicator (P-5). The pre-Agencx teal prototype system is retired
-and archived.
+changes are the three-screen manifest (S1/S2/S3), the font swap, the
+failover typing indicator (P-5), and the mobile-first app chrome (D18). The
+pre-Agencx prototype's teal accent, cleaning copy, and Hivee emblem stay
+retired and archived (D17); its mobile-first structure returns as the tenant
+app's bottom tab bar (D18).
 
 ## 1. The one hard rule: nothing is hardcoded
 
@@ -56,6 +58,33 @@ token change is the font:
 wired via `next/font/google` Plus Jakarta Sans in `layout.tsx` (replacing Inter;
 `display: "swap"`). Component code is untouched - the swap is a re-point, the
 same load-bearing pattern the Wren rebrand proved.
+
+**Colour convention (semantic status colours).** Crimson is the **brand** primary
+and is reserved for brand accents only: primary buttons, active tab/nav, links,
+focus rings, the monogram, and progress fill on brand surfaces. It is never used
+for a *status* meaning. Status is expressed with the standard semantic ramp,
+routed through the semantic tokens (Layer 2) and the `Badge` `STATUS_TONE` map:
+
+- **Green** (`--color-success`): approved, success, complete, paid, ready,
+  resolved, active, delivered, confirmed.
+- **Red** (`--color-danger`): cancelled, declined, failed, suspended, rejected,
+  refunded, error.
+- **Amber** (`--color-warning`): pending, warning, overdue, in-progress,
+  provisioning, processing, claimed, escalated, outstanding.
+- **Neutral / info** (grey, or `--color-info` where a distinct info colour is
+  wanted): open, sent, draft, neutral - any status without a clear
+  good/bad/pending charge.
+
+When a screen needs a status the component maps the status string to a tone via
+`toneForStatus` (Badge.tsx) - never a hardcoded hex. Unknown/tenant-defined
+statuses fall back to neutral. (This convention lands in shipped code via ticket
+B-3; the reference prototypes already reflect it.)
+
+**Lighter primary (B-3).** The shipped brand accent moves from `#BA0036` to
+`#C1123F` (a touch lighter, still crimson, white-text AA on primary), with the
+derived ramp hover `#A1002F`->`#A80033`, active `#870027`->`#8F0029`,
+accent-container `#E21E4A`->`#E8385E`; subtle `#FFD9DC`/`#FFECEE` unchanged.
+Applied to the reference prototypes now; the shipped token change ships with B-3.
 
 **Dark mode:** the two dark blocks (`:root[data-theme="dark"]` and the
 `prefers-color-scheme` media block) must stay literally identical - a header
@@ -216,6 +245,28 @@ the platform owner until Stage 2 re-lands them. Platform admin stays minimal
 (E-3): one Tenants page (list, provision, suspend/reactivate) plus aggregate
 metrics.
 
+### Mobile-first app chrome (tenant app, D18)
+
+The tenant app is mobile-first: below `lg` the two-tab manifest renders as an
+app-style surface with a persistent **bottom tab bar** - Chat and Business as
+bottom tabs; at `lg+` the left sidebar stays (E-1). One codebase, responsive; no
+native app, no PWA shell in Stage 1.
+
+- Tab bar: icon + label per tab, minimum 44px touch target, ~64px height plus
+  `env(safe-area-inset-bottom)` padding for home-indicator devices
+- Active tab: accent-container pill with the filled Material Symbol; inactive:
+  quiet text with the outlined glyph - the same idiom as the sidebar items
+- The hamburger Drawer is no longer the tenant app's mobile nav; it stays
+  available to the platform surface (E-3)
+- Brand header stays compact on mobile; sign-out is reachable, never hidden
+- Structural reference: the reworked prototype
+  (`docs/agencx/design/prototypes/agencx-prototype-v6.html`) is trusted for
+  screen inventory, states, interaction vocabulary, and the bottom tab bar
+  pattern, now carrying the shipped crimson identity, the monogram mark, and
+  the Sababa reference tenant (D17, D18). The companion storefront surface
+  (`agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
+  storefront interaction vocabulary only
+
 ## 8. SSE event contract
 
 | Event | When emitted | Subscribed surfaces update |
@@ -250,7 +301,10 @@ metrics.
   focus traps in modals
 - `aria-live` for streaming and toasts; labeled forms; table semantics
 - Responsive: admin tables collapse gracefully at 768px (horizontal scroll
-  within the card); chat is mobile-first; minimum touch target 44px
+  within the card); the tenant app is mobile-first (bottom tab bar below `lg`,
+  D18); chat is mobile-first; minimum touch target 44px
+- Tab bar: `aria-current` on the active tab, visible labels on every tab,
+  keyboard navigation, safe-area padding honored
 - The `docs/conventions.md` section 6 standard applies: if a screen looks off
   while you're in there - fix it in the shared component/token, not with a local
   patch

@@ -80,7 +80,7 @@ ticket to land is A-2 (pointer updates, this restructure commit).
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; **CHANGING** - P-2 replaces the timeout behavior with the 4s/10s first-wins failover budget |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; **CHANGING** - P-1/P-2 track per-provider TTFT and failover events |
-| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; **CHANGING** - E-1/E-2 re-cut to Chat + Business; advanced screens hidden from nav |
+| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; **CHANGING** - P-5 adds the failover typing indicator; rebrand (B-1) |
@@ -114,14 +114,23 @@ ticket to land is A-2 (pointer updates, this restructure commit).
 Tracked as the work lands. One ticket = one commit; commit message starts with
 the ticket id.
 
+**Phase 1 target (three pillars only):** (1) business onboarding, (2) customer
+chat query handling, (3) the business page. Everything else defers to Phase 2 /
+Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
+are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
+P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3,
+D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
+
 | Ticket | Status | Commit |
 |---|---|---|
 | A-1 Docs restructure + archive | in progress | this commit |
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | this commit | |
 | B-1 Copy rename to Agencx | not started | |
-| B-2 Domain + CORS to agencx.app | not started | |
+| B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
+| B-3 Semantic colour convention + lighter primary | not started | |
 | C-1..C-4 Money guardrail allowed-set loosening | not started | |
-| D-1..D-4 Per-tenant tool gating | not started | |
+| D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
+| D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
@@ -138,7 +147,7 @@ the ticket id.
   is blocked until it exists; backend auth is fully tested with locally minted
   tokens. The login-in-chat (O-2) work also needs an email-sending provider for
   real delivery.
-- **Console sidebar does not collapse on narrow mobile** (pre-existing, surfaced
-  by the rebrand's 375px e2e check): the shared console shell squeezes/clips
-  below ~375px. Not a rebrand regression; flagged for a future responsive
-  console-shell ticket per the flag-not-decide convention.
+- **Console sidebar squeeze below ~375px** (pre-existing, surfaced by the
+  rebrand's 375px e2e check): resolved by design - E-1 replaces the tenant
+  app's mobile nav with the bottom tab bar (D18) - but the code fix ships with
+  E-1, not before.

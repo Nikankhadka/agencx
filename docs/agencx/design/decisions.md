@@ -127,6 +127,28 @@ crimson primary". The Wren rebrand proved the tokens-only path (a full visual
 rebrand with zero component code changes); reusing it keeps the Agencx look
 consistent with the platform the code already ships. The repo, roles, and env
 names stay `wren` (renaming is churn with no user value - see the set README).
+The mobile-first structure does return - see D18.
+
+### D18: Mobile-first revival - the bottom tab bar returns from the planning prototype
+
+**Decision:** The tenant app is mobile-first. On phones (below `lg`) the two-tab
+manifest - Chat and Business - renders as an app-style surface with a persistent
+**bottom tab bar**; at `lg+` the left sidebar stays. One codebase, responsive; no
+native app, no PWA shell in Stage 1. The bottom tab bar pattern from the Agencx
+planning prototype is carried forward; the rest of the prototype stays retired
+(D17 - teal accent, cleaning copy, Hivee emblem). E-1 owns the implementation.
+
+**Why:** Small-business owners live on phones; the tenant app's two destinations
+map exactly onto two bottom tabs. The planning prototype validated the app-style
+mobile interaction vocabulary (chat-first, thread as progress, no celebration),
+and its screen inventory and states already match the S1/S2 specs. The pattern
+also replaces the hamburger drawer and fixes the known narrow-mobile sidebar
+squeeze (progress.md) - mobile stops being an afterthought of the desktop shell.
+
+**Boundary:** The customer public page (S3) is untouched - it is a shared web
+link, already chat-first and mobile. D17 stands for the prototype's identity
+elements (teal, cleaning copy, Hivee emblem). This decision sets the
+direction; E-1 delivers the chrome.
 
 ## ADRs
 

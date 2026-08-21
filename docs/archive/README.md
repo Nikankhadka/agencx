@@ -19,7 +19,9 @@ maintained. It is reference material for history, evidence, and provenance.
 ## Retired content notes
 
 - The HTML prototypes (`agencx-planning/design/prototypes/*.html`) were structural
-  references only and are retired: the bottom tab bar, the cleaning-flavored copy,
-  and the Hivee emblem were never carried forward.
+  references only. They were promoted to `docs/agencx/design/prototypes/` and
+  reworked (crimson identity, monogram mark, Sababa copy, D18 bottom tab bar) on
+  2026-08-21; the pre-rework cleaning copy, teal accent, and Hivee emblem here are
+  retained for provenance only.
 - `Untitled` is a stray dictation file of the restructure request itself; kept for
   provenance, it is not documentation.

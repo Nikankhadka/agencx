@@ -153,6 +153,9 @@ queue, pricing editor) are hidden from the tenant app navigation, not deleted.
 They stay reachable by code and by the platform owner until Stage 2 re-lands
 them with a purpose.
 
+The two-tab app is mobile-first: on phones the tabs render as an app-style
+bottom tab bar (D18), on desktop as a sidebar (E-1).
+
 ### What is explicitly out
 
 - No lead records, quote objects, payments, scheduling, or invoicing as default
@@ -306,6 +309,7 @@ $10/month (decision D16).
 |---|---|
 | **Chat** | Tenant app tab 1: login-in-chat, onboarding, then everyday conversation |
 | **Business** | Tenant app tab 2: profile + knowledge shown back, editable (show-back, not settings) |
+| **bottom tab bar** | The mobile navigation (D18): Chat + Business as persistent bottom tabs on phones, sidebar on desktop |
 | **public page** | Anonymous per-tenant page at a slug; share link + QR |
 
 ### Stages and readiness
