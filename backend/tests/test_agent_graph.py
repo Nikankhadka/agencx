@@ -169,6 +169,10 @@ async def test_forced_route_runs_agent_draft_inspection(
     )
     if route in ("recommendation", "quoting"):
         assert order == ["agent", "draft", "price_gate", "inspection"]
+    elif route == "conversation":
+        # P-3: no tool call means the agent already wrote the answer, so the
+        # draft node is skipped - one LLM call, then the gates.
+        assert order == ["agent", "inspection"]
     else:
         assert order == ["agent", "draft", "inspection"]
 

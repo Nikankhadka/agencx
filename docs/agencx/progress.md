@@ -56,13 +56,13 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 | Hybrid retrieval (dense + sparse + RRF + rerank) | BUILT | `9c27859`, `0dd266e` (reranker score normalization) |
 | Golden retrieval set + eval | BUILT | `182985a` |
 | `get_business_context` seam | BUILT | O-4 (`app/services/retrieval.py`): whole-corpus fast path under a measured token budget, hybrid pipeline above it, one shape |
-| Knowledge version + context-package cache | PARTIAL | P-4 version derivation is **BUILT** (0018 + `services/knowledge_version.py`); P-3 pre-load package is NEW |
+| Knowledge version + context-package cache | BUILT | P-4 derivation (0018 + `services/knowledge_version.py`) + P-3 package cache keyed by `(tenant_id, knowledge_version)` |
 
 ### Agents & the money boundary
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| LangGraph graph skeleton | BUILT | `82322b9`; **CHANGING** - P-3/P-1 re-cut to supervisor-with-tools, one call per turn (the Wren 3-5-call topology is replaced) |
+| LangGraph graph skeleton | BUILT | `82322b9`; re-cut by P-3 to supervisor-with-tools: a fast-path turn is one call plus inspection, and the draft node is skipped (it still serves tool routes and every redraft) |
 | Supervisor routing | BUILT | `731b622`, `27662e8` (conversation capability); **CHANGING** - D-1/D-2 build tools from the tenant enabled set; lean default |
 | Knowledge agent | BUILT | `0b99a71` |
 | Recommendation agent | BUILT | `c023918`; **CHANGING** - optional per-tenant tool (D-1), off by default |
@@ -111,7 +111,7 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 | Google AI Studio primary provider | NEW | P-1 |
 | Groq / Cerebras fallback + OpenRouter failover tiers | PARTIAL (Groq fallback wired in env; Cerebras candidate) | P-1 |
 | 4s TTFT timeout + first-wins race + 10s cap | NEW | P-2 |
-| Context-package pre-load on chat open | NEW | P-3 |
+| Context-package pre-load on chat open | BUILT | P-3 (`services/context_package.py`, primed by the public tenant lookup) |
 | knowledge_version derivation + invalidation | BUILT | P-4 (migration 0018 + `services/knowledge_version.py`) |
 | Failover typing indicator (client) | NEW | P-5 |
 
@@ -140,7 +140,8 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
-| P-4 knowledge_version + invalidation | done | this commit |
+| P-4 knowledge_version + invalidation | done | `9960a9d` |
+| P-3 Agent-ready pre-load (context package) | done | this commit |
 | P-1, P-2, P-3, P-5 Providers, failover, pre-load, indicator | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |

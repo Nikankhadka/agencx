@@ -63,8 +63,11 @@ class NoopReranker(Reranker):
 
 
 def _conversation_provider(*, stream_text: str) -> ToolAwareFakeProvider:
+    """P-3: a greeting calls no tool, so the agent's own reply is the draft -
+    the tool turn carries the prose, and ``stream_text`` is only reached on a
+    redraft (which goes through the draft node)."""
     return ToolAwareFakeProvider(
-        tool_call_sequence=[ToolTurn(text="Greeting response", tool_calls=[])],
+        tool_call_sequence=[ToolTurn(text=stream_text, tool_calls=[])],
         stream_text=stream_text,
         extract_route="conversation",
     )

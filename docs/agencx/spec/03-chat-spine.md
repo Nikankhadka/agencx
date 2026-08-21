@@ -40,10 +40,10 @@ to have something fast to protect.
 **I want** the context package assembled on chat open (not on first send),
 **so that** the agent is ready the moment the customer types.
 
-- [ ] Chat open (public page load, tenant chat load) triggers assembly
+- [x] Chat open (public page load, tenant chat load) triggers assembly
   behind the request: profile + system prompt + corpus (fast path) or
   retrieval-ready state (hybrid path)
-- [ ] The package is cached in-process with a TTL and the
+- [x] The package is cached in-process with a TTL and the
   `(tenant_id, knowledge_version)` key
 
 #### US-2 One call per turn in the common case
@@ -52,10 +52,12 @@ to have something fast to protect.
 **I want** my question answered in one round trip,
 **so that** the answer is fast.
 
-- [ ] A customer message = one LLM call: supervisor-with-tools against the
-  package + message history; no route call, no retrieval call, no separate
-  draft node
-- [ ] Greetings, refusals, and grounded answers all flow through this single
+- [x] A customer message = one LLM call for the answer: supervisor-with-tools
+  against the package + the last 10 messages of the thread; no route call, no
+  retrieval call, no separate draft node. Inspection remains its own call, as
+  US-3 requires - measured live: 2 calls, ~2.8s median, against the 37.1s
+  4-call baseline
+- [x] Greetings, refusals, and grounded answers all flow through this single
   call (tools available per the tenant's enabled set - D-1)
 
 #### US-3 The guardrail and inspection still gate
@@ -64,9 +66,14 @@ to have something fast to protect.
 **I want** the one-call shape to keep the full safety pipeline,
 **so that** speed never trades against the money boundary.
 
-- [ ] draft -> guardrail (C-2) -> inspection -> stream, unchanged in order
-  and authority
-- [ ] The inspection buffer rule (nothing before inspection passes) is
+- [x] draft -> guardrail (C-2) -> inspection -> stream, unchanged in order
+  and authority. Two judge-prompt corrections were needed *because* of the new
+  shape, neither of which relaxes a gate: grounding now sees whole chunks (the
+  300-char truncation failed grounded claims whose supporting sentence had been
+  cut off), and prompt_leak now distinguishes the assistant's own instructions
+  from the business material that shares the system message and is written for
+  customers
+- [x] The inspection buffer rule (nothing before inspection passes) is
   untouched
 
 #### US-4 Cache invalidation is version-driven
@@ -75,9 +82,9 @@ to have something fast to protect.
 **I want** the next chat open to answer from the new material,
 **so that** the cache never serves stale knowledge.
 
-- [ ] Package lookup validates the current `knowledge_version` (P-4); a
+- [x] Package lookup validates the current `knowledge_version` (P-4); a
   mismatch reassembles
-- [ ] A freshly assembled package is served for the very next turn (no
+- [x] A freshly assembled package is served for the very next turn (no
   TTL-wait staleness in the same session after an upload)
 
 ### Technical spec
@@ -105,10 +112,10 @@ to have something fast to protect.
 
 ### Definition of done
 
-- [ ] Package assembled on chat open, cached by version key
-- [ ] One LLM call per common turn
-- [ ] Safety pipeline unchanged and green
-- [ ] Stale-cache behavior verified
+- [x] Package assembled on chat open, cached by version key
+- [x] One LLM call per common turn
+- [x] Safety pipeline unchanged and green
+- [x] Stale-cache behavior verified
 
 ---
 

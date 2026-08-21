@@ -1,5 +1,12 @@
-"""T-044: Tool-driven agent -> draft -> price_gate (for money routes) ->
+"""T-044/P-3: tool-driven agent -> draft -> price_gate (for money routes) ->
 inspection -> END/retry/escalation.
+
+P-3 adds one edge: when the agent node already produced the answer from its
+context package (the one-call turn), the draft node is skipped and the draft
+goes straight to the gates. Everything downstream of the draft - the price gate,
+inspection, the redraft-once-then-escalate rule - is unchanged, and a redraft
+still runs through the draft node, which knows how to rebuild any route's prompt
+from the state the agent left behind.
 """
 
 from __future__ import annotations
@@ -38,6 +45,13 @@ def _draft_route(state: AgentState) -> str:
     return "inspection"
 
 
+def _agent_route(state: AgentState) -> str:
+    """Straight to the gates when the agent already wrote the draft (P-3)."""
+    if state.get("escalated") or not state.get("draft_response"):
+        return "draft"
+    return _draft_route(state)
+
+
 def _inspection_route(state: AgentState) -> str:
     decision = state.get("inspection_decision")
     if decision == "retry":
@@ -59,7 +73,11 @@ def build_graph() -> CompiledStateGraph[AgentState, GraphContext, AgentState, Ag
     graph.add_node("escalation", traced("escalation", escalation.run))
 
     graph.add_edge(START, "agent")
-    graph.add_edge("agent", "draft")
+    graph.add_conditional_edges(
+        "agent",
+        _agent_route,
+        {"draft": "draft", "price_gate": "price_gate", "inspection": "inspection"},
+    )
     graph.add_conditional_edges(
         "draft",
         _draft_route,

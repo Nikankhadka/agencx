@@ -54,8 +54,10 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
             ]
         elif route == "conversation":
             # No tool calls at all - _determine_route falls through to
-            # "conversation" (agent_node.py:154).
-            tool_sequence = [ToolTurn(text="hi", tool_calls=[])]
+            # "conversation" for a tenant with no corpus. P-3 makes that turn's
+            # prose the draft, so the first entry of ``drafts`` belongs here.
+            first = (drafts or ["hi"])[0]
+            tool_sequence = [ToolTurn(text=first, tool_calls=[])]
         else:
             tool_sequence = [
                 ToolTurn(
@@ -313,8 +315,11 @@ async def test_conversation_route_redraft_sees_the_violations(
 
     assert final_state["inspection_decision"] == "ok"
     assert final_state["escalated"] is False
-    assert provider.stream_calls == 2
-    assert "too curt" in provider.draft_prompts[1]
+    # P-3: the first draft is the agent's own one-call reply (no stream), so the
+    # single stream call here *is* the redraft - and it is the prompt that has
+    # to carry the violation.
+    assert provider.stream_calls == 1
+    assert "too curt" in provider.draft_prompts[0]
 
 
 async def test_conversation_route_second_failure_escalates_cleanly(

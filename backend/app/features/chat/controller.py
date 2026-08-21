@@ -46,11 +46,23 @@ from app.shared.limits import (
 logger = logging.getLogger("app.features.chat.controller")
 
 
-def initial_state(*, conversation_id: str, tenant_id: str, message: str) -> AgentState:
+# How much of the transcript goes into the turn. The customer message itself is
+# already the last row (resolve_conversation persisted it), so this is the whole
+# window the agent sees, not a window plus one.
+HISTORY_MESSAGES = 10
+
+
+def initial_state(
+    *,
+    conversation_id: str,
+    tenant_id: str,
+    message: str,
+    history: list[dict[str, str]] | None = None,
+) -> AgentState:
     return {
         "conversation_id": conversation_id,
         "tenant_id": tenant_id,
-        "messages": [{"role": "customer", "content": message}],
+        "messages": history or [{"role": "customer", "content": message}],
         "route": None,
         "route_confidence": None,
         "retrieved_chunks": [],
@@ -103,8 +115,22 @@ async def stream_chat_response(
     yield {"type": "conversation", "conversation_id": str(conversation_id)}
 
     graph = get_graph()
+    # P-3/US-2: the turn is one call against the package *and the conversation*,
+    # so the recent transcript goes in with it - without it "and how much is
+    # that one?" has nothing to refer to. Falls back to the bare message if the
+    # read fails; a turn is worth more than its history.
+    try:
+        history = await service.recent_messages(
+            tenant_id=tenant_id, conversation_id=conversation_id, limit=HISTORY_MESSAGES
+        )
+    except Exception:
+        logger.warning("could not load conversation history; answering from this message alone")
+        history = None
     initial_state_dict = initial_state(
-        conversation_id=str(conversation_id), tenant_id=str(tenant_id), message=message
+        conversation_id=str(conversation_id),
+        tenant_id=str(tenant_id),
+        message=message,
+        history=history,
     )
 
     full_text = ""
