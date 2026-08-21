@@ -8,24 +8,79 @@ satisfied by extraction, so there is no deterministic selection path here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 
+from app.features.knowledge import service as knowledge_service
 from app.features.onboarding import service
+from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     prepare_turn,
+    prepare_url_turn,
     run_turn,
     stream_reply,
 )
 from app.onboarding.flow import ProfileDraft
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
+
+_URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+
+# O-3: knowledge is never a blocking beat. A page we cannot read offers the two
+# other ways in and then lets the interview move on - the owner can fill this in
+# whenever, from the Knowledge screen.
+_URL_SCRAPE_FAILED = (
+    "I couldn't read that page. Send me a file instead, or tell me in a sentence "
+    "- and either way you can add your services, pricing and the rest any time "
+    "from Settings > Knowledge."
+)
+
+
+def _find_url(text: str) -> str | None:
+    """The first http(s) URL in the message, trailing punctuation stripped, or
+    None. Bare domains are not matched - the ingest path only fetches explicit
+    http(s) URLs, and a loose match would misread ordinary prose (e.g. a time
+    or a decimal) as a link."""
+    match = _URL_RE.search(text)
+    if match is None:
+        return None
+    return match.group(0).rstrip(".,;:!?)")
+
+
+def _state_event(record: OnboardingRecord) -> dict[str, object]:
+    record_data = record.to_jsonb()
+    nxt = beats.next_beat(record.draft)
+    return {
+        "type": "state",
+        "stage": nxt.key if nxt else "confirm",
+        "draft": record_data.get("draft", {}),
+        "completed": record_data.get("completed", False),
+        "input": beats.input_spec(nxt).model_dump() if nxt else None,
+        "can_confirm": nxt is None and not record_data.get("completed", False),
+    }
+
+
+async def _scrape_and_ingest(*, tenant_id: UUID, url: str, embedder: Embedder) -> tuple[str, str]:
+    """Scrape a URL and ingest it as a 'website' document (O-3). Returns
+    ``(page_text, title)``; a scrape failure raises ``ValueError``."""
+    document_id = uuid4()
+    page_text, title = await knowledge_service.scrape_url(url=url)
+    await knowledge_service.ingest_website(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        url=url,
+        text=page_text,
+        title=title,
+        embedder=embedder,
+    )
+    return page_text, title
 
 
 def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
@@ -57,13 +112,24 @@ async def load_record_state(*, tenant_id: UUID) -> dict[str, Any]:
     return response_from_record(record)
 
 
-async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> dict[str, Any]:
+async def run_message(
+    *, tenant_id: UUID, text: str, provider: LLMProvider, embedder: Embedder
+) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
+        )
+    url = _find_url(text)
+    if url is not None:
+        return await _run_url_message(
+            tenant_id=tenant_id,
+            url=url,
+            onboarding=onboarding,
+            provider=provider,
+            embedder=embedder,
         )
     # ponytail: use the platform default timeout rather than resolving the
     # tenant's per-tenant llm_timeout_s; resolve TenantLimits like
@@ -78,8 +144,35 @@ async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> d
     return record_data
 
 
+async def _run_url_message(
+    *,
+    tenant_id: UUID,
+    url: str,
+    onboarding: OnboardingRecord,
+    provider: LLMProvider,
+    embedder: Embedder,
+) -> dict[str, Any]:
+    """Non-streamed URL turn: scrape + ingest, extract, return the read-back
+    state. A failed scrape degrades to a calm ask-to-describe."""
+    bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+    try:
+        page_text, _title = await _scrape_and_ingest(
+            tenant_id=tenant_id, url=url, embedder=embedder
+        )
+    except ValueError:
+        onboarding.history.append({"role": "user", "content": url})
+        onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
+        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        return onboarding.to_jsonb()
+
+    plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
+    plan.record.history.append({"role": "assistant", "content": plan.summary or ""})
+    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    return plan.record.to_jsonb()
+
+
 async def run_message_stream(
-    *, tenant_id: UUID, text: str, provider: LLMProvider
+    *, tenant_id: UUID, text: str, provider: LLMProvider, embedder: Embedder
 ) -> AsyncIterator[dict[str, object]]:
     """Streams one text turn as SSE-shaped events.
 
@@ -87,6 +180,7 @@ async def run_message_stream(
     ``reply`` -> ``state`` -> ``done``. Two short DB writes per turn: the draft
     plus the user message persist before the stream starts (so a refresh
     mid-conversation survives), the assistant reply persists after the stream.
+    A URL in the message routes to the site-as-shortcut turn (O-3).
     """
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
@@ -95,6 +189,17 @@ async def run_message_stream(
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
         )
+    url = _find_url(text)
+    if url is not None:
+        async for event in _stream_url_turn(
+            tenant_id=tenant_id,
+            url=url,
+            onboarding=onboarding,
+            provider=provider,
+            embedder=embedder,
+        ):
+            yield event
+        return
     # ponytail: platform default timeout (see run_message above).
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
     plan = await prepare_turn(admin_message=text, record=onboarding, provider=bounded)
@@ -118,17 +223,58 @@ async def run_message_stream(
         plan.record.history.append({"role": "assistant", "content": full})
         await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
 
-    record_data = plan.record.to_jsonb()
-    completed = record_data.get("completed", False)
-    nxt = beats.next_beat(plan.record.draft)
-    yield {
-        "type": "state",
-        "stage": nxt.key if nxt else "confirm",
-        "draft": record_data.get("draft", {}),
-        "completed": completed,
-        "input": beats.input_spec(nxt).model_dump() if nxt else None,
-        "can_confirm": nxt is None and not completed,
-    }
+    yield _state_event(plan.record)
+    yield {"type": "done"}
+
+
+async def _stream_url_turn(
+    *,
+    tenant_id: UUID,
+    url: str,
+    onboarding: OnboardingRecord,
+    provider: LLMProvider,
+    embedder: Embedder,
+) -> AsyncIterator[dict[str, object]]:
+    """Streams the site-as-shortcut turn (O-3): scrape + ingest, then extract
+    the profile fields from the page and reply with a read-back for the owner
+    to confirm or correct. A failed scrape degrades to a calm ask-to-describe,
+    never a hang or an error chrome."""
+    bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+    # The stamp leads: it is what the owner reads while the fetch, the ingest and
+    # the extract run, so it has to be on the wire before any of them start.
+    yield {"type": "progress", "stage": "reading_site"}
+    try:
+        page_text, _title = await _scrape_and_ingest(
+            tenant_id=tenant_id, url=url, embedder=embedder
+        )
+    except ValueError:
+        onboarding.history.append({"role": "user", "content": url})
+        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        yield {"type": "token", "text": _URL_SCRAPE_FAILED}
+        yield {"type": "reply", "text": _URL_SCRAPE_FAILED}
+        onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
+        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        yield _state_event(onboarding)
+        yield {"type": "done"}
+        return
+
+    plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
+    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+
+    full = ""
+    async for kind, payload in stream_reply(plan=plan, provider=bounded):
+        if kind == "redraft":
+            full = ""
+            yield {"type": "redraft", "reason": payload}
+        else:
+            full += payload
+            yield {"type": "token", "text": payload}
+    yield {"type": "reply", "text": full}
+
+    plan.record.history.append({"role": "assistant", "content": full})
+    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+
+    yield _state_event(plan.record)
     yield {"type": "done"}
 
 

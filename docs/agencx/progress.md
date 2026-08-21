@@ -28,9 +28,11 @@ gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat 
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
 the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
-in progress on `feat/chat-spine`, in the order P-4 -> O-4 -> P-3 -> P-1 -> P-2 ->
-P-5 (O-4 is pulled forward from `04-chat-grounding.md` because P-3's fast path
-calls its `get_business_context` seam).
+landed except P-5. Chat grounding (`04-chat-grounding.md`) is in progress on
+`feat/knowledge-ingest`: O-4 and O-3 are done, the C tickets are next. O-3 also
+pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5 pulled
+B-3 US-1 forward - the Wren-era `/knowledge` console page leaves the nav but
+stays mounted (E-2's posture, applied early).
 
 O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
@@ -50,13 +52,14 @@ open for US-2, the `STATUS_TONE` map.
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile` |
 | Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
 | Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI); O-5 adds `services/email_address.py` - prose extraction + syntax validation, answered as one calm line |
-| URL scrape knowledge ingest path | NEW | O-3 (document upload path is built; URL fetch is a new ingest route) |
+| URL scrape knowledge ingest path | BUILT | O-3: pasting a link in the onboarding thread scrapes it, ingests it as a `website` document, and reads back what it found; attaching a file works from the command pill's `+`. Images are refused (nothing reads them) |
+| Settings > Knowledge screen | BUILT | O-3 / D19: a source is processed into readable sections the owner corrects, held as a draft until they save it. Mobile-first, built from the prototype's destination screens. Pulled forward from S2; E-1 re-homes it in the two-tab shell |
 
 ### Knowledge & retrieval
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Knowledge upload (PDFs, text) | BUILT | `8a7b472`; **CHANGING** - O-3 adds document upload + URL scrape into the chat/FileDropzone surface |
+| Knowledge upload (PDFs, text) | BUILT | `8a7b472`; O-3 added `.docx` (stdlib zipfile, no dependency) and put attaching inside the onboarding thread |
 | Chunk + embed pipeline | BUILT | `d8b0a43` |
 | Hybrid retrieval (dense + sparse + RRF + rerank) | BUILT | `9c27859`, `0dd266e` (reranker score normalization) |
 | Golden retrieval set + eval | BUILT | `182985a` |
@@ -154,7 +157,7 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
 | O-5 Onboarding UI: prototype thread port | done | this commit |
-| O-3 Knowledge ingest (URL scrape + upload) | not started | |
+| O-3 Knowledge ingest (URL scrape + upload) | done | `db5e862` + this commit |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)

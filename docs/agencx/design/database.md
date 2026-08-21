@@ -188,14 +188,22 @@ create table documents (
   tenant_id    uuid not null references tenants(id) on delete cascade,
   filename     text not null,
   doc_type     text not null check (doc_type in ('policy', 'faq', 'catalog', 'price_list', 'other', 'website')),
-  status       text not null default 'pending' check (status in ('pending', 'processing', 'ready', 'failed')),
+  status       text not null default 'pending' check (status in ('draft', 'pending', 'processing', 'ready', 'failed')),
   error        text,
-  uploaded_at  timestamptz not null default now()
+  structured   jsonb,                                   -- 0019: the readable sections
+  uploaded_at  timestamptz not null default now(),
+  updated_at   timestamptz not null default now()       -- 0018: knowledge_version input
 );
 ```
 
-`website` (migration 0015) exists for the URL-scrape ingest path (**CHANGING** -
-O-3 wires the scrape route).
+`website` (migration 0015) carries the URL-scrape ingest path, wired by O-3.
+
+`draft` and `structured` (migration 0019, D19) are the review step: a source is
+processed into `[{"heading", "body"}]` sections and held as a `draft` - no
+chunks, so retrieval cannot reach it - until the owner saves it. Saving runs the
+normal pipeline over the sections they approved. `structured` is null on rows
+ingested before the knowledge screen existed; those are processed on first view
+rather than backfilled, since the work costs a model call per document.
 
 ```sql
 create table knowledge_chunks (
@@ -419,11 +427,16 @@ applied in order by a plain runner (no heavy framework):
 0013_platform_admin_tenant_config_write.sql  platform admin can write tenant_config
 0014_onboarding_business_fields.sql  tenants.business_name, payment_processing_mode, tenant_self_update
 0015_website_doc_type.sql  documents.doc_type 'website'
+0017_auth_codes.sql        auth_codes (login-in-chat, O-2)
+0018_documents_updated_at.sql  documents.updated_at + touch trigger (P-4)
+0019_documents_structured.sql  documents 'draft' status + structured jsonb (O-3/D19)
 ```
 
+(0016 is reserved for D-2's lean `enabled_tools` default and intentionally
+skipped.)
+
 Planned Agencx migrations (in the tickets that own them): D-2 (lean
-`enabled_tools` default + backfill), O-2 (`auth_codes` table), O-3 (nothing new -
-`website` type exists).
+`enabled_tools` default + backfill).
 
 Every table migration ends with its RLS + policies + grants to `wren_app`. A
 table without RLS must never survive a migration - the schema audit enforces

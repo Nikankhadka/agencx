@@ -165,6 +165,77 @@ def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
     return "\n".join(lines)
 
 
+# O-3 site-as-shortcut: a page is bounded to this window before it is handed to
+# the extractor - the whole page (up to the 2MB fetch cap) would blow the
+# extract call's budget, and a homepage states who the business is up front.
+_URL_EXTRACT_CHARS = 4000
+
+_URL_EXTRACT_PROMPT = (
+    "You are extracting business information from a website a small-business "
+    "owner just linked during onboarding. Read the page text and fill any of "
+    "these fields the page states: business_name, business_type, services, "
+    "hours. Fill only what the page actually says - never invent a value, and "
+    "leave a field empty when the page does not mention it. Set off_topic=false."
+)
+
+# O-3: the fields a homepage reliably states, read back to the owner for
+# confirmation. name/headcount/contact stay conversationally asked (a page
+# rarely states them cleanly).
+_URL_READBACK_FIELDS = ("business_type", "services", "hours")
+
+
+def _url_readback(draft: dict[str, Any]) -> str:
+    parts = [
+        f"{field.replace('_', ' ')}: {draft[field]}"
+        for field in _URL_READBACK_FIELDS
+        if draft.get(field)
+    ]
+    if parts:
+        return (
+            "Here's what I've got from your site: "
+            + "; ".join(parts)
+            + (". Sound right, or anything to fix?")
+        )
+    return (
+        "I read your site but couldn't pin down the details - can you describe "
+        "the business in a sentence?"
+    )
+
+
+async def prepare_url_turn(
+    *, url: str, page_text: str, record: OnboardingRecord, provider: LLMProvider
+) -> TurnPlan:
+    """The site-as-shortcut half of a URL turn (O-3).
+
+    Extracts profile fields from the scraped page text (bounded to a window),
+    merges them into the draft, and returns a server-synthesized read-back so
+    the owner can confirm or correct. The URL - never the full page text - is
+    recorded as the user message.
+    """
+    if record.completed:
+        return TurnPlan(
+            record=record,
+            persist=False,
+            summary="Onboarding is already complete.",
+            reply_msgs=None,
+        )
+    scan_input(page_text)
+    update = await provider.extract(
+        system_prompt=_URL_EXTRACT_PROMPT,
+        user_input=_extraction_input(record, page_text[:_URL_EXTRACT_CHARS]),
+        schema=DraftUpdate,
+    )
+    if update.profile is not None:
+        record.draft = save_profile(record.draft, update.profile)
+    record.history.append({"role": "user", "content": url})
+    return TurnPlan(
+        record=record,
+        persist=True,
+        summary=_url_readback(record.draft),
+        reply_msgs=None,
+    )
+
+
 async def prepare_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
 ) -> TurnPlan:

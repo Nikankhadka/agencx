@@ -5,7 +5,9 @@ Pure functions, no DB/network needed.
 
 from __future__ import annotations
 
+import io
 import json
+import zipfile
 
 from app.ingestion.chunker import (
     TARGET_CHUNK_WORDS,
@@ -14,6 +16,7 @@ from app.ingestion.chunker import (
     chunk_document,
     chunk_json,
     chunk_prose,
+    extract_text,
 )
 
 
@@ -89,6 +92,39 @@ def test_chunk_document_dispatches_on_extension() -> None:
 
     prose_chunks = chunk_document(b"Just prose text.", ".md", source="x.md")
     assert prose_chunks[0].metadata["kind"] == "prose"
+
+
+def _docx_bytes(paragraphs: list[str]) -> bytes:
+    """A minimal .docx: a zip whose word/document.xml holds the paragraphs."""
+    runs = "".join(f"<w:p><w:r><w:t>{paragraph}</w:t></w:r></w:p>" for paragraph in paragraphs)
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body>'
+        f"{runs}"
+        "</w:body></w:document>"
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("word/document.xml", document_xml)
+    return buffer.getvalue()
+
+
+def test_extract_text_docx_reads_paragraphs() -> None:
+    """O-3: a .docx extracts its paragraph text via stdlib, no new dependency."""
+    body = _docx_bytes(["Screen repairs", "Battery replacements from $39"])
+    text = extract_text(body, ".docx")
+
+    assert "Screen repairs" in text
+    assert "Battery replacements from $39" in text
+
+
+def test_extract_text_docx_skips_empty_paragraphs() -> None:
+    body = _docx_bytes(["Real content", "   ", ""])
+    text = extract_text(body, ".docx")
+
+    assert "Real content" in text
+    assert text.strip().split("\n\n") == ["Real content"]
 
 
 def test_chunk_catalog_item_includes_price_when_present() -> None:

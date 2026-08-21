@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { foldReply, isMultiSelect, parseOnboardingEvent } from "./onboarding";
+import {
+  ACCEPTED_UPLOAD_EXTENSIONS,
+  describeUpload,
+  foldReply,
+  isMultiSelect,
+  parseOnboardingEvent,
+} from "./onboarding";
 
 describe("parseOnboardingEvent", () => {
   it("parses a token event", () => {
@@ -91,5 +97,37 @@ describe("foldReply", () => {
   it("ignores non-text events", () => {
     expect(foldReply("abc", { type: "done" })).toBe("abc");
     expect(foldReply("abc", { type: "progress", stage: "processing" })).toBe("abc");
+  });
+});
+
+describe("describeUpload", () => {
+  it("acknowledges every extension the backend accepts", () => {
+    for (const ext of ACCEPTED_UPLOAD_EXTENSIONS) {
+      const verdict = describeUpload(`menu${ext}`);
+      expect(verdict.accepted).toBe(true);
+      expect(verdict.message).toContain(`menu${ext}`);
+    }
+  });
+
+  it("is case-insensitive about the extension", () => {
+    expect(describeUpload("MENU.PDF").accepted).toBe(true);
+  });
+
+  it("refuses images by name, because nothing in the stack reads one", () => {
+    const verdict = describeUpload("menu-photo.jpg");
+    expect(verdict.accepted).toBe(false);
+    expect(verdict.message).toContain("can't read images");
+    // Every refusal names a way forward - it never just says no.
+    expect(verdict.message).toContain("link");
+  });
+
+  it("refuses an unknown type without pretending to know what it is", () => {
+    const verdict = describeUpload("prices.xlsx");
+    expect(verdict.accepted).toBe(false);
+    expect(verdict.message).toContain("prices.xlsx");
+  });
+
+  it("handles a file with no extension", () => {
+    expect(describeUpload("prices").accepted).toBe(false);
   });
 });

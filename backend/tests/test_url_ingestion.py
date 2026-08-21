@@ -89,6 +89,30 @@ async def test_fetch_page_rejects_oversized_body() -> None:
             await fetch_page("http://example.com/big", client=client)
 
 
+async def test_fetch_page_rejects_non_2xx() -> None:
+    """O-3: a 404 page is a failure, not content. Ingesting the error page would
+    teach the assistant the site's 'page not found' copy."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, content=b"<html><body>Page not found</body></html>")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="could not read this URL"):
+            await fetch_page("http://example.com/gone", client=client)
+
+
+async def test_fetch_page_wraps_transport_errors() -> None:
+    """O-3: an unreachable host surfaces as ValueError like every other fetch
+    failure, so both callers degrade instead of raising a 500 at the owner."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("nope", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="could not read this URL"):
+            await fetch_page("http://nope.invalid/", client=client)
+
+
 async def test_fetch_page_returns_body() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"<html>hi</html>")

@@ -6,12 +6,15 @@ import {
   AgentLine,
   LedeMessage,
   OwnerBubble,
+  ProcessingLine,
   Thread,
+  ThreadPill,
   ThreadVeil,
   TypingLine,
 } from "@/components/ui/Thread";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 import {
+  describeUpload,
   foldReply,
   parseOnboardingEvent,
   type InputSpec,
@@ -21,7 +24,9 @@ import {
 import { BeatComposer } from "./components/BeatComposer";
 
 interface Message {
-  role: "assistant" | "customer";
+  /** Set only for messages updated after they are pushed (upload stamps). */
+  id?: string;
+  role: "assistant" | "customer" | "stamp";
   text: string;
   streaming?: boolean;
 }
@@ -43,6 +48,13 @@ interface StateFields {
  * drop-off/return row.
  */
 const OPENING_PACE_MS = 820;
+
+/**
+ * The prototype's `.proc-txt` line while a pasted link is being fetched. The
+ * backend leads its URL turn with `progress: reading_site` precisely so this
+ * covers the scrape, the ingest and the extraction.
+ */
+const PROCESSING_COPY: Record<string, string> = { reading_site: "Reading your site\u2026" };
 
 function historyToMessages(
   history: { role: string; content: string }[] | undefined,
@@ -72,6 +84,7 @@ export default function OnboardingPage() {
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [openingPaced, setOpeningPaced] = useState(false);
@@ -108,6 +121,10 @@ export default function OnboardingPage() {
     return () => clearTimeout(timer);
   }, [opening, openingPaced]);
 
+  function updateById(id: string, update: Partial<Message>) {
+    setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, ...update } : message)));
+  }
+
   function updateLastAssistant(update: (last: Message) => Partial<Message>) {
     setMessages((prev) => {
       const next = [...prev];
@@ -122,6 +139,7 @@ export default function OnboardingPage() {
     if (!trimmed || busy) return;
     setError(null);
     setBusy(true);
+    setProcessing(null);
     setMessages((prev) => [
       ...prev,
       { role: "customer", text: trimmed },
@@ -158,10 +176,13 @@ export default function OnboardingPage() {
 
           switch (event.type) {
             case "progress":
-              break; // the typing indicator is already up - nothing to change
+              // Named work replaces the dots; anything unnamed leaves them up.
+              setProcessing(PROCESSING_COPY[event.stage] ?? null);
+              break;
             case "token":
             case "redraft":
             case "reply":
+              setProcessing(null);
               reply = foldReply(reply, event);
               updateLastAssistant(() => ({ text: reply }));
               break;
@@ -193,6 +214,56 @@ export default function OnboardingPage() {
       }
     } finally {
       abortRef.current = null;
+      setProcessing(null);
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Files attached through the pill's "+". Each file gets its own stamp and its
+   * own line, uploaded one at a time so the thread reads in order. Knowledge is
+   * never a blocking beat: a refused or failed file leaves one calm line and the
+   * interview carries on.
+   *
+   * ponytail: the stamps are client-side only - the ingested document is
+   * persisted, its stamp is not, so a reload shows the thread without them.
+   * Persisting them needs an onboarding-side record of the attachment.
+   */
+  async function uploadFiles(files: File[]) {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      for (const file of files) {
+        const verdict = describeUpload(file.name);
+        if (!verdict.accepted) {
+          setMessages((prev) => [...prev, { role: "assistant", text: verdict.message }]);
+          continue;
+        }
+        const id = crypto.randomUUID();
+        setMessages((prev) => [...prev, { id, role: "stamp", text: `${file.name} \u00b7 adding\u2026` }]);
+        const form = new FormData();
+        form.append("file", file);
+        form.append("doc_type", "other");
+        try {
+          await apiFetch("/api/knowledge/upload", { method: "POST", body: form });
+          updateById(id, { text: `${file.name} \u00b7 added` });
+          setMessages((prev) => [...prev, { role: "assistant", text: verdict.message }]);
+        } catch (err) {
+          updateById(id, { text: `${file.name} \u00b7 not added` });
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              text:
+                err instanceof ApiError && err.detail
+                  ? `I couldn't read that one. ${err.detail}`
+                  : "I couldn't read that one. Try another file, or tell me in a sentence.",
+            },
+          ]);
+        }
+      }
+    } finally {
       setBusy(false);
     }
   }
@@ -273,8 +344,14 @@ export default function OnboardingPage() {
             {messages.map((message, index) =>
               message.role === "customer" ? (
                 <OwnerBubble key={index}>{message.text}</OwnerBubble>
+              ) : message.role === "stamp" ? (
+                <ThreadPill key={index}>{message.text}</ThreadPill>
               ) : message.streaming && !message.text ? (
-                <TypingLine key={index} />
+                processing ? (
+                  <ProcessingLine key={index}>{processing}</ProcessingLine>
+                ) : (
+                  <TypingLine key={index} />
+                )
               ) : (
                 <AgentLine key={index} streaming={message.streaming ?? false}>
                   {message.text}
@@ -299,6 +376,7 @@ export default function OnboardingPage() {
               onText={(text) => void sendText(text)}
               onSelect={(values) => void sendSelection(values)}
               onStop={handleStop}
+              onFiles={(files) => void uploadFiles(files)}
             />
           ) : null}
 

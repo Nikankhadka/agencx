@@ -17,13 +17,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from pydantic import BaseModel
 
 from app.features.knowledge import controller
-from app.llm.dependency import get_embedder_dependency
+from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
+from app.llm.provider import LLMProvider
 from app.shared import auth
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
-ALLOWED_EXTENSIONS = frozenset({".md", ".txt", ".pdf", ".csv", ".json"})
+ALLOWED_EXTENSIONS = frozenset({".md", ".txt", ".pdf", ".csv", ".json", ".docx"})
 ALLOWED_DOC_TYPES = frozenset({"policy", "faq", "catalog", "price_list", "other", "website"})
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
@@ -38,6 +39,32 @@ class DocumentResponse(BaseModel):
 
 class UrlIngestRequest(BaseModel):
     url: str
+
+
+class Section(BaseModel):
+    """One readable block of a document: a fixed heading and the owner's text."""
+
+    heading: str
+    body: str
+
+
+class KnowledgeRecord(DocumentResponse):
+    """A document as the knowledge screen reads it - the row plus its sections."""
+
+    sections: list[Section]
+
+
+class SaveRecordRequest(BaseModel):
+    sections: list[Section]
+
+
+def _absolute_url(url: str) -> str:
+    if urlparse(url).scheme.lower() not in ("http", "https"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="url must be an absolute http:// or https:// URL",
+        )
+    return url
 
 
 @router.get("", response_model=list[DocumentResponse])
@@ -116,14 +143,92 @@ async def ingest_url(
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
     payload: UrlIngestRequest,
 ) -> DocumentResponse:
-    url = payload.url.strip()
-    if urlparse(url).scheme.lower() not in ("http", "https"):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="url must be an absolute http:// or https:// URL",
-        )
+    url = _absolute_url(payload.url.strip())
     document_id = uuid4()
     row = await controller.upload_url(
         tenant_id=admin.tenant_id, document_id=document_id, url=url, embedder=embedder
     )
     return DocumentResponse(**row)
+
+
+@router.get("/records", response_model=list[KnowledgeRecord])
+async def list_records(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> list[KnowledgeRecord]:
+    """Everything the assistant knows, as readable sections."""
+    rows = await controller.list_records(tenant_id=admin.tenant_id)
+    return [KnowledgeRecord(**row) for row in rows]
+
+
+@router.post("/drafts/upload", response_model=KnowledgeRecord, status_code=status.HTTP_201_CREATED)
+async def draft_from_upload(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    file: Annotated[UploadFile, File()],
+) -> KnowledgeRecord:
+    """Read a file and return it as sections to review. Nothing is embedded yet -
+    a draft answers no customer question until it is saved."""
+    body = await file.read()
+    ext = _reject_upload(file, body, "other")
+    row = await controller.draft_from_upload(
+        tenant_id=admin.tenant_id,
+        document_id=uuid4(),
+        filename=file.filename or "",
+        body=body,
+        extension=ext,
+        provider=provider,
+    )
+    return KnowledgeRecord(**row)
+
+
+@router.post("/drafts/url", response_model=KnowledgeRecord, status_code=status.HTTP_201_CREATED)
+async def draft_from_url(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    payload: UrlIngestRequest,
+) -> KnowledgeRecord:
+    """Read a page and return it as sections to review (see /drafts/upload)."""
+    row = await controller.draft_from_url(
+        tenant_id=admin.tenant_id,
+        document_id=uuid4(),
+        url=_absolute_url(payload.url.strip()),
+        provider=provider,
+    )
+    return KnowledgeRecord(**row)
+
+
+@router.get("/records/{document_id}", response_model=KnowledgeRecord)
+async def get_record(
+    document_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> KnowledgeRecord:
+    row = await controller.get_record(
+        tenant_id=admin.tenant_id, document_id=document_id, provider=provider
+    )
+    return KnowledgeRecord(**row)
+
+
+@router.put("/records/{document_id}", response_model=KnowledgeRecord)
+async def save_record(
+    document_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+    payload: SaveRecordRequest,
+) -> KnowledgeRecord:
+    """Save the owner's reviewed sections and make them answerable."""
+    row = await controller.save_record(
+        tenant_id=admin.tenant_id,
+        document_id=document_id,
+        sections=[section.model_dump() for section in payload.sections],
+        embedder=embedder,
+    )
+    return KnowledgeRecord(**row)
+
+
+@router.delete("/records/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_record(
+    document_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> None:
+    await controller.delete_record(tenant_id=admin.tenant_id, document_id=document_id)

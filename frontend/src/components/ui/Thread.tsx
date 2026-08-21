@@ -96,7 +96,7 @@ export function AgentLine({
   streaming?: boolean;
 }) {
   return (
-    <p className="animate-rise mt-thread-gap text-prose text-text">
+    <p className="animate-rise mt-thread-gap break-words text-prose text-text">
       {children}
       {streaming ? (
         <span
@@ -108,10 +108,14 @@ export function AgentLine({
   );
 }
 
-/** An owner turn (`.u-bubble`): filled accent, right-aligned, tip bottom-right. */
+/**
+ * An owner turn (`.u-bubble`): filled accent, right-aligned, tip bottom-right.
+ * `break-words` because a pasted URL is a normal turn here (O-3) and one
+ * unbreakable token would otherwise run straight past the screen edge.
+ */
 export function OwnerBubble({ children }: { children: ReactNode }) {
   return (
-    <div className="animate-rise-fast mt-thread-gap max-w-[78%] self-end rounded-[var(--radius-bubble-lg)_var(--radius-bubble-lg)_var(--radius-bubble-tip)_var(--radius-bubble-lg)] bg-accent px-4 py-2.5 text-bubble text-text-inverse">
+    <div className="animate-rise-fast mt-thread-gap max-w-[78%] self-end break-words rounded-[var(--radius-bubble-lg)_var(--radius-bubble-lg)_var(--radius-bubble-tip)_var(--radius-bubble-lg)] bg-accent px-4 py-2.5 text-bubble text-text-inverse">
       {children}
     </div>
   );
@@ -127,6 +131,21 @@ export function TypingLine() {
     <div className="animate-rise-fast mt-thread-gap-lg flex h-[22px] items-center">
       <ThinkingDots />
     </div>
+  );
+}
+
+/**
+ * The prototype's `.proc-txt`: a quiet italic line naming the slow thing the
+ * assistant is doing right now ("Reading your site..."), left-aligned in the
+ * thread rather than centred like a stamp, and replaced by the reply it
+ * precedes. Distinct from `TypingLine` on purpose - dots say "thinking", this
+ * says what is being read.
+ */
+export function ProcessingLine({ children }: { children: ReactNode }) {
+  return (
+    <p role="status" className="animate-rise-fast mt-3 text-proc italic text-ink-a35">
+      {children}
+    </p>
   );
 }
 

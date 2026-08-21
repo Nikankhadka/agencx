@@ -150,6 +150,39 @@ link, already chat-first and mobile. D17 stands for the prototype's identity
 elements (teal, cleaning copy, Hivee emblem). This decision sets the
 direction; E-1 delivers the chrome.
 
+### D19: Knowledge is one readable text the owner corrects, held until they save
+
+**Decision:** A knowledge source - a pasted link or an uploaded file - is
+extracted, then **processed into a fixed set of readable sections** (About, What
+we offer, Prices, Hours, Location and contact, Policies, Other details) and
+parked as a **draft**: stored, shown back, and answering nothing. It becomes
+answerable only when the owner has read it and saved it, and what they saved -
+their edits included - is what gets chunked, embedded and answered from. The
+surface is **Settings > Knowledge** (`/settings/knowledge`), reached from a
+Settings hub, and it renders the same sections it showed at review time.
+
+**Why:** A list of files with statuses is a document manager, and it does not
+scale for a real business: an owner with a dozen sources cannot tell what their
+assistant actually believes by reading filenames. One structured text answers the
+question they came with - "what does it think my business is?" - and makes
+correction a matter of editing a sentence rather than re-uploading a file. The
+draft gate exists because the first time an owner sees this text must not be
+after it has already answered a customer.
+
+**The money guard:** the processing step is a model rewriting the owner's own
+material, and a price list is exactly the material it will handle. Every
+monetary figure in the processed text must appear in the source, checked
+deterministically with `extract_monetary_figures()` (the pricing gate's own
+extractor); on any mismatch the processed version is discarded and the source
+text is kept verbatim. This keeps I7 intact - a model still never authors a
+monetary amount - and C-1 should adopt the same helper when it lands.
+
+**Boundary:** the headings are the same for every business (I8 - the skeleton
+does not branch on a vertical). Long sources keep their tail unstructured rather
+than being cut. This decision amends the "no settings screen" ADR below: the
+address changed, the substance did not - Knowledge is show-back-and-correct, not
+a toggle tree.
+
 ## ADRs
 
 ### ADR: Import-boundary enforcement from first commit
@@ -179,3 +212,9 @@ decision is revisited - the signal is logged, not assumed away.
 **Exception:** the Business tab carries the thin, product-required toggles the
 PRD names: live/not-live state, the share link + QR, and the enabled-tools
 toggle (D-1/D-3). These are scope, not settings-tree creep.
+
+**Amended by D19 (2026-08-22):** a Settings destination does exist, and it holds
+the Knowledge screen. It carries no toggles and no preferences - it is the
+show-back surface this ADR asks for, at a different address. The rule the ADR
+protects ("if a setting can only exist as a toggle on a screen, it should not
+exist") is unchanged.

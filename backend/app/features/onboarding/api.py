@@ -23,7 +23,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.features.onboarding import controller
-from app.llm.dependency import get_llm_provider
+from app.llm.dependency import get_embedder_dependency, get_llm_provider
+from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
 from app.shared import auth
@@ -78,6 +79,7 @@ async def post_message(
     body: OnboardingMessageRequest,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingStateResponse:
     if body.selection is not None:
         # O-1 made every beat a text beat, so nothing is satisfied by a chip.
@@ -85,7 +87,7 @@ async def post_message(
         raise HTTPException(status_code=409, detail="onboarding is text-only")
     assert body.text is not None
     record_data = await controller.run_message(
-        tenant_id=admin.tenant_id, text=body.text, provider=provider
+        tenant_id=admin.tenant_id, text=body.text, provider=provider, embedder=embedder
     )
     return OnboardingStateResponse(**controller.response_from_record(record_data))
 
@@ -95,6 +97,7 @@ async def post_message_stream(
     body: OnboardingMessageRequest,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> StreamingResponse:
     if body.text is None:
         raise HTTPException(status_code=400, detail="stream accepts text messages only")
@@ -107,7 +110,7 @@ async def post_message_stream(
         stream_started = time.perf_counter()
         try:
             async for event in controller.run_message_stream(
-                tenant_id=admin.tenant_id, text=text, provider=provider
+                tenant_id=admin.tenant_id, text=text, provider=provider, embedder=embedder
             ):
                 yield await _sse(event)
         except HTTPException as exc:

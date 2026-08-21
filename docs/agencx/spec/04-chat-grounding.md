@@ -42,13 +42,18 @@ frontend spec.
 **I want** the pipeline to fetch, extract, chunk, embed, and store it,
 **so that** the assistant answers from the site without retyping anything.
 
-- [ ] URL detection on submit (chat composer + Business tab)
-- [ ] Fetch with a timeout and size cap; extraction failures become a
-  failed document with retry, never a hang
-- [ ] Stored as `doc_type='website'`; status flow pending -> processing ->
-  ready -> failed with retry affordance
-- [ ] Read-back in chat: "Here's what I found: [summary]. Sound right, or
-  anything to fix?"
+- [x] URL detection on submit - server-side, in the onboarding turn
+  (`_find_url`), so the composer needs no URL mode. The Business tab's own
+  entry points land with the Knowledge screen
+- [x] Fetch with a timeout and size cap; every fetch failure (bad scheme,
+  oversize, non-2xx, DNS/connect/timeout) leaves `app/ingestion/url.py` as
+  `ValueError`, so no path hangs and none reaches the owner as a 500
+- [x] Stored as `doc_type='website'`; the pipeline's pending -> processing ->
+  ready/failed flow is unchanged. The retry affordance ships with the
+  Knowledge screen
+- [x] Read-back in chat: "Here's what I've got from your site: ... Sound
+  right, or anything to fix?" - server-synthesized from the draft, never
+  model prose
 
 #### US-2 Upload polish holds the spec
 
@@ -57,11 +62,16 @@ frontend spec.
 acknowledgement,
 **so that** uploads read as part of the chat, not a file manager.
 
-- [ ] FileDropzone: PDF, PNG/JPG, DOCX; drag + click; per-file progress
-- [ ] Attachment chip in chat; "Got your menu - I'll answer from it now."
-  on ready
-- [ ] Unreadable/unsupported files: one calm message each, no error chrome
-- [ ] Multiple files in sequence: each its own chip and status
+- [x] Attach from inside the command pill (the prototype's `+`), not a
+  dropzone: PDF, DOCX, MD, TXT, CSV, JSON. **PNG/JPG are refused** - nothing
+  in the stack reads an image (no OCR, no vision call), so accepting one
+  would promise an answer that never comes (founder ruling, 2026-08-22).
+  A vision call on the provider seam is the upgrade path
+- [x] Attachment stamp in the thread; "Got your menu.pdf - I'll answer from
+  it now." on ready
+- [x] Unreadable/unsupported files: one calm line each, naming the way
+  forward, no error chrome
+- [x] Multiple files in sequence: each its own stamp and line
 
 #### US-3 Ingest invalidates the cache
 
@@ -69,8 +79,9 @@ acknowledgement,
 **I want** every completed ingest to bump the knowledge version,
 **so that** the pre-load cache (P-3/P-4) cannot serve the old knowledge.
 
-- [ ] Both paths write through the shared pipeline (single code path);
-  document rows update timestamps on completion (P-4 contract)
+- [x] Both paths write through `process_document`; the 0018 touch trigger
+  bumps `documents.updated_at` on every status write, so completion moves
+  the knowledge version (P-4 contract)
 
 ### Design reference
 
@@ -102,10 +113,28 @@ chip). There is no separate uploads screen in the prototype - do not build one.
 
 ### Definition of done
 
-- [ ] URL scrape path end to end
-- [ ] Upload polish per spec
-- [ ] Ingest bumps the knowledge version
-- [ ] E2E: site-derived answer works
+- [x] URL scrape path end to end
+- [x] Upload polish per spec (attach from the pill; images refused by ruling)
+- [x] Ingest bumps the knowledge version
+- [x] E2E: site-derived answer works (`frontend/e2e/onboarding-url.spec.ts`,
+  scraping a static fixture this app serves - the app's own pages are
+  client-rendered and carry no text to extract)
+
+### Notes from the build
+
+- Knowledge is never a blocking beat: a page that cannot be read offers a
+  file or a sentence instead, and says it can wait for Settings > Knowledge.
+- The upload stamps are client-side only; the ingested document persists, its
+  stamp does not survive a reload.
+- **Settings > Knowledge** (`/settings/knowledge`) ships with this ticket,
+  pulled forward from S2 on the founder's direction and recorded as D19: a
+  source is processed into fixed readable sections, held as a draft until the
+  owner saves it, and shown back as the same sections afterwards. Not a
+  document table - the owner's question is "what does it think my business
+  is?", which a list of filenames cannot answer.
+- The processing step is model-written text over owner material, so it carries
+  a deterministic money guard: any figure it produces that is absent from the
+  source discards the whole processed version (see D19).
 
 ---
 

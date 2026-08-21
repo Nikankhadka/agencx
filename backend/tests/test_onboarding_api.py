@@ -13,6 +13,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 
 import asyncpg
@@ -21,6 +22,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.onboarding.controller import _find_url
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
@@ -451,3 +453,174 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     assert state_event["completed"] is False
     # The SSE state event carries the current beat key, matching /state's shape.
     assert state_event["stage"] == "business_name"
+
+
+# --- URL turn (O-3 site-as-shortcut) ------------------------------------------
+
+
+class UrlFakeProvider(BaseFakeProvider):
+    """Returns a URL-shaped extraction: the page states business_type/services/
+    hours. No chat is needed - the URL turn's reply is a server-synthesized
+    read-back."""
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        return schema.model_validate(
+            {
+                "profile": {
+                    "business_type": "phone repair shop",
+                    "services": "screen repairs, battery replacements",
+                    "hours": "Mon-Fri 9-6",
+                }
+            }
+        )
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        return ""
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        if False:
+            yield ""
+
+
+@pytest.fixture
+def uploads_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    return tmp_path
+
+
+def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
+    async def fake_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+        return html
+
+    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
+
+
+_CANNED_URL_HTML = (
+    b"<html><head><title>Bytefix</title></head>"
+    b"<body><main>Phone repair shop. Screen repairs and batteries. "
+    b"Open weekdays 9 to 6.</main></body></html>"
+)
+
+
+async def test_url_message_scrapes_ingests_and_reads_back(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+    _patch_fetch(monkeypatch, _CANNED_URL_HTML)
+    try:
+        body = await _send(client, headers, text="https://bytefix.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    # The page pre-filled the profile fields the read-back covers.
+    assert body["draft"]["business_type"] == "phone repair shop"
+    assert body["draft"]["services"] == "screen repairs, battery replacements"
+    assert body["draft"]["hours"] == "Mon-Fri 9-6"
+
+    assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
+    assert any("Here's what I've got from your site" in m for m in assistant_msgs)
+
+    # The site became a ready 'website' document.
+    doc = await superuser_conn.fetchrow(
+        "select doc_type, status, filename from documents where tenant_id = $1",
+        tenant_id,
+    )
+    assert doc is not None
+    assert doc["doc_type"] == "website"
+    assert doc["status"] == "ready"
+    assert doc["filename"] == "https://bytefix.example.com"
+
+
+async def test_url_message_scrape_failure_falls_back(
+    client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+
+    async def fail_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+        raise ValueError("no extractable content at this URL")
+
+    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fail_fetch)
+    try:
+        body = await _send(client, headers, text="https://empty.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    # Nothing captured, and the owner gets the calm line - which offers the other
+    # two ways in and says knowledge can wait. Onboarding is never blocked on it.
+    assert body["draft"] == {}
+    assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
+    assert any("couldn't read that page" in m for m in assistant_msgs)
+    assert any("Settings > Knowledge" in m for m in assistant_msgs)
+
+
+async def test_url_message_survives_an_unreachable_host(
+    client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dead link is a transport error, not a ValueError, at the httpx layer.
+    It has to reach the owner as the same calm line, never as a 500."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+
+    async def unreachable(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+        raise ValueError("could not read this URL (ConnectError)")
+
+    monkeypatch.setattr("app.features.knowledge.service.fetch_page", unreachable)
+    try:
+        body = await _send(client, headers, text="please read https://nope.invalid/")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
+    assert any("couldn't read that page" in m for m in assistant_msgs)
+
+
+async def test_url_stream_leads_with_the_reading_stamp(
+    client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 'Reading your site' stamp covers the scrape, so it must be the first
+    event on the wire - emitted before the fetch, not after it."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+    _patch_fetch(monkeypatch, _CANNED_URL_HTML)
+    try:
+        async with client.stream(
+            "POST",
+            "/api/onboarding/message/stream",
+            json={"text": "https://bytefix.example.com"},
+            headers=headers,
+        ) as resp:
+            assert resp.status_code == 200
+            events: list[dict[str, Any]] = []
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert events[0] == {"type": "progress", "stage": "reading_site"}
+    assert [e["type"] for e in events].count("progress") == 1
+    reply = next(e for e in events if e["type"] == "reply")
+    assert "Here's what I've got from your site" in reply["text"]
+
+
+def test_find_url_extracts_http_url_and_strips_punctuation() -> None:
+    assert _find_url("check https://bytefix.example.com, thanks") == "https://bytefix.example.com"
+    assert _find_url("https://bytefix.example.com.") == "https://bytefix.example.com"
+
+
+def test_find_url_ignores_prose_and_bare_domains() -> None:
+    assert _find_url("we fix phones") is None
+    assert _find_url("open weekdays 9 to 5.30pm") is None
+    assert _find_url("see bytefix.example.com") is None

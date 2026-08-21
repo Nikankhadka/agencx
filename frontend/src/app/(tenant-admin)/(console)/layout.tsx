@@ -16,8 +16,11 @@ import { apiFetch } from "@/lib/api";
  * the URL, so /knowledge and /onboarding are unchanged by living under
  * (console).
  *
- * Settings is specced (7.2) but lands later - it renders as a visibly-disabled
- * item rather than a dead link so the nav is honest about what exists today.
+ * Settings is real now: it holds the Knowledge screen (O-3), where an owner
+ * reads back and corrects what their assistant knows. The Wren-era /knowledge
+ * console page it replaces stays mounted but leaves the nav - E-2's "hidden,
+ * not deleted" posture, applied early because two doors onto the same thing
+ * would be worse than one.
  * Dashboards (T-034) is temporarily hidden: its nav item is removed and
  * /dashboards redirects to /onboarding (next.config.ts redirects()).
  *
@@ -25,21 +28,21 @@ import { apiFetch } from "@/lib/api";
  * item is an accent-container pill with the filled glyph, inactive items are
  * quiet text with the outlined glyph.
  *
- * /onboarding is the exception: it renders chrome-free. In the prototype the
- * app has no navigation at all until the business is live (the bottom tab bar
- * appears only on `#phone.post`), and the onboarding thread is the entire
- * screen. The auth guard below still runs for it - only the chrome is dropped.
+ * /onboarding and the /settings screens render chrome-free. In the prototype
+ * the app has no navigation at all until the business is live (the bottom tab
+ * bar appears only on `#phone.post`), and each destination screen carries its
+ * own `.dst-topbar` with a back control instead. The auth guard below still
+ * runs for them - only the chrome is dropped. E-1 re-homes all of this inside
+ * the two-tab shell.
  */
-const CHROME_FREE = new Set(["/onboarding"]);
+const CHROME_FREE_PREFIXES = ["/onboarding", "/settings"];
 const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/onboarding", label: "Onboarding", icon: "rocket_launch" },
-  { href: "/knowledge", label: "Knowledge", icon: "folder_open" },
+  { href: "/settings", label: "Settings", icon: "settings" },
   { href: "/conversations", label: "Conversations", icon: "forum" },
   { href: "/escalations", label: "Escalations", icon: "support_agent" },
   { href: "/pricing", label: "Pricing", icon: "sell" },
 ];
-
-const SOON_ITEMS = ["Settings"] as const;
 
 interface TenantMe {
   slug: string;
@@ -77,7 +80,9 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     return <div aria-busy="true" className="h-dvh bg-bg" />;
   }
   if (!session) return null;
-  if (CHROME_FREE.has(pathname)) return <>{children}</>;
+  if (CHROME_FREE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return <>{children}</>;
+  }
 
   const displayName =
     (tenant?.brand?.["display_name"] as string | undefined) ?? tenant?.name ?? "Wren";
@@ -110,19 +115,6 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
             </li>
           );
         })}
-        {SOON_ITEMS.map((label) => (
-          <li key={label}>
-            <span
-              aria-disabled="true"
-              className="flex items-center justify-between rounded-md px-3 py-2 text-body-sm font-medium text-text-tertiary"
-            >
-              {label}
-              <span className="rounded-full bg-surface px-2 py-0.5 text-caption font-medium text-text-tertiary">
-                soon
-              </span>
-            </span>
-          </li>
-        ))}
       </ul>
       <div className="mt-auto pt-4">
         <button

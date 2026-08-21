@@ -31,7 +31,12 @@ export type IconName =
   | "menu"
   | "add"
   | "arrow_upward"
-  | "attach_file";
+  | "attach_file"
+  | "arrow_back"
+  | "chevron_right"
+  | "delete"
+  | "refresh"
+  | "edit";
 
 /** A glyph is one outlined `path`, plus an optional `filled` variant used by
  * nav icons when their item is active. */
@@ -123,6 +128,21 @@ const ICONS: Record<IconName, Glyph> = {
   },
   attach_file: {
     path: "M720-330q0 104-73 177T470-80q-104 0-177-73t-73-177v-370q0-75 52.5-127.5T400-880q75 0 127.5 52.5T580-700v350q0 46-32 78t-78 32q-46 0-78-32t-32-78v-370h80v370q0 13 8.5 21.5T470-320q13 0 21.5-8.5T500-350v-350q-1-42-29.5-71T400-800q-42 0-71 29t-29 71v370q-1 71 49.5 120.5T470-160q71 0 120.5-49.5T640-330v-390h80v390Z",
+  },
+  arrow_back: {
+    path: "m313-440 224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z",
+  },
+  chevron_right: {
+    path: "M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z",
+  },
+  delete: {
+    path: "M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360Z",
+  },
+  refresh: {
+    path: "M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z",
+  },
+  edit: {
+    path: "M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Z",
   },
 };
 

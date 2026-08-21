@@ -36,6 +36,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/login-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login Code */
+        post: operations["login_code_api_auth_login_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/verify-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Code */
+        post: operations["verify_code_api_auth_verify_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/dev-login-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dev Login Code
+         * @description Local-dev only: return the last issued code for ``email``.
+         *
+         *     Backs the demo's captured-code path and the E2E login-in-chat flow. Gated to
+         *     the local environment so a real deployment can never expose codes.
+         */
+        get: operations["dev_login_code_api_auth_dev_login_code_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/platform/ping": {
         parameters: {
             query?: never;
@@ -173,6 +230,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/message/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Message Stream */
+        post: operations["post_message_stream_api_onboarding_message_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/confirm": {
         parameters: {
             query?: never;
@@ -236,6 +310,106 @@ export interface paths {
         /** Reprocess Document */
         post: operations["reprocess_document_api_knowledge__document_id__reprocess_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/urls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Url */
+        post: operations["ingest_url_api_knowledge_urls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Records
+         * @description Everything the assistant knows, as readable sections.
+         */
+        get: operations["list_records_api_knowledge_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/drafts/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft From Upload
+         * @description Read a file and return it as sections to review. Nothing is embedded yet -
+         *     a draft answers no customer question until it is saved.
+         */
+        post: operations["draft_from_upload_api_knowledge_drafts_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/drafts/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft From Url
+         * @description Read a page and return it as sections to review (see /drafts/upload).
+         */
+        post: operations["draft_from_url_api_knowledge_drafts_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/records/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Record */
+        get: operations["get_record_api_knowledge_records__document_id__get"];
+        /**
+         * Save Record
+         * @description Save the owner's reviewed sections and make them answerable.
+         */
+        put: operations["save_record_api_knowledge_records__document_id__put"];
+        post?: never;
+        /** Delete Record */
+        delete: operations["delete_record_api_knowledge_records__document_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -483,12 +657,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_draft_from_upload_api_knowledge_drafts_upload_post */
+        Body_draft_from_upload_api_knowledge_drafts_upload_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_document_api_knowledge_upload_post */
         Body_upload_document_api_knowledge_upload_post: {
             /** File */
             file: string;
             /** Doc Type */
             doc_type: string;
+        };
+        /**
+         * BudgetUsage
+         * @description Where this month's spend sits against the standing testing budget (P-1).
+         *     ``fraction`` is None when no budget is configured.
+         */
+        BudgetUsage: {
+            /** Fraction */
+            fraction: number | null;
+            /** Warning */
+            warning: boolean;
         };
         /** CatalogItemResponse */
         CatalogItemResponse: {
@@ -519,6 +709,18 @@ export interface components {
             conversation_id?: string | null;
             /** Message */
             message: string;
+        };
+        /** ChipSpec */
+        ChipSpec: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+            /**
+             * Dashed
+             * @default false
+             */
+            dashed: boolean;
         };
         /** ConversationDetail */
         ConversationDetail: {
@@ -582,6 +784,9 @@ export interface components {
             escalation_rate: number | null;
             /** Daily Costs */
             daily_costs: components["schemas"]["DailyCost"][];
+            /** Monthly Budget Usd */
+            monthly_budget_usd: number;
+            monthly_budget_used: components["schemas"]["BudgetUsage"];
         };
         /** DailyCost */
         DailyCost: {
@@ -674,6 +879,67 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** InputSpec */
+        InputSpec: {
+            /**
+             * Kind
+             * @default text
+             * @enum {string}
+             */
+            kind: "text" | "chips" | "masked" | "cta";
+            /**
+             * Placeholder
+             * @default
+             */
+            placeholder: string;
+            /** Chips */
+            chips?: components["schemas"]["ChipSpec"][];
+            /** Mask */
+            mask?: string | null;
+            /** Cta Label */
+            cta_label?: string | null;
+        };
+        /**
+         * KnowledgeRecord
+         * @description A document as the knowledge screen reads it - the row plus its sections.
+         */
+        KnowledgeRecord: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Filename */
+            filename: string;
+            /** Doc Type */
+            doc_type: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error: string | null;
+            /** Sections */
+            sections: components["schemas"]["Section"][];
+        };
+        /**
+         * LoginCodeRequest
+         * @description Raw typed text, not a validated address - see ``_resolve_email``.
+         */
+        LoginCodeRequest: {
+            /** Email */
+            email: string;
+        };
+        /**
+         * LoginCodeResponse
+         * @description The address the code was actually sent to, after normalization.
+         *
+         *     The owner may have typed a sentence, or odd casing; echoing the resolved
+         *     address back is what lets the thread say where to look for the code without
+         *     the client having to re-derive it (and risk disagreeing with the server).
+         */
+        LoginCodeResponse: {
+            /** Email */
+            email: string;
+        };
         /** MessageDetail */
         MessageDetail: {
             /**
@@ -708,15 +974,12 @@ export interface components {
              * Format: uuid
              */
             tenant_id: string;
-            /** Catalog Items Created */
-            catalog_items_created: number;
-            /** Pricing Rules Created */
-            pricing_rules_created: number;
         };
         /** OnboardingMessageRequest */
         OnboardingMessageRequest: {
             /** Text */
-            text: string;
+            text?: string | null;
+            selection?: components["schemas"]["SelectionPayload"] | null;
         };
         /** OnboardingStateResponse */
         OnboardingStateResponse: {
@@ -726,12 +989,17 @@ export interface components {
             prompt: string;
             /** Draft */
             draft: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
+                [key: string]: string;
             };
             /** Completed */
             completed: boolean;
+            /** History */
+            history: {
+                [key: string]: string;
+            }[];
+            input: components["schemas"]["InputSpec"] | null;
+            /** Can Confirm */
+            can_confirm: boolean;
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -821,6 +1089,28 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** SaveRecordRequest */
+        SaveRecordRequest: {
+            /** Sections */
+            sections: components["schemas"]["Section"][];
+        };
+        /**
+         * Section
+         * @description One readable block of a document: a fixed heading and the owner's text.
+         */
+        Section: {
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
+        };
+        /** SelectionPayload */
+        SelectionPayload: {
+            /** Beat */
+            beat: string;
+            /** Values */
+            values?: string[];
+        };
         /** SlugAvailabilityResponse */
         SlugAvailabilityResponse: {
             /** Available */
@@ -837,6 +1127,10 @@ export interface components {
             slug: string;
             /** Name */
             name: string;
+            /** Brand */
+            brand?: {
+                [key: string]: unknown;
+            };
         };
         /** TenantResolveResponse */
         TenantResolveResponse: {
@@ -923,6 +1217,11 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** UrlIngestRequest */
+        UrlIngestRequest: {
+            /** Url */
+            url: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -935,6 +1234,22 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerifyCodeRequest */
+        VerifyCodeRequest: {
+            /** Email */
+            email: string;
+            /** Code */
+            code: string;
+        };
+        /** VerifyCodeResponse */
+        VerifyCodeResponse: {
+            /** Access Token */
+            access_token: string;
+            /** User Id */
+            user_id: string;
+            /** Tenant Id */
+            tenant_id: string;
         };
     };
     responses: never;
@@ -994,6 +1309,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantMeResponse"];
+                };
+            };
+        };
+    };
+    login_code_api_auth_login_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginCodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_code_api_auth_verify_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyCodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dev_login_code_api_auth_dev_login_code_get: {
+        parameters: {
+            query: {
+                email: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1243,6 +1657,39 @@ export interface operations {
             };
         };
     };
+    post_message_stream_api_onboarding_message_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_api_onboarding_confirm_post: {
         parameters: {
             query?: never;
@@ -1335,6 +1782,220 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_url_api_knowledge_urls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UrlIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_records_api_knowledge_records_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRecord"][];
+                };
+            };
+        };
+    };
+    draft_from_upload_api_knowledge_drafts_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_draft_from_upload_api_knowledge_drafts_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_from_url_api_knowledge_drafts_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UrlIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_api_knowledge_records__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_record_api_knowledge_records__document_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_record_api_knowledge_records__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

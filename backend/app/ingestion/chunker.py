@@ -18,13 +18,17 @@ import csv
 import io
 import json
 import re
+import zipfile
 from dataclasses import dataclass, field
 from typing import Any
+from xml.etree import ElementTree
 
 from pypdf import PdfReader
 
 TARGET_CHUNK_WORDS = 400
 OVERLAP_RATIO = 0.15
+
+_DOCX_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 @dataclass(frozen=True)
@@ -33,11 +37,33 @@ class Chunk:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def extract_docx(body: bytes) -> str:
+    """Text of a .docx, one paragraph per blank-line-separated block.
+
+    A .docx is a zip whose ``word/document.xml`` holds the paragraph runs;
+    stdlib ``zipfile`` + ``ElementTree`` only, no new dependency. Images inside
+    the document are skipped, and image uploads are refused at the API edge:
+    nothing in this stack reads an image (no OCR, no vision call). The upgrade
+    path is a vision call on the provider seam, not a new OCR dependency.
+    """
+    with zipfile.ZipFile(io.BytesIO(body)) as zf:
+        xml = zf.read("word/document.xml")
+    root = ElementTree.fromstring(xml)
+    paragraphs: list[str] = []
+    for paragraph in root.iter(f"{_DOCX_NS}p"):
+        text = "".join(t.text or "" for t in paragraph.iter(f"{_DOCX_NS}t"))
+        if text.strip():
+            paragraphs.append(text)
+    return "\n\n".join(paragraphs)
+
+
 def extract_text(body: bytes, ext: str) -> str:
     """Raw bytes -> plain text, dispatched on file extension."""
     if ext == ".pdf":
         reader = PdfReader(io.BytesIO(body))
         return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+    if ext == ".docx":
+        return extract_docx(body)
     return body.decode("utf-8")
 
 
@@ -108,8 +134,8 @@ def chunk_json(body: bytes, *, source: str) -> list[Chunk]:
 
 
 def chunk_document(body: bytes, ext: str, *, source: str) -> list[Chunk]:
-    """Dispatch on extension: prose splitting for .md/.txt/.pdf, one chunk per
-    record for .csv/.json."""
+    """Dispatch on extension: prose splitting for .md/.txt/.pdf/.docx, one
+    chunk per record for .csv/.json."""
     if ext == ".csv":
         return chunk_csv(body, source=source)
     if ext == ".json":

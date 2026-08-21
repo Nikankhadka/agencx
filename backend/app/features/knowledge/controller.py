@@ -14,6 +14,7 @@ from fastapi import HTTPException, status
 
 from app.features.knowledge import service
 from app.llm.embedder import Embedder
+from app.llm.provider import LLMProvider
 
 
 async def list_documents(*, tenant_id: UUID) -> list[dict[str, Any]]:
@@ -81,3 +82,86 @@ async def upload_url(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="document not created"
         )
     return row
+
+
+async def list_records(*, tenant_id: UUID) -> list[dict[str, Any]]:
+    return await service.list_records(tenant_id=tenant_id)
+
+
+def _created(row: dict[str, Any] | None) -> dict[str, Any]:
+    if row is None:
+        # Cannot happen: the insert and the read-back share one transaction.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="document not created"
+        )
+    return row
+
+
+async def draft_from_upload(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    filename: str,
+    body: bytes,
+    extension: str,
+    provider: LLMProvider,
+) -> dict[str, Any]:
+    """Unreadable files are a 422 with the reason, never a stored failure - the
+    owner is standing at the screen waiting to see what we made of it."""
+    try:
+        row = await service.draft_from_upload(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            filename=filename,
+            body=body,
+            extension=extension,
+            provider=provider,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return _created(row)
+
+
+async def draft_from_url(
+    *, tenant_id: UUID, document_id: UUID, url: str, provider: LLMProvider
+) -> dict[str, Any]:
+    try:
+        row = await service.draft_from_url(
+            tenant_id=tenant_id, document_id=document_id, url=url, provider=provider
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return _created(row)
+
+
+async def get_record(
+    *, tenant_id: UUID, document_id: UUID, provider: LLMProvider
+) -> dict[str, Any]:
+    row = await service.get_record(tenant_id=tenant_id, document_id=document_id, provider=provider)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    return row
+
+
+async def save_record(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    sections: list[dict[str, Any]],
+    embedder: Embedder,
+) -> dict[str, Any]:
+    row = await service.save_record(
+        tenant_id=tenant_id, document_id=document_id, sections=sections, embedder=embedder
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    return row
+
+
+async def delete_record(*, tenant_id: UUID, document_id: UUID) -> None:
+    if not await service.delete_record(tenant_id=tenant_id, document_id=document_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")

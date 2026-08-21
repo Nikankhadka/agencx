@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CommandPill } from "@/components/ui/CommandPill";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
-import { isMultiSelect, type InputSpec } from "@/lib/onboarding";
+import { ACCEPTED_UPLOAD_EXTENSIONS, isMultiSelect, type InputSpec } from "@/lib/onboarding";
 
 export interface BeatComposerProps {
   /** The widget the server wants for this beat. */
@@ -15,6 +15,8 @@ export interface BeatComposerProps {
   onText: (text: string) => void;
   onSelect: (values: string[]) => void;
   onStop: () => void;
+  /** Files picked through the pill's "+" (O-3); omitted, the affordance is inert. */
+  onFiles?: (files: File[]) => void;
 }
 
 /**
@@ -23,6 +25,9 @@ export interface BeatComposerProps {
  * beat wants - the beat system in app/onboarding/beats.py is the single source
  * of truth. Chip and masked selections submit as deterministic ``selection``
  * messages (no LLM); only text beats stream.
+ *
+ * The pill's "+" opens a file picker when ``onFiles`` is given (O-3): uploads
+ * belong to the conversation, so there is no dropzone and no uploads screen.
  *
  * Multi-select is signalled by dashed chips (inbound channels): chips toggle
  * and a Continue button commits the set. The root fades up in 80ms on beat
@@ -40,10 +45,12 @@ export function BeatComposer({
   onText,
   onSelect,
   onStop,
+  onFiles,
 }: BeatComposerProps) {
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [masked, setMasked] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function handleTextSubmit(value: string) {
     const trimmed = value.trim();
@@ -70,15 +77,32 @@ export function BeatComposer({
   return (
     <div className="animate-beat-in flex flex-col gap-2.5" data-testid="onboarding-composer">
       {input.kind === "text" ? (
-        <CommandPill
-          value={text}
-          onChange={setText}
-          onSubmit={handleTextSubmit}
-          placeholder={input.placeholder}
-          disabled={busy}
-          busy={busy}
-          onStop={onStop}
-        />
+        <>
+          <CommandPill
+            value={text}
+            onChange={setText}
+            onSubmit={handleTextSubmit}
+            placeholder={input.placeholder}
+            disabled={busy}
+            busy={busy}
+            onStop={onStop}
+            onAttach={onFiles ? () => fileRef.current?.click() : undefined}
+          />
+          {/* The thread has no dropzone - the prototype attaches from inside the
+              pill, so the picker is a hidden input the "+" opens. */}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")}
+            className="hidden"
+            data-testid="onboarding-file-input"
+            onChange={(event) => {
+              if (event.target.files) onFiles?.(Array.from(event.target.files));
+              event.target.value = "";
+            }}
+          />
+        </>
       ) : null}
 
       {input.kind === "chips" && !multi ? (

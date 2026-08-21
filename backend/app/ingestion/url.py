@@ -7,7 +7,10 @@ unit-testable without Postgres. The HTTP fetch is deliberately minimal:
   ``ValueError`` before any network I/O);
 - a 10s timeout;
 - a 2MB body cap (rejecting, not truncating, oversized pages);
-- redirects followed, bounded by httpx's own redirect limit.
+- redirects followed, bounded by httpx's own redirect limit;
+- non-2xx responses rejected, so an error page is never ingested as content.
+
+Every failure surfaces as ``ValueError`` - see ``_get_bounded``.
 
 HTML extraction removes boilerplate chrome (script/style/nav/header/footer/form)
 and returns the collapsed plain text of what remains, plus the page title.
@@ -51,7 +54,16 @@ async def fetch_page(url: str, *, client: httpx.AsyncClient | None = None) -> by
 async def _get_bounded(client: httpx.AsyncClient, url: str) -> bytes:
     # follow_redirects and timeout are passed per-request so they hold even when
     # a caller supplies its own client.
-    response = await client.get(url, follow_redirects=True, timeout=_TIMEOUT)
+    try:
+        response = await client.get(url, follow_redirects=True, timeout=_TIMEOUT)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        # Every fetch failure leaves this module as ValueError - the one failure
+        # type both callers already handle (the /urls route maps it to a 422,
+        # the onboarding turn degrades to its calm offer of another way). Without
+        # this a dead link 500s in the owner's face, and without raise_for_status
+        # a 404 page would be ingested as if it were the business's own content.
+        raise ValueError(f"could not read this URL ({exc.__class__.__name__})") from exc
     body = response.content
     if len(body) > _MAX_BODY_BYTES:
         raise ValueError(f"page body exceeds the {_MAX_BODY_BYTES // (1024 * 1024)}MB fetch limit")

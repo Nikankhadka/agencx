@@ -166,7 +166,7 @@ Every component takes only semantic tokens. Each lists its required states.
 |---|---|---|
 | `Button` | primary / secondary / ghost / destructive; sm/md | default, hover, active, focus ring, disabled, loading |
 | `Input`, `Textarea`, `Select` | label above, help/error below; the inactive send state is the only validation signal - no red error text | default, focus, error, disabled |
-| `CommandPill` | `command` (send circle appears with text) and `field` (circle always present, dimmed until valid) variants; the pill carries the focus ring, never a rectangle inside it | empty, typing, armed, busy/stop, disabled |
+| `CommandPill` | `command` (send circle appears with text) and `field` (circle always present, dimmed until valid) variants; the pill carries the focus ring, never a rectangle inside it; `.pill-plus` opens the file picker where attaching is offered (O-3) | empty, typing, armed, busy/stop, disabled, attach |
 | `Card` | surface + border + radius-lg + shadow-1 | default, interactive |
 | `Table` | sticky header, row hover | loading, empty, error |
 | `Badge` | status pill; maps every status vocabulary to a tone (info=open/sent, warning=escalated/claimed/processing/provisioning, success=resolved/closed/active/ready, danger=failed/suspended, neutral=pending/draft/expired) | n/a |
@@ -178,7 +178,9 @@ Every component takes only semantic tokens. Each lists its required states.
 | `Skeleton` | shimmer off in reduced-motion | n/a |
 | `MetricCard` | bento stat card: big number + label + optional icon/trend/footer | loading, empty, error |
 | `Sparkline` | dependency-free inline-SVG polyline, strokes `currentColor` | n/a |
-| `FileDropzone` | drag target; accepted PDF, PNG/JPG, DOCX (+ URL paste detection) | idle, drag-over, uploading, done, rejected |
+| `ScreenTopbar` (O-3) | `.dst-topbar`: 58px, back control, title, optional trailing action, hairline rule | default |
+| `RowLink` (O-3) | `.bh-row`: icon, label, chevron, hairline - a hub screen's list of destinations | default, pressed |
+| `FileDropzone` | drag target; accepted PDF, DOCX, MD/TXT/CSV/JSON. **Images are refused** - nothing in the stack reads one (no OCR, no vision call), founder ruling 2026-08-22; a vision call on the provider seam is the upgrade path | idle, drag-over, uploading, done, rejected |
 | `ChatBubble` | the OPERATOR thread idiom: customer (accent-subtle, right), assistant (surface, left), human_agent (info-subtle), system (centered caption); 18px radius, tip at the top | static, streaming |
 | `Thread` (O-5) | the ONBOARDING thread idiom, a separate design: `Thread`, `LedeMessage`, `AgentLine` (bare prose), `OwnerBubble` (20px, tip bottom-right), `TypingLine`, `ThreadPill`, `ThreadVeil`. Never merge with `ChatBubble` | static, streaming, pending |
 | `StreamingText` | renders SSE tokens, `aria-live="polite"` | streaming, done, interrupted |
@@ -265,12 +267,18 @@ link + QR, and the **enabled-tools toggle (D-3)** - the per-tenant on/off for
 recommendations / quoting / order lookup that implements tool gating (PRD
 section 8). These are scope, not settings-tree creep (decision 7).
 
+The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
+O-3 / D19) and is not a document table: a source is processed into fixed readable
+sections the owner corrects, held as a draft until they save it. E-1 re-homes
+this screen inside the two-tab shell.
+
 | State | Spec |
 |---|---|
-| Empty | Document upload prompt; no profile yet - the tenant hasn't onboarded |
-| Active | Table of documents with per-file status (pending/processing/ready/failed + retry on failed); profile fields shown back |
-| Uploading | FileDropzone with per-file progress |
-| Re-ingesting | Re-processing existing documents after profile changes (affordance appears after a profile change) |
+| Empty | One line plus the two ways in (paste a link, add a document); no table, no type picker |
+| Reading | The `.proc-txt` line naming the work ("Reading your site...") while a source is fetched and processed |
+| Review (draft) | Bottom sheet: the sections as editable text, Save / Discard. Nothing answers a customer until Save |
+| Active | Each source shown as its sections, with its own status line; edit reopens the sheet |
+| Failed | The reason in place, plus retry (re-runs the ingest over the stored text) |
 | Tool toggles | Enabled-tools section (D-3); toggling updates `tenant_config.enabled_tools` |
 
 ### S3 - Public page (anonymous, per-tenant slug)

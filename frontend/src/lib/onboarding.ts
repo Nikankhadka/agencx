@@ -105,3 +105,56 @@ export function foldReply(reply: string, event: OnboardingStreamEvent): string {
       return reply;
   }
 }
+
+/**
+ * What the backend's knowledge upload accepts (`ALLOWED_EXTENSIONS` in
+ * app/features/knowledge/api.py). Checked here so an unusable file is answered
+ * in one line by the assistant rather than by a 422 the owner has to interpret.
+ */
+export const ACCEPTED_UPLOAD_EXTENSIONS = [
+  ".pdf",
+  ".docx",
+  ".md",
+  ".txt",
+  ".csv",
+  ".json",
+] as const;
+
+/** Extensions worth naming in the refusal - the owner reached for a photo. */
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".heic", ".webp", ".gif"];
+
+export interface UploadVerdict {
+  accepted: boolean;
+  /** One calm line for the thread - an acknowledgement, or the reason it can't be read. */
+  message: string;
+}
+
+function extensionOf(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  return dot === -1 ? "" : filename.slice(dot).toLowerCase();
+}
+
+/**
+ * The assistant's line for one attached file, decided before the upload starts.
+ *
+ * Images are refused, not queued: nothing in the stack reads one (no OCR, no
+ * vision call), so accepting a photo of a menu would promise an answer that
+ * never comes. Every refusal names the way forward, and never blocks the
+ * interview - knowledge can be added later from Settings > Knowledge.
+ */
+export function describeUpload(filename: string): UploadVerdict {
+  const ext = extensionOf(filename);
+  if ((ACCEPTED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
+    return { accepted: true, message: `Got your ${filename} - I'll answer from it now.` };
+  }
+  if (IMAGE_EXTENSIONS.includes(ext)) {
+    return {
+      accepted: false,
+      message: `I can't read images yet, so ${filename} won't help me answer. A PDF, a document, or a link to the page works.`,
+    };
+  }
+  return {
+    accepted: false,
+    message: `I can't read ${filename || "that file"}. A PDF, a document, or a link to the page works.`,
+  };
+}

@@ -18,6 +18,7 @@ from app.onboarding.agent import (
     OnboardingRecord,
     _echo,
     prepare_turn,
+    prepare_url_turn,
     run_turn,
     stream_reply,
 )
@@ -483,9 +484,75 @@ async def test_stream_reply_price_echo_redrafts() -> None:
     assert len(provider.stream_calls) == 2
 
 
+# --- URL turn (O-3 site-as-shortcut) -------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_turn_extracts_from_page_and_reads_back() -> None:
+    provider = _ExtractFake(
+        updates=[
+            {
+                "profile": {
+                    "business_type": "phone repair shop",
+                    "services": "screen repairs, battery replacements",
+                    "hours": "Mon-Fri 9-6",
+                }
+            },
+        ],
+    )
+    record = OnboardingRecord()
+    plan = await prepare_url_turn(
+        url="https://bytefix.example.com",
+        page_text=(
+            "Bytefix Repairs fixes phones. Screen repairs and battery "
+            "replacements. Open weekdays 9 to 6."
+        ),
+        record=record,
+        provider=provider,
+    )
+
+    assert plan.persist is True
+    assert plan.summary is not None
+    assert "Here's what I've got from your site" in plan.summary
+    assert "phone repair shop" in plan.summary
+    assert "screen repairs" in plan.summary
+    assert "Mon-Fri 9-6" in plan.summary
+    assert plan.reply_msgs is None
+    assert record.draft["business_type"] == "phone repair shop"
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_turn_records_url_not_page_text() -> None:
+    provider = _ExtractFake(updates=[{"profile": {"services": "screen repairs"}}])
+    record = OnboardingRecord()
+    plan = await prepare_url_turn(
+        url="https://bytefix.example.com",
+        page_text="a very long page that should never land in history",
+        record=record,
+        provider=provider,
+    )
+
+    user_messages = [m["content"] for m in plan.record.history if m["role"] == "user"]
+    assert user_messages == ["https://bytefix.example.com"]
+    assert "a very long page" not in plan.record.to_jsonb().__repr__()
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_turn_reads_back_nothing_when_page_has_no_fields() -> None:
+    provider = _ExtractFake(updates=[{"profile": None}])
+    record = OnboardingRecord()
+    plan = await prepare_url_turn(
+        url="https://empty.example.com",
+        page_text="welcome to my site",
+        record=record,
+        provider=provider,
+    )
+
+    assert plan.summary is not None
+    assert "couldn't pin down" in plan.summary
+
+
 # --- directive shape -----------------------------------------------------------
-
-
 def test_directive_as_prompt_with_acknowledged() -> None:
     d = Directive(acknowledged=["business name"], ask_for="opening hours")
     prompt = d.as_prompt()
