@@ -1,12 +1,15 @@
-"""T-037 / T-042: provision Tenant 2 (a dental clinic) through the public API.
+"""T-037 / O-1: provision Tenant 2 (a dental clinic) through the public API.
 
-The onboarding conversation portion pre-populates the agentic v2 jsonb state
+The onboarding conversation portion pre-populates the lean v3 jsonb profile
 directly (bypassing the LLM-driven copilot, per the 2026-07-30 decision), then
 calls the confirm endpoint through the public API. The confirm validation and
-relational write path is identical to a real admin's browser flow - only the
-state population method differs.
+write path is identical to a real admin's browser flow - only the state
+population method differs.
 
-Knowledge upload remains unchanged (real API calls).
+Knowledge upload remains unchanged (real API calls). Since O-1 the profile
+carries no prices: the clinic's fees reach the assistant through
+``services-and-fees.md``, uploaded as a ``price_list`` document, which is the
+only source a figure may be stated from (I1 / C-1).
 
 Usage::
 
@@ -45,19 +48,21 @@ KNOWLEDGE_DOCS: tuple[tuple[str, str], ...] = (
     ("faq.md", "faq"),
 )
 
+# One stage per lean profile field, in beat order (see BEAT_ORDER in
+# app/onboarding/beats.py). These are the keys folded into the draft.
+PROFILE_STAGES: tuple[str, ...] = (
+    "name",
+    "business_name",
+    "business_type",
+    "headcount",
+    "hours",
+    "services",
+    "contact",
+)
+
 # The stage names the script must cover. knowledge_prompt is not a data stage
 # - it's the final prompt before confirm.
-EXPECTED_STAGES: tuple[str, ...] = (
-    "business_name",
-    "hours_contact",
-    "identity",
-    "tone",
-    "services",
-    "pricing_rules",
-    "business_number",
-    "escalation_threshold",
-    "knowledge_prompt",
-)
+EXPECTED_STAGES: tuple[str, ...] = (*PROFILE_STAGES, "knowledge_prompt")
 
 # Prose is allowed between a stage heading and its fenced answer, so the
 # script stays readable as a document; only the fence is posted.
@@ -77,134 +82,17 @@ def parse_interview_script(text: str) -> dict[str, str]:
 
 
 def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
-    """Construct a v2 agentic draft from raw text interview answers.
+    """Construct a lean v3 profile draft from the raw text interview answers.
 
-    This bypasses the LLM-driven copilot per the ADR. The draft values match
-    the Pydantic schemas in app/onboarding/flow.py exactly, so the confirm
-    endpoint validates them identically to a real admin's browser flow.
+    This bypasses the LLM-driven copilot per the ADR. The keys match
+    ``ProfileDraft`` in app/onboarding/flow.py exactly, so the confirm endpoint
+    validates them identically to a real admin's browser flow. Every value is
+    the owner's own free text - nothing here is dental-specific platform
+    config, which is the point of the proof (I8).
     """
-    draft: dict[str, Any] = {}
-
-    # business: name, team, hours, contact, and inbound channels. The owner's
-    # answer carries the name and the hours/contact lines; the rest is fixed
-    # config for this proof (a multi-chair clinic reachable by web and phone).
-    business_name = answers.get("business_name", "").strip() or TENANT_NAME
-    hours_lines = [
-        line.strip()
-        for line in answers.get("hours_contact", "").strip().split("\n")
-        if line.strip()
-    ]
-    draft["business"] = {
-        "name": business_name,
-        "is_team": True,
-        "hours": hours_lines[0] if hours_lines else "",
-        "contact": " / ".join(hours_lines[1:]) if len(hours_lines) > 1 else "",
-        "inbound_channels": ["website", "phone"],
-    }
-
-    # identity: extract the business description from the answer
-    draft["identity"] = {"description": answers["identity"].strip()}
-
-    # tone: extract the tone description
-    draft["tone"] = {"tone": answers["tone"].strip()}
-
-    # services: parse the bullet-list of services with prices
-    services_raw = answers["services"]
-    items: list[dict[str, Any]] = []
-    for line in services_raw.strip().split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        name, price = _parse_service_line(line)
-        if name:
-            items.append({"name": name, "description": "", "price_dollars": price})
-    draft["services"] = {"items": items}
-
-    # pricing_rules: parse rules from the answer
-    rules_raw = answers.get("pricing_rules", "")
-    rules: list[dict[str, Any]] = _parse_pricing_rules(rules_raw)
-    draft["pricing_rules"] = {"rules": rules}
-
-    # escalation: store the admin's described posture
-    # The admin described a cautious posture - encode it
-    draft["escalation_threshold"] = {
-        "posture": "cautious",
-        "threshold": None,
-        "_resolved_threshold": 0.75,
-    }
-
-    # tax: the clinic has a business number and is tax-registered.
-    draft["tax"] = {
-        "has_business_number": True,
-        "business_number": answers.get("business_number", "").strip(),
-        "tax_registered": True,
-    }
-
-    # payment: collects directly, full payment before the visit, no deposit.
-    draft["payment"] = {
-        "processing_mode": "DIRECT",
-        "terms": "full_before",
-        "deposit_pct": None,
-    }
-
-    # readback: the owner has reviewed and confirmed the captured details.
-    draft["readback"] = {"confirmed": True}
-
+    draft = {stage: answers[stage].strip() for stage in PROFILE_STAGES}
+    draft["business_name"] = draft["business_name"] or TENANT_NAME
     return draft
-
-
-def _parse_service_line(line: str) -> tuple[str | None, float | None]:
-    """Extract name and optional price from a service description line.
-
-    Examples: 'New patient exam is 95 dollars' -> ('New patient exam', 95.0)
-              'Fluoride varnish 30' -> ('Fluoride varnish', 30.0)
-    """
-    # Match "$X" or "X dollars" at the end of the line
-    import re as _re
-
-    price_match = _re.search(
-        r"\$\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*$|(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars?|dollars?)?\s*$",
-        line,
-        _re.IGNORECASE,
-    )
-    if price_match:
-        price_str = price_match.group(1) or price_match.group(2)
-        price = float(price_str.replace(",", ""))
-        name = line[: price_match.start()].strip().rstrip(",").rstrip("is").strip()
-        return (name, price)
-    return (line.strip(), None)
-
-
-def _parse_pricing_rules(text: str) -> list[dict[str, Any]]:
-    """Parse pricing rules from free text into structured rule dicts."""
-    rules: list[dict[str, Any]] = []
-    known_rules = [
-        ("deep_cleaning", "Deep cleaning", "per_quadrant"),
-        ("wisdom_tooth", "Wisdom tooth extraction", "per_tooth"),
-        ("out_of_hours", "Out-of-hours surcharge", "flat"),
-        ("missed_appointment", "Missed appointment fee", "flat"),
-        ("family_plan", "Family preventive plan", "monthly"),
-    ]
-    text_lower = text.lower()
-    for code, label, unit in known_rules:
-        if label.lower() in text_lower:
-            # Extract the dollar amount following the rule mention
-            import re as _re
-
-            pat = _re.compile(
-                _re.escape(label.lower()) + r".*?(\d+(?:\.\d{1,2})?)\s*(?:dollar|$)", _re.IGNORECASE
-            )
-            m = pat.search(text)
-            amount = float(m.group(1)) if m else None
-            rules.append(
-                {
-                    "code": code,
-                    "label": label,
-                    "unit_amount_dollars": amount,
-                    "unit": unit,
-                }
-            )
-    return rules
 
 
 class ProofFailure(RuntimeError):
@@ -267,37 +155,41 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
         )
         report["tenant_id"] = signup["tenant_id"]
 
-        # T-042: pre-populate the agentic v2 jsonb state directly, bypassing the
-        # LLM-driven copilot (per ADR in decisions-log.md). The confirm endpoint
-        # validates the draft and writes to relational tables identically to a
-        # real admin's browser flow - only the state population method differs.
-        print("  onboarding       pre-populating v2 state")
+        # T-042 / O-1: pre-populate the lean v3 jsonb profile directly, bypassing
+        # the LLM-driven copilot (per ADR in decisions-log.md). The confirm
+        # endpoint gates and persists the draft identically to a real admin's
+        # browser flow - only the state population method differs.
+        print("  onboarding       pre-populating v3 profile")
         draft = _build_draft_from_answers(answers)
-        async with db.tenant_context(UUID(signup["tenant_id"]), "tenant_admin") as conn:
-            await conn.execute(
-                "update tenant_config set config = "
-                "jsonb_set(config, '{onboarding}', $2::jsonb, true), "
-                "updated_at = now() where tenant_id = $1",
-                UUID(signup["tenant_id"]),
-                json.dumps(
-                    {
-                        "version": 2,
-                        "draft": draft,
-                        "history": [],
-                        "off_topic_count": 0,
-                        "completed": False,
-                    }
-                ),
-            )
+        # This is the one step that talks to the database rather than the API,
+        # so it owns its own pool for the duration.
+        await db.create_pool()
+        try:
+            async with db.tenant_context(UUID(signup["tenant_id"]), "tenant_admin") as conn:
+                await conn.execute(
+                    "update tenant_config set config = "
+                    "jsonb_set(config, '{onboarding}', $2::jsonb, true), "
+                    "updated_at = now() where tenant_id = $1",
+                    UUID(signup["tenant_id"]),
+                    json.dumps(
+                        {
+                            "version": 3,
+                            "draft": draft,
+                            "history": [],
+                            "off_topic_count": 0,
+                            "completed": False,
+                        }
+                    ),
+                )
+        finally:
+            await db.close_pool()
         report["draft"] = draft
 
         print("  confirm")
-        confirmed = _check(
+        _check(
             await client.post(f"{api_base}/api/onboarding/confirm", headers=headers),
             "onboarding confirm",
         )
-        report["catalog_items_created"] = confirmed["catalog_items_created"]
-        report["pricing_rules_created"] = confirmed["pricing_rules_created"]
 
         report["documents"] = []
         for filename, doc_type in KNOWLEDGE_DOCS:
@@ -374,8 +266,7 @@ def main() -> int:
 
     print(
         f"\ntenant {SLUG!r} is live: "
-        f"{report['catalog_items_created']} catalog items, "
-        f"{report['pricing_rules_created']} pricing rules, "
+        f"{len(PROFILE_STAGES)} profile fields captured, "
         f"{len(report['documents'])} documents ingested"
     )
     return 0

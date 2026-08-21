@@ -1,9 +1,10 @@
-"""T-006 / T-042 / T-054: onboarding endpoints exercised at the API level.
+"""O-1: onboarding endpoints exercised at the API level.
 
-Uses an OnboardingFakeProvider that synthesizes onboarding extraction updates
-from canned draft data, one section per turn, so the API-level tests never
-call a real model. Chip beats are exercised through the deterministic
-selection path (no LLM involved).
+Uses an OnboardingFakeProvider that synthesizes extraction updates from canned
+profile data, one field per turn, so the API-level tests never call a real
+model. Onboarding is text-only since O-1: every beat is satisfied by
+extraction, so the walk is seven text turns and a selection payload is
+rejected.
 """
 
 from __future__ import annotations
@@ -33,76 +34,43 @@ pytestmark = pytest.mark.db
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
 
-# The text beats the fake provider feeds, in beat order. business updates are
-# cumulative (stateful extraction re-emits the full section), so the
-# hours_contact update repeats the name and team size captured earlier.
+# One profile field per turn, in beat order. Each update carries only what the
+# owner stated that turn; save_profile merges it into the accumulated draft.
 _FAKE_UPDATES: list[dict[str, object]] = [
-    {"business": {"name": "Bytefix Repairs"}},
-    {"identity": {"description": "A neighborhood phone repair shop."}},
-    {
-        "business": {
-            "name": "Bytefix Repairs",
-            "is_team": True,
-            "hours": "Mon-Fri 9-6",
-            "contact": "555-0100",
-        }
-    },
-    {
-        "services": {
-            "items": [
-                {
-                    "name": "Screen repair",
-                    "description": "Cracked screens",
-                    "price_dollars": 89.5,
-                }
-            ]
-        },
-    },
-    {
-        "pricing_rules": {
-            "rules": [
-                {
-                    "code": "rush-fee",
-                    "label": "Rush service",
-                    "unit_amount_dollars": 25.0,
-                    "unit": "flat",
-                }
-            ]
-        },
-    },
+    {"profile": {"name": "Sam"}},
+    {"profile": {"business_name": "Bytefix Repairs"}},
+    {"profile": {"business_type": "a neighborhood phone repair shop"}},
+    {"profile": {"headcount": "just me and one technician"}},
+    {"profile": {"hours": "Mon-Fri 9-6"}},
+    {"profile": {"services": "screen repairs, battery replacements"}},
+    {"profile": {"contact": "555-0100"}},
 ]
 
 _CHAT_REPLIES = [
-    "Nice to meet you, Bytefix Repairs!",
-    "I've captured your business description.",
-    "Hours and contact noted.",
+    "Nice to meet you, Sam!",
+    "Bytefix Repairs it is.",
+    "A phone repair shop - got it.",
+    "Team size noted.",
+    "Hours noted.",
     "Services recorded.",
-    "Pricing rules saved.",
+    "Contact details saved.",
 ]
 
-# The full walk: text beats (LLM extraction) interleaved with chip selections
-# in beat order.
+# The full walk: seven text turns, one per lean beat.
 _FULL_WALK: list[tuple[Any, ...]] = [
+    ("text", "I'm Sam"),
     ("text", "we are Bytefix Repairs"),
-    ("selection", "team", ["team"]),
     ("text", "we fix phones"),
-    ("selection", "readback", ["confirm"]),
-    ("text", "open weekdays, call 555-0100"),
-    ("text", "screen repairs are $89.50"),
-    ("text", "rush fee is $25"),
-    ("selection", "business_number", ["none"]),
-    ("selection", "tax_registered", ["yes"]),
-    ("selection", "payment_mode", ["DIRECT"]),
-    ("selection", "payment_terms", ["full_before"]),
-    ("selection", "inbound_channels", ["website", "phone"]),
-    ("selection", "tone", ["friendly"]),
-    ("selection", "escalation_posture", ["balanced"]),
+    ("text", "just me and one tech"),
+    ("text", "open weekdays 9 to 6"),
+    ("text", "screen repairs and batteries"),
+    ("text", "call 555-0100"),
 ]
 
 
 class OnboardingFakeProvider(BaseFakeProvider):
-    """Synthesizes extraction updates from canned data, one section per
-    extract() call until all sections are captured."""
+    """Synthesizes extraction updates from canned data, one profile field per
+    extract() call until every field is captured."""
 
     def __init__(self) -> None:
         self._update_idx = 0
@@ -139,13 +107,13 @@ class OffTopicFakeProvider(BaseFakeProvider):
         return schema.model_validate(
             {
                 "off_topic": True,
-                "meta_reply": "I'm Wren.",
-                "next_question": "What is your business?",
+                "meta_reply": "I'm here to help you set up your business.",
+                "next_question": "What's your name?",
             }
         )
 
     async def chat(self, messages: list[ChatMessage]) -> str:
-        return "I'm Wren. What is your business?"
+        return "I'm here to help you set up your business. What's your name?"
 
 
 @pytest.fixture(autouse=True)
@@ -222,24 +190,21 @@ async def _walk(
 ) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     for step in steps or _FULL_WALK:
-        if step[0] == "text":
-            await _send(client, headers, text=step[1])
-        else:
-            await _send(client, headers, selection={"beat": step[1], "values": step[2]})
+        await _send(client, headers, text=step[1])
 
 
 async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
     await _walk(client, token)
 
 
-async def test_fresh_tenant_starts_at_business_name(client: httpx.AsyncClient) -> None:
+async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.get(
         "/api/onboarding/state", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["stage"] == "business_name"
+    assert body["stage"] == "name"
     assert body["completed"] is False
     assert body["draft"] == {}
     assert body["history"] == []
@@ -247,20 +212,60 @@ async def test_fresh_tenant_starts_at_business_name(client: httpx.AsyncClient) -
     assert body["input"]["kind"] == "text"
 
 
-async def test_message_captures_business_name_and_advances_stage(client: httpx.AsyncClient) -> None:
+async def test_every_beat_renders_the_text_pill(client: httpx.AsyncClient) -> None:
+    """O-1: the interview is text-only, so no beat ever asks for a chip."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for step in _FULL_WALK[:-1]:
+        body = await _send(client, headers, text=step[1])
+        assert body["input"]["kind"] == "text"
+        assert body["input"]["chips"] == []
+        assert body["input"]["mask"] is None
+        assert body["input"]["cta_label"] is None
+
+
+async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
     response = await client.post(
-        "/api/onboarding/message", json={"text": "we are Bytefix Repairs"}, headers=headers
+        "/api/onboarding/message", json={"text": "I'm Sam"}, headers=headers
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["stage"] == "team"
-    assert body["draft"]["business"]["name"] == "Bytefix Repairs"
+    assert body["stage"] == "business_name"
+    assert body["draft"]["name"] == "Sam"
 
     resumed = await client.get("/api/onboarding/state", headers=headers)
-    assert resumed.json()["stage"] == "team"
+    assert resumed.json()["stage"] == "business_name"
+
+
+async def test_draft_accumulates_across_turns(client: httpx.AsyncClient) -> None:
+    """US-1: each turn merges its fields; nothing captured earlier is lost."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await _send(client, headers, text="I'm Sam")
+    body = await _send(client, headers, text="we are Bytefix Repairs")
+
+    assert body["draft"] == {"name": "Sam", "business_name": "Bytefix Repairs"}
+
+
+async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClient) -> None:
+    """US-4: a returning owner picks up where they left off, nothing re-asked."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk(client, token, _FULL_WALK[:3])
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    body = state.json()
+
+    assert body["stage"] == "headcount"
+    assert body["draft"]["name"] == "Sam"
+    assert body["draft"]["business_name"] == "Bytefix Repairs"
+    user_messages = [m["content"] for m in body["history"] if m["role"] == "user"]
+    assert user_messages == ["I'm Sam", "we are Bytefix Repairs", "we fix phones"]
 
 
 async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> None:
@@ -279,32 +284,21 @@ async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> 
     state = await client.get("/api/onboarding/state", headers=headers)
     body = state.json()
     assert body["draft"] == {}
-    assert body["stage"] == "business_name"
+    assert body["stage"] == "name"
 
 
-async def test_selection_updates_draft_and_history(client: httpx.AsyncClient) -> None:
+async def test_selection_payload_is_conflict(client: httpx.AsyncClient) -> None:
+    """O-1 retired the chip path; the payload stays in the contract until E-1."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
-    await _send(client, headers, text="we are Bytefix Repairs")
 
-    body = await _send(client, headers, selection={"beat": "team", "values": ["team"]})
-    assert body["stage"] == "description"
-    assert body["draft"]["business"]["is_team"] is True
-    assert body["input"]["kind"] == "text"
-    user_messages = [m["content"] for m in body["history"] if m["role"] == "user"]
-    assert any("We're a team" in m for m in user_messages)
-
-
-async def test_stale_selection_is_conflict(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
-    headers = {"Authorization": f"Bearer {token}"}
-    # current beat is business_name; a team selection is stale.
     response = await client.post(
         "/api/onboarding/message",
-        json={"selection": {"beat": "team", "values": ["team"]}},
+        json={"selection": {"beat": "headcount", "values": ["team"]}},
         headers=headers,
     )
     assert response.status_code == 409
+    assert "text-only" in response.json()["detail"]
 
 
 async def test_message_requires_exactly_one_of_text_or_selection(
@@ -314,7 +308,7 @@ async def test_message_requires_exactly_one_of_text_or_selection(
     headers = {"Authorization": f"Bearer {token}"}
     both = await client.post(
         "/api/onboarding/message",
-        json={"text": "hi", "selection": {"beat": "team", "values": ["team"]}},
+        json={"text": "hi", "selection": {"beat": "headcount", "values": ["team"]}},
         headers=headers,
     )
     assert both.status_code == 422
@@ -322,45 +316,7 @@ async def test_message_requires_exactly_one_of_text_or_selection(
     assert neither.status_code == 422
 
 
-async def test_kyc_beat_appears_only_for_platform(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
-    headers = {"Authorization": f"Bearer {token}"}
-    await _walk(client, token, _FULL_WALK[:9])  # through tax_registered
-
-    body = await _send(client, headers, selection={"beat": "payment_mode", "values": ["PLATFORM"]})
-    assert body["stage"] == "kyc"
-    assert body["input"]["kind"] == "cta"
-    assert body["input"]["cta_label"] == "Start ID check"
-
-    body = await _send(client, headers, selection={"beat": "kyc", "values": ["skip"]})
-    assert body["stage"] == "payment_terms"
-    assert body["draft"]["kyc"]["skipped"] is True
-
-
-async def test_direct_payment_skips_kyc(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
-    headers = {"Authorization": f"Bearer {token}"}
-    await _walk(client, token, _FULL_WALK[:9])
-
-    body = await _send(client, headers, selection={"beat": "payment_mode", "values": ["DIRECT"]})
-    assert body["stage"] == "payment_terms"
-
-
-async def test_deposit_terms_asks_for_percentage(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
-    headers = {"Authorization": f"Bearer {token}"}
-    await _walk(client, token, _FULL_WALK[:9])
-    await _send(client, headers, selection={"beat": "payment_mode", "values": ["DIRECT"]})
-
-    body = await _send(client, headers, selection={"beat": "payment_terms", "values": ["deposit"]})
-    assert body["stage"] == "deposit_pct"
-
-    body = await _send(client, headers, selection={"beat": "deposit_pct", "values": ["20"]})
-    assert body["stage"] == "inbound_channels"
-    assert body["draft"]["payment"]["deposit_pct"] == 20
-
-
-async def test_full_flow_confirm_writes_tenant_config_and_catalog(
+async def test_full_flow_confirm_writes_profile(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)
@@ -375,58 +331,56 @@ async def test_full_flow_confirm_writes_tenant_config_and_catalog(
 
     confirm = await client.post("/api/onboarding/confirm", headers=headers)
     assert confirm.status_code == 200
-    result = confirm.json()
-    assert result["catalog_items_created"] == 1
-    assert result["pricing_rules_created"] == 1
+    assert confirm.json() == {"tenant_id": str(tenant_id)}
 
     config_row = await superuser_conn.fetchrow(
         "select system_prompt, tone, escalation_threshold from tenant_config where tenant_id = $1",
         tenant_id,
     )
     assert config_row is not None
+    # The identity sentence carries both the name and the captured type.
+    assert "Bytefix Repairs" in config_row["system_prompt"]
     assert "phone repair shop" in config_row["system_prompt"]
+    # O-1 no longer sets these from the interview - they keep schema defaults.
     assert config_row["tone"] == "friendly"
     assert config_row["escalation_threshold"] == pytest.approx(0.5)
 
     tenant_row = await superuser_conn.fetchrow(
-        "select business_name, payment_processing_mode from tenants where id = $1", tenant_id
+        "select business_name from tenants where id = $1", tenant_id
     )
     assert tenant_row is not None
     assert tenant_row["business_name"] == "Bytefix Repairs"
-    assert tenant_row["payment_processing_mode"] == "DIRECT"
 
-    business_name = await superuser_conn.fetchval(
-        "select config->'business'->>'name' from tenant_config where tenant_id = $1", tenant_id
+    profile = await superuser_conn.fetchval(
+        "select config->'profile' from tenant_config where tenant_id = $1", tenant_id
     )
-    assert business_name == "Bytefix Repairs"
+    assert json.loads(profile) == {
+        "name": "Sam",
+        "business_name": "Bytefix Repairs",
+        "business_type": "a neighborhood phone repair shop",
+        "headcount": "just me and one technician",
+        "hours": "Mon-Fri 9-6",
+        "services": "screen repairs, battery replacements",
+        "contact": "555-0100",
+    }
 
-    item_row = await superuser_conn.fetchrow(
-        "select name, price_cents from catalog_items where tenant_id = $1", tenant_id
-    )
-    assert item_row is not None
-    assert item_row["name"] == "Screen repair"
-    assert item_row["price_cents"] == 8950
 
-    rule_row = await superuser_conn.fetchrow(
-        "select code, unit_amount_cents from pricing_rules where tenant_id = $1",
-        tenant_id,
-    )
-    assert rule_row is not None
-    assert rule_row["code"] == "rush-fee"
-    assert rule_row["unit_amount_cents"] == 2500
+async def test_confirm_writes_no_catalog_or_pricing_rows(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """O-1 captures a profile, not a priced catalog - prices come from uploads."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    await _walk_to_confirm(client, token)
+    await client.post("/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"})
 
-    catalog_doc = await superuser_conn.fetchrow(
-        "select id, status from documents where tenant_id = $1 and doc_type = 'catalog'",
-        tenant_id,
+    items = await superuser_conn.fetchval(
+        "select count(*) from catalog_items where tenant_id = $1", tenant_id
     )
-    assert catalog_doc is not None
-    assert catalog_doc["status"] == "ready"
-    chunk_row = await superuser_conn.fetchrow(
-        "select content, metadata from knowledge_chunks where document_id = $1",
-        catalog_doc["id"],
+    rules = await superuser_conn.fetchval(
+        "select count(*) from pricing_rules where tenant_id = $1", tenant_id
     )
-    assert chunk_row is not None
-    assert "Screen repair" in chunk_row["content"]
+    assert items == 0
+    assert rules == 0
 
 
 async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) -> None:
@@ -468,7 +422,7 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     async with client.stream(
         "POST",
         "/api/onboarding/message/stream",
-        json={"text": "we are Bytefix Repairs"},
+        json={"text": "I'm Sam"},
         headers=headers,
     ) as resp:
         assert resp.status_code == 200
@@ -493,10 +447,7 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     state_event = next(e for e in events if e["type"] == "state")
     state_draft = state_event["draft"]
     assert isinstance(state_draft, dict)
-    business = state_draft["business"]
-    assert isinstance(business, dict)
-    assert business["name"] == "Bytefix Repairs"
+    assert state_draft["name"] == "Sam"
     assert state_event["completed"] is False
-    # The client needs the current beat key to submit a chip selection after a
-    # text turn, so the SSE state event carries it (matching /state's shape).
-    assert state_event["stage"] == "team"
+    # The SSE state event carries the current beat key, matching /state's shape.
+    assert state_event["stage"] == "business_name"

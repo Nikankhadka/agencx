@@ -25,8 +25,10 @@ The Wren build is complete except for external shipping gates (live deploy needs
 credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
 a human). The Agencx change work - rebrand, money guardrail loosening, tool
 gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
-is defined ticket-by-ticket in `spec/`. Foundation (A-1/A-2) and login-in-chat
-(O-2) are landed; the next ticket is O-1 (the lean onboarding re-cut).
+is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
+Foundation (A-1/A-2), login-in-chat (O-2), and the lean onboarding re-cut (O-1)
+are landed. The next group is the chat spine (`03-chat-spine.md`), starting
+with P-3.
 
 ## Feature status matrix
 
@@ -39,7 +41,7 @@ is defined ticket-by-ticket in `spec/`. Foundation (A-1/A-2) and login-in-chat
 | RLS enforcement + schema audit | BUILT | `c0b798b` (audit teeth), `d1826e4` |
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGING** - B-2 points the public domain to agencx.app |
-| Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; **CHANGING** - O-1 re-cuts to one tool to save profile fields + an LLM turn loop (extract -> save -> ask missing -> deflect) |
+| Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile` |
 | Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI) |
 | URL scrape knowledge ingest path | NEW | O-3 (document upload path is built; URL fetch is a new ingest route) |
 
@@ -137,8 +139,9 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-1..P-5 Providers, failover, pre-load, versioning, indicator | not started | |
-| O-2 Login-in-chat: email + 6-digit code | done | this commit |
-| O-1, O-3, O-4 Onboarding tool loop, ingest, fast path | not started | |
+| O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
+| O-1 Onboarding: one tool + LLM turn loop | done | this commit |
+| O-3, O-4 Knowledge ingest, whole-corpus fast path | not started | |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
@@ -150,6 +153,15 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
   is blocked until it exists; backend auth is fully tested with locally minted
   tokens. The login-in-chat (O-2) work also needs an email-sending provider for
   real delivery.
+- **Business type does not vary the interview (O-1, US-2).** The PRD glossary
+  describes a `business_types` row carrying "a profile template and prompt
+  fragments"; neither half has a consumer in Phase 1, and none of the seven
+  lean fields is one a vertical should skip (a solo trader's "just me" and an
+  online store's "24/7" are both useful answers). O-1 therefore captures
+  `business_type` as a profile field and feeds it to the tenant's system
+  prompt, and asks every tenant the same seven questions - which keeps I8
+  cleanly satisfied, since no vertical name appears anywhere. Revisit when a
+  real vertical needs a question the generic set does not cover.
 - **Console sidebar squeeze below ~375px** (pre-existing, surfaced by the
   rebrand's 375px e2e check): resolved by design - E-1 replaces the tenant
   app's mobile nav with the bottom tab bar (D18) - but the code fix ships with

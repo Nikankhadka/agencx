@@ -1,55 +1,31 @@
-"""Onboarding orchestration: turn loop, beat selection, draft validation, and
-confirm gating.
+"""Onboarding orchestration: turn loop, draft validation, and confirm gating.
 
 Moved out of api/onboarding.py. Holds the business order of a confirm (gate,
-validate drafts, resolve threshold, then persist atomically) and the
-state-shaped response builder. The LLM turn loop still runs in
-app/onboarding/agent.py; chip selections merge deterministically here.
+then persist) and the state-shaped response builder. The LLM turn loop runs in
+app/onboarding/agent.py. O-1 made onboarding text-only: every beat is
+satisfied by extraction, so there is no deterministic selection path here.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
 from app.features.onboarding import service
-from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
-    _assistant_reply_for,
     prepare_turn,
     run_turn,
     stream_reply,
 )
-from app.onboarding.flow import (
-    BusinessDraft,
-    EscalationDraft,
-    IdentityDraft,
-    PaymentDraft,
-    PricingRulesDraft,
-    ServicesDraft,
-    TaxDraft,
-    ToneDraft,
-    resolve_threshold,
-)
+from app.onboarding.flow import ProfileDraft
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
-
-
-@dataclass(frozen=True)
-class Selection:
-    beat: str
-    values: list[str] = field(default_factory=list)
-
-
-def _cents(dollars: float) -> int:
-    return round(dollars * 100)
 
 
 def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
@@ -64,10 +40,7 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             prompt = msg.get("content", "")
             break
     if not prompt:
-        prompt = (
-            "Hi, I'm Wren, your personal agent to set up your business agent. "
-            "To get started: tell me the name of your business."
-        )
+        prompt = "Hi! I'll help you set up your business. To get started, what's your name?"
     return {
         "stage": stage,
         "prompt": prompt,
@@ -82,12 +55,6 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
 async def load_record_state(*, tenant_id: UUID) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     return response_from_record(record)
-
-
-def _selection_user_message(beat: beats.Beat, values: list[str]) -> str:
-    if beat.kind == "cta" and not values:
-        return beat.cta_label or beat.label
-    return ", ".join(chip.label for chip in beat.chips if chip.value in values)
 
 
 async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> dict[str, Any]:
@@ -108,36 +75,6 @@ async def run_message(*, tenant_id: UUID, text: str, provider: LLMProvider) -> d
     record_data = updated.to_jsonb()
     if persist:
         await service.save_record(tenant_id=tenant_id, record=record_data)
-    return record_data
-
-
-async def run_selection(*, tenant_id: UUID, selection: Selection) -> dict[str, Any]:
-    """Merge a chip selection deterministically - no LLM call.
-
-    Rejects a stale beat (the client was showing an older widget than the server's
-    current first-unsatisfied beat) with a 409 so the client re-syncs from /state.
-    """
-    record = await service.load_record(tenant_id=tenant_id)
-    onboarding = OnboardingRecord.from_jsonb(record)
-    if onboarding.completed:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="onboarding already confirmed",
-        )
-    beat = beats.next_beat(onboarding.draft)
-    if beat is None or selection.beat != beat.key:
-        current = beat.key if beat else "confirm"
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"stale selection - current beat is {current}",
-        )
-    beats.apply_selection(onboarding.draft, selection.beat, selection.values)
-    user_message = _selection_user_message(beat, selection.values)
-    reply = _assistant_reply_for(onboarding.draft)
-    onboarding.history.append({"role": "user", "content": user_message})
-    onboarding.history.append({"role": "assistant", "content": reply})
-    record_data = onboarding.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
     return record_data
 
 
@@ -195,7 +132,7 @@ async def run_message_stream(
     yield {"type": "done"}
 
 
-async def confirm(*, tenant_id: UUID, embedder: Embedder) -> dict[str, Any]:
+async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
@@ -210,64 +147,24 @@ async def confirm(*, tenant_id: UUID, embedder: Embedder) -> dict[str, Any]:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"incomplete - missing: {'; '.join(gate.missing)}",
         )
-    business = BusinessDraft.model_validate(draft["business"])
-    identity = IdentityDraft.model_validate(draft["identity"])
-    tone = ToneDraft.model_validate(draft["tone"])
-    services = ServicesDraft.model_validate(draft["services"])
-    rules = PricingRulesDraft.model_validate(draft["pricing_rules"])
-    esc = EscalationDraft.model_validate(draft["escalation_threshold"])
-    tax = TaxDraft.model_validate(draft["tax"])
-    payment = PaymentDraft.model_validate(draft["payment"])
-    threshold = resolve_threshold(esc)
-
+    # The gate above guarantees all seven fields; extra keys (a pre-O-1 draft's
+    # orphan sections) are ignored rather than rejected.
+    profile = ProfileDraft.model_validate(draft)
+    # business_type is the owner's own free text, so it gets its own sentence
+    # rather than an apposition - "Bytefix Repairs, phone repair shop" and
+    # "Northgate Family Dental, A three-chair practice..." both read badly.
     system_prompt = (
-        "You are the AI support and sales assistant for this business. "
-        f"About the business: {identity.description}"
+        f"You are the assistant for {profile.business_name}. "
+        f"About the business: {profile.business_type.rstrip('.')}. "
+        "Answer only from the business's own material; when the answer isn't "
+        "there, say so and offer to have the owner follow up."
     )
-    service_items = [
-        {
-            "name": item.name,
-            "description": item.description,
-            "price_cents": _cents(item.price_dollars) if item.price_dollars is not None else None,
-        }
-        for item in services.items
-    ]
-    service_rules = [
-        {
-            "code": rule.code,
-            "label": rule.label,
-            "unit_amount_cents": _cents(rule.unit_amount_dollars)
-            if rule.unit_amount_dollars is not None
-            else None,
-            "unit": rule.unit,
-        }
-        for rule in rules.rules
-    ]
     onboarding.completed = True
-    try:
-        await service.apply_confirmation(
-            tenant_id=tenant_id,
-            system_prompt=system_prompt,
-            tone=tone.tone,
-            escalation_threshold=threshold,
-            business_name=business.name,
-            processing_mode=payment.processing_mode or "DIRECT",
-            config_extra={
-                "business": business.model_dump(),
-                "payment": payment.model_dump(),
-                "tax": tax.model_dump(),
-            },
-            services=service_items,
-            pricing_rules=service_rules,
-            embedder=embedder,
-            completed_record=onboarding.to_jsonb(),
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
-    return {
-        "tenant_id": tenant_id,
-        "catalog_items_created": len(service_items),
-        "pricing_rules_created": len(service_rules),
-    }
+    await service.apply_confirmation(
+        tenant_id=tenant_id,
+        system_prompt=system_prompt,
+        business_name=profile.business_name,
+        profile=profile.model_dump(),
+        completed_record=onboarding.to_jsonb(),
+    )
+    return {"tenant_id": tenant_id}

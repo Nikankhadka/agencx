@@ -24,8 +24,11 @@ export interface InputSpec {
   cta_label: string | null;
 }
 
-/** The captured draft: one object per section, keyed by section name. */
-export type OnboardingDraft = Record<string, Record<string, unknown>>;
+/**
+ * The captured business profile: one string per field, keyed by field name
+ * (O-1 - the flat draft that replaced the per-section objects).
+ */
+export type OnboardingDraft = Record<string, string>;
 
 export interface OnboardingState {
   /** The current beat key, or "confirm" when every beat is satisfied. */

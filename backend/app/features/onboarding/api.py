@@ -23,8 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.features.onboarding import controller
-from app.llm.dependency import get_embedder_dependency, get_llm_provider
-from app.llm.embedder import Embedder
+from app.llm.dependency import get_llm_provider
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
 from app.shared import auth
@@ -38,7 +37,8 @@ router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 class OnboardingStateResponse(BaseModel):
     stage: str
     prompt: str
-    draft: dict[str, dict[str, object]]
+    # O-1: the draft is a flat profile - one string per captured field.
+    draft: dict[str, str]
     completed: bool
     history: list[dict[str, str]]
     input: InputSpec | None
@@ -63,8 +63,6 @@ class OnboardingMessageRequest(BaseModel):
 
 class OnboardingConfirmResponse(BaseModel):
     tenant_id: UUID
-    catalog_items_created: int
-    pricing_rules_created: int
 
 
 @router.get("/state", response_model=OnboardingStateResponse)
@@ -82,15 +80,13 @@ async def post_message(
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> OnboardingStateResponse:
     if body.selection is not None:
-        record_data = await controller.run_selection(
-            tenant_id=admin.tenant_id,
-            selection=controller.Selection(beat=body.selection.beat, values=body.selection.values),
-        )
-    else:
-        assert body.text is not None
-        record_data = await controller.run_message(
-            tenant_id=admin.tenant_id, text=body.text, provider=provider
-        )
+        # O-1 made every beat a text beat, so nothing is satisfied by a chip.
+        # The payload stays in the contract until E-1 rebuilds this surface.
+        raise HTTPException(status_code=409, detail="onboarding is text-only")
+    assert body.text is not None
+    record_data = await controller.run_message(
+        tenant_id=admin.tenant_id, text=body.text, provider=provider
+    )
     return OnboardingStateResponse(**controller.response_from_record(record_data))
 
 
@@ -147,7 +143,6 @@ async def post_message_stream(
 @router.post("/confirm", response_model=OnboardingConfirmResponse)
 async def confirm(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
-    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingConfirmResponse:
-    result = await controller.confirm(tenant_id=admin.tenant_id, embedder=embedder)
+    result = await controller.confirm(tenant_id=admin.tenant_id)
     return OnboardingConfirmResponse(**result)

@@ -28,14 +28,7 @@ from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
 from app.onboarding import beats
 from app.onboarding.flow import DraftUpdate
-from app.onboarding.tools import (
-    save_business,
-    save_escalation,
-    save_identity,
-    save_pricing_rules,
-    save_services,
-    save_tone,
-)
+from app.onboarding.tools import save_profile
 
 logger = logging.getLogger("app.onboarding.agent")
 transcript = logging.getLogger(TRANSCRIPT_LOGGER_NAME)
@@ -64,28 +57,28 @@ class Directive:
 
 
 _COPILOT = (
-    "You are Wren, an onboarding copilot. Help a small-business owner describe "
-    "their business, tone, services (with prices), pricing rules, and escalation "
-    "posture. Be friendly and concise. Answer meta questions in one line, then "
-    "gently return to onboarding. Never invent prices."
+    "You are an onboarding assistant. Help a small-business owner describe "
+    "their name, business name, business type, team size, opening hours, what "
+    "they sell, and how customers reach them. Be friendly and concise. Answer "
+    "meta questions in one line, then gently return to onboarding."
 )
 
 _EXTRACT_PROMPT = (
     "You are extracting business information from a small-business owner who is "
-    "onboarding their AI assistant. Read the conversation and update the draft "
-    "with anything new the owner stated. Fill only what the owner actually said - "
-    "never invent a value, and never invent a price; record prices only as the "
-    "dollar figures the owner literally gave. If the message is off-topic (a "
-    "question about you, a greeting, or unrelated chat), set off_topic=true and "
-    "put a one-line answer in meta_reply. Otherwise set off_topic=false and set "
-    "next_question to the single most important question to ask next, given what "
-    "is still missing. Leave a section null when nothing new was stated."
+    "onboarding their assistant. Read the conversation and update the profile "
+    "with anything new the owner stated: name, business_name, business_type, "
+    "headcount, hours, services, contact. Fill only what the owner actually "
+    "said - never invent a value. If the message is off-topic (a question about "
+    "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
+    "answer in meta_reply. Otherwise set off_topic=false and set next_question "
+    "to the single most important question to ask next, given what is still "
+    "missing. Leave the profile null when nothing new was stated."
 )
 
 
 @dataclass
 class OnboardingRecord:
-    version: int = 2
+    version: int = 3
     draft: dict[str, Any] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)
     off_topic_count: int = 0
@@ -93,19 +86,25 @@ class OnboardingRecord:
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
-        if raw.get("version") == 2:
+        """Load a record, migrating anything older than v3 to the lean profile.
+
+        v3 is O-1's flat profile. A v1/v2 draft holds the retired nested
+        sections (business/identity/tone/services/...), which share no key with
+        the lean fields, so it is dropped rather than carried as orphan data -
+        an in-flight interview restarts. ``completed`` survives, so a tenant
+        that already went live is never re-interviewed.
+        """
+        if raw.get("version") == 3:
             return cls(
-                version=2,
+                version=3,
                 draft=raw.get("draft", {}),
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
             )
-        legacy_state = raw.get("state", {}) or {}
-        legacy_draft = legacy_state.get("draft", {}) if isinstance(legacy_state, dict) else {}
         return cls(
-            version=2,
-            draft=legacy_draft,
+            version=3,
+            draft={},
             history=[],
             off_topic_count=0,
             completed=raw.get("completed", False),
@@ -126,7 +125,7 @@ class TurnPlan:
     """Everything ``prepare_turn`` computed, ready for either the streamed or
     non-streamed reply path.
 
-    ``summary`` is set when the turn lands on readback or completion - the
+    ``summary`` is set when the turn completes the profile - the
     reply is server-synthesized from the draft and never touches the model.
     ``reply_msgs`` is set otherwise and is what the reply path feeds the LLM.
     ``off_topic`` mirrors the extraction verdict for logging.
@@ -139,43 +138,12 @@ class TurnPlan:
     off_topic: bool = False
 
 
-def _fmt_dollars(dollars: float) -> str:
-    return f"{dollars:g}"
-
-
-def _readback_summary(draft: dict[str, Any]) -> str:
-    business = draft.get("business") or {}
-    identity = draft.get("identity") or {}
-    services = draft.get("services") or {}
-    tone = draft.get("tone") or {}
-    lines: list[str] = []
-    if business.get("name"):
-        lines.append(f"Your business: {business['name']}")
-    if identity.get("description"):
-        lines.append(f"What you do: {identity['description']}")
-    is_team = business.get("is_team")
-    if is_team is not None:
-        lines.append("You're a team" if is_team else "It's just you")
-    items = services.get("items") or []
-    priced = [i for i in items if i.get("price_dollars") is not None]
-    if priced:
-        lines.append(
-            "Services: "
-            + ", ".join(f"{i['name']} at ${_fmt_dollars(i['price_dollars'])}" for i in priced)
-        )
-    if tone.get("tone"):
-        lines.append(f"Tone: {tone['tone']}")
-    lines.append("Does everything look right?")
-    return "\n".join(lines)
-
-
 def _activation_summary(draft: dict[str, Any]) -> str:
-    business = draft.get("business") or {}
-    name = business.get("name")
+    name = draft.get("business_name") or draft.get("name")
     if name:
-        intro = f"Your agent for {name} is ready to go live."
+        intro = f"Your assistant for {name} is ready to go live."
     else:
-        intro = "Your agent is ready to go live."
+        intro = "Your assistant is ready to go live."
     return f"{intro} Hit confirm to publish it."
 
 
@@ -183,8 +151,6 @@ def _assistant_reply_for(draft: dict[str, Any]) -> str:
     nxt = beats.next_beat(draft)
     if nxt is None:
         return _activation_summary(draft)
-    if nxt.key == "readback":
-        return _readback_summary(draft)
     return f"Got it. {nxt.ask}"
 
 
@@ -207,8 +173,9 @@ async def prepare_turn(
     Extracts and merges the owner's message into the draft, composes the
     directive, decides ``persist``, and appends the user message to history (if
     persisting). Then it decides whether the reply is a server-synthesized
-    summary (readback/completion) or a model-composed reply - without touching
-    the LLM for the reply. Returns a :class:`TurnPlan` the reply path consumes.
+    summary (the go-live activation line, once every beat is satisfied) or a
+    model-composed reply - without touching the LLM for the reply. Returns a
+    :class:`TurnPlan` the reply path consumes.
     """
     logger.info(
         "onboarding turn start",
@@ -240,24 +207,11 @@ async def prepare_turn(
     )
 
     acknowledged: list[str] = []
-    if update.business is not None:
-        record.draft = save_business(record.draft, update.business)
-        acknowledged.append("business details")
-    if update.identity is not None:
-        record.draft = save_identity(record.draft, update.identity)
-        acknowledged.append("business description")
-    if update.tone is not None:
-        record.draft = save_tone(record.draft, update.tone)
-        acknowledged.append("assistant tone")
-    if update.services is not None:
-        record.draft = save_services(record.draft, update.services)
-        acknowledged.append("services")
-    if update.pricing_rules is not None:
-        record.draft = save_pricing_rules(record.draft, update.pricing_rules)
-        acknowledged.append("pricing rules")
-    if update.escalation is not None:
-        record.draft = save_escalation(record.draft, update.escalation)
-        acknowledged.append("escalation posture")
+    if update.profile is not None:
+        record.draft = save_profile(record.draft, update.profile)
+        for beat in beats.BEAT_ORDER:
+            if getattr(update.profile, beat.key):
+                acknowledged.append(beat.label)
 
     nxt = beats.next_beat(record.draft)
     ask_for = nxt.ask if nxt else ""
@@ -266,7 +220,7 @@ async def prepare_turn(
     if update.off_topic:
         if persist:
             record.off_topic_count += 1
-        directive.meta_answer = update.meta_reply or "I'm Wren, your onboarding copilot."
+        directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
         directive.ask_for = update.next_question or ask_for
     else:
         directive.ask_for = update.next_question or ask_for
@@ -296,7 +250,7 @@ async def prepare_turn(
     if persist:
         record.history.append({"role": "user", "content": admin_message})
 
-    if nxt is None or nxt.key == "readback":
+    if nxt is None:
         return TurnPlan(
             record=record,
             persist=persist,
@@ -413,20 +367,7 @@ async def run_turn(
 
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:
-    figures = re.findall(r"\$\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?", reply)
-    if not figures:
-        return False
-    known: set[int] = set()
-    for item in draft.get("services", {}).get("items", []):
-        if isinstance(item, dict) and item.get("price_dollars") is not None:
-            known.add(round(item["price_dollars"] * 100))
-    for rule in draft.get("pricing_rules", {}).get("rules", []):
-        if isinstance(rule, dict) and rule.get("unit_amount_dollars") is not None:
-            known.add(round(rule["unit_amount_dollars"] * 100))
-    for whole, frac in figures:
-        cents = int(whole.replace(",", "")) * 100
-        if frac:
-            cents += int(frac.ljust(2, "0"))
-        if cents not in known and cents != 0:
-            return True
-    return False
+    """The lean profile captures no prices, so any monetary figure the
+    assistant produces is invented (I1 - the money guardrail). Trip on the
+    first one so the reply is redrafted without it."""
+    return bool(re.findall(r"\$\s*\d", reply))
