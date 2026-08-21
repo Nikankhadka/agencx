@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
 
+    # Login-in-chat email delivery (O-2): 'console' (log the code - the local
+    # demo path) or 'smtp' (a standard relay). Adding a vendor (e.g. Resend) is
+    # a new provider class in app/services/email.py, never a schema change.
+    email_provider: str = "console"
+    email_smtp_host: str = ""
+    email_smtp_port: int = 587
+    email_smtp_from: str = ""
+
     # Chat LLM provider: 'azure' | 'openai_compat' | 'zai'. 'openai_compat'
     # speaks the OpenAI wire format against any base URL (OpenRouter, Groq,
     # Ollama, ...), so swapping hosted vendors is a config change, never a code

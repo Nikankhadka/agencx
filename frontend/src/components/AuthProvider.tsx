@@ -10,7 +10,11 @@ import {
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
-import { setCachedSession } from "@/lib/auth-session";
+import {
+  clearManualSession,
+  getManualSession,
+  setCachedSession,
+} from "@/lib/auth-session";
 import { toast } from "react-hot-toast";
 
 export interface AuthState {
@@ -31,8 +35,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabase();
 
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-      setCachedSession(data.session ?? null);
+      const manual = getManualSession();
+      if (data.session) {
+        setSession(data.session);
+        setCachedSession(data.session);
+      } else if (manual) {
+        // A login-in-chat (backend-minted) session - synthesize the shape the
+        // rest of the app reads (access_token + user.id) so authed routes treat
+        // it like a supabase session without supabase-js owning it.
+        const synthetic = {
+          access_token: manual.access_token,
+          expires_at: undefined,
+          expires_in: 0,
+          token_type: "bearer",
+          refresh_token: "",
+          user: { id: manual.user_id, email: manual.email } as User,
+        } as unknown as Session;
+        setSession(synthetic);
+        setCachedSession(synthetic);
+      } else {
+        setSession(null);
+        setCachedSession(null);
+      }
       setIsLoading(false);
     });
 
@@ -48,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await getSupabase().auth.signOut();
+    clearManualSession();
     toast.success("Signed out");
     router.push("/");
   }, [router]);

@@ -29,6 +29,7 @@ EXPECTED_TABLES = {
     "eval_cases",
     "eval_runs",
     "cost_logs",
+    "auth_codes",
 }
 
 
@@ -39,8 +40,10 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # contract; 0011 adds T-020's escalation dedupe index; 0012 adds T-021's
     # messages.metadata column; 0013 adds T-033's platform_admin write access
     # on tenant_config; 0014 adds T-052's onboarding business fields; 0015 adds
-    # T-056's 'website' document type for URL ingestion.
-    assert len(on_disk) == 15, "expected migrations 0001-0015"
+    # T-056's 'website' document type for URL ingestion; 0017 adds O-2's
+    # login-in-chat auth_codes table (0016 is reserved for D-2's enabled_tools
+    # lean default and intentionally skipped).
+    assert len(on_disk) == 16, "expected migrations 0001-0015 + 0017"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

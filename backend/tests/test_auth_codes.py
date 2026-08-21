@@ -1,0 +1,228 @@
+"""O-2: login-in-chat - the auth-code lifecycle and the two endpoints.
+
+The code lifecycle (issue/verify: hash, TTL, attempt budget, single-use,
+duplicate-email non-leak) is tested at the service layer against wren_test; the
+endpoints are exercised through the real app. ``ensure_auth_user`` is
+monkeypatched because it talks to GoTrue's Admin API, which tests run without.
+"""
+
+from __future__ import annotations
+
+import os
+import uuid
+from collections.abc import AsyncIterator, Iterator
+from typing import Any
+
+import httpx
+import jwt
+import pytest
+import pytest_asyncio
+
+from app.main import app
+from app.services import auth_codes
+from app.shared import db
+from app.shared.config import get_settings
+from tests.conftest import _app_dsn_for
+
+pytestmark = pytest.mark.db
+
+TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
+
+
+@pytest.fixture(autouse=True)
+def _supabase_jwt_secret_env() -> Iterator[None]:
+    original = os.environ.get("SUPABASE_JWT_SECRET")
+    os.environ["SUPABASE_JWT_SECRET"] = TEST_JWT_SECRET
+    get_settings.cache_clear()
+    yield
+    if original is None:
+        os.environ.pop("SUPABASE_JWT_SECRET", None)
+    else:
+        os.environ["SUPABASE_JWT_SECRET"] = original
+    get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture
+async def pool(migrated_db: str) -> AsyncIterator[None]:
+    await db.create_pool(dsn=_app_dsn_for(migrated_db), min_size=1, max_size=4)
+    try:
+        yield
+    finally:
+        await db.close_pool()
+
+
+@pytest_asyncio.fixture
+async def client(migrated_db: str, pool: None) -> AsyncIterator[httpx.AsyncClient]:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+# --- service layer: the code lifecycle ----------------------------------------
+
+
+async def test_issue_then_verify_roundtrip(pool: None) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    code = await auth_codes.issue_code(email=email)
+    await auth_codes.verify_code(email=email, code=code)
+
+
+async def test_code_is_single_use(pool: None) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    code = await auth_codes.issue_code(email=email)
+    await auth_codes.verify_code(email=email, code=code)
+    with pytest.raises(auth_codes.CodeError) as exc:
+        await auth_codes.verify_code(email=email, code=code)
+    assert exc.value.kind == "invalid"
+
+
+async def test_wrong_code_increments_attempts_then_too_many(pool: None) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    code = await auth_codes.issue_code(email=email)
+    for _ in range(auth_codes.MAX_ATTEMPTS):
+        with pytest.raises(auth_codes.CodeError) as exc:
+            await auth_codes.verify_code(email=email, code="000000")
+        assert exc.value.kind == "invalid"
+    # budget exhausted - even the correct code no longer works
+    with pytest.raises(auth_codes.CodeError) as exc:
+        await auth_codes.verify_code(email=email, code=code)
+    assert exc.value.kind == "too_many"
+
+
+async def test_expired_code(superuser_conn: Any, pool: None) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    code = await auth_codes.issue_code(email=email)
+    await superuser_conn.execute(
+        "update auth_codes set expires_at = now() - interval '1 minute' where email = $1",
+        email,
+    )
+    with pytest.raises(auth_codes.CodeError) as exc:
+        await auth_codes.verify_code(email=email, code=code)
+    assert exc.value.kind == "expired"
+
+
+async def test_latest_code_wins_on_duplicate_email(pool: None) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    await auth_codes.issue_code(email=email)
+    latest = await auth_codes.issue_code(email=email)
+    await auth_codes.verify_code(email=email, code=latest)
+
+
+# --- endpoints ----------------------------------------------------------------
+
+
+async def test_login_code_endpoint_accepts_valid_email(client: httpx.AsyncClient) -> None:
+    resp = await client.post("/api/auth/login-code", json={"email": "sam@example.com"})
+    assert resp.status_code == 202
+
+
+@pytest.mark.parametrize("bad_email", ["not-an-email", "a@b", ""])
+async def test_login_code_endpoint_rejects_invalid_email(
+    client: httpx.AsyncClient, bad_email: str
+) -> None:
+    resp = await client.post("/api/auth/login-code", json={"email": bad_email})
+    assert resp.status_code == 422
+
+
+async def test_verify_code_mints_session_for_existing_user(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user_id = str(uuid.uuid4())
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+
+    async def _fake_ensure_auth_user(_email: str) -> str:
+        return user_id
+
+    monkeypatch.setattr("app.services.identity.ensure_auth_user", _fake_ensure_auth_user)
+
+    code = await auth_codes.issue_code(email=email)
+    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": code})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["user_id"] == user_id
+    claims = jwt.decode(
+        body["access_token"], TEST_JWT_SECRET, algorithms=["HS256"], audience="authenticated"
+    )
+    assert claims["sub"] == user_id
+
+
+async def test_verify_code_provisions_tenant_for_new_user(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, superuser_conn: Any
+) -> None:
+    user_id = str(uuid.uuid4())
+    email = f"new-{uuid.uuid4().hex}@example.com"
+
+    async def _fake_ensure_auth_user(_email: str) -> str:
+        return user_id
+
+    monkeypatch.setattr("app.services.identity.ensure_auth_user", _fake_ensure_auth_user)
+
+    code = await auth_codes.issue_code(email=email)
+    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": code})
+    assert resp.status_code == 200
+    tenant_id = uuid.UUID(resp.json()["tenant_id"])
+
+    user_row = await superuser_conn.fetchrow(
+        "select tenant_id, role from users where id = $1", user_id
+    )
+    assert user_row is not None
+    assert user_row["tenant_id"] == tenant_id
+    assert user_row["role"] == "owner"
+
+    # the minted session is usable: GET /api/tenants/me works with it
+    me = await client.get(
+        "/api/tenants/me",
+        headers={"Authorization": f"Bearer {resp.json()['access_token']}"},
+    )
+    assert me.status_code == 200
+
+
+async def test_verify_code_wrong_code_returns_calm_copy(client: httpx.AsyncClient) -> None:
+    email = f"sam-{uuid.uuid4().hex}@example.com"
+    await auth_codes.issue_code(email=email)
+    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": "000000"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "That code didn't work. Try again, or resend."
+
+
+async def test_verify_code_no_outstanding_code_returns_calm_copy(
+    client: httpx.AsyncClient,
+) -> None:
+    resp = await client.post(
+        "/api/auth/verify-code", json={"email": "nobody@example.com", "code": "123456"}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "That code didn't work. Try again, or resend."
+
+
+async def test_verify_code_requires_six_digits(client: httpx.AsyncClient) -> None:
+    resp = await client.post(
+        "/api/auth/verify-code", json={"email": "sam@example.com", "code": "abc"}
+    )
+    assert resp.status_code == 422
+
+
+async def test_dev_login_code_returns_the_captured_code(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    email = f"dev-{uuid.uuid4().hex}@example.com"
+    user_id = str(uuid.uuid4())
+
+    async def _fake_ensure_auth_user(_email: str) -> str:
+        return user_id
+
+    monkeypatch.setattr("app.services.identity.ensure_auth_user", _fake_ensure_auth_user)
+
+    await client.post("/api/auth/login-code", json={"email": email})
+    resp = await client.get(f"/api/auth/dev-login-code?email={email}")
+    assert resp.status_code == 200
+    code = resp.json()["code"]
+    assert len(code) == 6 and code.isdigit()
+
+    verify = await client.post("/api/auth/verify-code", json={"email": email, "code": code})
+    assert verify.status_code == 200
+
+
+async def test_dev_login_code_404_for_never_issued_email(client: httpx.AsyncClient) -> None:
+    resp = await client.get(f"/api/auth/dev-login-code?email=never-{uuid.uuid4().hex}@example.com")
+    assert resp.status_code == 404

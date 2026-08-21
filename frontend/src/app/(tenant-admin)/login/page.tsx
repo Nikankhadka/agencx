@@ -1,35 +1,38 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { ChatBubble } from "@/components/ui/ChatBubble";
+import { CodeInput } from "@/components/ui/CodeInput";
+import { CommandPill } from "@/components/ui/CommandPill";
 import { apiFetch, ApiError } from "@/lib/api";
-import { getSupabase } from "@/lib/supabase";
+import { setManualSession } from "@/lib/auth-session";
 import { useAuth } from "@/components/AuthProvider";
-import { toast } from "react-hot-toast";
 
-interface TenantMe {
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+interface VerifyResponse {
+  access_token: string;
+  user_id: string;
   tenant_id: string;
-  slug: string;
-  name: string;
-  brand?: Record<string, unknown>;
 }
 
 /**
- * T-004: tenant-admin login. On success it proves the full auth path by
- * calling the authed backend probe (GET /api/tenants/me), showing the
- * caller's tenant, and redirecting into the admin console shell.
+ * O-2: login-in-chat. The owner authenticates inside the conversation - type an
+ * email, receive a 6-digit code, type it back - instead of a sign-up form. The
+ * agent's first message is rendered up front (no welcome screen).
  */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
   const { session, isLoading } = useAuth();
+
+  const [phase, setPhase] = useState<"email" | "code">("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [resendReady, setResendReady] = useState(false);
+  const resendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isLoading && session) {
@@ -37,79 +40,116 @@ export default function LoginPage() {
     }
   }, [isLoading, session, router]);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
+  useEffect(() => {
+    return () => {
+      if (resendTimer.current) clearTimeout(resendTimer.current);
+    };
+  }, []);
+
+  async function submitEmail(value: string) {
+    const trimmed = value.trim().toLowerCase();
+    if (!EMAIL_RE.test(trimmed) || busy) return;
+    setEmail(trimmed);
+    setStatus(null);
     setBusy(true);
     try {
-      const { error: authError } = await getSupabase().auth.signInWithPassword({
-        email,
-        password,
+      await apiFetch("/api/auth/login-code", {
+        method: "POST",
+        body: JSON.stringify({ email: trimmed }),
       });
-      if (authError) {
-        setError(authError.message);
-        toast.error(authError.message);
-        return;
-      }
-      await apiFetch<TenantMe>("/api/tenants/me");
-      toast.success("Logged in successfully");
-      router.replace("/onboarding");
-    } catch (err) {
-      const message =
-        err instanceof ApiError && err.status === 403
-          ? "This account has no business yet - finish setup on the signup page."
-          : err instanceof ApiError
-            ? err.detail
-            : "Something went wrong. Please try again.";
-      setError(message);
-      toast.error(message);
+      setPhase("code");
+      setResendReady(false);
+      resendTimer.current = setTimeout(() => setResendReady(true), 30_000);
+    } catch {
+      // calm - no red chrome; the pill simply stays put
+      setStatus("Something went wrong - try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  if (isLoading) {
-    return (
-      <main className="flex min-h-dvh items-center justify-center p-4 sm:p-8">
-        <div aria-busy="true" className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1" />
-      </main>
-    );
+  async function submitCode(value: string) {
+    if (busy) return;
+    setCode(value);
+    setStatus(null);
+    setBusy(true);
+    try {
+      const res = await apiFetch<VerifyResponse>("/api/auth/verify-code", {
+        method: "POST",
+        body: JSON.stringify({ email, code: value }),
+      });
+      setManualSession({
+        access_token: res.access_token,
+        user_id: res.user_id,
+        email,
+      });
+      router.replace("/onboarding");
+    } catch (err) {
+      const detail = err instanceof ApiError ? err.detail : "Something went wrong.";
+      setStatus(detail);
+      setCode("");
+      setBusy(false);
+    }
   }
 
-  if (session) return null;
+  function handleWrongEmail() {
+    setPhase("email");
+    setEmail("");
+    setCode("");
+    setStatus(null);
+  }
+
+  if (isLoading || session) return null;
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-4 sm:p-8">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
-        <h1 className="text-title-2 font-semibold">Log in</h1>
-        <p className="mt-1 text-body-sm text-text-secondary">Wren admin console</p>
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-          <Input
-            label="Email"
-            type="email"
-            autoComplete="email"
-            required
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <div className="flex flex-col gap-3">
+          <ChatBubble role="assistant">
+            Hi, I&apos;ll get you set up. What&apos;s your email?
+          </ChatBubble>
+
+          {phase === "code" ? (
+            <ChatBubble role="system">
+              Code sent to <span className="font-medium text-text">{email}</span>
+            </ChatBubble>
+          ) : null}
+        </div>
+
+        {phase === "email" ? (
+          <CommandPill
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={setEmail}
+            onSubmit={submitEmail}
+            placeholder="you@example.com"
+            busy={busy}
+            canSubmit={EMAIL_RE.test(email.trim())}
           />
-          <Input
-            label="Password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={error ?? undefined}
-          />
-          <Button type="submit" loading={busy}>
-            Log in
-          </Button>
-        </form>
-        <p className="mt-4 text-footnote text-text-secondary">
-          New to Wren?{" "}
-          <Link href="/signup" className="text-accent hover:text-accent-hover font-medium">
-            Create your business
-          </Link>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <CodeInput value={code} onChange={setCode} onComplete={submitCode} disabled={busy} />
+            <div className="flex items-center justify-between text-footnote">
+              <button
+                type="button"
+                onClick={handleWrongEmail}
+                className="font-medium text-accent hover:text-accent-hover"
+              >
+                Wrong email?
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitEmail(email)}
+                disabled={!resendReady || busy}
+                className="font-medium text-text-secondary disabled:opacity-50"
+              >
+                Didn&apos;t get it? Resend
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className="h-4 text-footnote text-text-secondary" aria-live="polite">
+          {status ?? ""}
         </p>
       </div>
     </main>

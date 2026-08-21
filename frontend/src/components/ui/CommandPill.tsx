@@ -14,6 +14,8 @@ export interface CommandPillProps {
   onStop?: () => void;
   /** Attach affordance (file/URL upload beat); hidden when omitted. */
   onAttach?: () => void;
+  /** Hide the send affordance until true (e.g. email must be valid). */
+  canSubmit?: boolean;
 }
 
 const MAX_HEIGHT_PX = 96;
@@ -33,6 +35,7 @@ export function CommandPill({
   busy,
   onStop,
   onAttach,
+  canSubmit = true,
 }: CommandPillProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -84,7 +87,7 @@ export function CommandPill({
         >
           <span className="h-2.5 w-2.5 rounded-[2px] bg-current" aria-hidden="true" />
         </button>
-      ) : hasText ? (
+      ) : hasText && canSubmit ? (
         <button
           type="button"
           onClick={() => onSubmit(value)}

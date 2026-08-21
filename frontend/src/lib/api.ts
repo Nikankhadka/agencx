@@ -1,5 +1,10 @@
 import { getSupabase } from "./supabase";
-import { getCachedSession, setCachedSession } from "./auth-session";
+import {
+  clearManualSession,
+  getCachedSession,
+  getManualSession,
+  setCachedSession,
+} from "./auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -30,7 +35,12 @@ async function getAuthHeaders(init: RequestInit): Promise<Headers> {
     const { data } = await getSupabase().auth.getSession();
     session = data.session;
   }
-  if (session) headers.set("Authorization", `Bearer ${session.access_token}`);
+  if (session) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  } else {
+    const manual = getManualSession();
+    if (manual) headers.set("Authorization", `Bearer ${manual.access_token}`);
+  }
   return headers;
 }
 
@@ -41,6 +51,7 @@ async function getAuthHeaders(init: RequestInit): Promise<Headers> {
 async function throwApiError(res: Response): Promise<never> {
   if (res.status === 401) {
     setCachedSession(null);
+    clearManualSession();
   }
   let detail = res.statusText;
   try {

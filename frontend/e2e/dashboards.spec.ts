@@ -18,15 +18,15 @@ const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 test.describe("tenant dashboards (temporarily hidden)", () => {
   test.use({ baseURL: `http://${tenantAdminHost()}` });
 
-  test("/dashboards redirects to /onboarding", async ({ page }) => {
-    await loginAsTenantAdmin(page, BYTEFIX);
+  test("/dashboards redirects to /onboarding", async ({ page, request }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/dashboards");
     await page.waitForURL("**/onboarding");
     await expect(page.getByRole("heading", { name: "Onboarding", level: 1 })).toBeVisible();
   });
 
-  test("Dashboards nav link is absent from the console sidebar", async ({ page }) => {
-    await loginAsTenantAdmin(page, BYTEFIX);
+  test("Dashboards nav link is absent from the console sidebar", async ({ page, request }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
     await expect(page.getByRole("link", { name: "Dashboards" })).toHaveCount(0);
   });
 });

@@ -15,7 +15,9 @@ at the bottom.
 - Wren commit hashes are retained verbatim from the archived `docs/archive/PROGRESS.md`.
   Run `git show <hash>` for the full story of any commit.
 - The Agencx spec tickets are the work plan; update their status row in the
-  final section whenever a ticket ships.
+  final section whenever a ticket ships. The tickets live in `spec/`, grouped
+  by build phase into phase files (`01-foundation.md` .. `08-deferred.md`);
+  each ticket keeps its id as a section inside its phase file.
 
 ## Right now
 
@@ -23,8 +25,8 @@ The Wren build is complete except for external shipping gates (live deploy needs
 credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
 a human). The Agencx change work - rebrand, money guardrail loosening, tool
 gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
-is defined ticket-by-ticket in `spec/` and is **not yet started**; the first
-ticket to land is A-2 (pointer updates, this restructure commit).
+is defined ticket-by-ticket in `spec/`. Foundation (A-1/A-2) and login-in-chat
+(O-2) are landed; the next ticket is O-1 (the lean onboarding re-cut).
 
 ## Feature status matrix
 
@@ -38,7 +40,7 @@ ticket to land is A-2 (pointer updates, this restructure commit).
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGING** - B-2 points the public domain to agencx.app |
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; **CHANGING** - O-1 re-cuts to one tool to save profile fields + an LLM turn loop (extract -> save -> ask missing -> deflect) |
-| Login-in-chat email + 6-digit code | NEW | O-2 |
+| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI) |
 | URL scrape knowledge ingest path | NEW | O-3 (document upload path is built; URL fetch is a new ingest route) |
 
 ### Knowledge & retrieval
@@ -123,8 +125,8 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 
 | Ticket | Status | Commit |
 |---|---|---|
-| A-1 Docs restructure + archive | in progress | this commit |
-| A-2 Pointer updates (README, AGENTS.md, memory, conventions) | this commit | |
+| A-1 Docs restructure + archive | done | `fce4d71` |
+| A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
 | B-1 Copy rename to Agencx | not started | |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
 | B-3 Semantic colour convention + lighter primary | not started | |
@@ -135,7 +137,8 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-1..P-5 Providers, failover, pre-load, versioning, indicator | not started | |
-| O-1..O-4 Onboarding tool loop, login-in-chat, ingest, fast path | not started | |
+| O-2 Login-in-chat: email + 6-digit code | done | this commit |
+| O-1, O-3, O-4 Onboarding tool loop, ingest, fast path | not started | |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

@@ -5,7 +5,7 @@
  * files don't duplicate selectors and input sequences.
  */
 
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 // ---------------------------------------------------------------------------
 // Demo identities (from backend/seeds/seed_demo.py)
@@ -49,11 +49,13 @@ export function platformHost(): string {
   return "admin.localhost:3000";
 }
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 // ---------------------------------------------------------------------------
 // Login interaction helpers
 // ---------------------------------------------------------------------------
 
-/** Fill and submit the login form on the current page. */
+/** Fill and submit the login form (platform surface; email + password). */
 export async function submitLoginForm(
   page: Page,
   email: string,
@@ -65,15 +67,44 @@ export async function submitLoginForm(
 }
 
 /**
- * Log in as a tenant-admin user, then verify the post-login card shows the
- * expected tenant name.
+ * Log in through the tenant-admin login-in-chat (O-2): enter an email, fetch
+ * the code the backend captured (dev-login-code), type the six digits.
  */
-export async function loginAsTenantAdmin(page: Page, user: DemoUser): Promise<void> {
+export async function loginInChat(
+  page: Page,
+  request: APIRequestContext,
+  email: string
+): Promise<void> {
   await page.goto("/login");
-  await submitLoginForm(page, user.email, user.password);
-  // T-004: on success the login page proves the authed backend probe by
-  // redirecting into the admin console shell at /onboarding.
+  await page.getByPlaceholder("you@example.com").fill(email);
+  await page.getByRole("button", { name: "Send" }).click();
+
+  // The code phase must render before the captured code is fetched - the
+  // login-code request has to land first.
+  await page.getByLabel("Digit 1").waitFor({ timeout: 10_000 });
+  const codeResp = await request.get(
+    `${BACKEND_URL}/api/auth/dev-login-code?email=${encodeURIComponent(email)}`
+  );
+  if (!codeResp.ok()) {
+    throw new Error(`dev-login-code failed: ${codeResp.status()}`);
+  }
+  const { code } = (await codeResp.json()) as { code: string };
+  for (let i = 0; i < 6; i++) {
+    await page.getByLabel(`Digit ${i + 1}`).fill(code[i]);
+  }
   await page.waitForURL("**/onboarding");
+}
+
+/**
+ * Log in as a tenant-admin user (login-in-chat), then verify the post-login
+ * redirect into the admin console shell at /onboarding.
+ */
+export async function loginAsTenantAdmin(
+  page: Page,
+  request: APIRequestContext,
+  user: DemoUser
+): Promise<void> {
+  await loginInChat(page, request, user.email);
 }
 
 /**

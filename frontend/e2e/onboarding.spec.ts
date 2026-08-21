@@ -6,8 +6,8 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
  * first message (T-042 / onboarding stream): the stream POST must carry the
  * Supabase session token, and a reply must stream in as SSE.
  */
-test("onboarding first message streams a reply", async ({ page }) => {
-  await loginAsTenantAdmin(page, DEMO_USERS[0]);
+test("onboarding first message streams a reply", async ({ page, request }) => {
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
 
   await expect(page.getByRole("heading", { name: "Onboarding" })).toBeVisible();
 
