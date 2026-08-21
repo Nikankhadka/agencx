@@ -100,5 +100,22 @@ services:
     volumes:
       - ./docker/auth-proxy.conf:/etc/nginx/conf.d/default.conf:ro
 
+  # Local inbox for the login-in-chat code (O-2). The 6-digit code is issued by
+  # the backend, not by GoTrue (which runs autoconfirm and sends no mail), so
+  # this is the SMTP relay behind EMAIL_PROVIDER=smtp - see the login-in-chat
+  # block in .env.example. Read the mail at http://localhost:8025.
+  #
+  # Gated behind the `mail` profile so it is opt-in (`make mail`): `docker
+  # compose up -d db`, scripts/up-infra.sh and scripts/demo.sh never start it,
+  # and its ports stay out of the demo preflight check. Nothing depends on it,
+  # so it needs no healthcheck; messages live in memory and vanish on restart,
+  # which is what a throwaway dev inbox should do.
+  mailpit:
+    image: axllent/mailpit:v1.30.7
+    profiles: ["mail"]
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+
 volumes:
   wren-pgdata:

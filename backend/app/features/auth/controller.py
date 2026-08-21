@@ -50,8 +50,7 @@ async def _find_tenant_for_user(user_id: str) -> str | None:
 
 async def send_login_code(email: str) -> None:
     code = await auth_codes.issue_code(email=email)
-    provider = email_service.get_email_provider()
-    await provider.send_login_code(email=email, code=code)
+    await email_service.send_login_code(email=email, code=code)
 
 
 async def verify_login_code(email: str, code: str) -> dict[str, Any]:

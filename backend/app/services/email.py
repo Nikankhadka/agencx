@@ -4,7 +4,9 @@ The code-issuing backend owns delivery, so email is a provider abstraction
 selected by env (``EMAIL_PROVIDER``), never a hardcoded vendor. ``console`` is
 the default and the local-demo path: it logs the code instead of sending, since
 the demo never sends real email. ``smtp`` covers real delivery via a standard
-SMTP relay. Adding another vendor (e.g. Resend) is one more subclass.
+SMTP relay - in production, and locally against Mailpit (``make mail``) when the
+code should land in a real inbox. Adding another vendor (e.g. Resend) is one
+more subclass.
 """
 
 from __future__ import annotations
@@ -26,15 +28,9 @@ class EmailProvider:
 
 
 class ConsoleEmailProvider(EmailProvider):
-    """Local dev: log the code rather than sending (no SMTP in the demo).
-
-    The last-issued code per email is also kept in memory so the local demo and
-    E2E can retrieve it (the dev-login-code endpoint) - the "captured code" path
-    from O-2 US-4. Never populated in production (EMAIL_PROVIDER=smtp).
-    """
+    """Local dev: log the code rather than sending (no SMTP required)."""
 
     async def send_login_code(self, *, email: str, code: str) -> None:
-        _last_codes[email] = code
         logger.info("login code for %s: %s", email, code)
 
 
@@ -79,3 +75,18 @@ def get_email_provider() -> EmailProvider:
             settings.email_smtp_from,
         )
     raise RuntimeError(f"unknown EMAIL_PROVIDER {provider!r}; expected console or smtp")
+
+
+async def send_login_code(*, email: str, code: str) -> None:
+    """The one send path: capture the code locally, then deliver it.
+
+    The capture backs the demo's captured-code path and the E2E login flow (the
+    dev-login-code endpoint) - the "captured code" of O-2 US-4. It lives here
+    rather than in one provider so it survives a switch to a local inbox
+    (EMAIL_PROVIDER=smtp against Mailpit), and it is gated to the local
+    environment on exactly the same condition as the endpoint that reads it
+    (app/features/auth/api.py), so no deployment ever holds a code in memory.
+    """
+    if get_settings().environment == "local":
+        _last_codes[email] = code
+    await get_email_provider().send_login_code(email=email, code=code)

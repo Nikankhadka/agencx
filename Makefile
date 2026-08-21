@@ -38,6 +38,11 @@ db: ## Start the local Postgres + pgvector container
 db-full: ## Start db + GoTrue auth + auth-proxy (demo-ready infra)
 	./scripts/up-infra.sh
 
+.PHONY: mail
+mail: ## Start the local Mailpit inbox for login codes (SMTP :1025, UI :8025)
+	docker compose --profile mail up -d mailpit
+	@echo "  inbox: http://localhost:8025 (set EMAIL_PROVIDER=smtp in backend/.env - see .env.example)"
+
 .PHONY: db-down
 db-down: ## Stop and remove containers + volumes (tears out persistent data)
 	docker compose down -v
