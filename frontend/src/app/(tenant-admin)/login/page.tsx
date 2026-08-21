@@ -6,7 +6,6 @@ import { ChatBubble } from "@/components/ui/ChatBubble";
 import { CodeInput } from "@/components/ui/CodeInput";
 import { CommandPill } from "@/components/ui/CommandPill";
 import { apiFetch, ApiError } from "@/lib/api";
-import { setManualSession } from "@/lib/auth-session";
 import { useAuth } from "@/components/AuthProvider";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -24,7 +23,7 @@ interface VerifyResponse {
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, signInWithCode } = useAuth();
 
   const [phase, setPhase] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -78,7 +77,7 @@ export default function LoginPage() {
         method: "POST",
         body: JSON.stringify({ email, code: value }),
       });
-      setManualSession({
+      signInWithCode({
         access_token: res.access_token,
         user_id: res.user_id,
         email,

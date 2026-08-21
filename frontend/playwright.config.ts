@@ -22,10 +22,16 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // Serial, locally as well as on CI. Every spec drives the one seeded demo
+  // world (backend/seeds/seed_demo.py) against one backend, so parallel
+  // workers mutate shared state: two tests logging in as the same demo owner
+  // race on that owner's login code, and the newer code correctly supersedes
+  // the older, failing whichever test asked first. CI already ran with one
+  // worker, so this only makes local runs match it.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: [["html", { open: "never" }], ["list"]],
   timeout: 60_000,
   expect: { timeout: 10_000 },
