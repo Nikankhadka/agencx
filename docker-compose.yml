@@ -117,5 +117,20 @@ services:
       - "1025:1025"   # SMTP
       - "8025:8025"   # web UI
 
+  # Local Postgres web UI (pgweb) for browsing tables and running queries
+  # against the wren database. Plain SQL over lib/pq, so pgvector columns
+  # render as their text form (`[0.1,0.2,...]`) - fine for inspection.
+  # Gated behind the `dbui` profile like mailpit's `mail`: opt-in via
+  # `make dbui`, never started by demo.sh/up-infra.sh.
+  pgweb:
+    image: sosedoff/pgweb:0.17.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/wren?sslmode=disable
+    ports:
+      - "8081:8081"   # web UI
+
 volumes:
   wren-pgdata:

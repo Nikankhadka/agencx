@@ -43,6 +43,11 @@ mail: ## Start the local Mailpit inbox for login codes (SMTP :1025, UI :8025)
 	docker compose --profile mail up -d mailpit
 	@echo "  inbox: http://localhost:8025 (set EMAIL_PROVIDER=smtp in backend/.env - see .env.example)"
 
+.PHONY: dbui
+dbui: ## Start the pgweb DB browser for the local database (UI :8081)
+	docker compose --profile dbui up -d pgweb
+	@echo "  db ui: http://localhost:8081 (postgres/postgres, database wren)"
+
 .PHONY: db-down
 db-down: ## Stop and remove containers + volumes (tears out persistent data)
 	docker compose down -v
