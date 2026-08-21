@@ -97,5 +97,8 @@
 - **Never decide architecturally-consequential things mid-build**: flag to founder per conventions section 4.
 - **Bug-fix protocol**: reproduce E2E through the real user surface before writing a fix.
 - **Component code never hardcodes visual values**: re-pointing tokens carries visual changes without touching component code (proven by the LuxeStay rebrand).
+- **Two chat idioms, deliberately separate (O-5)**: `components/ui/ChatBubble.tsx` is the OPERATOR thread (18px radius, tip at the top, both sides bubbled); `components/ui/Thread.tsx` is the ONBOARDING thread (assistant = bare prose with no bubble at all, owner = 20px bubble tipped bottom-right). The prototype designs them differently on purpose - do not "unify" them.
+- **Tailwind v4 has no `--duration` namespace**: `duration-fast` compiles to nothing and silently falls back to 150ms. The form that reads a token is `duration-(--duration-fast)`. `--animate-*`, `--spacing-*`, `--container-*`, `--text-*`, `--radius-*`, `--color-*` and `--ease-*` ARE namespaces. Probe before assuming a utility resolves.
+- **The global `:focus-visible` rule is unlayered**, so it beats Tailwind's `outline-none` utility. A composite control (the command pill) needs its own unlayered `:focus-within` rule to move the ring onto the wrapper.
 - **One ticket = one commit**; commit message starts with ticket number; body explains in plain English.
 - **Unticketed work** (marketing pages, rebrand, demo) uses subject-prefixed commits (not `T-XXX:`) to stay distinguishable.

@@ -39,6 +39,18 @@
   --color-info: var(--color-info);
   --color-info-subtle: var(--color-info-subtle);
   --color-scrim: var(--color-scrim);
+  --color-accent-a07: var(--color-accent-a07);
+  --color-accent-a09: var(--color-accent-a09);
+  --color-accent-a12: var(--color-accent-a12);
+  --color-accent-a16: var(--color-accent-a16);
+  --color-accent-a28: var(--color-accent-a28);
+  --color-accent-a45: var(--color-accent-a45);
+  --color-accent-a50: var(--color-accent-a50);
+  --color-ink-a05: var(--color-ink-a05);
+  --color-ink-a07: var(--color-ink-a07);
+  --color-ink-a12: var(--color-ink-a12);
+  --color-ink-a35: var(--color-ink-a35);
+  --color-ink-a40: var(--color-ink-a40);
   --color-bubble-out: var(--color-bubble-out);
   --color-bubble-in: var(--color-bubble-in);
   --color-bubble-agent-in: var(--color-bubble-agent-in);
@@ -89,6 +101,13 @@
   --text-prose--line-height: var(--text-prose-leading);
   --text-timestamp: var(--text-timestamp-size);
   --text-timestamp--line-height: var(--text-timestamp-leading);
+  --text-lede: var(--text-lede-size);
+  --text-lede--line-height: var(--text-lede-leading);
+  --text-lede--letter-spacing: var(--text-lede-tracking);
+  --text-lede-q: var(--text-lede-q-size);
+  --text-lede-q--line-height: var(--text-lede-q-leading);
+  --text-bubble: var(--text-bubble-size);
+  --text-bubble--line-height: var(--text-bubble-leading);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
@@ -99,6 +118,20 @@
   --radius-pill: var(--radius-pill);
   --radius-bubble: var(--radius-bubble);
   --radius-bubble-tip: var(--radius-bubble-tip);
+  --radius-bubble-lg: var(--radius-bubble-lg);
+
+  --spacing-gutter: var(--gutter);
+  --spacing-thread-gap: var(--space-thread-gap);
+  --spacing-thread-gap-lg: var(--space-thread-gap-lg);
+  --spacing-thread-lede-gap: var(--space-thread-lede-gap);
+  --spacing-thread-top: var(--space-thread-top);
+  --spacing-thread-tail: var(--space-thread-tail);
+  --spacing-send: var(--size-send);
+  --spacing-send-hit: var(--size-send-hit);
+  --spacing-code-cell-w: var(--size-code-cell-w);
+  --spacing-code-cell-h: var(--size-code-cell-h);
+
+  --container-thread: var(--width-thread);
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
@@ -112,6 +145,17 @@
   --duration-base: var(--duration-base);
   --duration-beat: var(--duration-beat);
   --duration-push: var(--duration-push);
+  --duration-rise-fast: var(--duration-rise-fast);
+  --duration-veil: var(--duration-veil);
+
+  /* Named animations. Tailwind v4 has an --animate namespace (so `animate-rise`
+     works) but NO --duration namespace - `duration-fast` is not a real utility.
+     Timing that needs a token uses the v4 custom-property form instead:
+     `duration-(--duration-fast)`. */
+  --animate-rise: rise var(--duration-beat) var(--ease-out) both;
+  --animate-rise-fast: rise var(--duration-rise-fast) var(--ease-out) both;
+  --animate-beat-in: beat-in 80ms var(--ease-out) both;
+  --animate-caret-blink: caret-blink 1s var(--ease-out) infinite;
   --ease-out: var(--ease-out);
   --ease-push: var(--ease-push);
 }
@@ -127,6 +171,18 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
+}
+
+/* The composer pill is one control visually, so the pill's rounded shape is what
+   lights up on focus - never a hard rectangle around the textarea inside it
+   (the prototype's inputs are all `outline:none` with the pill as the affordance).
+   Both rules must stay unlayered to beat the generic :focus-visible above. */
+.command-pill:focus-within {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.command-pill :focus-visible {
+  outline: none;
 }
 
 /* Thinking-dot pulse: 7px dots, 1.3s
@@ -154,6 +210,31 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Thread entry - the prototype's `fsu`: every message, chip and pill rises 8px
+   as it fades in. --duration-beat (220ms) for prose/chips, --duration-rise-fast
+   (180ms) for bubbles and the typing row. Zeroed by the reduced-motion guard. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The empty active code cell's caret (prototype .otp-cursor). */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
   }
 }
 

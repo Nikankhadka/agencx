@@ -9,7 +9,11 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 test("onboarding first message streams a reply", async ({ page, request }) => {
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
 
-  await expect(page.getByRole("heading", { name: "Onboarding" })).toBeVisible();
+  // The onboarding thread IS the screen: no heading, and no console chrome
+  // (agencx-prototype-v6.html shows no navigation until the business is live).
+  await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Console" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Onboarding" })).toHaveCount(0);
 
   const thread = page.getByTestId("onboarding-thread");
   const prompt = await thread.textContent();

@@ -46,7 +46,7 @@ function centsToAmountInput(cents: number): string {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-border bg-surface px-2 py-1 text-body-sm text-text transition-colors duration-fast hover:border-border-strong";
+  "w-full rounded-md border border-border bg-surface px-2 py-1 text-body-sm text-text transition-colors duration-(--duration-fast) hover:border-border-strong";
 
 /**
  * T-031 / T-060: Pricing tab (frontend.md 7.2), rebuilt as a card list rather

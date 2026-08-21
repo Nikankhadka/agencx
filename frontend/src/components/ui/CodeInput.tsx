@@ -14,10 +14,13 @@ const LENGTH = 6;
 const empty = (): string[] => Array.from({ length: LENGTH }, () => "");
 
 /**
- * The six-digit login-code input (S1 login-in-chat). Six single-digit cells,
- * first auto-focused, numeric keyboard on mobile, auto-submit when six digits
- * are filled. Backspace moves back; paste spreads a six-digit string across the
- * cells.
+ * The six-digit login-code input (S1 login-in-chat), ported from the
+ * prototype's `.otp-cell` rules and `initOtp()`. Six 46x52 cells, first
+ * auto-focused, numeric keyboard on mobile, auto-submit when six digits are
+ * filled. Backspace moves back; paste spreads a six-digit string across the
+ * cells. The empty focused cell shows the prototype's blinking caret; a filled
+ * cell firms its border. The prototype's 500ms `verif` tint is deliberately not
+ * ported - O-2's spec is that success silently continues.
  *
  * The cells are the source of truth, held as a fixed-length array mirrored in a
  * ref. Deriving the next code from the `value` prop instead would break under
@@ -73,28 +76,46 @@ export function CodeInput({ value, onChange, onComplete, disabled }: CodeInputPr
   }
 
   return (
-    <div className="flex gap-2" aria-label="6-digit code">
-      {Array.from({ length: LENGTH }, (_, index) => (
-        <input
-          key={index}
-          ref={(el) => {
-            refs.current[index] = el;
-          }}
-          value={digits[index] ?? ""}
-          onChange={(event) => {
-            const digit = event.target.value.replace(/\D/g, "").slice(-1);
-            setDigit(index, digit);
-          }}
-          onKeyDown={(event) => handleKeyDown(index, event)}
-          onPaste={handlePaste}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          aria-label={`Digit ${index + 1}`}
-          disabled={disabled}
-          autoFocus={index === 0}
-          className="h-12 w-10 rounded-md border border-border bg-surface text-center text-title-3 font-semibold text-text outline-none focus:border-accent focus:ring-2 focus:ring-accent disabled:opacity-50"
-        />
-      ))}
+    <div className="flex justify-center gap-2" aria-label="6-digit code">
+      {Array.from({ length: LENGTH }, (_, index) => {
+        const filled = Boolean(digits[index]);
+        return (
+          <div key={index} className="relative">
+            <input
+              ref={(el) => {
+                refs.current[index] = el;
+              }}
+              value={digits[index] ?? ""}
+              onChange={(event) => {
+                const digit = event.target.value.replace(/\D/g, "").slice(-1);
+                setDigit(index, digit);
+              }}
+              onKeyDown={(event) => handleKeyDown(index, event)}
+              onPaste={handlePaste}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              aria-label={`Digit ${index + 1}`}
+              disabled={disabled}
+              autoFocus={index === 0}
+              className={[
+                "peer h-code-cell-h w-code-cell-w rounded-md text-center text-title-2 font-medium text-text",
+                "border-[length:var(--border-chip)] outline-none",
+                "transition-colors duration-(--duration-fast) ease-out disabled:opacity-50",
+                "focus:border-accent focus:bg-surface",
+                filled ? "border-accent-a45 bg-surface" : "border-accent-a16 bg-surface-sunken",
+              ].join(" ")}
+            />
+            {/* The prototype's .otp-cursor: shown only while the cell is both
+                focused and empty, so the caret marks where typing will land. */}
+            {filled ? null : (
+              <span
+                aria-hidden="true"
+                className="animate-caret-blink pointer-events-none absolute left-1/2 top-1/2 hidden h-[26px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-[1px] bg-accent peer-focus:block"
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

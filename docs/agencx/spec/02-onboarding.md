@@ -195,3 +195,151 @@ app expects,
 - [ ] Code lifecycle secure (hash/expiry/attempts/single-use)
 - [ ] Verified code yields the Supabase session
 - [ ] All failure modes calm one-liners
+
+---
+
+## O-5: Onboarding UI - port the prototype thread
+
+### Summary
+
+Rebuild the onboarding conversation surface as a port of the prototype's
+ONBOARDING screen, across both routes it spans (`/login`, `/onboarding`). The
+thread becomes the entire screen: no title, no navigation, and no progress
+surface. Every prototype value lands as a `theme.css` token, so the look is
+re-pointable from one file. Includes B-3's US-1 (the lighter crimson ramp),
+pulled forward because colour is half of what this ticket is for, and proper
+server-side email validation for the conversational login step.
+
+### Why
+
+`conventions.md` section 6 and `spec/README.md` carry the standing rule that UI
+is **ported from `design/prototypes/agencx-prototype-v6.html`, never designed
+from ticket text**. The shipped onboarding screen predates that rule and was
+designed from prose, so it diverged structurally: a console sidebar wrapping the
+thread, an `<h1>Onboarding</h1>`, assistant turns in grey bubbles, and a
+show-back aside carrying an "N/7 captured" counter - which also breaks the
+load-bearing rule in `design/frontend.md` section 9 ("no progress bars, no
+'% complete' anywhere; the thread is the progress indicator").
+
+### User stories
+
+#### US-1 The thread is the screen
+
+**As** Sam opening the product for the first time,
+**I want** the conversation to be the whole screen,
+**so that** the first conversation IS the product, as the PRD spine says.
+
+- [ ] No `<h1>`, no subtitle, no welcome screen
+- [ ] `/onboarding` renders chrome-free: no sidebar, no hamburger header (the
+  prototype shows no navigation until the business is live)
+- [ ] No show-back aside, no mobile Business sheet, no captured counter - the
+  profile is shown back on the Business tab (S2, E-1)
+
+#### US-2 The thread looks like the prototype
+
+**As** the founder,
+**I want** the screen to match the prototype it was designed as,
+**so that** the shipped product is the product that was designed.
+
+- [ ] Assistant turns are bare prose (`.a-prose`), never a bubble
+- [ ] Owner turns are a filled accent bubble, 20px radius, tip bottom-right
+  (`.u-bubble`) - distinct from the operator thread's `ChatBubble`
+- [ ] The opening message is the larger lede with the beat question beneath it
+  (`#first-msg` / `#first-msg-q`)
+- [ ] The crimson veil (`#s1-grad`) covers the bottom 56% and fades for good
+  once the owner has answered once
+- [ ] Typing dots are accent-coloured and precede static messages too
+
+#### US-3 Values are tokens, not literals
+
+**As** the maintainer,
+**I want** every prototype value to be a `theme.css` token,
+**so that** the whole look is re-pointable from one file and CI can prove it.
+
+- [ ] The prototype's one-hue alpha ladder lands as tokens derived from
+  `--primary-40-rgb` / `--neutral-10-rgb` channel triples
+- [ ] Lede, lede-question and bubble type sizes are tokens
+- [ ] Thread geometry, send-circle and code-cell sizes are tokens
+- [ ] `npm run check:tokens` green (no literal outside `theme.css`)
+
+#### US-4 Mobile first, responsive to the browser
+
+**As** Sam on a phone, and later at a desk,
+**I want** the same screen to work at both sizes,
+**so that** one codebase serves both without a separate build.
+
+- [ ] Prototype geometry (390px) is the mobile-first base
+- [ ] Above `--width-thread` the column centres rather than stretching
+- [ ] Safe-area insets honoured top and bottom
+
+#### US-5 A conversational email answer is validated on the server
+
+**As** Sam typing an email into a chat composer,
+**I want** a bad address answered with one calm line,
+**so that** I can fix it in place instead of hitting a validation dump.
+
+- [ ] The client gate is *liveness only* (text contains something
+  address-shaped), so "it's sam@shop.com" is sendable
+- [ ] `app/services/email_address.py` extracts an address from prose, normalizes
+  it, and validates syntax; the API is the authority
+- [ ] A bad address returns 400 with one conversational line, rendered verbatim;
+  the typed text is kept so it can be corrected
+- [ ] Issue and verify normalize identically, so they cannot disagree on the key
+- [ ] The refusal never echoes the address and never leaks account existence
+
+### Design reference
+
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`**, the ONBOARDING
+section. Port `initName()`, `agentMsg()`, `userMsg()`, `setInput()`,
+`buildCmdPill()` and `initOtp()`, plus the `#thread`, `#first-msg`,
+`#first-msg-q`, `.a-prose`, `.u-bubble`, `.typing` / `.td`, `.sys-pill`,
+`#s1-grad`, `#input-area`, `.chips-row`, `.cmd-pill`, `.plain-pill`, `.sc` and
+`.otp-cell` rules. Copy is demo copy for the Sababa reference tenant - take
+structure and behaviour, never strings; values become tokens, never hex.
+
+Five deviations are deliberate and documented in code:
+
+1. No camera/mic glyphs in the empty composer - Stage 1 has neither feature, and
+   a control that does nothing is a worse defect than an absent one
+2. No visible resend countdown - O-2's spec is 30s inactive, no countdown
+3. No `verif` tint on the code cells - O-2's spec is that success silently continues
+4. No "Already with Agencx? Log in" link - O-2 made login and signup one path
+5. Chips keep a 44px touch target (prototype ~29px) - `frontend.md` section 10
+
+The prototype's 46ms-per-word reveal is not ported: real SSE `token` events
+already pace the text, and a client-side word queue would fight the stream.
+
+### Technical spec
+
+- `frontend/src/styles/theme.css`: B-3 US-1 ramp; `--neutral-10` to the
+  prototype's ink; `-rgb` channel triples; the alpha ladder; lede/bubble type;
+  thread geometry; `--duration-rise-fast`, `--duration-veil`
+- `frontend/src/app/globals.css`: `@theme inline` mappings, `rise` and
+  `caret-blink` keyframes, `--animate-*` names, and the `.command-pill`
+  focus-within rule
+- `frontend/src/components/ui/Thread.tsx` (new): `Thread`, `LedeMessage`,
+  `AgentLine`, `OwnerBubble`, `TypingLine`, `ThreadPill`, `ThreadVeil`
+- `backend/app/services/email_address.py` (new) + `app/features/auth/api.py`
+
+### Tests
+
+- `make check`, `make format-check`, `npm run check:tokens`
+- `backend/tests/test_email_address.py` (syntax rules), `test_auth_codes.py`
+  (conversational refusal, prose extraction, issue/verify key agreement)
+- `make test-e2e`: onboarding, auth-login, landing, dashboards, including a
+  no-console-nav assertion on `/onboarding`
+- Visual: side by side against the prototype at 390px, then at 1440px
+
+### Files touched
+
+- `frontend/src/styles/**`, `frontend/src/app/globals.css`
+- `frontend/src/components/ui/**`, `frontend/src/app/(tenant-admin)/**`
+- `backend/app/services/email_address.py`, `backend/app/features/auth/api.py`
+- `frontend/e2e/**`, `backend/tests/**`
+
+### Definition of done
+
+- [ ] Both routes render the prototype thread; no nav, no title, no progress surface
+- [ ] Every value a token; `check:tokens` green
+- [ ] Conversational email validation server-side, with tests
+- [ ] Lint, typecheck, format, unit and e2e green

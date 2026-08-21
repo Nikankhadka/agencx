@@ -50,7 +50,7 @@ export function FileDropzone({ accept, disabled, onFiles }: FileDropzoneProps) {
       onDrop={handleDrop}
       className={[
         "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2",
-        "border-dashed p-8 text-center transition-colors duration-fast",
+        "border-dashed p-8 text-center transition-colors duration-(--duration-fast)",
         dragOver ? "border-accent bg-accent-subtle" : "border-border bg-surface-sunken",
         disabled ? "pointer-events-none opacity-50" : "",
       ].join(" ")}

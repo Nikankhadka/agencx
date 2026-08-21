@@ -151,7 +151,7 @@ export default function EscalationsPage() {
                   onChange={(e) => setResolveMessage(e.target.value)}
                   placeholder="Optional reply to the customer..."
                   rows={3}
-                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm text-text placeholder:text-text-tertiary transition-colors duration-fast hover:border-border-strong"
+                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm text-text placeholder:text-text-tertiary transition-colors duration-(--duration-fast) hover:border-border-strong"
                 />
                 <div className="flex items-center gap-2">
                   <Button size="sm" loading={busy} onClick={() => resolve(row.id)}>

@@ -27,6 +27,12 @@ export interface BeatComposerProps {
  * Multi-select is signalled by dashed chips (inbound channels): chips toggle
  * and a Continue button commits the set. The root fades up in 80ms on beat
  * change (remounted via its ``key`` in page.tsx).
+ *
+ * Layout follows the prototype's ``buildCmdPill(placeholder, onSubmit, chips)``:
+ * a chips row sits ABOVE the pill in the same widget, never beside or below it.
+ * ``beats.py`` makes all seven lean beats text-only today, so in the live flow
+ * only the text branch renders; the rest are kept because the InputSpec wire
+ * contract still carries them.
  */
 export function BeatComposer({
   input,
@@ -62,7 +68,7 @@ export function BeatComposer({
   const multi = isMultiSelect(input);
 
   return (
-    <div className="[animation:beat-in_80ms_ease-out]" data-testid="onboarding-composer">
+    <div className="animate-beat-in flex flex-col gap-2.5" data-testid="onboarding-composer">
       {input.kind === "text" ? (
         <CommandPill
           value={text}
@@ -90,7 +96,7 @@ export function BeatComposer({
       ) : null}
 
       {input.kind === "chips" && multi ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
           <div className="flex flex-wrap gap-2">
             {input.chips.map((chip) => (
               <Chip
@@ -121,7 +127,7 @@ export function BeatComposer({
       ) : null}
 
       {input.kind === "masked" ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -162,7 +168,7 @@ export function BeatComposer({
       ) : null}
 
       {input.kind === "cta" ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
           <div>
             <Button
               disabled={busy}

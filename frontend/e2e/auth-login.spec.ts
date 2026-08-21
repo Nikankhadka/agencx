@@ -19,7 +19,7 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
       await loginAsTenantAdmin(page, request, user);
 
       // The admin console shell is the post-login destination.
-      await expect(page.getByRole("heading", { name: "Onboarding", level: 1 })).toBeVisible();
+      await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
     });
 
     test(`signed-in session resumes into the console from /login (${user.email})`, async ({
@@ -31,7 +31,7 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
       // A signed-in admin hitting /login is redirected straight into the console.
       await page.goto("/login");
       await page.waitForURL("**/onboarding");
-      await expect(page.getByRole("heading", { name: "Onboarding", level: 1 })).toBeVisible();
+      await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
     });
   }
 });

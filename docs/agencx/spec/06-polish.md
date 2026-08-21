@@ -124,16 +124,22 @@ the shipped app in line.
 
 ### User stories
 
-#### US-1 Lighter brand primary
+#### US-1 Lighter brand primary - DONE, landed early with O-5
+
+Pulled forward: O-5 ports the onboarding thread from the prototype, and the
+prototype's crimson IS `#C1123F`, so the port could not be colour-accurate
+without it. The ramp below is shipped; US-2 (the `STATUS_TONE` map) is what
+remains of B-3.
 
 **As** the founder,
 **I want** the primary accent a touch lighter,
 **so that** the crimson reads brighter while keeping white-text AA contrast.
 
-- [ ] `--primary-40` `#BA0036` -> `#C1123F`
-- [ ] Derived ramp: hover `#A1002F`->`#A80033`, active `#870027`->`#8F0029`,
+- [x] `--primary-40` `#BA0036` -> `#C1123F`
+- [x] Derived ramp: hover `#A1002F`->`#A80033`, active `#870027`->`#8F0029`,
       accent-container `#E21E4A`->`#E8385E`; subtle `#FFD9DC`/`#FFECEE` unchanged
-- [ ] Dark-mode blocks updated identically (edit both or neither)
+- [x] Dark-mode blocks updated identically (edit both or neither) - vacuous
+      today: the dark blocks are currently disabled in `theme.css`
 
 #### US-2 Statuses use semantic colours
 
@@ -189,7 +195,7 @@ Read its `:root` custom properties and the usage around `.pcta-main`, `.ccfm` /
 
 ### Definition of done
 
-- [ ] Primary ramp lighter, dark-mode blocks identical
+- [x] Primary ramp lighter, dark-mode blocks identical (O-5)
 - [ ] Every status maps to green/red/amber/neutral via `STATUS_TONE`
 - [ ] No hardcoded status hex in components
 - [ ] Lint, typecheck, tokens, tests green

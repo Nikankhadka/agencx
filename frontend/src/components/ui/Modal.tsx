@@ -78,7 +78,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       }}
       className={[
         "fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4",
-        "transition-opacity duration-base ease-out",
+        "transition-opacity duration-(--duration-base) ease-out",
         open ? "opacity-100" : "pointer-events-none opacity-0",
       ].join(" ")}
     >
@@ -90,7 +90,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         tabIndex={-1}
         className={[
           "w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-3",
-          "transition-[opacity,transform] duration-base ease-out",
+          "transition-[opacity,transform] duration-(--duration-base) ease-out",
           open ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         ].join(" ")}
       >

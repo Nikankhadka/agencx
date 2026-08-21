@@ -256,9 +256,7 @@ async def stream_chat_response(
         # P-2: no leg produced a complete answer inside the turn budget. The
         # customer gets the handoff rather than a longer wait, and the reason
         # says which limit stopped it.
-        logger.warning(
-            "chat turn exceeded its %.1fs budget; escalating", limits.turn_budget_s
-        )
+        logger.warning("chat turn exceeded its %.1fs budget; escalating", limits.turn_budget_s)
         await service.record_limit_escalation(
             tenant_id=tenant_id,
             conversation_id=conversation_id,

@@ -26,11 +26,15 @@ credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
 a human). The Agencx change work - rebrand, money guardrail loosening, tool
 gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
-Foundation (A-1/A-2), login-in-chat (O-2), and the lean onboarding re-cut (O-1)
-are landed. The chat spine (`03-chat-spine.md`) is in progress on
-`feat/chat-spine`, in the order P-4 -> O-4 -> P-3 -> P-1 -> P-2 -> P-5 (O-4 is
-pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
-`get_business_context` seam).
+Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
+the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
+in progress on `feat/chat-spine`, in the order P-4 -> O-4 -> P-3 -> P-1 -> P-2 ->
+P-5 (O-4 is pulled forward from `04-chat-grounding.md` because P-3's fast path
+calls its `get_business_context` seam).
+
+O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
+prototype the onboarding thread is ported from carries that ramp - B-3 stays
+open for US-2, the `STATUS_TONE` map.
 
 ## Feature status matrix
 
@@ -44,7 +48,8 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGING** - B-2 points the public domain to agencx.app |
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile` |
-| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI) |
+| Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
+| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI); O-5 adds `services/email_address.py` - prose extraction + syntax validation, answered as one calm line |
 | URL scrape knowledge ingest path | NEW | O-3 (document upload path is built; URL fetch is a new ingest route) |
 
 ### Knowledge & retrieval
@@ -124,7 +129,7 @@ the ticket id.
 chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
-P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3,
+P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
 D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 
 | Ticket | Status | Commit |
@@ -133,8 +138,9 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
 | B-1 Copy rename to Agencx | not started | |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
-| B-3 Semantic colour convention + lighter primary | not started | |
+| B-3 Semantic colour convention + lighter primary | US-1 done (O-5), US-2 not started | |
 | C-1..C-4 Money guardrail allowed-set loosening | not started | |
+| C-5 Non-blocking escalation (chat continues after handoff) | not started | |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
@@ -144,9 +150,10 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
 | P-2 Latency budget + first-wins failover | done | this commit |
-| P-1, P-2, P-3, P-5 Providers, failover, pre-load, indicator | not started | |
+| P-5 Typing indicator through the failover window | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
+| O-5 Onboarding UI: prototype thread port | done | this commit |
 | O-3 Knowledge ingest (URL scrape + upload) | not started | |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 

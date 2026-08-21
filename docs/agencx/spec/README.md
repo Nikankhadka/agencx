@@ -51,9 +51,9 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | Phase file | Tickets |
 |---|---|
 | `01-foundation.md` | A-1, A-2 |
-| `02-onboarding.md` | O-1, O-2 |
+| `02-onboarding.md` | O-1, O-2, O-5 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
-| `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4 |
+| `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5 |
 | `05-business-page.md` | E-1, E-2 |
 | `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
 | `07-hygiene.md` | F-1 |
@@ -79,7 +79,7 @@ else defers to Phase 2 / Stage 2 backlog.
 | 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
-C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
+C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 
 **Deferred (not Phase 1)** - see `08-deferred.md`:
 
@@ -126,6 +126,7 @@ C-1..C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1} -> F-1.
 | C-2 | Route knowledge answers through the same figure check |
 | C-3 | Assistant states figures only exactly as listed, never computes |
 | C-4 | Money guardrail test matrix |
+| C-5 | Non-blocking escalation - chat continues after handoff |
 
 ### Business page (`05-business-page.md`)
 
