@@ -64,6 +64,23 @@ class Settings(BaseSettings):
     llm_fallback_api_key: str = ""
     llm_fallback_model: str = ""
 
+    # P-1 third leg: the independent failover tier (D15's OpenRouter gemma).
+    # Primary and fallback are usually the two fastest free tiers, which is
+    # exactly why they are the two most likely to be rate-limited on the same
+    # afternoon; the third leg exists to be somebody else's infrastructure. Same
+    # rules as the fallback: model + key set = enabled, empty = the chain is two
+    # legs long.
+    llm_failover_provider: str = "openai_compat"
+    llm_failover_base_url: str = ""
+    llm_failover_api_key: str = ""
+    llm_failover_model: str = ""
+
+    # P-1: the standing budget for live model testing, in whole dollars (D16).
+    # The cost dashboard warns at 80% of it. Free tiers report zero cost, so
+    # this only ever bites once a paid key is in play - which is the moment it
+    # matters.
+    llm_monthly_budget_usd: float = 10.0
+
     # Output caps, 0 = uncapped (the default, and the behavior before these
     # existed).
     #

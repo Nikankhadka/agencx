@@ -146,11 +146,11 @@ structure exist without a code change per provider.
 **I want** to swap the provider lineup by editing env vars,
 **so that** free-tier churn never means a code change.
 
-- [ ] `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_MODEL` (+ fallback pair) cover
+- [x] `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_MODEL` (+ fallback pair) cover
   Google (openai_compat), Groq (openai_compat), Cerebras (openai_compat),
   OpenRouter (openai_compat), Z.ai (zai) - each documented in
   `.env.example` with the exact base URL and known quirks
-- [ ] A third-leg slot (`LLM_FAILOVER_*` or equivalent) exists for the
+- [x] A third-leg slot (`LLM_FAILOVER_*` or equivalent) exists for the
   independent tier (OpenRouter gemma)
 
 #### US-2 Provider quirks stay encapsulated
@@ -159,14 +159,17 @@ structure exist without a code change per provider.
 **I want** each provider's documented quirks handled inside its class,
 **so that** a swap never breaks structured extract silently.
 
-- [ ] Groq: json_schema structured outputs only on gpt-oss models
+- [x] Groq: json_schema structured outputs only on gpt-oss models
   (llama-3.3-70b is json_object-only and breaks extract) - documented +
   guarded
-- [ ] Google: the OpenAI-compat endpoint quirks documented; gemini flash
+- [x] Google: the OpenAI-compat endpoint quirks documented; gemini flash
   line verified for structured outputs + tool calling
-- [ ] Free-tier reality: query the provider model list for
-  structured-output support at startup or config-check time (the CI pin
-  stays hardcoded by design)
+- [x] Free-tier reality: the startup guard refuses to boot any leg whose
+  model cannot serve the structured outputs the app depends on (the Groq
+  gpt-oss rule, enforced in all environments). It checks the configured
+  pairing rather than querying vendor model lists at boot: a network call on
+  the startup path would trade a guaranteed check for a flaky one, and the
+  failure it prevents is a config mistake, not model churn
 
 #### US-3 The budget ceiling is enforced
 
@@ -174,7 +177,7 @@ structure exist without a code change per provider.
 **I want** the $10/month testing budget to be a tracked number, not a hope,
 **so that** the build never silently burns money.
 
-- [ ] Cost logs already track per-call tokens; add a per-month budget
+- [x] Cost logs already track per-call tokens; add a per-month budget
   assertion to the cost dashboard (warning at 80% of $10)
 
 ### Technical spec
@@ -198,9 +201,9 @@ structure exist without a code change per provider.
 
 ### Definition of done
 
-- [ ] Three-tier chain configurable by env alone
-- [ ] Quirk guards in place per provider
-- [ ] Budget tracking assertion wired
+- [x] Three-tier chain configurable by env alone
+- [x] Quirk guards in place per provider
+- [x] Budget tracking assertion wired
 
 ---
 

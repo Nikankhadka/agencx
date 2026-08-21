@@ -44,10 +44,39 @@ ZAI_BASE_URL = "https://api.z.ai/api/paas/v4/"
 _ZAI_EXTRA_BODY: dict[str, object] = {"thinking": {"type": "disabled"}}
 
 
-def _openai_compat(settings: Settings, *, fallback: bool, zai: bool) -> OpenAICompatProvider:
-    base_url = settings.llm_fallback_base_url if fallback else settings.llm_base_url
-    api_key = settings.llm_fallback_api_key if fallback else settings.llm_api_key
-    model = settings.llm_fallback_model if fallback else settings.llm_model
+def leg_settings(settings: Settings, leg: str) -> tuple[str, str, str, str]:
+    """(provider, base_url, api_key, model) for one leg of the chain.
+
+    One place that knows the ``llm_*`` / ``llm_fallback_*`` / ``llm_failover_*``
+    naming, so adding a tier is a settings change rather than a new branch in
+    every consumer (the startup guard reads legs through this too).
+    """
+    if leg == "primary":
+        return (
+            settings.llm_provider,
+            settings.llm_base_url,
+            settings.llm_api_key,
+            settings.llm_model,
+        )
+    if leg == "fallback":
+        return (
+            settings.llm_fallback_provider,
+            settings.llm_fallback_base_url,
+            settings.llm_fallback_api_key,
+            settings.llm_fallback_model,
+        )
+    if leg == "failover":
+        return (
+            settings.llm_failover_provider,
+            settings.llm_failover_base_url,
+            settings.llm_failover_api_key,
+            settings.llm_failover_model,
+        )
+    raise ValueError(f"unknown provider leg {leg!r}")
+
+
+def _openai_compat(settings: Settings, *, leg: str, zai: bool) -> OpenAICompatProvider:
+    _, base_url, api_key, model = leg_settings(settings, leg)
     return OpenAICompatProvider(
         base_url=base_url or (ZAI_BASE_URL if zai else ""),
         api_key=api_key,
@@ -62,24 +91,49 @@ def _openai_compat(settings: Settings, *, fallback: bool, zai: bool) -> OpenAICo
     )
 
 
-def get_llm_provider() -> LLMProvider:
-    settings = get_settings()
-    if settings.llm_provider == "azure":
-        return AzureOpenAIProvider(settings)
+def _leg_provider(settings: Settings, leg: str) -> LLMProvider | None:
+    """The provider for one leg, or None when that leg is not configured."""
+    provider_name, _, api_key, model = leg_settings(settings, leg)
+    if leg == "primary":
+        if provider_name == "azure":
+            return AzureOpenAIProvider(settings)
+        return _openai_compat(settings, leg=leg, zai=provider_name == "zai")
 
-    primary = _openai_compat(settings, fallback=False, zai=settings.llm_provider == "zai")
-
-    if settings.llm_fallback_model and settings.llm_fallback_api_key:
-        fallback = _openai_compat(
-            settings,
-            fallback=True,
-            zai=settings.llm_fallback_provider != "openai_compat",
+    if not model:
+        return None
+    if not api_key:
+        logger.warning(
+            "LLM_%s_MODEL set but LLM_%s_API_KEY missing; that leg is disabled",
+            leg.upper(),
+            leg.upper(),
         )
-        return FailoverProvider(primary, fallback)
+        return None
+    return _openai_compat(settings, leg=leg, zai=provider_name == "zai")
 
-    if settings.llm_fallback_model:
-        logger.warning("LLM_FALLBACK_MODEL set but LLM_FALLBACK_API_KEY missing; failover disabled")
-    return primary
+
+def get_llm_provider() -> LLMProvider:
+    """The configured provider chain: primary, then each configured leg after it.
+
+    D15's three tiers are a generous free primary, a fast fallback, and an
+    independent failover - and they nest, because a chain of two providers is
+    exactly what FailoverProvider already is. ``FailoverProvider(primary,
+    FailoverProvider(fallback, failover))`` needs no new class and no chain
+    type: each leg's failure hands the call to whatever is left.
+    """
+    settings = get_settings()
+    legs = [
+        provider
+        for provider in (
+            _leg_provider(settings, "primary"),
+            _leg_provider(settings, "fallback"),
+            _leg_provider(settings, "failover"),
+        )
+        if provider is not None
+    ]
+    chain = legs[-1]
+    for leg in reversed(legs[:-1]):
+        chain = FailoverProvider(leg, chain)
+    return chain
 
 
 @lru_cache

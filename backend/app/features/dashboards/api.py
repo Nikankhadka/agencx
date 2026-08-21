@@ -25,6 +25,14 @@ class DailyCost(BaseModel):
     cost_usd: float
 
 
+class BudgetUsage(BaseModel):
+    """Where this month's spend sits against the standing testing budget (P-1).
+    ``fraction`` is None when no budget is configured."""
+
+    fraction: float | None
+    warning: bool
+
+
 class CostDashboard(BaseModel):
     cost_today_usd: float
     cost_yesterday_usd: float
@@ -35,6 +43,8 @@ class CostDashboard(BaseModel):
     escalated_conversation_count: int
     escalation_rate: float | None
     daily_costs: list[DailyCost]
+    monthly_budget_usd: float
+    monthly_budget_used: BudgetUsage
 
 
 class EvalCheck(BaseModel):

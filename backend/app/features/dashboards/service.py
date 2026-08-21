@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.shared import db
+from app.shared.config import get_settings
 
 _DAILY_SERIES_DAYS = 30
 
@@ -102,16 +103,38 @@ async def cost_dashboard(*, tenant_id: str) -> dict[str, Any]:
         for day in ((series_start + timedelta(days=i)).date() for i in range(_DAILY_SERIES_DAYS))
     ]
 
+    cost_this_month = float(cost_row["cost_this_month"])
+    budget = get_settings().llm_monthly_budget_usd
+
     return {
         "cost_today_usd": float(cost_row["cost_today"]),
         "cost_yesterday_usd": float(cost_row["cost_yesterday"]),
-        "cost_this_month_usd": float(cost_row["cost_this_month"]),
+        "cost_this_month_usd": cost_this_month,
         "cost_prev_month_usd": float(cost_row["cost_prev_month"]),
         "avg_cost_per_conversation_usd": avg_cost,
         "conversation_count": conversation_count,
         "escalated_conversation_count": escalated_count,
         "escalation_rate": escalation_rate,
         "daily_costs": daily_costs,
+        "monthly_budget_usd": budget,
+        "monthly_budget_used": budget_usage(cost_this_month, budget),
+    }
+
+
+# P-1 US-3: the $10/month testing ceiling stops being a hope the moment the
+# number is on the same screen as the spend. Warning fires at 80% so there is
+# room to react, not a post-mortem.
+BUDGET_WARNING_FRACTION = 0.8
+
+
+def budget_usage(spent_usd: float, budget_usd: float) -> dict[str, Any]:
+    """Fraction of the monthly budget spent, and whether that is worth flagging."""
+    if budget_usd <= 0:
+        return {"fraction": None, "warning": False}
+    fraction = spent_usd / budget_usd
+    return {
+        "fraction": round(fraction, 4),
+        "warning": fraction >= BUDGET_WARNING_FRACTION,
     }
 
 

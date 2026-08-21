@@ -108,8 +108,8 @@ pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
 
 | Feature | Status | Ticket |
 |---|---|---|
-| Google AI Studio primary provider | NEW | P-1 |
-| Groq / Cerebras fallback + OpenRouter failover tiers | PARTIAL (Groq fallback wired in env; Cerebras candidate) | P-1 |
+| Google AI Studio primary provider | BUILT | P-1 (gemini-3.5-flash-lite, documented tier matrix in `.env.example`) |
+| Groq / Cerebras fallback + OpenRouter failover tiers | BUILT | P-1 (`LLM_FAILOVER_*` third leg; legs nest into one chain, Cerebras documented as a candidate) |
 | 4s TTFT timeout + first-wins race + 10s cap | NEW | P-2 |
 | Context-package pre-load on chat open | BUILT | P-3 (`services/context_package.py`, primed by the public tenant lookup) |
 | knowledge_version derivation + invalidation | BUILT | P-4 (migration 0018 + `services/knowledge_version.py`) |
@@ -141,7 +141,8 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
-| P-3 Agent-ready pre-load (context package) | done | this commit |
+| P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
+| P-1 Provider layer: Google/Groq/OpenRouter tiers | done | this commit |
 | P-1, P-2, P-3, P-5 Providers, failover, pre-load, indicator | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |

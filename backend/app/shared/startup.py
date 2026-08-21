@@ -19,12 +19,20 @@ _PLACEHOLDER_DB_PASSWORD = "change-me"
 
 
 class ConfigError(RuntimeError):
-    """A production deployment is running with placeholder/empty secrets."""
+    """The process is configured in a way that cannot work: placeholder secrets
+    in a real deployment, or a provider leg whose model cannot do the job."""
 
 
 def check_startup_config(settings: Settings) -> None:
-    """Raise :class:`ConfigError` if a real deployment is missing required
-    secrets. A no-op in local/CI, where defaults are expected."""
+    """Raise :class:`ConfigError` on configuration that cannot work.
+
+    The secrets half is a no-op in local/CI, where placeholder defaults are
+    expected. The provider half is not: a model that cannot do structured
+    outputs breaks every route and every inspection call in *any* environment,
+    and it breaks quietly - the endpoint returns prose with a 200.
+    """
+    _check_provider_legs(settings)
+
     if settings.environment.lower() in _DEV_ENVIRONMENTS:
         return
 
@@ -40,3 +48,30 @@ def check_startup_config(settings: Settings) -> None:
             f"refusing to start in environment={settings.environment!r} with "
             f"insecure configuration: {'; '.join(missing)}"
         )
+
+
+# Groq serves strict json_schema structured outputs only on its gpt-oss line.
+# Point a leg at llama-3.3-70b-versatile and every extract() - routing,
+# onboarding, inspection - comes back as prose under a 200, which surfaces as
+# mysterious validation errors far from the cause. Documented in .env.example
+# and enforced here (P-1 US-2).
+_GROQ_HOST = "api.groq.com"
+_GROQ_STRUCTURED_OUTPUT_MODELS = ("gpt-oss",)
+
+
+def _check_provider_legs(settings: Settings) -> None:
+    # Imported here, not at module scope: app.llm.dependency pulls the embedder
+    # module in, and this guard runs before anything has asked for a model.
+    from app.llm.dependency import leg_settings
+
+    for leg in ("primary", "fallback", "failover"):
+        _, base_url, _, model = leg_settings(settings, leg)
+        if not model or _GROQ_HOST not in base_url:
+            continue
+        if not any(family in model for family in _GROQ_STRUCTURED_OUTPUT_MODELS):
+            raise ConfigError(
+                f"the {leg} provider leg points at Groq with model {model!r}, which "
+                "does not support strict json_schema structured outputs - Groq serves "
+                "those only on its gpt-oss models, and every extract() call would "
+                "silently return prose. Use openai/gpt-oss-120b (or gpt-oss-20b)."
+            )
