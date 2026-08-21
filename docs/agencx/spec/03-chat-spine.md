@@ -324,9 +324,10 @@ max timestamp with no schema addition, no new writes to maintain.
 `documents`,
 **so that** no new table or write path exists to drift.
 
-- [ ] `select coalesce(max(uploaded_at), 'epoch'::timestamptz) from
-  documents where tenant_id = :tid`
-- [ ] Profile changes also bump (the profile lives in `tenant_config`; its
+- [x] One query, as built over `documents.updated_at` (migration 0018) rather
+  than the insert-only `uploaded_at`: `greatest(coalesce(max(documents
+  .updated_at), 'epoch'), coalesce(tenant_config.updated_at, 'epoch'))`
+- [x] Profile changes also bump (the profile lives in `tenant_config`; its
   `updated_at` joins the derivation: version = max(documents.max,
   tenant_config.updated_at))
 
@@ -336,11 +337,11 @@ max timestamp with no schema addition, no new writes to maintain.
 **I want** the cached package replaced at the next open or turn,
 **so that** answers use the new material.
 
-- [ ] Ingest completion updates `documents.uploaded_at` (or a dedicated
-  status-change timestamp if the current column is insert-only) - verify
-  the current pipeline sets it on re-processing; if not, this ticket makes
-  re-ingest update the row timestamp
-- [ ] P-3's lookup compares versions; mismatch reassembles the package
+- [x] Ingest completion moves the row timestamp: `uploaded_at` was
+  insert-only, so 0018 adds `updated_at` + the shared `touch_updated_at()`
+  trigger, and the pipeline's existing `status` writes bump it on every
+  (re-)ingest - verified against the real pipeline, not the UPDATE text
+- [x] P-3's lookup compares versions; mismatch reassembles the package
 
 #### US-3 The version is cheap and safe
 
@@ -348,9 +349,9 @@ max timestamp with no schema addition, no new writes to maintain.
 **I want** the version check to add no meaningful latency,
 **so that** the pre-load gain is not eaten by the invalidation check.
 
-- [ ] One indexed max query per package lookup (documents is already
+- [x] One indexed max query per package lookup (documents is already
   indexed by tenant)
-- [ ] No tenant data crosses the process boundary in the version value
+- [x] No tenant data crosses the process boundary in the version value
 
 ### Technical spec
 
@@ -375,9 +376,9 @@ max timestamp with no schema addition, no new writes to maintain.
 
 ### Definition of done
 
-- [ ] One-query derivation including profile changes
-- [ ] Upload/re-ingest/profile change invalidate
-- [ ] Pipeline timestamp behavior verified (fixed if missing)
+- [x] One-query derivation including profile changes
+- [x] Upload/re-ingest/profile change invalidate
+- [x] Pipeline timestamp behavior verified (fixed if missing)
 
 ---
 

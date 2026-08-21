@@ -27,8 +27,10 @@ a human). The Agencx change work - rebrand, money guardrail loosening, tool
 gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), and the lean onboarding re-cut (O-1)
-are landed. The next group is the chat spine (`03-chat-spine.md`), starting
-with P-3.
+are landed. The chat spine (`03-chat-spine.md`) is in progress on
+`feat/chat-spine`, in the order P-4 -> O-4 -> P-3 -> P-1 -> P-2 -> P-5 (O-4 is
+pulled forward from `04-chat-grounding.md` because P-3's fast path calls its
+`get_business_context` seam).
 
 ## Feature status matrix
 
@@ -54,7 +56,7 @@ with P-3.
 | Hybrid retrieval (dense + sparse + RRF + rerank) | BUILT | `9c27859`, `0dd266e` (reranker score normalization) |
 | Golden retrieval set + eval | BUILT | `182985a` |
 | `get_business_context` seam | PARTIAL | retrieval exists behind it; **CHANGING** - O-4 adds the whole-corpus fast path + measured token threshold (the two-path seam) |
-| Knowledge version + context-package cache | NEW | P-4 (version derivation), P-3 (pre-load package) |
+| Knowledge version + context-package cache | PARTIAL | P-4 version derivation is **BUILT** (0018 + `services/knowledge_version.py`); P-3 pre-load package is NEW |
 
 ### Agents & the money boundary
 
@@ -110,7 +112,7 @@ with P-3.
 | Groq / Cerebras fallback + OpenRouter failover tiers | PARTIAL (Groq fallback wired in env; Cerebras candidate) | P-1 |
 | 4s TTFT timeout + first-wins race + 10s cap | NEW | P-2 |
 | Context-package pre-load on chat open | NEW | P-3 |
-| knowledge_version derivation + invalidation | NEW | P-4 |
+| knowledge_version derivation + invalidation | BUILT | P-4 (migration 0018 + `services/knowledge_version.py`) |
 | Failover typing indicator (client) | NEW | P-5 |
 
 ## Spec ticket status
@@ -138,10 +140,12 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
-| P-1..P-5 Providers, failover, pre-load, versioning, indicator | not started | |
+| P-4 knowledge_version + invalidation | done | this commit |
+| P-1, P-2, P-3, P-5 Providers, failover, pre-load, indicator | not started | |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
-| O-1 Onboarding: one tool + LLM turn loop | done | this commit |
-| O-3, O-4 Knowledge ingest, whole-corpus fast path | not started | |
+| O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
+| O-3 Knowledge ingest (URL scrape + upload) | not started | |
+| O-4 Whole-corpus fast path + threshold | not started (pulled into the chat spine, before P-3) | |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

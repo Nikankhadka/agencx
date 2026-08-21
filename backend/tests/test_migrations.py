@@ -42,8 +42,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # on tenant_config; 0014 adds T-052's onboarding business fields; 0015 adds
     # T-056's 'website' document type for URL ingestion; 0017 adds O-2's
     # login-in-chat auth_codes table (0016 is reserved for D-2's enabled_tools
-    # lean default and intentionally skipped).
-    assert len(on_disk) == 16, "expected migrations 0001-0015 + 0017"
+    # lean default and intentionally skipped); 0018 adds P-4's documents
+    # .updated_at + touch trigger, the knowledge_version derivation.
+    assert len(on_disk) == 17, "expected migrations 0001-0015 + 0017-0018"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
