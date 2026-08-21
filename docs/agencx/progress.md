@@ -157,7 +157,7 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
 | O-5 Onboarding UI: prototype thread port | done | this commit |
-| O-3 Knowledge ingest (URL scrape + upload) | done | `db5e862` + this commit |
+| O-3 Knowledge ingest (URL scrape + upload) | done | `29fd5a5` |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
