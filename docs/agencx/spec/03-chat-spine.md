@@ -436,6 +436,22 @@ answer streams,
   only
 - [ ] `prefers-reduced-motion`: dots static, no pulse animation
 
+### Design reference
+
+Build from the prototype, do not invent:
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`** - the `.typing` / `.td`
+rules (7px dots, 5px gap, `tp` keyframes: 1.3s ease-in-out, 220ms stagger,
+-2.5px travel, teal-token dot) and `agentMsg()`'s indicator-then-message
+pacing in the ONBOARDING section. The customer-side placement is
+**`docs/agencx/design/prototypes/agencx-storefront-customer-v3.html`** (the
+chat bottom sheet); trust it for storefront interaction vocabulary only,
+never for nav (pre-D18) or copy.
+
+The prototype's cadence is 1.3s, not the 600-800ms this ticket's US-3 text
+guesses at - the prototype wins. `ThinkingDots.tsx` already ports these
+rules exactly, so this ticket reuses it rather than adding a second
+component.
+
 ### Technical spec
 
 - `frontend/src/components/ui/TypingIndicator.tsx`; semantic tokens only

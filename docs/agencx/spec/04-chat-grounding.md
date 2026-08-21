@@ -71,6 +71,14 @@ acknowledgement,
 - [ ] Both paths write through the shared pipeline (single code path);
   document rows update timestamps on completion (P-4 contract)
 
+### Design reference
+
+The upload/scrape surface lives inside the onboarding thread, so the reference
+is **`docs/agencx/design/prototypes/agencx-prototype-v6.html`**'s ONBOARDING
+section: `buildCmdPill()`'s attach affordance and
+the in-thread confirmation pattern (`.thr-pill` stamps, agent message then
+chip). There is no separate uploads screen in the prototype - do not build one.
+
 ### Technical spec
 
 - `backend/app/routes/ingest.py` (or extend the existing upload route):

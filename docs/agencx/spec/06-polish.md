@@ -65,6 +65,14 @@ hrefs verbatim - a copy change without the spec update goes red).
 - [ ] Playwright specs updated alongside the copy changes
 - [ ] `make test-e2e` passes on the seeded world
 
+### Design reference
+
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`** carries the
+shipped Agencx identity (crimson, monogram mark) and is the reference for how
+the name and mark appear in product chrome. Prototype
+copy is demo copy for the Sababa reference tenant - never lift strings from it
+into marketing or product surfaces.
+
 ### Technical spec
 
 - String sweep across `frontend/src/`, `backend/app/` (seeds + greeting
@@ -142,6 +150,16 @@ the shipped app in line.
       `completed`, `cancelled`, `shipped`, `delivered`) added to the map
 - [ ] No status colour is a hardcoded hex; all route through the semantic tokens
       or `toneForStatus`
+
+### Design reference
+
+**`docs/agencx/design/prototypes/agencx-prototype-v6.html`** is the colour
+source of record for this ticket: it already applies the convention (crimson
+reserved for identity and the single primary action per view; state colour
+carried by the semantic tokens, never by the brand hue).
+Read its `:root` custom properties and the usage around `.pcta-main`, `.ccfm` /
+`.ccnc`, and the status pills (`.spaid`, `.sover`, `.spend`) before touching
+`theme.css`.
 
 ### Technical spec
 
@@ -226,6 +244,13 @@ watch metrics,
 - [ ] Existing dashboards (cost + eval) remain reachable from the platform
   side (they were tenant-side; the platform keeps its own aggregate view
   where present - no new build, just non-regression)
+
+### Design reference
+
+**None - and that is deliberate.** Neither prototype has a platform-owner
+screen; the platform surface stays the existing plain admin UI. Do not invent a
+prototype-flavoured design for it, and do not port tenant-app chrome (bottom tab
+bar, command pill) onto it.
 
 ### Technical spec
 
