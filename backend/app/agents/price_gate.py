@@ -25,13 +25,33 @@ GATE_ESCALATION_MESSAGE = (
 )
 
 
+def owner_material(state: AgentState) -> list[str]:
+    """The tenant's own text this turn had in front of it (C-1).
+
+    The chunks are whatever the turn was grounded in - the whole corpus on the
+    fast path, the retrieved set on the hybrid path - and ``owner_material``
+    carries the interview profile, which is prompt material but never a chunk,
+    so a price the owner typed into their profile counts too.
+    """
+    material = [chunk["content"] for chunk in state["retrieved_chunks"] if chunk.get("content")]
+    profile = state.get("owner_material")
+    if profile:
+        material.append(profile)
+    return material
+
+
 async def run(state: AgentState) -> dict[str, Any]:
     provenance = [
         selection["price_cents"]
         for selection in state["selections"]
         if isinstance(selection.get("price_cents"), int)
     ]
-    violations = validate(state["draft_response"], state["engine_quote"], provenance)
+    violations = validate(
+        state["draft_response"],
+        state["engine_quote"],
+        provenance,
+        owner_material(state),
+    )
 
     if not violations:
         return {"price_gate_decision": "ok"}

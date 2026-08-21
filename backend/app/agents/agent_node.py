@@ -676,6 +676,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "selections": selections,
             "engine_quote": engine_quote,
             "lookup": lookup_result,
+            "owner_material": package.profile_text(),
         }
 
     if route == "knowledge" and not retrieved_chunks:
@@ -694,4 +695,5 @@ async def run(state: AgentState) -> dict[str, Any]:
         "selections": selections,
         "engine_quote": engine_quote,
         "lookup": lookup_result,
+        "owner_material": package.profile_text(),
     }
