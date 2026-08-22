@@ -16,12 +16,15 @@ Five checks, only two of which are real LLM calls:
   call (``InspectionVerdicts``) - cheaper than five separate calls, and
   none of the three needs scoring independently of the others.
 - **price-provenance**: deterministic, delegates to the existing
-  ``app.pricing.validation_gate.validate()`` - scoped to the two
-  money-carrying specialists only (recommendation/quoting), mirroring
-  price_gate.py's own scope. A knowledge answer quoting a real price from
-  a retrieved chunk is a grounding question, not a price-provenance one
-  (flagged interpretation: the hard rule targets model-fabricated
-  figures, not verbatim knowledge-base quotes).
+  ``app.pricing.validation_gate.validate()`` - on every route (C-2),
+  mirroring price_gate.py's own scope. It used to be scoped to
+  recommendation/quoting on the reasoning that a knowledge answer quoting a
+  real price from a chunk was a grounding question rather than a
+  price-provenance one. That reasoning held while knowledge answers rarely
+  carried figures; once the whole corpus goes into the prompt it is the
+  route where figures most often appear, so the check follows them there.
+  The verbatim quote it was protecting is now allowed explicitly (C-1),
+  which is a better answer than not looking.
 - **prompt-leak**: a deterministic substring check against the tenant's
   system prompt first; the LLM's own ``prompt_leak`` verdict (part of the
   same combined call) is the fallback for a paraphrased leak a substring
@@ -44,6 +47,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 from pydantic import BaseModel
 
+from app.agents.price_gate import owner_material
 from app.agents.state import AgentState, GraphContext
 from app.pricing.validation_gate import validate as validate_price_provenance
 from app.shared import db
@@ -53,13 +57,14 @@ ESCALATION_MESSAGE = (
     "to a human who can. They'll pick it up from here."
 )
 
-# Public because graph.py routes on exactly these two facts. They were once
-# duplicated there as literal tuples and drifted: "conversation" was retryable
-# per graph.py but absent here, so a second inspection failure on that route
-# raised instead of escalating. One definition, no drift.
 logger = logging.getLogger("app.agents.inspection")
 
-PRICE_GATED_ROUTES = ("recommendation", "quoting")
+# Public because graph.py routes on it. It was once duplicated there as a
+# literal tuple and drifted: "conversation" was retryable per graph.py but
+# absent here, so a second inspection failure on that route raised instead of
+# escalating. One definition, no drift. (C-2 removed its sibling
+# PRICE_GATED_ROUTES - every route is money-gated now, so the tuple named a
+# distinction that no longer exists.)
 RETRYABLE_ROUTES = ("conversation", "knowledge", "recommendation", "quoting")
 
 
@@ -99,15 +104,20 @@ def check_prompt_leak(draft: str, system_prompt: str) -> CheckVerdict | None:
 
 
 def check_price_provenance(state: AgentState) -> CheckVerdict:
-    if state["route"] not in PRICE_GATED_ROUTES:
-        return CheckVerdict()
+    # C-2: no route bypass. This is the second, independent look at the same
+    # question the price gate already asked - defence in depth is the point,
+    # so it must not be narrower than the gate it backs up. One helper builds
+    # the allowed material for both.
     provenance = [
         selection["price_cents"]
         for selection in state["selections"]
         if isinstance(selection.get("price_cents"), int)
     ]
     violations = validate_price_provenance(
-        state["draft_response"], state["engine_quote"], provenance
+        state["draft_response"],
+        state["engine_quote"],
+        provenance,
+        owner_material(state),
     )
     if not violations:
         return CheckVerdict()

@@ -59,13 +59,14 @@ from seeds.seed_tenant1_phoneshop import SLUG
 
 TOOL_CORRECTNESS_GATE = 0.90
 
-# Minimum node executions for a clean pass through each route: supervisor +
-# specialist + inspection, with price_gate added for the two money routes
-# (see app/agents/graph.py's topology).
+# Minimum node executions for a clean pass through each route (see
+# app/agents/graph.py's topology). C-2 put price_gate on every path, so the
+# floor is agent + draft + price_gate + inspection - except knowledge, whose
+# P-3 fast path answers from the context package and skips the draft node.
 _MIN_STEPS_BY_ROUTE = {
     "knowledge": 3,
-    "order_status": 3,
-    "escalation": 3,
+    "order_status": 4,
+    "escalation": 4,
     "recommendation": 4,
     "quoting": 4,
 }

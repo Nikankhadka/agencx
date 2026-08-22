@@ -1,13 +1,18 @@
-"""T-018: the price-provenance gate as a graph node.
+"""T-018/C-2: the price-provenance gate as a graph node.
 
-Runs after Quoting and Recommendation (the two nodes whose drafts carry
-money). Deterministic - delegates to app/pricing/validation_gate.py, no LLM
-call. A violating draft gets exactly one redraft (violations listed back to
-the producing node via ``price_violations``); a second violation escalates
-with reason ``price_provenance``. Emits a ``redraft`` stream event so the
-customer surface clears the violating text it already saw - full buffering
-until inspection passes is T-021's job and is a recorded latency tradeoff,
-not something this node half-implements.
+Runs after **every** draft, not just the money routes. It was built when the
+only prose carrying figures came from Quoting and Recommendation; the lean
+assistant answers from knowledge, which is now where a figure is most likely
+to appear, so a route-based bypass was a hole rather than a saving. A reply
+with no figures costs one regex sweep.
+
+Deterministic - delegates to app/pricing/validation_gate.py, no LLM call. A
+violating draft gets exactly one redraft (violations listed back to the
+producing node via ``price_violations``); a second violation escalates with
+reason ``price_provenance``. Emits a ``redraft`` stream event so the customer
+surface clears the violating text it already saw - full buffering until
+inspection passes is T-021's job and is a recorded latency tradeoff, not
+something this node half-implements.
 """
 
 from __future__ import annotations
@@ -41,6 +46,12 @@ def owner_material(state: AgentState) -> list[str]:
 
 
 async def run(state: AgentState) -> dict[str, Any]:
+    # A template or refusal constant carries no model-authored figure, so
+    # there is nothing here to check - same reasoning, and the same skip,
+    # that inspection applies to these drafts.
+    if state.get("draft_deterministic"):
+        return {"price_gate_decision": "ok"}
+
     provenance = [
         selection["price_cents"]
         for selection in state["selections"]

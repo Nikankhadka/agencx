@@ -1,5 +1,5 @@
-"""T-044/P-3: tool-driven agent -> draft -> price_gate (for money routes) ->
-inspection -> END/retry/escalation.
+"""T-044/P-3/C-2: tool-driven agent -> draft -> price_gate -> inspection ->
+END/retry/escalation.
 
 P-3 adds one edge: when the agent node already produced the answer from its
 context package (the one-call turn), the draft node is skipped and the draft
@@ -24,24 +24,17 @@ from app.agents.draft_node import run as draft_node_run
 from app.agents.state import AgentState, GraphContext
 from app.agents.tracing import traced
 
-_PRICE_GATED = inspection.PRICE_GATED_ROUTES
-
 
 def _price_gate_route(state: AgentState) -> str:
     decision = state.get("price_gate_decision")
     if decision == "retry":
         route = state["route"]
-        assert route in _PRICE_GATED
+        # Only a real (non-deterministic) draft can violate, and those are
+        # exactly the retryable routes - same rule inspection asserts.
+        assert route in inspection.RETRYABLE_ROUTES
         return "draft"
     if decision == "escalate":
         return "escalation"
-    return "inspection"
-
-
-def _draft_route(state: AgentState) -> str:
-    route = state.get("route")
-    if route in _PRICE_GATED:
-        return "price_gate"
     return "inspection"
 
 
@@ -49,7 +42,7 @@ def _agent_route(state: AgentState) -> str:
     """Straight to the gates when the agent already wrote the draft (P-3)."""
     if state.get("escalated") or not state.get("draft_response"):
         return "draft"
-    return _draft_route(state)
+    return "price_gate"
 
 
 def _inspection_route(state: AgentState) -> str:
@@ -76,13 +69,12 @@ def build_graph() -> CompiledStateGraph[AgentState, GraphContext, AgentState, Ag
     graph.add_conditional_edges(
         "agent",
         _agent_route,
-        {"draft": "draft", "price_gate": "price_gate", "inspection": "inspection"},
+        {"draft": "draft", "price_gate": "price_gate"},
     )
-    graph.add_conditional_edges(
-        "draft",
-        _draft_route,
-        {"price_gate": "price_gate", "inspection": "inspection"},
-    )
+    # C-2: every draft passes the money gate, not only the two money routes.
+    # A knowledge answer is where figures now come from, so leaving that route
+    # unchecked was the hole, not a scope cut.
+    graph.add_edge("draft", "price_gate")
     graph.add_conditional_edges(
         "price_gate",
         _price_gate_route,

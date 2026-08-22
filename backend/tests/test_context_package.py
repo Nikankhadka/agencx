@@ -273,7 +273,9 @@ async def test_fast_path_turn_makes_one_model_call_and_skips_the_draft_node(
     # second generation call happens at all.
     assert len(provider.tool_call_messages) == 1
     assert provider.draft_prompts == []  # nothing was streamed: no draft call
-    assert order == ["agent", "inspection"]
+    # C-2: the money gate is on every path now; it is a regex sweep over a
+    # draft with no figures, not a second model call - the one-call claim holds.
+    assert order == ["agent", "price_gate", "inspection"]
 
 
 async def test_fast_path_prompt_carries_the_corpus_and_drops_the_search_tool(
