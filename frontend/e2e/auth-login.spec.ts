@@ -33,6 +33,20 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
       await page.waitForURL("**/onboarding");
       await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
     });
+
+    test(`sign out returns to the login chat without a reload (${user.email})`, async ({
+      page,
+      request,
+    }) => {
+      await loginAsTenantAdmin(page, request, user);
+
+      // The console shell (sidebar) renders the Sign out button on a chrome page.
+      await page.goto("/home");
+      await page.getByRole("button", { name: "Sign out" }).click();
+
+      // The login chat must render immediately - no manual reload required.
+      await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+    });
   }
 });
 

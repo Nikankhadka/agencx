@@ -108,8 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await getSupabase().auth.signOut();
     clearManualSession();
+    await getSupabase().auth.signOut();
+    setSession(null);
+    setCachedSession(null);
     toast.success("Signed out");
     router.push("/");
   }, [router]);
