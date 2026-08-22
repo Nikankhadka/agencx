@@ -650,4 +650,25 @@ def test_find_url_extracts_http_url_and_strips_punctuation() -> None:
 def test_find_url_ignores_prose_and_bare_domains() -> None:
     assert _find_url("we fix phones") is None
     assert _find_url("open weekdays 9 to 5.30pm") is None
+    # A bare host with no path stays prose: too easy to trip on a sentence.
     assert _find_url("see bytefix.example.com") is None
+
+
+def test_find_url_accepts_a_bare_domain_that_carries_a_path() -> None:
+    """O-7: an owner pastes what the address bar shows them, which is usually
+    scheme-less. Before O-7 that fell through to an ordinary text turn and the
+    page was never fetched at all - the link looked ignored."""
+    assert _find_url("ubereats.com/store/sababa") == "https://ubereats.com/store/sababa"
+    assert _find_url("www.bytefix.example.com") == "https://www.bytefix.example.com"
+    assert _find_url("have a look at bytefix.example.com/menu") == (
+        "https://bytefix.example.com/menu"
+    )
+
+
+def test_find_url_never_reads_a_price_as_a_link() -> None:
+    """The guard the loose match has to survive: money and ratings contain both
+    a dot and a slash, and onboarding is full of them."""
+    assert _find_url("$16.50 a plate") is None
+    assert _find_url("we charge 16.50/plate for catering") is None
+    assert _find_url("it is 3.5/5 stars") is None
+    assert _find_url("email me at sam@shop.example") is None

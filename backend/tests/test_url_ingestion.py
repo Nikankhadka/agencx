@@ -121,6 +121,41 @@ async def test_fetch_page_returns_body() -> None:
         assert await fetch_page("http://example.com/", client=client) == b"<html>hi</html>"
 
 
+# --- O-7: the fetch looks like a browser, and says why it failed -------------
+
+
+async def test_fetch_page_sends_browser_headers() -> None:
+    """O-7: httpx's default ``python-httpx/x.y`` user agent is answered with a
+    403 by a good share of real business sites. A shop owner pasting their own
+    link is not a bot, and the request should not announce itself as one."""
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.headers)
+        return httpx.Response(200, content=b"<html>hi</html>")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await fetch_page("http://example.com/", client=client)
+
+    assert "python-httpx" not in seen["user-agent"]
+    assert "Mozilla/5.0" in seen["user-agent"]
+    assert "text/html" in seen["accept"]
+    assert seen["accept-language"].startswith("en")
+
+
+async def test_fetch_page_names_the_http_status() -> None:
+    """O-7: 403 (bot protection), 404 (wrong link) and 503 (their outage) are
+    three different problems. The owner sees one calm line either way, so the
+    only place the difference can survive is this message, which is logged."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, content=b"<html><body>Forbidden</body></html>")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match=r"HTTP 403"):
+            await fetch_page("http://example.com/blocked", client=client)
+
+
 # --- db: fixtures + helpers --------------------------------------------------
 
 

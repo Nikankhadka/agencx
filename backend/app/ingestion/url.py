@@ -10,7 +10,17 @@ unit-testable without Postgres. The HTTP fetch is deliberately minimal:
 - redirects followed, bounded by httpx's own redirect limit;
 - non-2xx responses rejected, so an error page is never ingested as content.
 
-Every failure surfaces as ``ValueError`` - see ``_get_bounded``.
+Every failure surfaces as ``ValueError`` - see ``_get_bounded``. O-7: the
+message names *why*, including the HTTP status, because the one caller that
+swallows it (the onboarding turn) now logs the reason instead of collapsing a
+403, an empty page and a dead host into the same silence.
+
+O-7 also sends browser-like request headers. httpx defaults to a
+``python-httpx/x.y`` user agent, which a good share of real business sites -
+anything behind a CDN's bot protection - answers with a 403. A small business
+pasting the link to its own shop page is not a bot, and the fetch should not
+look like one. This does not defeat protection that fingerprints beyond
+headers; those pages still fail, and now they fail legibly.
 
 HTML extraction removes boilerplate chrome (script/style/nav/header/footer/form)
 and returns the collapsed plain text of what remains, plus the page title.
@@ -26,6 +36,18 @@ from selectolax.parser import HTMLParser
 
 _TIMEOUT = httpx.Timeout(10.0)
 _MAX_BODY_BYTES = 2 * 1024 * 1024
+
+# A current desktop Chrome string. Sent verbatim rather than built from a
+# version constant: it is one literal that either matches a real browser or
+# does not, and an assembled one drifts into looking synthetic.
+_HEADERS = {
+    "user-agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+    ),
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "en-AU,en;q=0.9",
+}
 
 # Tag names dropped before text extraction: page chrome, never the content an
 # admin wants their agent to answer from.
@@ -46,23 +68,30 @@ async def fetch_page(url: str, *, client: httpx.AsyncClient | None = None) -> by
     # private-IP / loopback / cloud-metadata hostnames is the upgrade path if
     # this ever faces untrusted input.
     if client is None:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=_TIMEOUT) as owned:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=_TIMEOUT, headers=_HEADERS
+        ) as owned:
             return await _get_bounded(owned, url)
     return await _get_bounded(client, url)
 
 
 async def _get_bounded(client: httpx.AsyncClient, url: str) -> bytes:
-    # follow_redirects and timeout are passed per-request so they hold even when
-    # a caller supplies its own client.
+    # follow_redirects, timeout and headers are passed per-request so they hold
+    # even when a caller supplies its own client.
     try:
-        response = await client.get(url, follow_redirects=True, timeout=_TIMEOUT)
+        response = await client.get(url, follow_redirects=True, timeout=_TIMEOUT, headers=_HEADERS)
         response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # The status is the whole diagnosis for the common case: 403 is bot
+        # protection, 404 is a wrong link, 5xx is their outage. Naming it is
+        # what lets the log tell those apart later.
+        raise ValueError(f"could not read this URL (HTTP {exc.response.status_code})") from exc
     except httpx.HTTPError as exc:
-        # Every fetch failure leaves this module as ValueError - the one failure
-        # type both callers already handle (the /urls route maps it to a 422,
-        # the onboarding turn degrades to its calm offer of another way). Without
-        # this a dead link 500s in the owner's face, and without raise_for_status
-        # a 404 page would be ingested as if it were the business's own content.
+        # Every other fetch failure leaves this module as ValueError too - the
+        # one failure type both callers already handle (the /urls route maps it
+        # to a 422, the onboarding turn degrades to its calm offer of another
+        # way). Without this a dead link 500s in the owner's face, and without
+        # raise_for_status a 404 page would be ingested as business content.
         raise ValueError(f"could not read this URL ({exc.__class__.__name__})") from exc
     body = response.content
     if len(body) > _MAX_BODY_BYTES:

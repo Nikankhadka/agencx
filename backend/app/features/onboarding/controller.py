@@ -8,6 +8,7 @@ satisfied by extraction, so there is no deterministic selection path here.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -31,27 +32,53 @@ from app.onboarding.flow import ProfileDraft
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
-_URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+logger = logging.getLogger("app.onboarding.controller")
+
+# O-7: three shapes of link, in the order an owner is likely to paste one. A
+# bare host only counts when a path follows it or it starts with "www.", and
+# its last label must be alphabetic - that is what keeps "$16.50 a plate" and
+# "16.50/plate" out while letting "ubereats.com/store/x" in. Before O-7 only
+# the first branch matched, so a pasted bare domain was never even attempted.
+_URL_RE = re.compile(
+    r"""
+    (?:
+        https?://[^\s"'<>]+                                  # an explicit URL
+      | www\.[^\s"'<>]+                                      # a www host, scheme omitted
+      | (?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}       # host, alphabetic TLD
+        /[^\s"'<>]*                                          # ... only with a path
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
 # O-3: knowledge is never a blocking beat. A page we cannot read offers the two
 # other ways in and then lets the interview move on - the owner can fill this in
 # whenever, from the Knowledge screen.
+#
+# O-7: the line now names the situation instead of implying the owner mistyped
+# something. Marketplace and social pages (Uber Eats, Instagram, Facebook) build
+# themselves in the browser and turn readers away at the door, so the honest
+# answer is that this page cannot be read, not that the link was wrong.
 _URL_SCRAPE_FAILED = (
-    "I couldn't read that page. Send me a file instead, or tell me in a sentence "
-    "- and either way you can add your services, pricing and the rest any time "
-    "from Settings > Knowledge."
+    "I couldn't read that page - some sites don't let anything but a browser in. "
+    "Tell me in a sentence what you do, or send me a file instead. Either way you "
+    "can add your services, pricing and the rest any time from Settings > Knowledge."
 )
 
 
 def _find_url(text: str) -> str | None:
-    """The first http(s) URL in the message, trailing punctuation stripped, or
-    None. Bare domains are not matched - the ingest path only fetches explicit
-    http(s) URLs, and a loose match would misread ordinary prose (e.g. a time
-    or a decimal) as a link."""
+    """The first link in the message, trailing punctuation stripped, or None.
+
+    A match without a scheme is returned with ``https://`` prepended, because
+    that is what the owner meant and what ``fetch_page`` will accept.
+    """
     match = _URL_RE.search(text)
     if match is None:
         return None
-    return match.group(0).rstrip(".,;:!?)")
+    url = match.group(0).rstrip(".,;:!?)")
+    if not url.lower().startswith(("http://", "https://")):
+        url = f"https://{url}"
+    return url
 
 
 def _state_event(record: OnboardingRecord) -> dict[str, object]:
@@ -158,7 +185,11 @@ async def _run_url_message(
         page_text, _title = await _scrape_and_ingest(
             tenant_id=tenant_id, url=url, embedder=embedder
         )
-    except ValueError:
+    except ValueError as exc:
+        # O-7: the owner gets one calm line either way, but the reason is not
+        # thrown away. A 403, a page that renders itself in the browser, and a
+        # dead host all read the same on screen and must not read the same here.
+        logger.info("url scrape failed url=%s reason=%s", url, exc)
         onboarding.history.append({"role": "user", "content": url})
         onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
         await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
@@ -246,7 +277,8 @@ async def _stream_url_turn(
         page_text, _title = await _scrape_and_ingest(
             tenant_id=tenant_id, url=url, embedder=embedder
         )
-    except ValueError:
+    except ValueError as exc:
+        logger.info("url scrape failed url=%s reason=%s", url, exc)
         onboarding.history.append({"role": "user", "content": url})
         await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
         yield {"type": "token", "text": _URL_SCRAPE_FAILED}
