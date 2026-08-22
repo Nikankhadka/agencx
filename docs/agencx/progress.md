@@ -93,6 +93,7 @@ open for US-2, the `STATUS_TONE` map.
 | Knowledge agent | BUILT | `0b99a71` |
 | Recommendation agent | BUILT | `c023918`; **CHANGING** - optional per-tenant tool (D-1), off by default |
 | Deterministic pricing engine | BUILT | `eda876f`; **CHANGING** - engine runs only for quote-enabled tenants (D-1) |
+| Lean tool default | BUILT | D-2 (migration 0016): `tenant_config.enabled_tools` defaults to `["search_knowledge","create_escalation"]` and legacy rows carrying the old full list were backfilled. Tenant 1 states the full set to demo the commerce tools; tenant 2 inherits the default, which is the I8 proof. **Nothing reads the column until D-1** - the data is made honest first so D-1's arrival cannot silently switch quoting on for existing tenants |
 | Quoting agent | BUILT | `8e6b9e5`; **CHANGING** - optional per-tenant tool, off by default |
 | Order/ticket lookup | BUILT | `ecd2b31`; **CHANGING** - optional per-tenant tool, off by default |
 | Escalation agent + handoff | BUILT | `c10b742`; **no longer terminal** - C-5 made a handoff a notification, C-6 added staff takeover/handback (`'human'` status, migration 0020). Only a tenant limit ends a conversation now |
@@ -174,7 +175,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
-| D-2 Lean default (quoting OFF) | not started (Phase 1) | |
+| D-2 Lean default (quoting OFF) | done | this commit (migration 0016) |
 | E-1 Three-tab shell (Home + Chats + Business) | done | this commit |
 | E-4 Home: the greeting and the brief | done | this commit |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR this commit |
@@ -194,6 +195,12 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
+
+- **`enabled_tools` has no reader yet** (D-2). The column now says lean and
+  `agents/agent_node.py::_tools_for` still offers every tool to every tenant -
+  D-1 wires the two together in Phase 2. The data change lands first on
+  purpose: doing it after D-1 would mean a window where quoting was on for
+  tenants who never asked for it.
 
 - **There is no everyday owner Copilot** (found during E-4, deferred by founder
   2026-08-22). S1 promised that after go-live the owner's chat tab holds an

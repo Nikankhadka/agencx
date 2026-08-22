@@ -9,6 +9,7 @@ loading a real embedding model.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -79,3 +80,42 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
         "select count(*) from catalog_items where tenant_id = $1", first_id
     )
     assert leftover_catalog == 0  # cascaded away with the first tenant
+
+
+async def test_lean_default_and_tenant_one_opt_in(
+    app_pool: None, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """D-2: the column's default is lean, and tenant 1 says otherwise on purpose.
+
+    Two halves of one decision. A business that never asked for quoting must
+    not have it, so the default is search + escalate; reference tenant 1 is
+    where the commerce tools get demonstrated, so it opts in explicitly. Tenant
+    2 takes the default untouched, which is the I8 proof - two verticals, one
+    codebase, different config.
+
+    Nothing reads `enabled_tools` yet (D-1 wires it in Phase 2). That is exactly
+    why this is pinned now: the data has to be honest before the reader exists,
+    or D-1's arrival would switch quoting on for every tenant onboarded before
+    it, silently.
+    """
+    lean = ["search_knowledge", "create_escalation"]
+
+    # The default, taken by any row that does not state a set - which is every
+    # tenant that onboards through signup.
+    default_sql = await superuser_conn.fetchval(
+        "select column_default from information_schema.columns "
+        "where table_name = 'tenant_config' and column_name = 'enabled_tools'"
+    )
+    assert json.loads(default_sql.split("::")[0].strip("'")) == lean
+
+    tenant_id = await seed(embedder=ZeroEmbedder())
+    tools = await superuser_conn.fetchval(
+        "select enabled_tools from tenant_config where tenant_id = $1", tenant_id
+    )
+    assert json.loads(tools) == [
+        "search_knowledge",
+        "recommend_items",
+        "get_quote_inputs",
+        "lookup_order_or_ticket",
+        "create_escalation",
+    ]

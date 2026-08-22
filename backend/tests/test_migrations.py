@@ -40,14 +40,16 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # contract; 0011 adds T-020's escalation dedupe index; 0012 adds T-021's
     # messages.metadata column; 0013 adds T-033's platform_admin write access
     # on tenant_config; 0014 adds T-052's onboarding business fields; 0015 adds
-    # T-056's 'website' document type for URL ingestion; 0017 adds O-2's
-    # login-in-chat auth_codes table (0016 is reserved for D-2's enabled_tools
-    # lean default and intentionally skipped); 0018 adds P-4's documents
+    # T-056's 'website' document type for URL ingestion; 0016 is D-2's
+    # enabled_tools lean default, reserved when it was written and landed after
+    # 0020 - the runner applies by filename and skips what is already applied,
+    # so arriving out of sequence is fine and it depends on nothing after 0003;
+    # 0017 adds O-2's login-in-chat auth_codes table; 0018 adds P-4's documents
     # .updated_at + touch trigger, the knowledge_version derivation; 0019 adds
     # O-3's draft status + documents.structured, the reviewable knowledge record;
     # 0020 adds C-6's 'human' conversation status + escalations.summary, the
     # takeover state and the owner's one-line note.
-    assert len(on_disk) == 19, "expected migrations 0001-0015 + 0017-0020"
+    assert len(on_disk) == 20, "expected migrations 0001-0020"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

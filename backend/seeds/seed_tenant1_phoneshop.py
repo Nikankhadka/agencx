@@ -224,8 +224,15 @@ async def _seed_core(tenant_id: UUID) -> None:
             TENANT_NAME,
         )
         await conn.execute(
-            "insert into tenant_config (tenant_id, tone, escalation_threshold, brand, config) "
-            "values ($1, 'friendly', 0.5, $2, $3)",
+            # D-2: stated, not inherited. Reference tenant 1 is where the
+            # commerce tools get demonstrated, so it opts into all of them -
+            # the lean column default (search + escalate) would leave the
+            # quoting and order-lookup demo with nothing to run. Tenant 2 takes
+            # the default and stays lean, which is the I8 proof: two verticals,
+            # one codebase, different config.
+            "insert into tenant_config "
+            "(tenant_id, tone, escalation_threshold, brand, config, enabled_tools) "
+            "values ($1, 'friendly', 0.5, $2, $3, $4)",
             tenant_id,
             json.dumps({"display_name": TENANT_NAME, "accent": "#D97757"}),
             # config->'customer' is the T-032 customer-surface block: the
@@ -246,6 +253,15 @@ async def _seed_core(tenant_id: UUID) -> None:
                         ],
                     }
                 }
+            ),
+            json.dumps(
+                [
+                    "search_knowledge",
+                    "recommend_items",
+                    "get_quote_inputs",
+                    "lookup_order_or_ticket",
+                    "create_escalation",
+                ]
             ),
         )
 

@@ -11,6 +11,12 @@ carries no prices: the clinic's fees reach the assistant through
 ``services-and-fees.md``, uploaded as a ``price_list`` document, which is the
 only source a figure may be stated from (I1 / C-1).
 
+``enabled_tools`` is deliberately NOT written here (D-2). The clinic takes the
+column's lean default - search plus escalate - and that inheritance is the
+point: tenant 1 opts into the commerce tools explicitly, tenant 2 touches
+nothing, and the two run the same code. Writing the lean set here would prove
+only that the seed can write, not that the default is right.
+
 Usage::
 
     uv run python -m seeds.seed_tenant2_dental
