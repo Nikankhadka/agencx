@@ -64,6 +64,56 @@ test.describe("Business hub", () => {
     expect(copied.endsWith("/")).toBe(false);
   });
 
+  test("the QR decodes to the same link the copy button gives", async ({ page, request }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/booking");
+
+    const qr = page.getByTestId("booking-qr");
+    await expect(qr).toBeVisible();
+
+    // A real decode, not a "it looks like a QR" check. Chromium ships
+    // BarcodeDetector with qr_code support, so the test scans the thing the
+    // owner would point a phone at. This is the assertion that catches an
+    // orientation slip in the SVG we build from the module matrix - a
+    // transposed code still renders as a plausible-looking QR and simply does
+    // not scan.
+    const decoded = await page.evaluate(async () => {
+      const svg = document.querySelector("[data-testid='booking-qr']")!;
+      const markup = new XMLSerializer().serializeToString(svg);
+
+      // Rasterise through an <img> data URL: Chromium's createImageBitmap does
+      // not accept SVG blobs. Drawn at 4x so every module is several pixels -
+      // the detector wants pixels, not vectors.
+      const SIZE = 528;
+      const img = new Image(SIZE, SIZE);
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+      await img.decode();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE;
+      canvas.height = SIZE;
+      const ctx = canvas.getContext("2d")!;
+      // QR contrast needs an opaque light ground; the SVG itself is
+      // transparent so it can sit on any themed surface.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.drawImage(img, 0, 0, SIZE, SIZE);
+
+      const Detector = (
+        window as unknown as {
+          BarcodeDetector: new (o: unknown) => {
+            detect(s: unknown): Promise<{ rawValue: string }[]>;
+          };
+        }
+      ).BarcodeDetector;
+      const found = await new Detector({ formats: ["qr_code"] }).detect(canvas);
+      return found[0]?.rawValue ?? null;
+    });
+
+    expect(decoded).toMatch(/^https?:\/\/bytefix\./);
+    expect(decoded).toBe(await page.getByTestId("booking-link").textContent().then((t) => `http://${t}`));
+  });
+
   test("back from the booking page returns to the hub", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/booking");

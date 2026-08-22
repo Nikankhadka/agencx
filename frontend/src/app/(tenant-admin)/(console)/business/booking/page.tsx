@@ -5,6 +5,7 @@ import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
 import { surfaceUrl } from "@/lib/tenant";
+import { QrCode } from "./components/QrCode";
 
 /**
  * E-5: the Booking page - the business as a customer finds it, and the link
@@ -120,6 +121,13 @@ export default function BookingPage() {
               className="h-12 rounded-field border border-hairline bg-surface-sunken"
             />
           )}
+
+          {publicUrl ? (
+            <div className="mt-5 flex flex-col items-center gap-2.5">
+              <QrCode value={publicUrl} />
+              <p className="text-meta text-ink-a40">Or let them scan this.</p>
+            </div>
+          ) : null}
         </section>
       </div>
     </main>

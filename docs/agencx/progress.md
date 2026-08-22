@@ -44,8 +44,7 @@ long-standing 375px sidebar squeeze, `/chats` and `/settings` render inside the
 shell, Home greets the owner with what needs them, Business is a hub with its
 Booking page and share link, and the Wren-era operator screens are unlinked
 while still serving and still tested. Next is `06-polish.md` (B-1, B-3, E-3,
-D-2, F-2, G-1), with P-5 still outstanding from the chat spine and the Booking
-page's QR waiting on a dependency decision.
+D-2, F-2, G-1), with P-5 still outstanding from the chat spine.
 
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
@@ -113,7 +112,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
-| Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. **QR outstanding** - needs a dependency decision, see known gaps |
+| Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. The QR is `qrcode-generator` (MIT, founder-approved) for the encoding and our own SVG path for the rendering, so it inherits `currentColor`; the e2e decodes it with `BarcodeDetector` rather than checking an SVG exists |
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
 | Advanced screens hidden, not deleted | BUILT | E-2: `/conversations`, `/escalations`, `/pricing` and `/knowledge` are absent from `NAV_ITEMS` and from nothing else - each still serves when typed, renders inside the shell, and is pinned by `e2e/hidden-screens.spec.ts`, which also holds the platform surface unchanged |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
@@ -176,7 +175,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1 Three-tab shell (Home + Chats + Business) | done | this commit |
 | E-4 Home: the greeting and the brief | done | this commit |
-| E-5 Business hub + Booking page | done (QR outstanding) | this commit |
+| E-5 Business hub + Booking page | done | `ac01cf0` + QR this commit |
 | E-2 Hide advanced screens, keep code | done | this commit |
 | E-3 Platform admin stays minimal | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
@@ -194,12 +193,6 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
-- **The Booking page has no QR** (E-5). The PRD names "share link + QR" and the
-  link half shipped; nothing in the repo generates a QR, and QR encoding is a
-  spec-defined algorithm with Reed-Solomon error correction and mask selection
-  - hand-rolling it would be worse code than a mature ~10KB dependency, and
-  adding a dependency is a founder call (conventions: "No new dependency if it
-  can be avoided"). Flagged, not decided.
 
 - **Live LLM calls run against free-tier models** (Google AI Studio primary,
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to

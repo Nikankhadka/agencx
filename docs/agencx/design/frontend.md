@@ -337,9 +337,18 @@ the cover photo (no image upload; images are refused by ruling, O-3), the
 platform buttons (no Google/Facebook/Instagram integrations), and the Services
 list (quoting is off by default, D-1/D-2).
 
-**The QR is still outstanding.** Nothing in the repo generates one, and QR
-encoding is a spec-defined algorithm with error correction and masking - the
-wrong thing to hand-roll. It needs a dependency decision before it ships.
+**The QR (E-5, founder-approved dependency).** Encoding is `qrcode-generator`
+(MIT, no dependencies of its own) - QR is a spec with Reed-Solomon error
+correction and mask selection, and a subtly wrong implementation scans on one
+phone and fails on another. The **rendering** is ours: the library's
+`createSvgTag` emits hardcoded colours, which `check:tokens` forbids and which
+could not follow a theme, so `QrCode.tsx` builds one SVG path from `isDark()`
+and fills it with `currentColor`. Level M (15% recovery).
+
+The e2e **decodes it** with Chromium's `BarcodeDetector` rather than asserting
+an SVG is present - a transposed module matrix still renders as a plausible QR
+and simply does not scan, and that is the failure a presence check would wave
+through.
 
 The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
 O-3 / D19) and is not a document table: a source is processed into fixed readable
