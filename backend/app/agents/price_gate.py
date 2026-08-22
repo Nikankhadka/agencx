@@ -24,9 +24,12 @@ from langgraph.config import get_stream_writer
 from app.agents.state import AgentState
 from app.pricing.validation_gate import validate
 
+# C-5: a handoff on one price is not the end of the conversation. Names what
+# is being checked, and says plainly that everything else still works.
 GATE_ESCALATION_MESSAGE = (
-    "I couldn't put together a reliable answer on pricing, so I'm handing "
-    "this to a human who can. They'll pick it up from here."
+    "I don't want to guess at a price, so I've asked someone from the business "
+    "to confirm that one and come back to you. Anything else I can help with in "
+    "the meantime?"
 )
 
 

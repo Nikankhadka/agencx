@@ -81,9 +81,10 @@ async def chat(
             (_sse(event) async for event in events), media_type="text/event-stream"
         )
 
-    # T-020: escalation is terminal - an already-escalated conversation never
-    # gets another agent turn (the customer's message above is still kept,
-    # so the transcript is complete for whoever picks it up on Surface 2).
+    # T-020/C-5: a limit stop is terminal - such a conversation never gets
+    # another agent turn (the customer's message above is still kept, so the
+    # transcript is complete for whoever picks it up on Surface 2). Agent and
+    # guardrail handoffs no longer write this status, so they never land here.
     if already_escalated:
         return _wrap(controller.stream_escalated_response(conversation_id=conversation_id))
 

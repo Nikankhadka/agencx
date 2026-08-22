@@ -79,9 +79,14 @@ async def resolve_conversation(
 async def record_limit_escalation(
     *, tenant_id: UUID, conversation_id: UUID, reason: str, message: str
 ) -> None:
-    """T-028: a tenant hit a cap - record the escalation (same terminal
-    machinery as escalation.py, deduped by 0011's partial unique index) and
-    persist the graceful handoff as the assistant message. No graph runs."""
+    """T-028: a tenant hit a cap - record the escalation (deduped by 0011's
+    partial unique index) and persist the graceful handoff as the assistant
+    message. No graph runs.
+
+    C-5 left this the *only* writer of ``conversations.status = 'escalated'``.
+    A cap is a hard stop by design: the chat really does end, the composer
+    locks, and that is the behaviour being paid for. Every agent-side handoff
+    now keeps the conversation open instead."""
     async with db.tenant_context(tenant_id, "customer") as conn:
         await conn.execute(
             "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "

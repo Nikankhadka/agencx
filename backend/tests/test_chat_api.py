@@ -264,9 +264,14 @@ async def test_chat_suspended_tenant_is_404(
 async def test_chat_blocks_agent_turn_on_already_escalated_conversation(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """T-020: escalation is terminal - no agent turn runs (the graph is
-    never invoked) once a conversation is escalated, but the customer's
-    message is still persisted so the transcript stays complete."""
+    """T-020/C-5: a conversation stopped by a tenant limit is terminal - no
+    agent turn runs (the graph is never invoked), but the customer's message is
+    still persisted so the transcript stays complete.
+
+    Since C-5 the 'escalated' status is written only by
+    ``record_limit_escalation``, so this seeded row stands for a budget or cap
+    stop. An agent or guardrail handoff leaves the status 'open' and is covered
+    in test_escalation_agent.py."""
     slug = f"chat-{uuid.uuid4().hex[:8]}"
     tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
     conversation_id: uuid.UUID = await superuser_conn.fetchval(

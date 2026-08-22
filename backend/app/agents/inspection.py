@@ -7,8 +7,10 @@ event and only flushes once this node signals it's safe to (see
 ``app/api/chat.py``'s buffering loop). A failing draft gets exactly one
 redraft of the producing specialist with the verdict's reasons folded in;
 a second failure escalates (reason ``inspection:<check>``), reusing
-escalation.py's existing terminal machinery unchanged - the same
-retry-once-then-escalate shape as T-018's price_gate.py.
+escalation.py's machinery unchanged - the same retry-once-then-escalate
+shape as T-018's price_gate.py. Since C-5 that escalation records a handoff
+without ending the conversation; nothing about when this node escalates
+changed, only what happens afterwards.
 
 Five checks, only two of which are real LLM calls:
 
@@ -52,9 +54,11 @@ from app.agents.state import AgentState, GraphContext
 from app.pricing.validation_gate import validate as validate_price_provenance
 from app.shared import db
 
+# C-5: the conversation continues after this - see app/agents/escalation.py.
 ESCALATION_MESSAGE = (
-    "I wasn't able to put together a reliable answer to that, so I'm handing this "
-    "to a human who can. They'll pick it up from here."
+    "I couldn't put together an answer to that one I'd trust, so I've asked "
+    "someone from the business to follow up with you on it. I'm still here for "
+    "anything else."
 )
 
 logger = logging.getLogger("app.agents.inspection")
@@ -155,9 +159,10 @@ def _provenance_text(state: AgentState) -> str:
 async def run(state: AgentState) -> dict[str, Any]:
     writer = get_stream_writer()
 
-    # Escalation is terminal (T-020) - once set (by price_gate.py, or by
-    # this node's own second failure below), nothing more to inspect. This
-    # branch only fires on the escalation node's revisit (graph.py). Carry
+    # Once the turn has escalated (by price_gate.py, or by this node's own
+    # second failure below) there is nothing left to inspect - the draft is a
+    # handoff constant, not model prose. This branch only fires on the
+    # escalation node's revisit (graph.py). Carry
     # forward any verdicts already recorded (the failing ones that caused
     # the escalation) instead of overwriting them with an all-pass
     # placeholder - they are what chat.py persists for the trace viewer.

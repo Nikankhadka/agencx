@@ -249,18 +249,15 @@ async def _create_escalation_impl(
     conversation_id: UUID,
     reason: str,
 ) -> None:
+    # C-5: records the handoff, does not end the conversation. The status flip
+    # that used to live here is gone from every agent-side path - see
+    # app/agents/escalation.py for why. Only limit escalations still terminate.
     await conn.execute(
         "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
         "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
         tenant_id,
         conversation_id,
         reason,
-    )
-    await conn.execute(
-        "update conversations set status = 'escalated' "
-        "where id = $1 and tenant_id = $2 and status <> 'escalated'",
-        conversation_id,
-        tenant_id,
     )
 
 
@@ -555,7 +552,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             UUID(state["conversation_id"]),
                             ce_args.reason,
                         )
-                        writer({"type": "escalated"})
+                        writer({"type": "handoff"})
                         result_text = _tool_result(
                             spotlight, {"escalated": True, "reason": ce_args.reason}
                         )

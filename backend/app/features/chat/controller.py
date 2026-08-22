@@ -83,10 +83,16 @@ def initial_state(
 
 
 async def stream_escalated_response(*, conversation_id: UUID) -> AsyncIterator[dict[str, object]]:
-    """T-020: an already-escalated conversation is terminal - no agent turn
-    runs, the graph is never invoked. The customer's message is still
+    """T-020/C-5: a conversation stopped by a *limit* is terminal - no agent
+    turn runs, the graph is never invoked. The customer's message is still
     persisted (kept in api.py's resolve_conversation caller) so the transcript
-    stays complete for whoever picks it up on Surface 2."""
+    stays complete for whoever picks it up on Surface 2.
+
+    Since C-5 only ``record_limit_escalation`` writes the ``escalated`` status
+    this path keys off, so only budget/step-cap/turn-budget/provider-error
+    stops reach it. An agent or guardrail handoff leaves the conversation open
+    and streams a non-terminal ``handoff`` event instead - the composer stays
+    live and the next message gets a full turn."""
     yield {"type": "conversation", "conversation_id": str(conversation_id)}
     yield {"type": "escalated"}
     yield {"type": "done"}

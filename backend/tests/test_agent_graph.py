@@ -304,7 +304,9 @@ async def test_escalation_route_sets_escalated_flag(
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
-    assert status == "escalated"
+    # C-5: the handoff is recorded, the conversation is not ended. A tenant
+    # limit stop is the only thing that writes 'escalated' now.
+    assert status == "open"
 
 
 async def test_every_node_is_registered() -> None:
