@@ -79,13 +79,6 @@ test.describe("tenant app shell - three destinations", () => {
     await expect(page.getByRole("button", { name: "Back" })).toHaveCount(0);
   });
 
-  test("the advanced screens are unlinked but still serve (E-2 posture)", async ({
-    page,
-    request,
-  }) => {
-    await loginAsTenantAdmin(page, request, BYTEFIX);
-    await page.goto("/conversations");
-    await expect(page).toHaveURL(/\/conversations$/);
-    await expect(page.getByRole("navigation", { name: "Console" })).toBeVisible();
-  });
+  // The advanced screens' own posture - unlinked but still serving - is E-2's,
+  // and lives in hidden-screens.spec.ts.
 });

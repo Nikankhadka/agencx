@@ -32,9 +32,16 @@ import type { ConversationSummary } from "@/lib/api-schemas";
  * `onboarding.completed` is that signal - the page itself sends a completed
  * owner on to /home.
  *
- * The Wren-era screens (/conversations, /escalations, /pricing, /knowledge)
- * stay mounted and keep working; they are simply not in this list. E-2 owns
- * that posture and its test. Hidden until Stage 2, never deleted.
+ * E-2 - hidden until Stage 2, never deleted. The Wren-era screens
+ * (/conversations with its trace viewer, /escalations, /pricing, /knowledge,
+ * /dashboards) are absent from NAV_ITEMS and from nothing else: their routes,
+ * code and tests all stay, and typing one of their URLs still serves it. They
+ * are working machinery aimed at an operator, and Stage 2 re-lands them with a
+ * purpose - deleting them now would mean rebuilding them later, and stripping
+ * their tests would let them rot in place while looking fine.
+ *
+ * The hiding is therefore this list and nothing more. Anyone re-adding one:
+ * that is a Stage 2 decision, not a nav tidy-up.
  */
 const CHROME_FREE_PREFIXES = ["/onboarding"];
 
