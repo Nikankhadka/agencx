@@ -23,8 +23,13 @@ import {
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 const FOUNDER = DEMO_USERS.find((u) => u.surface === "platform")!;
 
-/** Wren-era operator screens. /dashboards is excluded - T-034 redirects it. */
-const HIDDEN = ["/conversations", "/escalations", "/pricing", "/knowledge"];
+/**
+ * The Wren-era operator screens. /dashboards joined this list in E-3: it used
+ * to redirect, which made it the one hidden screen that had actually stopped
+ * existing - and it holds the eval pass/fail view the keep/pivot/stop signals
+ * live in.
+ */
+const HIDDEN = ["/conversations", "/escalations", "/pricing", "/knowledge", "/dashboards"];
 
 test.describe("advanced screens: hidden, not deleted", () => {
   test.use({ baseURL: `http://${tenantAdminHost()}` });

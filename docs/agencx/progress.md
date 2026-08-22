@@ -116,8 +116,8 @@ open for US-2, the `STATUS_TONE` map.
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
 | Advanced screens hidden, not deleted | BUILT | E-2: `/conversations`, `/escalations`, `/pricing` and `/knowledge` are absent from `NAV_ITEMS` and from nothing else - each still serves when typed, renders inside the shell, and is pinned by `e2e/hidden-screens.spec.ts`, which also holds the platform surface unchanged |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
-| Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
-| Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
+| Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; unlinked from the nav (E-2). **E-3 removed the `/dashboards` redirect**: it was the one hidden screen that had stopped serving, and it holds the eval pass/fail view the keep/pivot/stop signals live in |
+| Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; E-3 verified it against its job and added nothing: `e2e/platform-surface.spec.ts` pins the six columns, the aggregate, the slug-collision refusal, and suspension's effect on the customer's page (the one control whose consequence lands on another surface) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
 | Semantic status colours | BUILT | B-3 US-2: `STATUS_TONE` covers the schema's whole vocabulary plus the tenant-defined order/repair statuses, `pending` moved from neutral to amber, `shipped` stays amber because it is not `delivered`, and `toneForStatus` normalises spelling so one entry answers `in_progress` / `in-progress` / "In Progress". The Chats list's crimson "being handled" dot is documented as the single deliberate exception |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
@@ -179,7 +179,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-4 Home: the greeting and the brief | done | this commit |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR this commit |
 | E-2 Hide advanced screens, keep code | done | this commit |
-| E-3 Platform admin stays minimal | not started | |
+| E-3 Platform admin stays minimal | done | this commit |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |

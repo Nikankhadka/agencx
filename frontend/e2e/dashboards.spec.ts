@@ -4,11 +4,10 @@
  * Surface: tenant-admin (http://app.localhost:3000)
  * Entry point: /dashboards (after login)
  *
- * Dashboards is temporarily hidden: the nav item is removed and /dashboards
- * redirects to /home (next.config.ts redirects(); E-1 repointed it there when
- * Home became the app's landing tab). This spec asserts the redirect and the
- * absent nav link, and stays ready to restore the original cost/eval render
- * assertions when the feature is re-enabled.
+ * Dashboards is hidden the way every advanced screen is hidden (E-2): absent
+ * from the nav, still serving when typed. E-3 removed the redirect that used
+ * to stand in for that - the eval pass/fail view is where the keep/pivot/stop
+ * signals live, and it has to be reachable to be a signal at all.
  */
 
 import { test, expect } from "@playwright/test";
@@ -16,14 +15,16 @@ import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers"
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
-test.describe("tenant dashboards (temporarily hidden)", () => {
+test.describe("tenant dashboards (unlinked, still serving)", () => {
   test.use({ baseURL: `http://${tenantAdminHost()}` });
 
-  test("/dashboards redirects to /home", async ({ page, request }) => {
+  test("/dashboards serves the cost and eval watch", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/dashboards");
-    await page.waitForURL("**/home");
+    await expect(page).toHaveURL(/\/dashboards$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // The eval half is the reason this route may not quietly disappear.
+    await expect(page.getByText(/eval/i).first()).toBeVisible();
   });
 
   test("Dashboards nav link is absent from the console sidebar", async ({ page, request }) => {

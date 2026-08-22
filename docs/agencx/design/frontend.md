@@ -393,7 +393,7 @@ message list, composer pinned bottom. No auth. Share link + QR for distribution.
 |---|---|
 | Resolving tenant | Full-page centered skeleton; no flash of default branding |
 | Unknown slug | Calm 404: "There's no business here." |
-| Suspended tenant | "This assistant is currently unavailable." caption, composer hidden |
+| Suspended tenant | "This page is currently unavailable." caption, composer hidden. Says nothing about why - a customer is not owed the tenant's billing state (PRD 13; the wording also carried "assistant" until B-3's E-3 sweep) |
 | Empty conversation | Tenant-configured greeting as the first assistant bubble; starter chips if configured |
 | Streaming | StreamingText in assistant bubble; TypingIndicator through the failover window (P-5); composer disabled with "answering..." hint; stop button |
 | Citations | CitationChips on grounded sentences |

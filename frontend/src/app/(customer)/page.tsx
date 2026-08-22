@@ -30,7 +30,7 @@ export default async function CustomerHome() {
       <main className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center sm:px-8">
         <h1 className="text-title-2 font-semibold text-text">{displayName}</h1>
         <p className="text-body text-text-secondary">
-          This assistant is currently unavailable.
+          This page is currently unavailable.
         </p>
       </main>
     );
