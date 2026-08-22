@@ -28,11 +28,21 @@ gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat 
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
 the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
-landed except P-5. Chat grounding (`04-chat-grounding.md`) is in progress on
-`feat/knowledge-ingest`: O-4 and O-3 are done, the C tickets are next. O-3 also
-pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5 pulled
-B-3 US-1 forward - the Wren-era `/knowledge` console page leaves the nav but
-stays mounted (E-2's posture, applied early).
+landed except P-5.
+
+**Chat grounding (`04-chat-grounding.md`) is closed** on `feat/money-guardrail`:
+O-3, O-4, then C-1, C-2, C-3, C-5, C-6, C-4. The assistant can now state a price
+the owner published, every reply passes one deterministic figure check, a handoff
+no longer ends the conversation, and staff can take a conversation over and hand
+it back. **C-6 is a ticket added during the build** (founder request, 2026-08-22)
+and is spec'd in the phase file like the rest. Next is `05-business-page.md`
+(E-1/E-2), with P-5 still outstanding from the chat spine.
+
+O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
+pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
+`/chats` and `/chats/[id]` are mounted chrome-free until E-1's tab bar re-homes
+them, and the Wren-era `/conversations` and `/escalations` console pages stay
+mounted for E-2 to hide (E-2's posture, applied early).
 
 O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
@@ -77,9 +87,9 @@ open for US-2, the `STATUS_TONE` map.
 | Deterministic pricing engine | BUILT | `eda876f`; **CHANGING** - engine runs only for quote-enabled tenants (D-1) |
 | Quoting agent | BUILT | `8e6b9e5`; **CHANGING** - optional per-tenant tool, off by default |
 | Order/ticket lookup | BUILT | `ecd2b31`; **CHANGING** - optional per-tenant tool, off by default |
-| Escalation agent + terminal handoff | BUILT | `c10b742`; stays the one tool in the lean default |
+| Escalation agent + handoff | BUILT | `c10b742`; **no longer terminal** - C-5 made a handoff a notification, C-6 added staff takeover/handback (`'human'` status, migration 0020). Only a tenant limit ends a conversation now |
 | Reasoning-inspection layer | BUILT | `e4db924`; stays as the last gate before stream |
-| Money guardrail (price provenance) | BUILT | `7247a1c`; **CHANGING** - C-1..C-4 loosen the allowed set to include figures verbatim in owner material; engine output becomes one of three allowed sources |
+| Money guardrail (price provenance) | BUILT | `7247a1c`; C-1 added owner material as a third allowed source (plus a hedge rule), C-2 put the gate on every route, C-3 added the prompt half, C-4 the 21-case matrix in the absolute gate |
 | Cross-tenant leakage test | BUILT | `e7be3d2`; stays an absolute gate |
 | Spotlight delimiter fence | BUILT | `598f3a7`; stays |
 
@@ -94,7 +104,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
-| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
+| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; **CHANGING** - P-5 adds the failover typing indicator; rebrand (B-1) |
@@ -142,8 +152,12 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | B-1 Copy rename to Agencx | not started | |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
 | B-3 Semantic colour convention + lighter primary | US-1 done (O-5), US-2 not started | |
-| C-1..C-4 Money guardrail allowed-set loosening | not started | |
-| C-5 Non-blocking escalation (chat continues after handoff) | not started | |
+| C-1 Money guardrail: verbatim owner material | done | `bee1775` |
+| C-2 Gate every reply, not just money routes | done | `70a0ea1` |
+| C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
+| C-4 Money guardrail test matrix (absolute gate) | done | `dcd5f59` |
+| C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
+| C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1..E-3 Three screens (Chat + Business + Public) | not started | |
