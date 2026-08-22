@@ -43,8 +43,11 @@ landed. The hamburger drawer is gone, the bottom tab bar below `lg` closes the
 long-standing 375px sidebar squeeze, `/chats` and `/settings` render inside the
 shell, Home greets the owner with what needs them, Business is a hub with its
 Booking page and share link, and the Wren-era operator screens are unlinked
-while still serving and still tested. Next is `06-polish.md` (B-1, B-3, E-3,
-D-2, F-2, G-1), with P-5 still outstanding from the chat spine.
+while still serving and still tested. **`06-polish.md` is closed too** - P-5, B-1, B-3,
+E-3, D-2, F-2 and G-1 all landed. What remains for Stage 1 is `07-hygiene.md`
+(F-1), plus the two findings in Known gaps that want tickets of their own: the
+Google tier's `thought_signature` rejection, and the absent everyday owner
+Copilot.
 
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
