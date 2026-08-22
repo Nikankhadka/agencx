@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.features.auth.api import router as auth_router
+from app.features.business.api import router as business_router
 from app.features.chat.api import router as chat_router
 from app.features.conversations.api import router as conversations_router
 from app.features.dashboards.api import router as dashboards_router
@@ -104,6 +105,7 @@ app.include_router(platform_router)
 app.include_router(public_router)
 app.include_router(onboarding_router)
 app.include_router(knowledge_router)
+app.include_router(business_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(escalations_router)
