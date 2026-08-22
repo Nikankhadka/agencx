@@ -10,7 +10,8 @@ from uuid import UUID
 from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
-from app.agents.drafting import stream_draft
+from app.agents.drafting import MONEY_GUIDANCE, stream_draft
+from app.agents.escalation import HANDOFF_MESSAGE
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ChatMessage
@@ -76,7 +77,8 @@ def _build_knowledge_prompt(
         "Answer the customer's question using ONLY the numbered context below. "
         "Cite every factual claim with its bracket number, e.g. [1]. If the "
         "context doesn't fully answer the question, say what you don't know - "
-        "never invent information.\n\n"
+        "never invent information.\n"
+        f"{MONEY_GUIDANCE}\n\n"
         f"Context:\n{context_block}"
     )
     return prompt + _redraft_note(violations)
@@ -135,12 +137,11 @@ async def run(state: AgentState) -> dict[str, Any]:
     query = state["messages"][-1]["content"]
 
     if state.get("escalated"):
-        handoff = state.get("draft_response")
-        if not handoff:
-            handoff = (
-                "Thanks for your patience - a human will pick this up "
-                "from here and follow up with you."
-            )
+        # One handoff message, defined next to the node that owns handoffs -
+        # this used to hold its own copy of the text and kept the pre-C-5
+        # sign-off after escalation.py had already moved on.
+        handoff = state.get("draft_response") or HANDOFF_MESSAGE
+        if not state.get("draft_response"):
             writer({"type": "refusal", "text": handoff})
         return {"draft_response": handoff, "draft_deterministic": True, "escalated": True}
 

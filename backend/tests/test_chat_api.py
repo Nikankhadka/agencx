@@ -264,9 +264,14 @@ async def test_chat_suspended_tenant_is_404(
 async def test_chat_blocks_agent_turn_on_already_escalated_conversation(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """T-020: escalation is terminal - no agent turn runs (the graph is
-    never invoked) once a conversation is escalated, but the customer's
-    message is still persisted so the transcript stays complete."""
+    """T-020/C-5: a conversation stopped by a tenant limit is terminal - no
+    agent turn runs (the graph is never invoked), but the customer's message is
+    still persisted so the transcript stays complete.
+
+    Since C-5 the 'escalated' status is written only by
+    ``record_limit_escalation``, so this seeded row stands for a budget or cap
+    stop. An agent or guardrail handoff leaves the status 'open' and is covered
+    in test_escalation_agent.py."""
     slug = f"chat-{uuid.uuid4().hex[:8]}"
     tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
     conversation_id: uuid.UUID = await superuser_conn.fetchval(
@@ -514,3 +519,73 @@ async def test_public_messages_after_cursor_returns_only_newer_messages(
     assert response.status_code == 200
     body = response.json()
     assert [m["role"] for m in body] == ["assistant", "human_agent"]
+
+
+# --- C-6: while a human has the conversation -------------------------------
+
+
+async def test_chat_stays_silent_but_open_while_a_human_has_it(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """C-6: the assistant does not talk over the staff member who took over.
+
+    The distinction from a limit stop is the whole point: the message is kept,
+    no agent turn runs, and no terminal event is sent - so the customer's
+    composer stays live and a handback resumes normal turns.
+    """
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id, status) values ($1, 'human') returning id",
+        tenant_id,
+    )
+
+    response = await client.post(
+        "/api/chat",
+        json={"slug": slug, "conversation_id": str(conversation_id), "message": "still there?"},
+    )
+    assert response.status_code == 200
+    types = [event["type"] for event in _parse_sse(response.text)]
+    assert types == ["conversation", "handoff", "done"]
+    assert "escalated" not in types
+
+    kept = await superuser_conn.fetchval(
+        "select count(*) from messages where conversation_id = $1 and role = 'customer'",
+        conversation_id,
+    )
+    assert kept == 1
+    # No agent turn ran, so nothing was drafted.
+    drafted = await superuser_conn.fetchval(
+        "select count(*) from messages where conversation_id = $1 and role = 'assistant'",
+        conversation_id,
+    )
+    assert drafted == 0
+    status = await superuser_conn.fetchval(
+        "select status from conversations where id = $1", conversation_id
+    )
+    assert status == "human"
+
+
+async def test_the_owners_summary_never_reaches_a_customer(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """C-6 exempts the summary from the money guardrail on the grounds that no
+    customer reads it. That only holds if no public endpoint returns it, so it
+    is asserted rather than assumed."""
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    secret = "Catering for 20 on Friday, quoted 480 last time"
+    await superuser_conn.execute(
+        "insert into escalations (tenant_id, conversation_id, reason, summary) "
+        "values ($1, $2, 'customer_request', $3)",
+        tenant_id,
+        conversation_id,
+        secret,
+    )
+
+    transcript = await client.get(f"/api/chat/{conversation_id}/messages?slug={slug}")
+    assert transcript.status_code == 200
+    assert secret not in transcript.text

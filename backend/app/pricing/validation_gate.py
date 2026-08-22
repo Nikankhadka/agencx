@@ -1,18 +1,33 @@
-"""T-018: the price-provenance validation gate (pure logic half).
+"""T-018/C-1: the price-provenance validation gate (pure logic half).
 
 Deterministic - no LLM imports in this module, same rule as the engine.
 ``validate`` extracts every monetary figure from a draft response (currency
 patterns, "N dollars" phrasings, and spelled-out amounts like "twelve
-hundred") and requires each one to reconcile exactly to pricing-engine
-output (unit amounts, line totals, subtotal, tax, total) or to DB-sourced
-provenance (catalog ``price_cents`` the Recommendation Agent fetched). Any
-unmatched figure is a violation - including a customer's own stated budget
-restated by the model, which is deliberate: generated text states no
-amounts at all, the QuoteCard does.
+hundred") and requires each one to reconcile exactly to one of three allowed
+sources: pricing-engine output (unit amounts, line totals, subtotal, tax,
+total), DB-sourced provenance (catalog ``price_cents`` the Recommendation
+Agent fetched), or - C-1 - a figure stated verbatim in the owner's own
+material. Any unmatched figure is a violation, including a customer's own
+stated budget restated by the model.
 
-The graph half (app/agents/price_gate.py) runs this after Quoting and
-Recommendation: one redraft with the violations listed, then escalation
-with reason ``price_provenance``.
+**Why owner material became an allowed source (C-1).** The gate was built for
+the quoting route, where generated text states no amounts at all and the
+QuoteCard does. The lean assistant answers mostly from knowledge, where the
+honest answer IS the figure the owner published - a menu reading "catering
+from $12 a head" must be quotable. Note this is not new policy: the
+trajectory eval has scored figures this way since T-021 ("a knowledge answer
+quoting a real KB price is sourced"), so C-1 makes the runtime gate agree
+with the eval that already judged it.
+
+**Why hedged figures fail anyway.** A figure the model hedged is a figure the
+model chose. "about $40" is not what the menu says; it is a guess that
+happens to land nearby, and it fails even when 4000 is in the allowed set.
+Estimation words only - "from", "starting at" and "up to" are how owners
+write real prices and are deliberately not hedges.
+
+The graph half (app/agents/price_gate.py) runs this after drafting: one
+redraft with the violations listed, then escalation with reason
+``price_provenance``.
 """
 
 from __future__ import annotations
@@ -65,10 +80,36 @@ _NUMBER_WORDS = _UNITS.keys() | _TENS.keys() | _SCALES.keys()
 _WORD_RE = re.compile(r"[a-z]+(?:-[a-z]+)?|\S", re.IGNORECASE)
 
 
+# Estimation words that turn a quoted figure into a guessed one. Matched
+# against the text immediately before a figure; "~" counts. Deliberately
+# absent: "from", "starting at", "up to" - owners write those on real price
+# lists ("catering from $12 a head") and restating them verbatim is exactly
+# what C-1 exists to allow.
+_HEDGE_BEFORE_RE = re.compile(
+    r"(?:\babout|\baround|\broughly|\bapproximately|\bapprox|\bcirca|\bballpark"
+    r"|\bsomewhere\s+(?:around|near)|~)\s*[-:]?\s*$",
+    re.IGNORECASE,
+)
+_HEDGE_AFTER_RE = re.compile(
+    r"^\s*(?:-\s*ish\b|ish\b|or\s+so\b|give\s+or\s+take\b)",
+    re.IGNORECASE,
+)
+
+# How far back a hedge may sit and still attach to the figure. Long enough for
+# "somewhere around $40", short enough that a hedge about something else
+# earlier in the sentence does not poison an exact figure later in it.
+_HEDGE_WINDOW = 24
+
+
 @dataclass(frozen=True)
 class MonetaryFigure:
     raw: str
     cents: int
+    # Offset of ``raw`` in the text it was extracted from, for the hedge
+    # window. Defaults to -1 so any caller constructing one by hand (tests,
+    # and the O-3 structuring guard, which only ever reads ``cents``) stays
+    # valid; a figure with no position is simply never treated as hedged.
+    start: int = -1
 
 
 def _to_cents(whole: str, fraction: str | None) -> int:
@@ -134,18 +175,30 @@ def _spelled_figures(text: str) -> list[MonetaryFigure]:
                 else (tokens[i - 1][1] + len(tokens[i - 1][0]))
             )
             figures.append(
-                MonetaryFigure(raw=text[raw_start:raw_end], cents=_word_value(run) * 100)
+                MonetaryFigure(
+                    raw=text[raw_start:raw_end],
+                    cents=_word_value(run) * 100,
+                    start=raw_start,
+                )
             )
     return figures
 
 
 def extract_monetary_figures(text: str) -> list[MonetaryFigure]:
     figures = [
-        MonetaryFigure(raw=match.group(0), cents=_to_cents(match.group(1), match.group(2)))
+        MonetaryFigure(
+            raw=match.group(0),
+            cents=_to_cents(match.group(1), match.group(2)),
+            start=match.start(),
+        )
         for match in _CURRENCY_RE.finditer(text)
     ]
     figures += [
-        MonetaryFigure(raw=match.group(0), cents=_to_cents(match.group(1), match.group(2)))
+        MonetaryFigure(
+            raw=match.group(0),
+            cents=_to_cents(match.group(1), match.group(2)),
+            start=match.start(),
+        )
         for match in _DOLLARS_WORD_RE.finditer(text)
         # "$120 dollars" would double-report; the currency regex already got it.
         if not any(match.group(1) in figure.raw for figure in figures)
@@ -154,8 +207,33 @@ def extract_monetary_figures(text: str) -> list[MonetaryFigure]:
     return figures
 
 
-def allowed_cents(engine_quote: dict[str, Any] | None, provenance: Iterable[int]) -> set[int]:
+def is_hedged(text: str, figure: MonetaryFigure) -> bool:
+    """Was this figure estimated rather than quoted?
+
+    Reads the text around the figure's own position, so "the platter is $40
+    and delivery is about $12" hedges only the second one.
+    """
+    if figure.start < 0:
+        return False
+    before = text[max(0, figure.start - _HEDGE_WINDOW) : figure.start]
+    after = text[figure.start + len(figure.raw) :]
+    return bool(_HEDGE_BEFORE_RE.search(before) or _HEDGE_AFTER_RE.match(after))
+
+
+def allowed_cents(
+    engine_quote: dict[str, Any] | None,
+    provenance: Iterable[int],
+    material: Iterable[str] = (),
+) -> set[int]:
+    """Every amount a draft is allowed to state, in integer cents.
+
+    ``material`` is the owner's own text - retrieved chunks, the profile the
+    interview captured - run through the same tokenizer as the draft, which is
+    what makes "$12" / "12 dollars" / "12.00" one another's equals for free.
+    """
     allowed = set(provenance)
+    for text in material:
+        allowed |= {figure.cents for figure in extract_monetary_figures(text)}
     if engine_quote is not None:
         for item in engine_quote.get("line_items", []):
             allowed.add(int(item["unit_amount_cents"]))
@@ -170,12 +248,21 @@ def validate(
     draft_response: str,
     engine_quote: dict[str, Any] | None,
     provenance: Iterable[int] = (),
+    material: Iterable[str] = (),
 ) -> list[str]:
     """Empty list = ok. Each violation names the offending figure so the
     producing node can be re-prompted with it."""
-    allowed = allowed_cents(engine_quote, provenance)
-    return [
-        f"'{figure.raw}' does not reconcile to any engine-computed or database-sourced amount"
-        for figure in extract_monetary_figures(draft_response)
-        if figure.cents not in allowed
-    ]
+    allowed = allowed_cents(engine_quote, provenance, material)
+    violations: list[str] = []
+    for figure in extract_monetary_figures(draft_response):
+        if is_hedged(draft_response, figure):
+            violations.append(
+                f"'{figure.raw}' is hedged - state a figure exactly as the material "
+                "states it, or do not state one"
+            )
+        elif figure.cents not in allowed:
+            violations.append(
+                f"'{figure.raw}' does not reconcile to any engine-computed, "
+                "database-sourced, or owner-stated amount"
+            )
+    return violations

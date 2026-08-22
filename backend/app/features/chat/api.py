@@ -63,7 +63,7 @@ async def chat(
     try:
         (
             conversation_id,
-            already_escalated,
+            status_now,
             limits,
             over_budget,
         ) = await service.resolve_conversation(
@@ -81,11 +81,19 @@ async def chat(
             (_sse(event) async for event in events), media_type="text/event-stream"
         )
 
-    # T-020: escalation is terminal - an already-escalated conversation never
-    # gets another agent turn (the customer's message above is still kept,
-    # so the transcript is complete for whoever picks it up on Surface 2).
-    if already_escalated:
+    # T-020/C-5: a limit stop is terminal - such a conversation never gets
+    # another agent turn (the customer's message above is still kept, so the
+    # transcript is complete for whoever picks it up on Surface 2). Agent and
+    # guardrail handoffs no longer write this status, so they never land here.
+    if status_now == "escalated":
         return _wrap(controller.stream_escalated_response(conversation_id=conversation_id))
+
+    # C-6: a staff member is answering this conversation. The message is kept
+    # (above) and reaches them in the Chats thread; the assistant stays quiet
+    # rather than talking over the human who took it. Not terminal - a handback
+    # returns the conversation to 'open' and the next turn runs normally.
+    if status_now == "human":
+        return _wrap(controller.stream_human_handled(conversation_id=conversation_id))
 
     # T-028: over the daily budget - graceful handoff, graph never invoked.
     if over_budget:

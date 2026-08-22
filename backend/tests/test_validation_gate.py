@@ -108,6 +108,90 @@ def test_customer_budget_restated_is_a_violation() -> None:
     assert validate("That's over your $125 budget.", _ENGINE_QUOTE) != []
 
 
+# --- C-1: owner material as an allowed source --------------------------------
+
+_MENU = "Shawarma plate $16. Catering box, feeds 15, from $285. Delivery 35 dollars."
+
+
+def test_figure_verbatim_in_owner_material_passes() -> None:
+    assert validate("The shawarma plate is $16.", None, material=[_MENU]) == []
+
+
+def test_from_price_is_not_a_hedge() -> None:
+    """The ticket's own example: a menu reading "from $285" must be quotable."""
+    assert validate("Catering starts from $285 for 15 people.", None, material=[_MENU]) == []
+
+
+def test_cents_normalized_equivalence_across_phrasings() -> None:
+    assert validate("Delivery is $35.", None, material=[_MENU]) == []
+    assert validate("Delivery is $35.00.", None, material=[_MENU]) == []
+    assert validate("Delivery is 35 dollars.", None, material=[_MENU]) == []
+
+
+def test_figure_absent_from_owner_material_is_a_violation() -> None:
+    assert validate("The shawarma plate is $18.", None, material=[_MENU]) != []
+
+
+def test_model_computed_total_is_a_violation() -> None:
+    """$16 and $35 are both in the material; their sum is the model's own."""
+    violations = validate("Plate plus delivery comes to $51.", None, material=[_MENU])
+    assert len(violations) == 1
+    assert "$51" in violations[0]
+
+
+def test_figure_from_another_tenants_material_is_a_violation() -> None:
+    assert validate("That's $16.", None, material=["Haircut $45. Beard trim $25."]) != []
+
+
+def test_material_does_not_widen_the_engine_path() -> None:
+    """C-1 adds a source; it does not relax the ones already there."""
+    assert validate("I can do it for $99!", _ENGINE_QUOTE, material=[_MENU]) != []
+    assert validate("That's $120.00, $9.60 tax, $129.60 total.", _ENGINE_QUOTE) == []
+
+
+# --- C-1: hedged figures fail even when the number is allowed ----------------
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "It's about $16.",
+        "It's around $16.",
+        "Roughly $16.",
+        "Approximately $16.",
+        "Somewhere around $16.",
+        "It's ~$16.",
+        "It's $16-ish.",
+        "It's $16 or so.",
+    ],
+)
+def test_hedged_figure_fails_even_when_the_amount_is_allowed(draft: str) -> None:
+    violations = validate(draft, None, material=[_MENU])
+    assert len(violations) == 1
+    assert "hedged" in violations[0]
+
+
+def test_hedged_engine_figure_also_fails() -> None:
+    """The engine is exact - hedging its output is the model editorializing."""
+    assert validate("That's about $129.60 all in.", _ENGINE_QUOTE) != []
+
+
+def test_spelled_hedge_fails() -> None:
+    assert validate("Roughly twelve hundred.", None, material=["The package is $1200."]) != []
+
+
+def test_hedge_attaches_only_to_its_own_figure() -> None:
+    draft = "The plate is $16 and delivery is about $35."
+    violations = validate(draft, None, material=[_MENU])
+    assert len(violations) == 1
+    assert "$35" in violations[0]
+
+
+def test_owner_profile_text_counts_as_material() -> None:
+    profile = "Services offered: mobile screen repair, from $89 callout"
+    assert validate("Callout starts from $89.", None, material=[profile]) == []
+
+
 # --- API-layer half: no request schema accepts money -------------------------
 
 

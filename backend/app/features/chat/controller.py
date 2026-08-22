@@ -40,6 +40,7 @@ from app.shared.limits import (
     BUDGET_ESCALATION_REASON,
     BUDGET_UNAVAILABLE_MESSAGE,
     PROVIDER_ERROR_ESCALATION_REASON,
+    PROVIDER_UNAVAILABLE_MESSAGE,
     STEP_CAP_ESCALATION_REASON,
     TURN_BUDGET_ESCALATION_REASON,
     TenantLimits,
@@ -83,12 +84,34 @@ def initial_state(
 
 
 async def stream_escalated_response(*, conversation_id: UUID) -> AsyncIterator[dict[str, object]]:
-    """T-020: an already-escalated conversation is terminal - no agent turn
-    runs, the graph is never invoked. The customer's message is still
+    """T-020/C-5: a conversation stopped by a *limit* is terminal - no agent
+    turn runs, the graph is never invoked. The customer's message is still
     persisted (kept in api.py's resolve_conversation caller) so the transcript
-    stays complete for whoever picks it up on Surface 2."""
+    stays complete for whoever picks it up on Surface 2.
+
+    Since C-5 only ``record_limit_escalation`` writes the ``escalated`` status
+    this path keys off, so only budget/step-cap/turn-budget/provider-error
+    stops reach it. An agent or guardrail handoff leaves the conversation open
+    and streams a non-terminal ``handoff`` event instead - the composer stays
+    live and the next message gets a full turn."""
     yield {"type": "conversation", "conversation_id": str(conversation_id)}
     yield {"type": "escalated"}
+    yield {"type": "done"}
+
+
+async def stream_human_handled(*, conversation_id: UUID) -> AsyncIterator[dict[str, object]]:
+    """C-6: a staff member is answering this conversation, so the assistant
+    says nothing rather than talking over them.
+
+    Deliberately not the escalated stream: no terminal event, so the customer's
+    composer stays live. Their message was already persisted by
+    ``resolve_conversation`` and reaches the owner in the Chats thread; the
+    reply comes back as a ``human_agent`` message through the transcript poll.
+    A handback returns the conversation to 'open' and the next turn runs
+    normally.
+    """
+    yield {"type": "conversation", "conversation_id": str(conversation_id)}
+    yield {"type": "handoff"}
     yield {"type": "done"}
 
 
@@ -297,12 +320,18 @@ async def stream_chat_response(
         # stream ended with no terminal event and the customer's chat bubble
         # span forever, which reads as infinite latency. Escalate like any
         # other dead end so the turn always terminates.
-        logger.exception("chat turn failed mid-stream; escalating")
+        logger.exception("chat turn failed mid-stream; handing off")
+        # Non-terminal, unlike the three cap paths above. A provider falling
+        # over is not a limit the tenant hit - it is a transient upstream fault
+        # the customer had no part in, and ending their conversation over one
+        # is the dead end C-5 removed everywhere else. The owner still gets the
+        # queue item; the customer can just ask again.
         await service.record_limit_escalation(
             tenant_id=tenant_id,
             conversation_id=conversation_id,
             reason=PROVIDER_ERROR_ESCALATION_REASON,
-            message=BUDGET_UNAVAILABLE_MESSAGE,
+            message=PROVIDER_UNAVAILABLE_MESSAGE,
+            terminal=False,
         )
         # The failed turn still burned tokens before it died; they belong in
         # cost_logs for the same reason the step-cap path records its own.
@@ -310,8 +339,8 @@ async def stream_chat_response(
             await service.record_turn_costs(
                 tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
             )
-        yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
-        yield {"type": "escalated"}
+        yield {"type": "refusal", "text": PROVIDER_UNAVAILABLE_MESSAGE}
+        yield {"type": "handoff"}
         yield {"type": "done"}
         return
 

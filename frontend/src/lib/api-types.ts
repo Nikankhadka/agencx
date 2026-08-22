@@ -495,6 +495,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversations/{conversation_id}/takeover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Over Conversation
+         * @description C-6: the staff member is the voice now; the assistant stays silent until
+         *     handed back. Available on any conversation, not only a flagged one - a
+         *     business steps into its own conversations whenever it wants to.
+         */
+        post: operations["take_over_conversation_api_conversations__conversation_id__takeover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations/{conversation_id}/handback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand Back Conversation
+         * @description C-6: the assistant resumes. The takeover interlude stays in the history,
+         *     so its next turn reads what the human said rather than contradicting it.
+         */
+        post: operations["hand_back_conversation_api_conversations__conversation_id__handback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations/{conversation_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply As Human
+         * @description C-6: a staff member's own words into the customer's open chat, picked up
+         *     by the transcript poll C-5 left running.
+         *
+         *     Requires the conversation to be taken over first: replying underneath a
+         *     live assistant would put two voices in one thread, each unaware of the
+         *     other mid-turn.
+         */
+        post: operations["reply_as_human_api_conversations__conversation_id__reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/escalations": {
         parameters: {
             query?: never;
@@ -763,6 +831,17 @@ export interface components {
             created_at: string;
             /** Message Count */
             message_count: number;
+            /**
+             * Needs Attention
+             * @default false
+             */
+            needs_attention: boolean;
+            /** Pending Summary */
+            pending_summary?: string | null;
+            /** Last Message */
+            last_message?: string | null;
+            /** Last Activity At */
+            last_activity_at?: string | null;
         };
         /** CostDashboard */
         CostDashboard: {
@@ -828,6 +907,8 @@ export interface components {
             conversation_id: string;
             /** Reason */
             reason: string;
+            /** Summary */
+            summary?: string | null;
             /** Status */
             status: string;
             /**
@@ -878,6 +959,11 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HumanReplyRequest */
+        HumanReplyRequest: {
+            /** Message */
+            message: string;
         };
         /** InputSpec */
         InputSpec: {
@@ -2079,7 +2165,7 @@ export interface operations {
     list_conversations_api_conversations_get: {
         parameters: {
             query?: {
-                status?: ("open" | "escalated" | "closed") | null;
+                status?: ("open" | "human" | "escalated" | "closed") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -2128,6 +2214,97 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConversationDetail"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_over_conversation_api_conversations__conversation_id__takeover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hand_back_conversation_api_conversations__conversation_id__handback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reply_as_human_api_conversations__conversation_id__reply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HumanReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

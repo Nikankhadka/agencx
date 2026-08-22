@@ -212,7 +212,8 @@ def test_recommendation_price_provenance_is_allowed() -> None:
 def test_expected_min_steps_and_efficiency() -> None:
     assert expected_min_steps(["knowledge"]) == 3
     assert expected_min_steps(["quoting"]) == 4
-    assert expected_min_steps(["order_status", "quoting"]) == 3  # min over any-of routes
+    # min over any-of routes: knowledge is the cheap one (P-3 skips its draft)
+    assert expected_min_steps(["knowledge", "quoting"]) == 3
     assert step_efficiency(4, 4) == 1.0
     assert step_efficiency(8, 4) == 0.5
     assert step_efficiency(3, 4) == 1.0  # never rewards impossible undercounts above 1.0
@@ -367,6 +368,7 @@ async def test_run_case_captures_steps_lookup_and_terminal_state(
         assert [step.node for step in trajectory.steps] == [
             "agent",
             "draft",
+            "price_gate",
             "inspection",
         ]
         assert trajectory.final_state["lookup"] == {

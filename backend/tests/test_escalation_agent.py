@@ -82,9 +82,10 @@ def _escalation_provider(*, reason: str) -> ToolAwareFakeProvider:
     )
 
 
-async def test_escalation_creates_row_and_flips_conversation_status(
+async def test_escalation_records_the_handoff_and_leaves_the_chat_open(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
+    """C-5's core claim: escalating notifies a human without ending the chat."""
     tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
     graph = build_graph()
     context = GraphContext(
@@ -97,7 +98,10 @@ async def test_escalation_creates_row_and_flips_conversation_status(
         _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
     )
     assert final_state["escalated"] is True
-    assert "a human will pick this up" in final_state["draft_response"].lower()
+    handoff = final_state["draft_response"].lower()
+    # Names the handoff and keeps the door open - never a sign-off.
+    assert "asked someone from the business" in handoff
+    assert "anything else" in handoff
     escalation_row = await superuser_conn.fetchrow(
         "select reason, status from escalations where conversation_id = $1", conversation_id
     )
@@ -107,7 +111,7 @@ async def test_escalation_creates_row_and_flips_conversation_status(
     conversation_status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
-    assert conversation_status == "escalated"
+    assert conversation_status == "open"
 
 
 async def test_escalation_is_scoped_to_its_own_tenant(
@@ -162,4 +166,79 @@ async def test_concurrent_escalations_on_same_conversation_do_not_duplicate(
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
-    assert status == "escalated"
+    assert status == "open"
+
+
+# --- C-5: what happens *after* a handoff ------------------------------------
+
+
+async def test_the_conversation_keeps_working_after_a_handoff(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Escalate, then ask something else on the same conversation and get a
+    real answer.
+
+    This is the failure C-5 exists to remove: one unanswerable question used to
+    end a session that was working fine for everything else.
+    """
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+
+    await graph.ainvoke(
+        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id),
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=_escalation_provider(reason="customer_request"),
+            embedder=ZeroEmbedder(),
+            reranker=NoopReranker(),
+        ),
+    )
+
+    follow_up = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    follow_up["messages"] = [{"role": "customer", "content": "what are your hours?"}]
+    second_state = await graph.ainvoke(
+        follow_up,
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=ToolAwareFakeProvider(
+                tool_call_sequence=[ToolTurn(text="We're open 9 to 5.", tool_calls=[])],
+                stream_text="We're open 9 to 5.",
+                extract_route="conversation",
+            ),
+            embedder=ZeroEmbedder(),
+            reranker=NoopReranker(),
+        ),
+    )
+
+    assert second_state["escalated"] is False
+    assert second_state["draft_response"] == "We're open 9 to 5."
+    assert (
+        await superuser_conn.fetchval(
+            "select status from conversations where id = $1", conversation_id
+        )
+        == "open"
+    )
+
+
+async def test_a_second_handoff_does_not_queue_a_duplicate_for_the_owner(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The chat continues, so it may hand off again - the owner should still
+    see one open item, not one per attempt."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    for reason in ("customer_request", "customer_request_again"):
+        await graph.ainvoke(
+            _initial_state(tenant_id=tenant_id, conversation_id=conversation_id),
+            context=GraphContext(
+                tenant_id=tenant_id,
+                provider=_escalation_provider(reason=reason),
+                embedder=ZeroEmbedder(),
+                reranker=NoopReranker(),
+            ),
+        )
+    open_rows = await superuser_conn.fetchval(
+        "select count(*) from escalations where conversation_id = $1 and status = 'open'",
+        conversation_id,
+    )
+    assert open_rows == 1

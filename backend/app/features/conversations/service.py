@@ -20,14 +20,35 @@ async def list_conversations(
     *, tenant_id: str, status_filter: str | None, limit: int, offset: int
 ) -> list[dict[str, Any]]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        # C-6 adds the three things the owner's Chats list reads at a glance:
+        # whether a human is wanted (an open escalation), what it is about
+        # (that escalation's summary), and the last thing said. All three are
+        # correlated subqueries against the row being listed rather than a join
+        # + group-by, which keeps one row per conversation without the list
+        # having to de-duplicate anything.
         rows = await conn.fetch(
             "select c.id, c.customer_ref, c.status, c.created_at, "
             "  (select count(*) from messages m "
             "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system') "
-            "   as message_count "
+            "   as message_count, "
+            "  (select e.summary from escalations e "
+            "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved' "
+            "   order by e.created_at desc limit 1) as pending_summary, "
+            "  exists (select 1 from escalations e "
+            "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved') "
+            "   as needs_attention, "
+            "  (select m.content from messages m "
+            "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system' "
+            "   order by m.created_at desc, m.id desc limit 1) as last_message, "
+            "  (select m.created_at from messages m "
+            "   where m.tenant_id = $1 and m.conversation_id = c.id "
+            "   order by m.created_at desc, m.id desc limit 1) as last_activity_at "
             "from conversations c "
             "where c.tenant_id = $1 and ($2::text is null or c.status = $2) "
-            "order by c.created_at desc "
+            # Ordered by the stamp the row actually shows. Nulls last puts a
+            # conversation with nothing said in it at the bottom, which is
+            # where an empty thread belongs.
+            "order by last_activity_at desc nulls last, c.created_at desc "
             "limit $3 offset $4",
             tenant_id,
             status_filter,

@@ -38,6 +38,7 @@ from langgraph.runtime import get_runtime
 from pydantic import BaseModel, Field
 
 from app.agents.draft_node import citation_source
+from app.agents.drafting import MONEY_GUIDANCE
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
@@ -70,7 +71,11 @@ _TOOL_GUIDANCE = (
     "- create_escalation: hand off to a human when you cannot help confidently\n"
     "If the customer is just greeting, saying thanks, or asking what you can do, "
     "respond directly without calling any tool. If you are unsure or the message "
-    "is unclear, escalate."
+    "is unclear, escalate.\n"
+    "If the customer asks to speak to a person, call create_escalation straight "
+    "away - do not try to talk them out of it. Tell them someone from the "
+    "business has been notified, and carry on helping with anything else they "
+    "ask in the meantime."
 )
 
 # The customer bubble renders plain text with citation chips - it does not parse
@@ -140,6 +145,17 @@ class _LookupOrderArgs(BaseModel):
 
 class _CreateEscalationArgs(BaseModel):
     reason: str = Field(description="Why this needs human attention")
+    # C-6: what the owner reads in their Chats list instead of a reason code.
+    # Captured in the tool call the model is already making - no extra call,
+    # no second prompt pass. Optional so an older/edge model that omits it
+    # still escalates; the row falls back to ``reason``.
+    summary: str = Field(
+        default="",
+        description=(
+            "One plain line of what the customer wants, for the business owner "
+            "to read - e.g. 'Catering for 20 on Friday, wants a price'"
+        ),
+    )
 
 
 async def _search_knowledge_impl(
@@ -247,19 +263,19 @@ async def _create_escalation_impl(
     tenant_id: UUID,
     conversation_id: UUID,
     reason: str,
+    summary: str = "",
 ) -> None:
+    # C-5: records the handoff, does not end the conversation. The status flip
+    # that used to live here is gone from every agent-side path - see
+    # app/agents/escalation.py for why. Only limit escalations still terminate.
     await conn.execute(
-        "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
+        "insert into escalations (tenant_id, conversation_id, reason, summary) "
+        "values ($1, $2, $3, $4) "
         "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
         tenant_id,
         conversation_id,
         reason,
-    )
-    await conn.execute(
-        "update conversations set status = 'escalated' "
-        "where id = $1 and tenant_id = $2 and status <> 'escalated'",
-        conversation_id,
-        tenant_id,
+        summary or None,
     )
 
 
@@ -296,6 +312,9 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
         parts.append(f"Business facts the owner gave you:\n{profile}")
     parts.append(_TOOL_GUIDANCE)
     parts.append(_STYLE_GUIDANCE)
+    # Unconditional: a figure can appear in any answer, on any path, whether or
+    # not the corpus made it into this turn's prompt.
+    parts.append(MONEY_GUIDANCE)
     if package.fast_path and package.chunks:
         parts.append(_FAST_PATH_GUIDANCE)
         parts.append(
@@ -550,8 +569,9 @@ async def run(state: AgentState) -> dict[str, Any]:
                             ctx.tenant_id,
                             UUID(state["conversation_id"]),
                             ce_args.reason,
+                            ce_args.summary,
                         )
-                        writer({"type": "escalated"})
+                        writer({"type": "handoff"})
                         result_text = _tool_result(
                             spotlight, {"escalated": True, "reason": ce_args.reason}
                         )
@@ -676,6 +696,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "selections": selections,
             "engine_quote": engine_quote,
             "lookup": lookup_result,
+            "owner_material": package.profile_text(),
         }
 
     if route == "knowledge" and not retrieved_chunks:
@@ -694,4 +715,5 @@ async def run(state: AgentState) -> dict[str, Any]:
         "selections": selections,
         "engine_quote": engine_quote,
         "lookup": lookup_result,
+        "owner_material": package.profile_text(),
     }

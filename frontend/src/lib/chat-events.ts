@@ -29,6 +29,20 @@ export type ChatStreamEvent =
   | { type: "redraft" }
   | { type: "token"; text: string }
   | { type: "refusal"; text: string }
+  /**
+   * The assistant handed a topic to a human (C-5). The conversation is still
+   * open: the composer stays live and the next message gets a full agent turn.
+   * The customer only needs a human's reply to be able to arrive, so this
+   * starts the transcript poll and nothing else.
+   */
+  | { type: "handoff" }
+  /**
+   * The conversation is over - a tenant limit stopped it (daily budget, step
+   * cap, turn budget, provider failure). This is the only terminal event, and
+   * the only one that locks the composer. Before C-5 the assistant emitted it
+   * for ordinary handoffs too, which ended a working session over one question
+   * it could not answer.
+   */
   | { type: "escalated" }
   | { type: "done" };
 

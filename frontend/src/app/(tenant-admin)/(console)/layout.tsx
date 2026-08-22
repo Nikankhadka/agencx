@@ -35,11 +35,18 @@ import { apiFetch } from "@/lib/api";
  * runs for them - only the chrome is dropped. E-1 re-homes all of this inside
  * the two-tab shell.
  */
-const CHROME_FREE_PREFIXES = ["/onboarding", "/settings"];
+// Screens ported from the prototype, which has no nav chrome of its own until
+// E-1's bottom tab bar lands - each carries the prototype's `.dst-topbar` back
+// control instead. Prefix match, so `/chats/<id>` is covered by `/chats`.
+const CHROME_FREE_PREFIXES = ["/onboarding", "/settings", "/chats"];
 const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
   { href: "/onboarding", label: "Onboarding", icon: "rocket_launch" },
   { href: "/settings", label: "Settings", icon: "settings" },
-  { href: "/conversations", label: "Conversations", icon: "forum" },
+  { href: "/chats", label: "Chats", icon: "forum" },
+  // The Wren-era trace viewer. E-2 hides it; until then it keeps its place and
+  // an icon that reads as records rather than as conversation, since Chats is
+  // now what an owner means by that.
+  { href: "/conversations", label: "Conversations", icon: "folder_open" },
   { href: "/escalations", label: "Escalations", icon: "support_agent" },
   { href: "/pricing", label: "Pricing", icon: "sell" },
 ];

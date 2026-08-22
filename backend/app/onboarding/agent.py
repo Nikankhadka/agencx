@@ -63,12 +63,18 @@ _COPILOT = (
     "meta questions in one line, then gently return to onboarding."
 )
 
+# C-3: a figure the extractor rounds into the profile becomes a figure the
+# customer-facing money gate will bless forever - the profile is one of its
+# three allowed sources (C-1). So the copy-it-exactly rule belongs here too,
+# not only on the customer side.
 _EXTRACT_PROMPT = (
     "You are extracting business information from a small-business owner who is "
     "onboarding their assistant. Read the conversation and update the profile "
     "with anything new the owner stated: name, business_name, business_type, "
     "headcount, hours, services, contact. Fill only what the owner actually "
-    "said - never invent a value. If the message is off-topic (a question about "
+    "said - never invent a value. Copy any price or other amount exactly as the "
+    "owner wrote it: never round it, convert it, tidy it up, or work one out. "
+    "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false and set next_question "
     "to the single most important question to ask next, given what is still "
@@ -175,7 +181,9 @@ _URL_EXTRACT_PROMPT = (
     "owner just linked during onboarding. Read the page text and fill any of "
     "these fields the page states: business_name, business_type, services, "
     "hours. Fill only what the page actually says - never invent a value, and "
-    "leave a field empty when the page does not mention it. Set off_topic=false."
+    "leave a field empty when the page does not mention it. Copy any price or "
+    "other amount exactly as the page states it: never round it, convert it, or "
+    "work one out. Set off_topic=false."
 )
 
 # O-3: the fields a homepage reliably states, read back to the owner for

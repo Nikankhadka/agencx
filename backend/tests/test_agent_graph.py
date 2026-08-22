@@ -4,6 +4,7 @@ right node sequence runs (agent -> draft -> [price_gate] -> inspection).
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -167,14 +168,122 @@ async def test_forced_route_runs_agent_draft_inspection(
     order = await _run_and_collect_node_order(
         route, tenant_id=tenant_id, conversation_id=conversation_id
     )
-    if route in ("recommendation", "quoting"):
-        assert order == ["agent", "draft", "price_gate", "inspection"]
-    elif route == "conversation":
+    # C-2: every route traverses price_gate, not only the money ones. A draft
+    # with no figures leaves it in a regex sweep, and a deterministic draft
+    # (order_status, escalation) short-circuits inside the node.
+    if route == "conversation":
         # P-3: no tool call means the agent already wrote the answer, so the
         # draft node is skipped - one LLM call, then the gates.
-        assert order == ["agent", "inspection"]
+        assert order == ["agent", "price_gate", "inspection"]
     else:
-        assert order == ["agent", "draft", "inspection"]
+        assert order == ["agent", "draft", "price_gate", "inspection"]
+
+
+# --- C-2: the money gate covers the answer path, not just the money routes ---
+
+
+async def _seed_tenant_with_priced_profile(
+    conn: asyncpg.Connection[Any],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """A tenant whose owner typed a price into the interview profile.
+
+    The profile is prompt material but never a retrieved chunk, so this also
+    covers C-1's ``owner_material`` wiring end to end.
+    """
+    tenant_id: uuid.UUID = await conn.fetchval(
+        "insert into tenants (slug, name) values ($1, 'Gate Coverage Co') returning id",
+        f"coverage-{uuid.uuid4().hex[:8]}",
+    )
+    await conn.execute(
+        "insert into tenant_config (tenant_id, config) values ($1, $2)",
+        tenant_id,
+        json.dumps({"profile": {"services": "Screen repair, $89 flat"}}),
+    )
+    conversation_id: uuid.UUID = await conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    return tenant_id, conversation_id
+
+
+async def _answer_directly(
+    draft: str,
+    *,
+    redraft: str,
+    tenant_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+) -> dict[str, Any]:
+    """One direct answer (no tool call), with ``redraft`` ready if the gate
+    sends it back."""
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[ToolTurn(text=draft, tool_calls=[])],
+        stream_text=redraft,
+        extract_route="conversation",
+    )
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=provider,
+        embedder=ZeroEmbedder(),
+        reranker=FakeReranker(),
+    )
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    return await graph.ainvoke(initial_state, context=context)
+
+
+async def test_figure_from_the_owner_profile_passes_the_gate(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_priced_profile(superuser_conn)
+    final_state = await _answer_directly(
+        "A screen repair is $89 flat.",
+        redraft="(should not be needed)",
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    assert final_state["draft_response"] == "A screen repair is $89 flat."
+    assert final_state["escalated"] is False
+
+
+async def test_invented_figure_on_the_answer_path_is_redrafted(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_priced_profile(superuser_conn)
+    final_state = await _answer_directly(
+        "A screen repair is $250.",
+        redraft="A screen repair is $89 flat.",
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    assert final_state["draft_response"] == "A screen repair is $89 flat."
+    assert final_state["escalated"] is False
+
+
+async def test_second_invented_figure_on_the_answer_path_escalates(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_priced_profile(superuser_conn)
+    final_state = await _answer_directly(
+        "A screen repair is $250.",
+        redraft="Fine, $240 then.",
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    assert final_state["escalated"] is True
+    assert final_state["escalation_reason"] == "price_provenance"
+
+
+async def test_hedging_the_owners_own_price_is_a_violation(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """89 is allowed; "about $89" is the model guessing, not the owner's price."""
+    tenant_id, conversation_id = await _seed_tenant_with_priced_profile(superuser_conn)
+    final_state = await _answer_directly(
+        "It's about $89.",
+        redraft="A screen repair is $89 flat.",
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    assert final_state["draft_response"] == "A screen repair is $89 flat."
 
 
 async def test_escalation_route_sets_escalated_flag(
@@ -195,7 +304,9 @@ async def test_escalation_route_sets_escalated_flag(
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
-    assert status == "escalated"
+    # C-5: the handoff is recorded, the conversation is not ended. A tenant
+    # limit stop is the only thing that writes 'escalated' now.
+    assert status == "open"
 
 
 async def test_every_node_is_registered() -> None:

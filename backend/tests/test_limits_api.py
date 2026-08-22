@@ -20,7 +20,7 @@ import asyncpg
 import pytest
 
 from app.features.chat.controller import stream_budget_escalation, stream_chat_response
-from app.llm.provider import ChatMessage, SchemaT
+from app.llm.provider import ChatMessage, SchemaT, ToolSpec, ToolTurn
 from app.observability.cost import report_usage
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
@@ -28,6 +28,7 @@ from app.shared import db
 from app.shared.config import get_settings
 from app.shared.limits import (
     BUDGET_ESCALATION_REASON,
+    PROVIDER_ERROR_ESCALATION_REASON,
     STEP_CAP_ESCALATION_REASON,
     TURN_BUDGET_ESCALATION_REASON,
     TenantLimits,
@@ -297,6 +298,11 @@ async def test_turn_over_its_latency_budget_hands_off_gracefully(
         "select reason from escalations where conversation_id = $1", conversation_id
     )
     assert row is not None and row["reason"] == TURN_BUDGET_ESCALATION_REASON
+    # A cap the tenant actually hit really does end the conversation.
+    status = await superuser_conn.fetchval(
+        "select status from conversations where id = $1", conversation_id
+    )
+    assert status == "escalated"
 
 
 async def test_a_turn_inside_its_budget_is_untouched(
@@ -321,3 +327,60 @@ async def test_a_turn_inside_its_budget_is_untouched(
     types = [event["type"] for event in events]
     assert "token" in types
     assert "escalated" not in types
+
+
+class _BrokenProvider(_AlwaysRouteKnowledge):
+    """An upstream that dies mid-turn - observed live as OpenRouter forwarding
+    a failure as a 200 with choices=null."""
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        raise RuntimeError("upstream returned choices=null")
+
+
+async def test_a_provider_failure_hands_off_without_ending_the_conversation(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """C-6: a provider falling over is not a limit the tenant hit.
+
+    Every other dead end in this module is a cap the tenant is being held to,
+    and ending the conversation is the behaviour being paid for. This one is a
+    transient upstream fault the customer had no part in - locking them out
+    over it is the same dead end C-5 removed everywhere else, so the handoff is
+    recorded and the chat stays open.
+    """
+    tenant_id, conversation_id = await _seed(superuser_conn)
+    limits = TenantLimits.resolve({}, get_settings())
+
+    events = [
+        event
+        async for event in stream_chat_response(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            message="What are your hours?",
+            provider=_BrokenProvider(),
+            embedder=ZeroEmbedder(),
+            reranker=_PassthroughReranker(),
+            limits=limits,
+        )
+    ]
+
+    types = [event["type"] for event in events]
+    assert types[-3:] == ["refusal", "handoff", "done"]
+    assert "escalated" not in types
+
+    # The owner still hears about it.
+    row = await superuser_conn.fetchrow(
+        "select reason from escalations where conversation_id = $1", conversation_id
+    )
+    assert row is not None and row["reason"] == PROVIDER_ERROR_ESCALATION_REASON
+    # And the customer can simply ask again.
+    status = await superuser_conn.fetchval(
+        "select status from conversations where id = $1", conversation_id
+    )
+    assert status == "open"

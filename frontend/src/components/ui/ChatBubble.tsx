@@ -2,28 +2,58 @@ import type { ReactNode } from "react";
 
 export type ChatRole = "customer" | "assistant" | "human_agent" | "system";
 
+/**
+ * Who is reading. On the customer surface the customer is the outbound voice;
+ * in the owner's Chats thread the business is, and the customer's messages
+ * arrive. Same roles, mirrored sides - C-6.
+ */
+export type ChatPerspective = "customer" | "operator";
+
 export interface ChatBubbleProps {
   role: ChatRole;
+  perspective?: ChatPerspective;
   children: ReactNode;
 }
 
-const ROLE_CLASSES: Record<ChatRole, string> = {
-  customer: "self-end bg-bubble-out text-text-inverse",
-  assistant: "self-start bg-bubble-in text-text",
-  human_agent: "self-start bg-bubble-agent-in text-text",
-  system: "self-center bg-transparent text-text-tertiary text-footnote",
+const ROLE_CLASSES: Record<ChatPerspective, Record<ChatRole, string>> = {
+  customer: {
+    customer: "self-end bg-bubble-out text-text-inverse",
+    assistant: "self-start bg-bubble-in text-text",
+    human_agent: "self-start bg-bubble-agent-in text-text",
+    system: "self-center bg-transparent text-text-tertiary text-footnote",
+  },
+  operator: {
+    // The business is the outbound voice here. The assistant's answers and the
+    // owner's own replies look the same, exactly as the prototype's operator
+    // thread has them - the takeover stamp is what marks who was speaking, and
+    // it reads better than labelling every bubble.
+    customer: "self-start bg-bubble-in text-text",
+    assistant: "self-end bg-bubble-out text-text-inverse",
+    human_agent: "self-end bg-bubble-out text-text-inverse",
+    system: "self-center bg-transparent text-text-tertiary text-footnote",
+  },
 };
 
-// The 4px corner always points at the speaker: inbound (assistant) tips
-// top-left, outbound (owner/customer) tips top-right.
-const RADIUS_CLASSES: Record<ChatRole, string> = {
-  customer:
-    "rounded-[var(--radius-bubble)_var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)]",
-  assistant:
-    "rounded-[var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)_var(--radius-bubble)]",
-  human_agent:
-    "rounded-[var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)_var(--radius-bubble)]",
-  system: "",
+// The 4px corner always points at the speaker: inbound tips top-left,
+// outbound tips top-right. Which role is which depends on who is reading.
+const INBOUND =
+  "rounded-[var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)_var(--radius-bubble)]";
+const OUTBOUND =
+  "rounded-[var(--radius-bubble)_var(--radius-bubble-tip)_var(--radius-bubble)_var(--radius-bubble)]";
+
+const RADIUS_CLASSES: Record<ChatPerspective, Record<ChatRole, string>> = {
+  customer: {
+    customer: OUTBOUND,
+    assistant: INBOUND,
+    human_agent: INBOUND,
+    system: "",
+  },
+  operator: {
+    customer: INBOUND,
+    assistant: OUTBOUND,
+    human_agent: OUTBOUND,
+    system: "",
+  },
 };
 
 /**
@@ -32,16 +62,18 @@ const RADIUS_CLASSES: Record<ChatRole, string> = {
  * top-left tip, human_agent (light crimson, labeled), system (centered
  * caption). Streaming arrives with StreamingText.
  */
-export function ChatBubble({ role, children }: ChatBubbleProps) {
+export function ChatBubble({ role, perspective = "customer", children }: ChatBubbleProps) {
   if (role === "system") {
-    return <p className={`w-full text-center ${ROLE_CLASSES.system}`}>{children}</p>;
+    return (
+      <p className={`w-full text-center ${ROLE_CLASSES[perspective].system}`}>{children}</p>
+    );
   }
 
   return (
     <div
-      className={`max-w-[85%] px-4 py-2.5 text-body-sm leading-relaxed ${RADIUS_CLASSES[role]} ${ROLE_CLASSES[role]}`}
+      className={`max-w-[85%] px-4 py-2.5 text-body-sm leading-relaxed ${RADIUS_CLASSES[perspective][role]} ${ROLE_CLASSES[perspective][role]}`}
     >
-      {role === "human_agent" ? (
+      {role === "human_agent" && perspective === "customer" ? (
         <p className="mb-1 text-footnote font-medium text-text-secondary">Human agent</p>
       ) : null}
       {children}

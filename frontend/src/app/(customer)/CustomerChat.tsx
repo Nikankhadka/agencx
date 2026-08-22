@@ -64,7 +64,12 @@ export function CustomerChat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  // C-5 split one flag in two. `escalated` means a tenant limit ended the
+  // conversation - the only case that locks the composer. `handoffSeen` means
+  // the assistant asked a human to look at something, which is a notification,
+  // not a stop: the chat stays live and only the human-reply poll starts.
   const [escalated, setEscalated] = useState(false);
+  const [handoffSeen, setHandoffSeen] = useState(false);
   // Which agent stage is running right now, for the live region below. Null
   // between turns; the backend sends one of these per graph node.
   const [stage, setStage] = useState<ProgressStage | null>(null);
@@ -73,24 +78,23 @@ export function CustomerChat({
   const [showStarters, setShowStarters] = useState(starterQuestions.length > 0);
   const abortRef = useRef<AbortController | null>(null);
   // Cursor for the transcript poll: the created_at of the newest message we
-  // have already rendered. Starts undefined so the first poll after escalation
-  // fetches the whole tail once, then narrows each tick.
+  // have already fetched. Starts undefined so the first poll fetches the whole
+  // tail once, then narrows each tick.
   const pollCursor = useRef<string | undefined>(undefined);
 
-  // T-031: an escalated conversation is terminal for the agent, but a human
-  // may still reply (escalations.py's resolve inserts a human_agent message).
-  // No push channel exists, so poll the public transcript endpoint while
-  // escalated and append anything new. Polling stops the moment we leave the
-  // escalated state or unmount (interval cleanup) - it never runs otherwise,
-  // which keeps this off the backend's back for non-escalated tabs.
+  // T-031/C-5: once a topic has been handed to a human, that human may reply
+  // (the escalations resolve flow inserts a human_agent message). No push
+  // channel exists, so poll the public transcript endpoint and append what
+  // arrives. Polling starts on a handoff or a limit stop and runs until
+  // unmount; it never runs on a tab that has neither, which keeps it off the
+  // backend's back.
   useEffect(() => {
-    if (!escalated || !conversationId) return;
+    if (!(handoffSeen || escalated) || !conversationId) return;
 
     let cancelled = false;
 
     async function poll() {
       const params = new URLSearchParams({ slug });
-      const isFirstTick = pollCursor.current === undefined;
       if (pollCursor.current) params.set("after", pollCursor.current);
       try {
         const res = await fetch(
@@ -100,21 +104,21 @@ export function CustomerChat({
         const incoming = (await res.json()) as PublicMessage[];
         if (cancelled || incoming.length === 0) return;
         pollCursor.current = incoming[incoming.length - 1]?.created_at ?? pollCursor.current;
+        // Only a human's reply. C-5 keeps the conversation open, so the
+        // customer's own messages and the assistant's answers keep being
+        // persisted while this poll runs - taking everything would render each
+        // of them a second time. A human reply is the one thing this client
+        // cannot learn about any other way, and it is all the poll is for.
+        const replies = incoming.filter((m) => m.role === "human_agent");
+        if (replies.length === 0) return;
         setMessages((prev) => {
-          // Only the first tick (no cursor yet) can re-fetch messages already
-          // on screen - dedupe those by role + content (no server ids in the
-          // streamed transcript). Every later tick is already narrowed by the
-          // `after` cursor, so its results are new by construction; deduping
-          // them against all history would wrongly drop a legitimate repeat.
-          if (!isFirstTick) {
-            const additions = incoming.map<Message>((m) => ({
-              role: m.role as ChatRole,
-              text: m.content,
-            }));
-            return [...prev, ...additions];
-          }
+          // Dedupe by role + content (the transcript carries no ids the
+          // streamed messages share). Applied on every tick, not just the
+          // first: a page that restored history already shows earlier replies,
+          // and two identical human replies in one thread are far less likely
+          // than the double-render this prevents.
           const shown = new Set(prev.map((m) => `${m.role}\0${m.text}`));
-          const additions = incoming
+          const additions = replies
             .filter((m) => !shown.has(`${m.role}\0${m.content}`))
             .map<Message>((m) => ({ role: m.role as ChatRole, text: m.content }));
           return additions.length > 0 ? [...prev, ...additions] : prev;
@@ -130,7 +134,7 @@ export function CustomerChat({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [escalated, conversationId, slug]);
+  }, [handoffSeen, escalated, conversationId, slug]);
 
   function updateLastAssistant(update: (last: Message) => Partial<Message>) {
     setMessages((prev) => {
@@ -207,6 +211,10 @@ export function CustomerChat({
               break;
             case "refusal":
               updateLastAssistant(() => ({ text: event.text }));
+              break;
+            case "handoff":
+              // A human was notified. Nothing about the chat changes.
+              setHandoffSeen(true);
               break;
             case "escalated":
               setEscalated(true);

@@ -43,6 +43,10 @@ class AgentState(TypedDict):
     price_gate_attempted: NotRequired[bool]
     price_gate_decision: NotRequired[str]
     escalation_reason: NotRequired[str]
+    # C-1: the owner's profile text as it went into the prompt. The gate's
+    # allowed set is built from the material the turn actually saw, and the
+    # profile is the one piece of that which is never a retrieved chunk.
+    owner_material: NotRequired[str]
     # T-021 reasoning-inspection gate: violations text fed back to the
     # producing specialist on redraft, whether the one allowed redraft was
     # already spent, the gate's routing decision, and a marker a specialist

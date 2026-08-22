@@ -51,7 +51,7 @@ from app.agents.state import AgentState, GraphContext
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
-from app.pricing.validation_gate import allowed_cents, extract_monetary_figures
+from app.pricing.validation_gate import allowed_cents, extract_monetary_figures, is_hedged
 from app.retrieval.rerank import Reranker, get_reranker
 from app.shared import config, db
 from evals.trajectory_dataset import TrajectoryCase, load_cases, sync_eval_cases
@@ -59,13 +59,14 @@ from seeds.seed_tenant1_phoneshop import SLUG
 
 TOOL_CORRECTNESS_GATE = 0.90
 
-# Minimum node executions for a clean pass through each route: supervisor +
-# specialist + inspection, with price_gate added for the two money routes
-# (see app/agents/graph.py's topology).
+# Minimum node executions for a clean pass through each route (see
+# app/agents/graph.py's topology). C-2 put price_gate on every path, so the
+# floor is agent + draft + price_gate + inspection - except knowledge, whose
+# P-3 fast path answers from the context package and skips the draft node.
 _MIN_STEPS_BY_ROUTE = {
     "knowledge": 3,
-    "order_status": 3,
-    "escalation": 3,
+    "order_status": 4,
+    "escalation": 4,
     "recommendation": 4,
     "quoting": 4,
 }
@@ -185,13 +186,16 @@ def check_unsourced_figures(final_state: dict[str, Any]) -> list[str]:
         for selection in final_state.get("selections") or []
         if "price_cents" in selection
     ]
-    allowed = allowed_cents(final_state.get("engine_quote"), provenance)
-    for chunk in final_state.get("retrieved_chunks") or []:
-        allowed |= {figure.cents for figure in extract_monetary_figures(chunk["content"])}
+    # C-1 folded this scorer's own rule into the runtime gate, so the two can
+    # no longer drift: one ``allowed_cents``, one tokenizer, one answer to
+    # "is this figure sourced?".
+    material = [chunk["content"] for chunk in final_state.get("retrieved_chunks") or []]
+    allowed = allowed_cents(final_state.get("engine_quote"), provenance, material)
+    draft = final_state.get("draft_response", "")
     return [
         f"unsourced monetary figure in draft: {figure.raw!r}"
-        for figure in extract_monetary_figures(final_state.get("draft_response", ""))
-        if figure.cents not in allowed
+        for figure in extract_monetary_figures(draft)
+        if figure.cents not in allowed or is_hedged(draft, figure)
     ]
 
 
