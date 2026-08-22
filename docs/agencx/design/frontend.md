@@ -77,8 +77,21 @@ routed through the semantic tokens (Layer 2) and the `Badge` `STATUS_TONE` map:
 
 When a screen needs a status the component maps the status string to a tone via
 `toneForStatus` (Badge.tsx) - never a hardcoded hex. Unknown/tenant-defined
-statuses fall back to neutral. (This convention lands in shipped code via ticket
-B-3; the reference prototypes already reflect it.)
+statuses fall back to neutral, which is the honest answer for a word the map has
+never seen. `toneForStatus` normalises case and separators, so one entry
+(`in_progress`) answers the schema's spelling, this doc's hyphenated one, and a
+tenant's "In Progress" - three keys for one concept is how one of them silently
+goes grey. **Shipped is amber, not green**: on its way is not arrived, and the
+customer waiting is the one who would notice. **Landed in B-3.**
+
+**The one crimson exception, and why it is not a status (B-3).** The Chats list
+marks a conversation being handled with a crimson dot and one that wants the
+owner with amber (`.bdot-t` / `.bdot-a` in the prototype, where `--c-teal` is a
+legacy name holding the crimson value). That looks like it contradicts the rule
+above, and does not: "we have this one" carries no good/bad/pending charge - it
+is the brand saying it is present, the same role crimson plays in progress fill
+on a brand surface. Green would be wrong for a live conversation, since green
+means resolved. Nothing else may borrow crimson for a status.
 
 **Lighter primary - SHIPPED (O-5, was B-3 US-1).** The brand accent is
 `#C1123F` (a touch lighter than the original `#BA0036`, still crimson, white-text

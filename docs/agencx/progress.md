@@ -119,6 +119,7 @@ open for US-2, the `STATUS_TONE` map.
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
+| Semantic status colours | BUILT | B-3 US-2: `STATUS_TONE` covers the schema's whole vocabulary plus the tenant-defined order/repair statuses, `pending` moved from neutral to amber, `shipped` stays amber because it is not `delivered`, and `toneForStatus` normalises spelling so one entry answers `in_progress` / `in-progress` / "In Progress". The Chats list's crimson "being handled" dot is documented as the single deliberate exception |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
 | Marketing pages | BUILT | `b2c46e9`, `27537d7`; superseded - the bare host is login-in-chat now (O-2), so B-1 had no marketing copy left to rename |
 | Copy rules enforced on screen | BUILT | B-1: the product is Agencx everywhere a user can see it, and `e2e/copy-rules.spec.ts` sweeps each surface's rendered text for "AI", "agent", "automated", "assistant" and "Wren". Proven to fail on a planted violation before being trusted green |
@@ -165,7 +166,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
 | B-1 Copy rename to Agencx | done | this commit |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
-| B-3 Semantic colour convention + lighter primary | US-1 done (O-5), US-2 not started | |
+| B-3 Semantic colour convention + lighter primary | done | US-1 `O-5`, US-2 this commit |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
