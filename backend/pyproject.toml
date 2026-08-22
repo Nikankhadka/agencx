@@ -28,6 +28,7 @@ local-ml = [
     "sentence-transformers>=5.6.0",
 ]
 dev = [
+    "import-linter>=2.5",
     "mypy>=2.2.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
@@ -59,3 +60,55 @@ markers = ["db: tests that require a live Postgres (docker compose up -d db)"]
 python_version = "3.12"
 strict = true
 files = ["app", "tests", "seeds", "evals"]
+
+
+# ── F-2: the deterministic boundary, machine-checked ────────────────────────
+#
+# The hard rule (I1) is that no language model can reach the money path. Every
+# other statement of it - engine.py's docstring, conventions.md, review - is a
+# promise; this is the part that fails a build.
+#
+# Scope note, because the ADR that asked for this described a different
+# contract: it said "forbid importing llm/provider.py outside agents/ and
+# llm/". Applied literally that fails on a dozen files today, and correctly so
+# - `features/chat`, `features/knowledge` and `features/onboarding` import
+# `LLMProvider` as a FastAPI dependency-injection annotation, which is how a
+# route receives the provider at all. Forbidding that would not protect
+# determinism, it would just make the app impossible to wire. The contracts
+# below enforce the boundary the code is actually built around.
+[tool.importlinter]
+root_packages = ["app"]
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "Pricing never reaches a model"
+type = "forbidden"
+source_modules = ["app.pricing"]
+forbidden_modules = ["app.llm", "app.agents", "app.onboarding", "app.retrieval"]
+# No exceptions, ever. Agents select rule codes and quantities; this package
+# computes every cent from the database. A single import here would make the
+# money path something a model could influence.
+
+[[tool.importlinter.contracts]]
+name = "The deterministic services layer never asks a model"
+type = "forbidden"
+source_modules = ["app.services"]
+forbidden_modules = ["app.llm.provider", "app.agents"]
+# services/ is the cross-feature layer of plain functions (auth codes, email,
+# identity, context packages, the retrieval seam). It reads and writes; it
+# never asks a model for words.
+#
+# `app.llm.embedder` is deliberately NOT forbidden, and `services/retrieval.py`
+# uses it. An embedder turns text into a vector - deterministic, no prose, no
+# figures - and O-4's whole-corpus seam cannot do hybrid retrieval without one.
+# The rule that matters is that nothing here generates content; forbidding the
+# whole `app.llm` package would have banned arithmetic along with authorship.
+
+[[tool.importlinter.contracts]]
+name = "The provider seam is a leaf"
+type = "forbidden"
+source_modules = ["app.llm"]
+forbidden_modules = ["app.features", "app.agents", "app.onboarding", "app.pricing"]
+# The LLM layer is swapped by config (Google, Groq, OpenRouter, Azure). If it
+# reached upward into features or agents, swapping a provider would mean
+# reading the whole application to know what else moved.

@@ -93,8 +93,9 @@ lint-frontend: ## Lint frontend (ESLint) + token guard
 	cd frontend && npm run lint && npm run check:tokens
 
 .PHONY: lint-backend
-lint-backend: ## Lint backend (ruff)
+lint-backend: ## Lint backend (ruff + import boundary)
 	cd backend && uv run ruff check .
+	cd backend && uv run lint-imports
 
 # ── format ──────────────────────────────────────────────────────────────────────
 

@@ -111,7 +111,7 @@ open for US-2, the `STATUS_TONE` map.
 | Golden agent-task set + trajectory scorer | BUILT | `22f9cae`, `cd868c4`; **CHANGING** - G-1 updates for the supervisor-with-tools shape |
 | Prompt-injection defense + adversarial set | BUILT | `598f3a7` |
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
-| CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
+| CI regression gate | BUILT | `46c3be4`; F-2 added the import boundary - three import-linter contracts (pricing never reaches a model, services never ask one for words, the provider seam is a leaf) plus the frontend's presentational-UI rule. The ADR claiming this had been enforced "from the very first commit" was corrected: nothing enforced it until F-2 |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
 | Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. The QR is `qrcode-generator` (MIT, founder-approved) for the encoding and our own SVG path for the rendering, so it inherits `currentColor`; the e2e decodes it with `BarcodeDetector` rather than checking an SVG exists |
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
@@ -181,7 +181,8 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR this commit |
 | E-2 Hide advanced screens, keep code | done | this commit |
 | E-3 Platform admin stays minimal | done | this commit |
-| F-1..F-2 Hygiene + import boundary in CI | not started | |
+| F-2 Import boundary in CI | done | this commit |
+| F-1 Hygiene | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |

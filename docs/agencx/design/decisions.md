@@ -188,16 +188,50 @@ a toggle tree.
 
 ## ADRs
 
-### ADR: Import-boundary enforcement from first commit
+### ADR: Import-boundary enforcement in CI
 
-The codebase enforces the deterministic boundary (I1) through an import-linter
-rule in CI from the very first commit. The rule forbids importing
-`llm/provider.py` outside `agents/` and `llm/`. The frontend carries an
-equivalent ESLint `no-restricted-imports` rule. Both are wired in CI.
+The codebase enforces the deterministic boundary (I1) with machine checks in
+CI, because the violation that matters is the one added later under time
+pressure. Determinism is a property of the module graph, not of willpower.
 
-The violation that matters is the one added later under time pressure, so the
-check must predate the pressure. Determinism is a property of the module graph,
-not of willpower.
+**Corrected 2026-08-22 (F-2), on two counts.** This ADR said the rule had been
+in CI "from the very first commit". It had not: there was no import-linter
+config, no ESLint rule and no AST test anywhere in the repo until F-2 wired
+them. The ADR described an intention in the present tense for the length of the
+build, which is worse than an admitted gap - nobody goes looking for a check
+they have been told exists.
+
+It also described the wrong contract. "Forbid importing `llm/provider.py`
+outside `agents/` and `llm/`" fails on a dozen files today, and correctly so:
+`features/chat`, `features/knowledge` and `features/onboarding` import
+`LLMProvider` as a FastAPI dependency-injection annotation, which is how a
+route receives a provider at all. Banning that would not protect determinism,
+only wiring.
+
+**What is enforced** (contracts in `backend/pyproject.toml`, run by
+`make lint-backend` and CI):
+
+1. **Pricing never reaches a model** - `app.pricing` may not import
+   `app.llm`, `app.agents`, `app.onboarding` or `app.retrieval`. This is the
+   hard rule itself; `engine.py` has always declared it in a docstring, and now
+   a build fails on it.
+2. **The deterministic services layer never asks a model for words** -
+   `app.services` may not import `app.llm.provider` or `app.agents`.
+   `app.llm.embedder` is deliberately allowed: an embedder turns text into a
+   vector, and O-4's retrieval seam cannot work without one. The rule is about
+   authorship, not arithmetic.
+3. **The provider seam is a leaf** - `app.llm` may not import `app.features`,
+   `app.agents`, `app.onboarding` or `app.pricing`, so swapping a provider by
+   config cannot move anything above it.
+
+The frontend carries the equivalent: `components/ui/**` may not import
+`@/lib/api` or `@/lib/useApiQuery` (ESLint `no-restricted-imports`). The shared
+library is presentational - a component that fetched its own data would decide
+when a request happens from inside a render tree.
+
+All four held on the day they were written, so they lock a property rather than
+announce a migration. Each was proven to fail on a deliberately planted
+violation before being trusted.
 
 ### ADR: No settings screen - Business tab as show-back only
 

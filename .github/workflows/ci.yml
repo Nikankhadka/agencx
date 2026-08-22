@@ -77,6 +77,12 @@ jobs:
         run: uv sync --frozen
       - name: Lint
         run: uv run ruff check .
+
+      - name: Import boundary (F-2)
+        # The deterministic hard rule (I1), machine-checked: pricing never
+        # reaches a model, services never ask one for words, and the provider
+        # seam stays a leaf. Contracts live in backend/pyproject.toml.
+        run: uv run lint-imports
       - name: Format check
         run: uv run ruff format --check .
       - name: Typecheck
