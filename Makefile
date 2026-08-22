@@ -11,7 +11,7 @@ help: ## Show this help
 # ── demo ───────────────────────────────────────────────────────────────────────
 
 .PHONY: demo
-demo: ## One-command demo: GoTrue + DB + migrate + seed + dev servers (see docs/DEMO.md)
+demo: ## One-command demo: GoTrue + DB + migrate + seed + dev servers (see docs/agencx/running.md)
 	./scripts/demo.sh
 
 # ── dev servers ─────────────────────────────────────────────────────────────────
@@ -55,19 +55,21 @@ db-down: ## Stop and remove containers + volumes (tears out persistent data)
 # ── data ────────────────────────────────────────────────────────────────────────
 
 .PHONY: migrate
-migrate: ## Apply forward-only DB migrations
+migrate: db ## Apply forward-only DB migrations (starts the db container first)
 	cd backend && uv run python -m app.shared.migrate
 
+# Needs GoTrue, not just the db: the demo owners are created through the auth
+# admin API, so db-full comes first.
 .PHONY: seed
-seed: ## Seed the full demo world (two tenants, auth users, conversations)
+seed: db-full migrate ## Seed the full demo world (two tenants, auth users, conversations)
 	cd backend && uv run python -m seeds.seed_demo
 
 .PHONY: seed-tenant1
-seed-tenant1: ## Seed Tenant 1 (Bytefix phone repair) only
+seed-tenant1: migrate ## Seed Tenant 1 (Bytefix phone repair) only - db only, no auth users
 	cd backend && uv run python -m seeds.seed_tenant1_phoneshop
 
 .PHONY: seed-tenant2
-seed-tenant2: ## Seed Tenant 2 (dental clinic) via the public API (generalization proof)
+seed-tenant2: db-full ## Seed Tenant 2 (dental clinic) via the public API - NEEDS a running backend (make dev-backend)
 	cd backend && uv run python -m seeds.seed_tenant2_dental
 
 # ── install ─────────────────────────────────────────────────────────────────────
@@ -133,8 +135,10 @@ test-frontend: ## Run frontend unit tests (vitest)
 test-backend: ## Run backend tests (pytest)
 	cd backend && uv run pytest
 
+# Playwright's webServer starts the frontend only; the backend on :8000 and the
+# seeded demo world have to be up already or most specs fail on timeouts.
 .PHONY: test-e2e
-test-e2e: ## Run Playwright end-to-end tests
+test-e2e: ## Run Playwright e2e tests - NEEDS a seeded db + running backend (make seed && make dev-backend)
 	cd frontend && npm run test:e2e
 
 .PHONY: test-e2e-ui
@@ -144,11 +148,11 @@ test-e2e-ui: ## Run Playwright e2e tests with UI mode
 # ── eval ────────────────────────────────────────────────────────────────────────
 
 .PHONY: eval
-eval: ## Run the full eval gate (deterministic + LLM-judged)
+eval: ## Run the full eval gate (deterministic + LLM-judged) - NEEDS a seeded db (make seed-tenant1)
 	cd backend && uv run python -m evals.run_gate
 
 .PHONY: eval-skip-llm
-eval-skip-llm: ## Run deterministic eval gate only (skip LLM-judged evals)
+eval-skip-llm: ## Deterministic eval gate only (skip LLM-judged) - NEEDS a seeded db (make seed-tenant1)
 	cd backend && uv run python -m evals.run_gate --skip-llm
 
 # ── CI ──────────────────────────────────────────────────────────────────────────

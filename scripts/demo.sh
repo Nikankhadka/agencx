@@ -46,10 +46,12 @@ for p in 3000 8000 54321; do
     die "port $p is already in use (free it, or stop the process on it). Note: 54321 conflicts with a running supabase CLI stack - stop it first."
   fi
 done
-# 5432 is only a problem if it is NOT our wren-db container.
+# 5432 is only a problem if it is NOT our own db container. Ask compose rather
+# than matching a container name: the name carries the project (directory) name,
+# so hardcoding one breaks the moment the checkout is renamed.
 if port_busy 5432; then
-  if ! docker ps --format '{{.Names}}' | grep -qx wren-db-1; then
-    die "port 5432 is in use by something other than wren-db-1. Stop it or change DATABASE_URL."
+  if [[ -z "$(docker compose ps -q db 2>/dev/null)" ]]; then
+    die "port 5432 is in use by something other than this project's db container. Stop it or change DATABASE_URL."
   fi
 fi
 ok "tools present, demo ports free"

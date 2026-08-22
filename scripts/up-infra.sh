@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bring up the local infra containers: db (Postgres + pgvector), GoTrue auth,
-# and the nginx auth-proxy that exposes auth on port 54321.
+# and the nginx auth-proxy that exposes auth on port 54321. Mailpit joins them
+# only when backend/.env has actually opted into SMTP delivery.
 #
 # Safe to run while the dev servers are up (touches only containers), and
 # idempotent. Shared by `make db-full` and scripts/demo.sh so the container
@@ -54,3 +55,15 @@ done
 [[ "$auth_ready" == true ]] \
   || die "GoTrue did not become healthy on http://localhost:54321/health. Try 'docker compose logs auth'. (A JWT-secret change against an old volume is harmless - GoTrue signs at request time; if migrations are corrupted, run 'docker compose exec db psql -U postgres -d wren -c \"drop schema if exists auth cascade; create schema auth;\"' then re-run. Note: port 54321 conflicts with a running supabase CLI stack - stop it first.)"
 ok "db + GoTrue (auth) + auth-proxy up"
+
+# The login code is sent by our own backend, not by GoTrue, so a relay is only
+# needed when backend/.env asks for one. EMAIL_PROVIDER=smtp against a local
+# host means Mailpit: start it here rather than leaving login to discover the
+# refused connection at request time. Any other host is a real relay - not ours
+# to start.
+email_provider="$(grep -E '^EMAIL_PROVIDER=' backend/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+smtp_host="$(grep -E '^EMAIL_SMTP_HOST=' backend/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+if [[ "$email_provider" == "smtp" && ( "$smtp_host" == "localhost" || "$smtp_host" == "127.0.0.1" ) ]]; then
+  docker compose --profile mail up -d mailpit
+  ok "mailpit up (EMAIL_PROVIDER=smtp) - inbox at http://localhost:8025"
+fi

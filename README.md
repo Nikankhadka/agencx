@@ -22,7 +22,7 @@ uploaded knowledge - never in code.
 ```
    SURFACE 1                 SURFACE 2                  SURFACE 3
    Platform owner            Tenant admin               Customer chat
-   admin.wren.app            app.wren.app               {slug}.wren.app
+   admin.agencx.app          app.agencx.app             {slug}.agencx.app
    all-tenants view,         onboarding, knowledge,     streaming Q&A,
    provisioning              conversations + traces,    quotes, citations,
                              pricing, dashboards        human handoff
@@ -111,32 +111,29 @@ make demo
 
 Starts a local GoTrue (Supabase Auth) + the database, fixes env files, runs
 migrations and a seeded demo world (two tenants, three logins), and brings up
-the backend + frontend. See [`docs/archive/DEMO.md`](docs/archive/DEMO.md) for the full
-walkthrough, credentials, and troubleshooting.
+the backend + frontend.
 
 ### Manual (step by step)
 
 ```bash
-make db         # Postgres + pgvector
 make install    # install all deps (frontend + backend)
+make db-full    # Postgres + pgvector, GoTrue, auth-proxy
 make migrate    # apply schema
-make dev        # backend (:8000) + frontend (:3000) concurrently
+make seed       # full demo world (two tenants + auth users)
+make dev-backend    # :8000, one terminal
+make dev-frontend   # :3000, another
 ```
 
-See [`AGENTS.md`](AGENTS.md) for the full command reference - lint, test,
-typecheck, eval, CI, per-service dev servers, and more.
+`make db` starts the database alone, which is not enough to log in - login needs
+GoTrue, which `make db-full` adds. Open http://bytefix.localhost:3000 after
+seeding, or http://app.localhost:3000/login for the tenant console.
 
-Copy `.env.example` to `.env` and fill in values as tickets wire up each
-service (Supabase, Azure OpenAI, Langfuse). To seed a tenant:
+Config lives in `backend/.env` (created from the repo-root `.env.example` by
+`scripts/demo.sh`) and `frontend/.env.local`.
 
-```bash
-make seed-tenant1     # ByteFix phone repair shop
-# or
-make seed             # full demo world (two tenants + auth users)
-```
-
-Open http://bytefix.localhost:3000 after seeding. The full demo world needs
-local GoTrue - see [`docs/archive/DEMO.md`](docs/archive/DEMO.md).
+**Full walkthrough - logins, which command needs which service, and
+troubleshooting: [`docs/agencx/running.md`](docs/agencx/running.md).** See
+[`AGENTS.md`](AGENTS.md) for the complete command reference.
 
 ## The two rules everything else bends around
 

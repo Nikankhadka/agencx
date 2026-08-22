@@ -20,6 +20,15 @@ from app.shared.config import get_settings
 logger = logging.getLogger("app.services.email")
 
 
+class LoginCodeDeliveryError(RuntimeError):
+    """The relay would not take the code. Distinct from a config error.
+
+    A relay that is down is an outage, not a bug in the request - the caller
+    turns this into a 502 with copy the owner can act on, rather than letting
+    it fall through to the catch-all 500.
+    """
+
+
 class EmailProvider:
     """Sends a login code to ``email``."""
 
@@ -87,6 +96,18 @@ async def send_login_code(*, email: str, code: str) -> None:
     environment on exactly the same condition as the endpoint that reads it
     (app/features/auth/api.py), so no deployment ever holds a code in memory.
     """
-    if get_settings().environment == "local":
+    is_local = get_settings().environment == "local"
+    if is_local:
         _last_codes[email] = code
-    await get_email_provider().send_login_code(email=email, code=code)
+    provider = get_email_provider()
+    try:
+        await provider.send_login_code(email=email, code=code)
+    except (OSError, smtplib.SMTPException) as exc:
+        if is_local:
+            # EMAIL_PROVIDER=smtp with no relay up. The code is already
+            # captured above and served by /api/auth/dev-login-code, so local
+            # login carries on the way the console provider would - a missing
+            # inbox is a missing inbox, not a broken login.
+            logger.warning("login code for %s: %s (delivery failed: %s)", email, code, exc)
+            return
+        raise LoginCodeDeliveryError(str(exc)) from exc

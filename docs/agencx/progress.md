@@ -168,9 +168,9 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 |---|---|---|
 | A-1 Docs restructure + archive | done | `fce4d71` |
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
-| B-1 Copy rename to Agencx | done | this commit |
+| B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
-| B-3 Semantic colour convention + lighter primary | done | US-1 `O-5`, US-2 this commit |
+| B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
@@ -178,25 +178,25 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
-| D-2 Lean default (quoting OFF) | done | this commit (migration 0016) |
-| E-1 Three-tab shell (Home + Chats + Business) | done | this commit |
-| E-4 Home: the greeting and the brief | done | this commit |
-| E-5 Business hub + Booking page | done | `ac01cf0` + QR this commit |
-| E-2 Hide advanced screens, keep code | done | this commit |
-| E-3 Platform admin stays minimal | done | this commit |
-| F-2 Import boundary in CI | done | this commit |
+| D-2 Lean default (quoting OFF) | done | `3b3a46a` (migration 0016) |
+| E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
+| E-4 Home: the greeting and the brief | done | `ebc9b78` |
+| E-5 Business hub + Booking page | done | `ac01cf0` + QR `e1f2f76` |
+| E-2 Hide advanced screens, keep code | done | `ac6199a` |
+| E-3 Platform admin stays minimal | done | `ecdaffb` |
+| F-2 Import boundary in CI | done | `1684a42` |
 | F-1 Hygiene | not started | |
-| G-1 Eval cases for the lean toolset | done | this commit |
+| G-1 Eval cases for the lean toolset | done | `acd2328` |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
-| P-2 Latency budget + first-wins failover | done | this commit |
-| P-5 Typing indicator through the failover window | done | this commit |
+| P-2 Latency budget + first-wins failover | done | `0cdff0c` |
+| P-5 Typing indicator through the failover window | done | `14ace05` + `be24802` |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
-| O-5 Onboarding UI: prototype thread port | done | this commit |
+| O-5 Onboarding UI: prototype thread port | done | `969bfdd` |
 | O-3 Knowledge ingest (URL scrape + upload) | done | `29fd5a5` |
-| O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
+| O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

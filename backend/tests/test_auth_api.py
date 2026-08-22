@@ -22,7 +22,9 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.auth import controller
 from app.main import app
+from app.services import email as email_service
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -273,3 +275,58 @@ async def test_platform_ping_requires_platform_admin(
     ok = await client.get("/api/platform/ping", headers={"Authorization": f"Bearer {admin_token}"})
     assert ok.status_code == 200
     assert ok.json() == {"ok": True}
+
+
+# --- login-code delivery ------------------------------------------------------
+
+
+class _DeadRelay(email_service.EmailProvider):
+    """A relay that refuses the connection, the way `smtplib` does when Mailpit
+    is not up (EMAIL_PROVIDER=smtp without `make mail`)."""
+
+    async def send_login_code(self, *, email: str, code: str) -> None:
+        raise ConnectionRefusedError(61, "Connection refused")
+
+
+@pytest.fixture
+def dead_relay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(email_service, "get_email_provider", _DeadRelay)
+
+
+@pytest.fixture
+def environment(monkeypatch: pytest.MonkeyPatch) -> Any:
+    def _set(value: str) -> None:
+        monkeypatch.setenv("ENVIRONMENT", value)
+        get_settings.cache_clear()
+
+    yield _set
+    get_settings.cache_clear()
+
+
+async def test_login_code_survives_a_dead_relay_locally(
+    client: httpx.AsyncClient, dead_relay: None, environment: Any
+) -> None:
+    """Local dev has no inbox to depend on: the code is captured before the send,
+    so a refused SMTP connection must not answer the owner with a 500."""
+    environment("local")
+    email = f"dead-relay-{uuid.uuid4().hex[:8]}@example.com"
+
+    sent = await client.post("/api/auth/login-code", json={"email": email})
+    assert sent.status_code == 202, sent.text
+
+    captured = await client.get("/api/auth/dev-login-code", params={"email": email})
+    assert captured.status_code == 200
+    assert captured.json()["code"].isdigit()
+
+
+async def test_login_code_dead_relay_is_a_502_not_a_500(
+    client: httpx.AsyncClient, dead_relay: None, environment: Any
+) -> None:
+    """Off local there is no captured code to fall back on, so the send really did
+    fail - but it is the relay that is down, and the copy has to say so."""
+    environment("production")
+    email = f"dead-relay-{uuid.uuid4().hex[:8]}@example.com"
+
+    sent = await client.post("/api/auth/login-code", json={"email": email})
+    assert sent.status_code == 502, sent.text
+    assert sent.json()["detail"] == controller._COPY["undelivered"]

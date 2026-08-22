@@ -33,11 +33,15 @@ All verified. Run from repo root via `make <target>` (the friendly entry point);
 | Local database | `make db` | `docker compose up -d db` |
 | DB + auth (full demo infra) | `make db-full` | `./scripts/up-infra.sh` |
 | Tear down DB (volumes) | `make db-down` | `docker compose down -v` |
+| Local mail inbox (login codes) | `make mail` | `docker compose --profile mail up -d mailpit` |
+| DB browser UI | `make dbui` | `docker compose --profile dbui up -d pgweb` |
 | Apply migrations | `make migrate` | `cd backend && uv run python -m app.shared.migrate` |
 | Seed demo world | `make seed` | `cd backend && uv run python -m seeds.seed_demo` |
 | Seed tenant 1 | `make seed-tenant1` | `cd backend && uv run python -m seeds.seed_tenant1_phoneshop` |
 | Seed tenant 2 | `make seed-tenant2` | `cd backend && uv run python -m seeds.seed_tenant2_dental` |
 | Install deps | `make install` | `cd frontend && npm ci` + `cd backend && uv sync` |
+| Install deps (frontend) | `make install-frontend` | `cd frontend && npm ci` |
+| Install deps (backend) | `make install-backend` | `cd backend && uv sync` |
 | Lint (frontend) | `make lint-frontend` | `cd frontend && npm run lint && npm run check:tokens` |
 | Lint (backend) | `make lint-backend` | `cd backend && uv run ruff check .` |
 | Lint (both) | `make lint` | frontend + backend lint |

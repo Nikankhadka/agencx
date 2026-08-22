@@ -25,6 +25,7 @@ _COPY = {
     "invalid": "That code didn't work. Try again, or resend.",
     "expired": "That code expired. Request a new one.",
     "too_many": "Too many tries. Request a new code.",
+    "undelivered": "I couldn't get that code sent just now. Try again in a moment.",
 }
 
 _SLUGIFY_RE = re.compile(r"[^a-z0-9]+")
@@ -50,7 +51,15 @@ async def _find_tenant_for_user(user_id: str) -> str | None:
 
 async def send_login_code(email: str) -> None:
     code = await auth_codes.issue_code(email=email)
-    await email_service.send_login_code(email=email, code=code)
+    try:
+        await email_service.send_login_code(email=email, code=code)
+    except email_service.LoginCodeDeliveryError as exc:
+        # The relay is down, not the request. Say so in the thread's own voice
+        # instead of letting the catch-all middleware answer "internal server
+        # error" to someone who only typed their email address.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=_COPY["undelivered"]
+        ) from exc
 
 
 async def verify_login_code(email: str, code: str) -> dict[str, Any]:

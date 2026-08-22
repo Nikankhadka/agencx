@@ -18,6 +18,7 @@ under `docs/archive/` (indexed there) and is not maintained.
 | [`design/database.md`](design/database.md) | The schema: tables, roles, RLS, migrations, seeds |
 | [`design/frontend.md`](design/frontend.md) | The UI: design system, tokens, components, the three screens and their states |
 | [`spec/`](spec/) | The tickets: every piece of change work with detailed user stories, acceptance criteria, and done definitions |
+| [`running.md`](running.md) | How do I run it? Setup, logins, which command needs which service, troubleshooting |
 
 ## How to read the build
 
