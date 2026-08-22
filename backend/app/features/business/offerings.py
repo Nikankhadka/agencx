@@ -100,12 +100,16 @@ def derive(records: list[dict[str, Any]]) -> list[dict[str, str | None]]:
     """Saved knowledge records -> the Services rows, in reading order.
 
     Only ``ready`` documents count: a draft the owner has not saved is not
-    something to show a customer. Rows are de-duplicated by name, first
-    occurrence winning, because a business that uploaded both a menu and a
-    price list has said the same thing twice.
+    something to show a customer.
+
+    Rows are de-duplicated by name, because a business that uploaded both a menu
+    and a price list has said the same thing twice - but a later mention that
+    carries a price *upgrades* an earlier one that does not. The headings arrive
+    in reading order, so "What we offer" (bare names) is seen before "Prices"
+    (the same names with figures); first-wins would have thrown every price away.
     """
     rows: list[Offering] = []
-    seen: set[str] = set()
+    by_name: dict[str, Offering] = {}
     for record in records:
         if record.get("status") != "ready":
             continue
@@ -117,8 +121,10 @@ def derive(records: list[dict[str, Any]]) -> list[dict[str, str | None]]:
                 if row is None:
                     continue
                 key = row.name.casefold()
-                if key in seen:
-                    continue
-                seen.add(key)
-                rows.append(row)
+                existing = by_name.get(key)
+                if existing is None:
+                    by_name[key] = row
+                    rows.append(row)
+                elif existing.price is None and row.price is not None:
+                    existing.price = row.price
     return [row.as_dict() for row in rows]

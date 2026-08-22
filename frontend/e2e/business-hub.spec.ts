@@ -9,8 +9,11 @@
  */
 
 import { test, expect } from "@playwright/test";
-import jsQR from "jsqr";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import {
+  DEMO_USERS,
+  loginAsTenantAdmin,
+  tenantAdminHost,
+} from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 const STAGE_2_ROWS = ["Schedule", "Money", "Plan"];
@@ -18,7 +21,10 @@ const STAGE_2_ROWS = ["Schedule", "Money", "Plan"];
 test.describe("Business hub", () => {
   test.use({ baseURL: `http://${tenantAdminHost()}` });
 
-  test("holds only rows that open onto something", async ({ page, request }) => {
+  test("holds only rows that open onto something", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business");
 
@@ -34,13 +40,18 @@ test.describe("Business hub", () => {
     }
   });
 
-  test("the booking page shows the business and its public link", async ({ page, request }) => {
+  test("the booking page shows the business and its public link", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business");
     await page.getByRole("link", { name: /Booking page/ }).click();
     await page.waitForURL("**/business/booking");
 
-    await expect(page.getByRole("heading", { level: 2 })).toContainText("Bytefix");
+    await expect(page.getByRole("heading", { level: 2 })).toContainText(
+      "Bytefix",
+    );
 
     // Derived from the current host, so it is the address that actually works
     // from this browser - never a hardcoded domain.
@@ -68,55 +79,84 @@ test.describe("Business hub", () => {
     expect(copied.endsWith("/")).toBe(false);
   });
 
-  test("the QR decodes to the same link the copy button gives", async ({ page, request }) => {
+  test("the cover photo, the services list and the link slots", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/booking");
 
-    const qr = page.getByTestId("booking-qr");
-    await expect(qr).toBeVisible();
+    // E-6: the QR went. It was never in the prototype's owner screen, and the
+    // founder does not use it. Pinned so it does not drift back in.
+    await expect(page.getByTestId("booking-qr")).toHaveCount(0);
+    // Nor is there a "Get a quote" CTA: quoting is a Stage 2 opt-in.
+    await expect(page.getByRole("button", { name: "Get a quote" })).toHaveCount(
+      0,
+    );
 
-    // A real decode, not a "it looks like a QR" check. The SVG is rasterised
-    // in the page, then the pixels are decoded here in Node with jsQR. It
-    // used to scan with Chromium's BarcodeDetector, but that API is absent
-    // from Playwright's desktop Chromium builds (flag-gated upstream), so the
-    // assertion could never run in CI or a fresh checkout. This is still the
-    // assertion that catches an orientation slip in the SVG we build from the
-    // module matrix - a transposed code still renders as a plausible-looking
-    // QR and simply does not scan.
-    const raster = await page.evaluate(async () => {
-      const svg = document.querySelector("[data-testid='booking-qr']")!;
-      const markup = new XMLSerializer().serializeToString(svg);
+    // The cover well invites a photo before there is one.
+    await expect(page.getByTestId("booking-cover")).toBeVisible();
+    await expect(page.getByTestId("booking-cover")).toContainText(
+      "cover photo",
+    );
 
-      // Rasterise through an <img> data URL: Chromium's createImageBitmap does
-      // not accept SVG blobs. Drawn at 4x so every module is several pixels -
-      // the detector wants pixels, not vectors.
-      const SIZE = 528;
-      const img = new Image(SIZE, SIZE);
-      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
-      await img.decode();
-
-      const canvas = document.createElement("canvas");
-      canvas.width = SIZE;
-      canvas.height = SIZE;
-      const ctx = canvas.getContext("2d")!;
-      // QR contrast needs an opaque light ground; the SVG itself is
-      // transparent so it can sit on any themed surface.
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, SIZE, SIZE);
-      ctx.drawImage(img, 0, 0, SIZE, SIZE);
-
-      const { data, width, height } = ctx.getImageData(0, 0, SIZE, SIZE);
-      return { data: Array.from(data), width, height };
-    });
-
-    const found = jsQR(new Uint8ClampedArray(raster.data), raster.width, raster.height);
-    const decoded = found?.data ?? null;
-
-    expect(decoded).toMatch(/^https?:\/\/bytefix\./);
-    expect(decoded).toBe(await page.getByTestId("booking-link").textContent().then((t) => `http://${t}`));
+    // Four slots, each either offering to take a link or offering to open one.
+    // Not asserted as "all empty": these specs share one seeded tenant, so a
+    // slot's contents are another test's business, not this one's.
+    for (const key of ["website", "google", "facebook", "instagram"]) {
+      await expect(page.getByTestId(`booking-platform-${key}`)).toContainText(
+        /Add|Open/,
+      );
+    }
   });
 
-  test("back from the booking page returns to the hub", async ({ page, request }) => {
+  test("a link slot takes an address, keeps it, and then opens it", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/booking");
+
+    const tile = page.getByTestId("booking-platform-instagram");
+
+    // These specs share one seeded tenant, so start from a known slot rather
+    // than from whatever a previous run left behind.
+    await tile.click();
+    if (await page.getByTestId("booking-link-remove").isVisible()) {
+      await page.getByTestId("booking-link-remove").click();
+      await expect(tile).toContainText("Add");
+      await tile.click();
+    }
+
+    // Pasted without a scheme, the way an address bar shows it.
+    await page.getByTestId("booking-link-input").fill("instagram.com/bytefix");
+    await page.getByTestId("booking-link-save").click();
+    await expect(tile).toContainText("Open");
+
+    // It survives a reload - this is the assertion that catches a save that
+    // only ever updated local state.
+    await page.reload();
+    await expect(tile).toContainText("Open");
+
+    // And it is a way out to that page, with the scheme filled in. Asserted on
+    // the href rather than by following it: a real popup would assert on
+    // whatever instagram.com redirects to that day, which is a test of their
+    // infrastructure, not ours.
+    await tile.click();
+    await expect(page.getByTestId("booking-link-open")).toHaveAttribute(
+      "href",
+      "https://instagram.com/bytefix",
+    );
+
+    // Put the slot back, so this spec leaves the shared tenant as it found it.
+    await page.getByTestId("booking-link-remove").click();
+    await expect(tile).toContainText("Add");
+  });
+
+  test("back from the booking page returns to the hub", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/booking");
     await page.getByRole("button", { name: "Back" }).click();

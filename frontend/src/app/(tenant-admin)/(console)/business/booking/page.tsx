@@ -1,105 +1,129 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
+import { Icon } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
-import { useApiQuery } from "@/lib/useApiQuery";
 import { surfaceUrl } from "@/lib/tenant";
-import { QrCode } from "./components/QrCode";
+import { CoverPhoto } from "./components/CoverPhoto";
+import { PlatformLinks } from "./components/PlatformLinks";
 
 /**
- * E-5: the Booking page - the business as a customer finds it, and the link
+ * E-5/E-6: the Booking page - the business as a customer finds it, and the link
  * that takes them there. Built from `renderScreen('booking')` in
- * agencx-prototype-v6.html: the name and its one-line description, then "How
- * leads come in" with the shareable link and a copy control.
+ * agencx-prototype-v6.html: the cover photo, the name and its one-line
+ * description, "How leads come in" with the shareable link and the platform
+ * tiles, and the Services list.
  *
- * Three parts of the prototype's screen do not ship, each because nothing
- * stands behind it in Stage 1: the cover photo (no image upload, and images are
- * refused by ruling - O-3), the platform buttons (no Google/Facebook/Instagram
- * integrations), and the Services list (quoting is a per-tenant opt-in that is
- * off by default, D-1/D-2). Adding them would be the dead surface the PRD
- * forbids.
+ * Two parts of the prototype's screen do not ship, by founder decision: the
+ * "Get a quote" CTA (quoting is a Stage 2 opt-in and this owner will not use
+ * it) and the QR code E-5 added, which was never in the prototype's owner
+ * screen and was not being used.
+ *
+ * The page a customer actually lands on is still the bare chat surface at
+ * `(customer)/page.tsx`. Building it out of the storefront prototype is the
+ * next ticket; until then the headings here say what this is - a preview of
+ * what customers see - and claim nothing that is not true.
  */
 
-interface TenantMe {
+interface Offering {
+  name: string;
+  price: string | null;
+}
+
+interface BookingPage {
   slug: string;
   name: string;
-  brand?: Record<string, unknown>;
+  tagline: string | null;
+  services: Offering[];
+  links: Record<string, string>;
+  has_cover: boolean;
 }
 
-interface OnboardingState {
-  draft: Record<string, string>;
-}
-
-/**
- * The prototype's subtitle is one line: what the business does, then when it is
- * open. Both come from the O-1 interview, and either may be missing - a
- * business that never answered the hours beat gets the shorter sentence rather
- * than a dangling separator.
- */
-function describe(draft: Record<string, string>): string | null {
-  const parts = [draft["services"]?.trim(), draft["hours"]?.trim()].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-export default function BookingPage() {
-  const tenant = useApiQuery<TenantMe>("/api/tenants/me");
-  const [draft, setDraft] = useState<Record<string, string>>({});
+export default function BookingPageScreen() {
+  const [page, setPage] = useState<BookingPage | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    apiFetch<OnboardingState>("/api/onboarding/state")
-      .then((state) => setDraft(state.draft ?? {}))
-      .catch(() => setDraft({}));
+  const load = useCallback(() => {
+    apiFetch<BookingPage>("/api/business/page")
+      .then(setPage)
+      .catch(() => setPage(null));
   }, []);
 
-  const slug = tenant.data?.slug;
+  useEffect(load, [load]);
+
+  const slug = page?.slug;
   // Derived from the current host so the base domain and port carry over -
   // app.localhost:3000 in dev, the real domain in production, never hardcoded.
   // The trailing slash goes: it is the same page either way, and this address
   // is going into a text message or onto a shop window.
   const publicUrl =
     slug && typeof window !== "undefined"
-      ? surfaceUrl({ surface: "customer", slug }, window.location.host).replace(/\/$/, "")
+      ? surfaceUrl({ surface: "customer", slug }, window.location.host).replace(
+          /\/$/,
+          "",
+        )
       : null;
   // The pill shows the address without its scheme, the way the prototype does;
   // what gets copied is the whole URL, which is what a customer needs.
   const shown = publicUrl?.replace(/^https?:\/\//, "");
 
-  const displayName =
-    (tenant.data?.brand?.["display_name"] as string | undefined) ??
-    draft["business_name"]?.trim() ??
-    tenant.data?.name;
-  const subtitle = describe(draft);
-
   async function copy() {
     if (!publicUrl) return;
     await navigator.clipboard.writeText(publicUrl);
     setCopied(true);
+    // Resets, unlike the prototype's one-way `this.textContent='Copied ✓'` -
+    // a control stuck in its confirmed state cannot confirm the next copy.
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function share() {
+    if (!publicUrl || !page) return;
+    // Web Share where it exists (every phone this is designed for), clipboard
+    // everywhere else. No custom sheet: the native one already lists the apps
+    // the owner actually has, which a hardcoded four-icon row cannot.
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: page.name, url: publicUrl });
+        return;
+      } catch {
+        // Cancelled, or refused by the browser - fall through to copying.
+      }
+    }
+    await copy();
   }
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Booking page" backHref="/business" />
       <div className="min-h-0 flex-1 overflow-y-auto pb-thread-tail lg:mx-auto lg:w-full lg:max-w-thread">
+        <CoverPhoto hasCover={page?.has_cover ?? false} onChanged={load} />
+
         <div className="px-gutter pt-[18px]">
           <h2 className="mb-1.5 text-display-sm font-bold tracking-[var(--text-display-sm-tracking)] text-text">
-            {displayName ?? "Your business"}
+            {page?.name ?? "Your business"}
           </h2>
           {/* Clamped: the prototype's subtitle is one tight line because Sababa's
               services are, and a real business's list runs to five. Two lines
               is the gist; the full text lives in Settings > Knowledge. */}
-          {subtitle ? <p className="line-clamp-2 text-meta text-ink-a40">{subtitle}</p> : null}
+          {page?.tagline ? (
+            <p className="line-clamp-2 text-meta text-ink-a40">
+              {page.tagline}
+            </p>
+          ) : null}
         </div>
 
-        <section className="mt-6 border-t border-hairline px-gutter pt-5">
-          <h3 className="mb-1.5 text-row-label font-medium text-text">How customers reach you</h3>
+        {/* `.bk-entry-wrap` - the tinted card holding the link and the tiles. */}
+        <section className="mx-gutter mt-3.5 rounded-card bg-accent-a06 p-4">
+          <h3 className="mb-1 text-chip font-medium text-accent">
+            How customers reach you
+          </h3>
           <p className="mb-3.5 text-meta text-ink-a40">
             Share this link and anyone can ask you a question, any time.
           </p>
 
           {shown ? (
-            <div className="flex items-center gap-3 rounded-field border border-hairline bg-surface-sunken px-3.5 py-3">
+            <div className="mb-3 flex items-center gap-3 rounded-field bg-surface px-3.5 py-2.5">
               <span
                 data-testid="booking-link"
                 className="min-w-0 flex-1 truncate text-body-sm text-text"
@@ -110,7 +134,7 @@ export default function BookingPage() {
                 type="button"
                 onClick={copy}
                 data-testid="booking-copy"
-                className="shrink-0 whitespace-nowrap rounded-chip border-[1.5px] border-accent-a28 px-3.5 py-1.5 text-chip text-accent transition-colors duration-(--duration-fast) active:bg-accent-a07"
+                className="shrink-0 whitespace-nowrap text-chip font-medium text-accent"
               >
                 {copied ? "Copied ✓" : "Copy"}
               </button>
@@ -118,17 +142,62 @@ export default function BookingPage() {
           ) : (
             <div
               aria-busy="true"
-              className="h-12 rounded-field border border-hairline bg-surface-sunken"
+              className="mb-3 h-11 rounded-field bg-surface"
             />
           )}
 
-          {publicUrl ? (
-            <div className="mt-5 flex flex-col items-center gap-2.5">
-              <QrCode value={publicUrl} />
-              <p className="text-meta text-ink-a40">Or let them scan this.</p>
-            </div>
-          ) : null}
+          <PlatformLinks
+            links={page?.links ?? {}}
+            onSaved={(links) =>
+              setPage((prev) => (prev ? { ...prev, links } : prev))
+            }
+          />
         </section>
+
+        {/* `SERVICES` - the owner's own words. Absent when they have saved no
+            price list or menu yet; an empty heading over nothing would be the
+            dead surface the PRD forbids. */}
+        {page && page.services.length > 0 ? (
+          <section className="px-gutter pt-4">
+            <h3 className="mb-3 text-eyebrow font-medium uppercase text-ink-a40">
+              Services
+            </h3>
+            <ul data-testid="booking-services">
+              {page.services.map((service) => (
+                <li
+                  key={service.name}
+                  className="flex items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-field bg-accent-a09 text-accent">
+                    <Icon name="sell" size={18} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-card-hl font-medium text-text">
+                      {service.name}
+                    </span>
+                    {service.price ? (
+                      <span className="block text-meta text-ink-a40">
+                        {service.price}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <div className="px-gutter pt-5">
+          <button
+            type="button"
+            onClick={share}
+            data-testid="booking-share"
+            className="flex w-full items-center justify-center gap-1.5 rounded-field border-[1.5px] border-accent-a28 py-3 text-chip font-medium text-accent active:bg-accent-a07"
+          >
+            <Icon name="share" size={14} />
+            Share
+          </button>
+        </div>
       </div>
     </main>
   );

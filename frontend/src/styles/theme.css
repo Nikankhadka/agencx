@@ -126,6 +126,8 @@
   --text-row-label-size:    15px;  --text-row-label-leading:    15px;  /* .bh-lb / .set-hdr-lbl 500 15/1 */
   --text-action-size:       14px;  --text-action-leading:       14px;  /* .se-add 500 14/1 */
   --text-tab-size:          10px;  --text-tab-leading:          10px;  /* .tab-lbl 500 10/1 */
+  --text-eyebrow-size:      10px;  --text-eyebrow-leading:      10px;  --text-eyebrow-tracking: 0.05em; /* .bk-svc-lbl 500 10/1 uppercase */
+  --text-badge-size:        11px;  --text-badge-leading:        11px;  /* .bk-photo-edit-btn 500 11/1 */
   --text-field-size:        18px;  --text-field-leading:        25px;  /* .se-input 400 18/1.4 */
   --text-field-label-size:  11px;  --text-field-label-leading:  11px;  --text-field-label-tracking: 0.045em; /* .se-label 500 11/1 uppercase */
 }

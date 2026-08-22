@@ -342,7 +342,7 @@ Copilot ("change my rate to $160"), never through settings forms. No
 configuration that exists only as a toggle.
 
 The thin, product-required exceptions: a "live / not live" indicator, the share
-link + QR, and the **enabled-tools toggle (D-3)** - the per-tenant on/off for
+link, and the **enabled-tools toggle (D-3)** - the per-tenant on/off for
 recommendations / quoting / order lookup that implements tool gating (PRD
 section 8). These are scope, not settings-tree creep (decision 7).
 
@@ -353,24 +353,44 @@ disabled. The Booking page (`renderScreen('booking')`) shows the business name,
 a clamped one-line description built from the O-1 profile's services and hours,
 and the public link with a copy control - the address derived from the current
 host via `surfaceUrl()`, never hardcoded, and shown without its scheme or
-trailing slash while the whole URL is what gets copied. Three parts of the
-prototype's screen do not ship because nothing stands behind them in Stage 1:
-the cover photo (no image upload; images are refused by ruling, O-3), the
-platform buttons (no Google/Facebook/Instagram integrations), and the Services
-list (quoting is off by default, D-1/D-2).
+trailing slash while the whole URL is what gets copied.
 
-**The QR (E-5, founder-approved dependency).** Encoding is `qrcode-generator`
-(MIT, no dependencies of its own) - QR is a spec with Reed-Solomon error
-correction and mask selection, and a subtly wrong implementation scans on one
-phone and fails on another. The **rendering** is ours: the library's
-`createSvgTag` emits hardcoded colours, which `check:tokens` forbids and which
-could not follow a theme, so `QrCode.tsx` builds one SVG path from `isDark()`
-and fills it with `currentColor`. Level M (15% recovery).
+**E-6 completed the screen** (founder walkthrough, 2026-08-23). The three parts
+E-5 left out now ship, because something stands behind each of them:
 
-The e2e **decodes it** with Chromium's `BarcodeDetector` rather than asserting
-an SVG is present - a transposed module matrix still renders as a plausible QR
-and simply does not scan, and that is the failure a presence check would wave
-through.
+- **The cover photo.** O-3's refusal of images is about *knowledge* - nothing
+  reads an image for text - and a brand asset is not knowledge, so the two
+  rulings do not collide. Migration 0021's `tenant_assets` holds the bytes in
+  Postgres: there is no object store here, Supabase Storage is absent from
+  local dev, and one small image per tenant is well inside what a row carries.
+  Resized client-side on a `<canvas>` before upload; 2MB server cap as the
+  backstop. Served behind the owner's session, so the page fetches it and hands
+  an object URL to the `<img>` - a bearer token cannot ride on `src`.
+- **The platform tiles** are link slots, not integrations: the owner's own
+  Website/Google/Facebook/Instagram addresses, stored in `tenant_config.brand
+  ->links`. Tapping a tile opens a panel - it never navigates on the tap, which
+  had left no way back to a link already saved. Schemes are allowlisted server
+  side; these render as links a customer clicks.
+- **The Services list** is derived from the owner's saved knowledge (the "What
+  we offer" and "Prices" sections), not from `catalog_items`, which has no
+  writer outside the demo seeds. `features/business/offerings.py` holds the
+  money rule *by construction*: no model runs on the path, and a price is a
+  verbatim slice of the owner's own line cut at the index the pricing gate's
+  extractor reports.
+
+**The QR is gone** (E-6). It was never in the prototype's owner screen - it came
+from the storefront's share sheet - and the founder does not use it. With it
+went the `qrcode-generator` dependency and the `BarcodeDetector` e2e. Sharing is
+the native `navigator.share()` with a clipboard fallback, which lists the apps
+the owner actually has rather than a hardcoded four-icon row.
+
+**The "Get a quote" CTA does not ship.** Quoting is a per-tenant opt-in that is
+off by default (D-1/D-2).
+
+**Still true, and worth saying plainly:** the page a customer lands on
+(`(customer)/page.tsx`) is a bare chat surface with none of this. The Booking
+page is the owner's preview of a storefront that has not been built yet; the
+port from `agencx-storefront-customer-v3.html` is the next ticket.
 
 The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
 O-3 / D19) and is not a document table: a source is processed into fixed readable
@@ -390,7 +410,8 @@ row, and the Business tab stays lit while the owner is inside it.
 ### S3 - Public page (anonymous, per-tenant slug)
 
 Single screen, centered column (max ~720px), tenant logo + display name header,
-message list, composer pinned bottom. No auth. Share link + QR for distribution.
+message list, composer pinned bottom. No auth. The share link is how a customer
+gets here (E-6 removed the QR).
 
 | State | Spec |
 |---|---|

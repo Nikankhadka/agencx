@@ -19,7 +19,10 @@ const SITE_URL =
  * no third-party flake. It cannot be one of the app's own pages: those are
  * client-rendered, so their HTML carries no text an extractor could find.
  */
-test("pasting a link reads the site and reads it back", async ({ page, request }) => {
+test("pasting a link reads the site and reads it back", async ({
+  page,
+  request,
+}) => {
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
 
   const thread = page.getByTestId("onboarding-thread");
@@ -31,7 +34,7 @@ test("pasting a link reads the site and reads it back", async ({ page, request }
   // visible" would be satisfied by a stale line, and once there were two it
   // failed strict mode outright.
   const readBack = thread.getByText(
-    /what I've got from your site|couldn't pin down the details/
+    /what I've got from your site|couldn't pin down the details/,
   );
   const before = await readBack.count();
 
@@ -41,7 +44,9 @@ test("pasting a link reads the site and reads it back", async ({ page, request }
 
   // The stamp names the slow work while the fetch, ingest and extraction run
   // (the backend leads the URL turn with progress: reading_site for this).
-  await expect(thread.getByText(/Reading your site/)).toBeVisible({ timeout: 20_000 });
+  await expect(thread.getByText(/Reading your site/)).toBeVisible({
+    timeout: 20_000,
+  });
 
   // The read-back lands: either the fields the page stated, or the honest
   // "couldn't pin down the details" when it stated none.
@@ -55,15 +60,24 @@ test("pasting a link reads the site and reads it back", async ({ page, request }
   // from it - the read-back alone would not prove the ingest ran.
   const token = await page.evaluate(() => {
     const raw = localStorage.getItem("agencx.login-session");
-    return raw ? (JSON.parse(raw) as { access_token: string }).access_token : "";
+    return raw
+      ? (JSON.parse(raw) as { access_token: string }).access_token
+      : "";
   });
   const docs = await request.get(`${BACKEND_URL}/api/knowledge`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(docs.ok()).toBe(true);
-  const rows = (await docs.json()) as { filename: string; doc_type: string; status: string }[];
+  const rows = (await docs.json()) as {
+    filename: string;
+    doc_type: string;
+    status: string;
+  }[];
   const site = rows.find((row) => row.filename === SITE_URL);
-  expect(site, "the pasted URL should be stored as a website document").toBeTruthy();
+  expect(
+    site,
+    "the pasted URL should be stored as a website document",
+  ).toBeTruthy();
   expect(site?.doc_type).toBe("website");
   expect(site?.status).toBe("ready");
 });

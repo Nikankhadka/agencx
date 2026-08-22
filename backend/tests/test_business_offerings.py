@@ -112,6 +112,27 @@ def test_the_same_service_from_two_sources_lists_once() -> None:
     assert offerings.derive([menu, price_list]) == [{"name": "Screen repair", "price": "$89"}]
 
 
+def test_a_priced_mention_upgrades_a_bare_one() -> None:
+    """The headings arrive in reading order, so "What we offer" (bare names) is
+    read before "Prices" (the same names with figures). First-wins de-duplication
+    threw every price away and left a Services list with no prices on it - which
+    is what the screenshot of the real page showed."""
+    rows = offerings.derive(
+        [
+            _record(
+                [
+                    {"heading": "What we offer", "body": "Shawarma plate\nMixed plate"},
+                    {"heading": "Prices", "body": "Shawarma plate - $16 · Pickup"},
+                ]
+            )
+        ]
+    )
+    assert rows == [
+        {"name": "Shawarma plate", "price": "$16 · Pickup"},
+        {"name": "Mixed plate", "price": None},
+    ]
+
+
 def test_prose_is_not_mistaken_for_a_row() -> None:
     """A wall of text under "What we offer" is a description, not a list. The
     length ceiling is what keeps it off the page as a giant unreadable row."""

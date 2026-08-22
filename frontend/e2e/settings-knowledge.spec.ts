@@ -13,7 +13,10 @@ const EDITED = "We fix phones and laptops on the north side, e2e.";
  * it, and saves it. The draft gate is the point - nothing answers a customer
  * until the owner has seen the text and said yes.
  */
-test("a pasted link is read back as sections, then saved", async ({ page, request }) => {
+test("a pasted link is read back as sections, then saved", async ({
+  page,
+  request,
+}) => {
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
 
   // Relative: the login helper signs in on the bare host, and the session lives
@@ -49,7 +52,10 @@ test("a pasted link is read back as sections, then saved", async ({ page, reques
 
   // Removing it takes it back out of what the assistant knows.
   await saved.getByTestId("knowledge-remove").click();
-  await expect(page.locator("article").filter({ hasText: EDITED })).toHaveCount(0, {
-    timeout: 30_000,
-  });
+  await expect(page.locator("article").filter({ hasText: EDITED })).toHaveCount(
+    0,
+    {
+      timeout: 30_000,
+    },
+  );
 });

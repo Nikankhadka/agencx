@@ -7,6 +7,10 @@ Tickets in this file:
 
 - O-1: Onboarding - one tool + LLM turn loop
 - O-2: Login-in-chat - email + 6-digit code
+- O-5: Onboarding UI - port the prototype thread
+- O-6: Chips, the contact widget, and the ABN beat
+- O-7: A link that cannot be read says so, and says why
+- O-8: Go-live lands on Home without a blank screen
 
 The knowledge-ingest tickets (O-3, O-4) ship with the chat-grounding build
 group and live in `04-chat-grounding.md`.
@@ -343,3 +347,137 @@ already pace the text, and a client-side word queue would fight the stream.
 - [ ] Every value a token; `check:tokens` green
 - [ ] Conversational email validation server-side, with tests
 - [ ] Lint, typecheck, format, unit and e2e green
+
+
+---
+
+## O-6: Chips, the contact widget, and the ABN beat
+
+Added during the build (founder walkthrough, 2026-08-23), spec'd here like the
+rest.
+
+### Summary
+
+Put the prototype's suggestion chips back on the beats that have them, add the
+country-code phone pill and the welded ABN pill as composer widgets a chip can
+open, and add `abn` / `gst` as beats.
+
+### Why
+
+O-1 cut chips to keep extraction reliable on free models ("seven text beats, no
+chips"). Walking the shipped flow against the prototype showed that trade was
+not necessary: chips can be presentation rather than protocol. And an ABN is
+what a business puts on an invoice - the prototype asks for it, and the shipped
+interview did not.
+
+### User stories
+
+#### US-1 A chip is a shortcut, never a gate
+
+**As** Sam answering "is it just you, or do you have a team?",
+**I want** to tap "Just me",
+**so that** I do not type an answer the assistant already guessed.
+
+- [x] Tapping a chip sends its **label as ordinary text** on the existing
+  streaming route; `save_profile` extraction is still the only way into the draft
+- [x] Every beat keeps `kind: "text"` - the pill is always there, placeholder
+  "or type…", and typing past the chips always works
+- [x] The `selection` payload stays refused (409); no new protocol
+- [x] `.chips-row` sits **above** the pill in the same widget, as the prototype has it
+
+#### US-2 A chip can open a different input
+
+**As** Sam asked for the best way to reach me,
+**I want** tapping "Phone number" to give me a real phone field,
+**so that** I get a numeric keypad and a country code, not a text box.
+
+- [x] `ChipSpec.widget` declares the swap, so the client never hardcodes a beat
+- [x] The phone pill ports `initPhone()`: AU/NZ/US/UK/SG, per-country formatting
+  and validation, popover opening upward, error line only after a rejected send
+- [x] The ABN pill is the prototype's `.abn-pill`: welded label, `XX XXX XXX XXX`,
+  armed at exactly 11 digits
+- [x] The chips row stays up after a swap and the active chip toggles back, so a
+  beat is never a trap
+- [x] The login address is offered as a one-tap chip on the contact beat, via
+  `InputSpec.suggest_owner_email` - the server declares it, the client supplies
+  the value it already holds
+
+#### US-3 ABN and GST, without branching on a vertical
+
+- [x] `abn` and `gst` are beats; the profile is jsonb, so no migration
+- [x] `gst` skips itself when the owner said they have no ABN, via its own
+  `complete` predicate - conditional on a previous *answer*, never on the
+  business type (I8)
+- [x] `"none"` is the stated answer of an owner without one, distinct from
+  "not asked yet"
+
+### Design reference
+
+`agencx-prototype-v6.html`: `buildCmdPill(placeholder, onSubmit, chips)` and the
+`.chips-row` / `.c-reply` / `.c-suggest` rules; `initPhone()` + `COUNTRIES`;
+`handlePricing()` / `handleAbn()` and the `.abn-pill` rules.
+
+### Definition of done
+
+- [x] `make check`, `check:tokens`, e2e green
+- [x] Verified against the running stack: a real login code, a real interview
+  through every beat with the live model, and the no-ABN branch skipping GST
+
+---
+
+## O-7: A link that cannot be read says so, and says why
+
+### Summary
+
+Send browser-like request headers on the ingest fetch, log the reason a scrape
+failed instead of swallowing it, and match a scheme-less link.
+
+### Why
+
+A pasted Uber Eats link came back as "I couldn't read that page" with nothing
+behind it. Three defects were under that one sentence: the fetch announced
+itself as `python-httpx` and was refused by bot protection; both URL paths
+caught `except ValueError:` binding no variable, so a 403, an empty page and a
+dead host were indistinguishable in the logs; and `_URL_RE` matched only
+`https?://`, so what the address bar shows was never fetched at all.
+
+### User stories
+
+- [x] The fetch sends a real user agent, accept and accept-language
+- [x] The reason is logged with the URL; the fetch names the HTTP status
+- [x] A `www.` host, or a bare host with a path and an alphabetic TLD, is
+  matched and given `https://` - while "$16.50 a plate", "16.50/plate" and
+  "3.5/5 stars" stay prose
+- [x] The failure line names the situation instead of implying a typo
+
+Deliberately **not** done: a headless browser. Marketplace pages fingerprint
+beyond headers - Uber Eats still answers 403, verified against the live
+stack - and the honest product behaviour is to say so.
+
+---
+
+## O-8: Go-live lands on Home without a blank screen
+
+### Summary
+
+Keep the conversation on screen through go-live, prefetch `/home`, and stop the
+confirm button re-arming during the transition.
+
+### Why
+
+Confirming replaced the whole thread with one line, held a fixed 1400ms on that
+near-empty screen, then navigated to `/home`, which fetched its brief from three
+endpoints cold. The pause had nothing to look at, so it read as a stall.
+
+### User stories
+
+- [x] The activation line is appended to the conversation, not substituted for it
+- [x] `/home` is prefetched as soon as confirming becomes possible
+- [x] The hold drops to 700ms - enough to read, with no blank frame to sit through
+- [x] The button stays held until the route changes (a second click 409s and
+  paints an error over the live line), and the timer is cleaned up on unmount
+
+Measured on the running stack: confirm to `/home` in 827ms.
+
+Not covered by a test: there is no component-test harness in this repo, and the
+only route to this code is an LLM-driven e2e interview. Verified by hand.

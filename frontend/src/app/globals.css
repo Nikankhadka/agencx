@@ -113,6 +113,11 @@
   --text-lede-q--line-height: var(--text-lede-q-leading);
   --text-bubble: var(--text-bubble-size);
   --text-bubble--line-height: var(--text-bubble-leading);
+  --text-eyebrow: var(--text-eyebrow-size);
+  --text-eyebrow--line-height: var(--text-eyebrow-leading);
+  --text-eyebrow--letter-spacing: var(--text-eyebrow-tracking);
+  --text-badge: var(--text-badge-size);
+  --text-badge--line-height: var(--text-badge-leading);
   --text-tab: var(--text-tab-size);
   --text-tab--line-height: var(--text-tab-leading);
   --text-proc: var(--text-proc-size);

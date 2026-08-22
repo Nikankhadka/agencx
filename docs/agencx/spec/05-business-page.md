@@ -448,3 +448,83 @@ prototype so the hub's shape is right, not because Phase 1 ships them.
 - [ ] Tenant nav hides advanced screens
 - [ ] Advanced screens serve and stay tested
 - [ ] Platform visibility unchanged
+
+
+---
+
+## E-6: the Booking page as the customer's view
+
+Added during the build (founder walkthrough, 2026-08-23).
+
+### Summary
+
+Finish the Booking page against the prototype: the cover photo, the Services
+list and the platform tiles that E-5 left out. Remove the QR and do not add a
+"Get a quote" CTA.
+
+### Why
+
+E-5 left three parts out as "dead surface", each because nothing stood behind
+them. Two of those reasons no longer hold, and the third was a scope call the
+founder has now made differently:
+
+- the cover photo was blocked on "images are refused (O-3)" - but that ruling is
+  about *knowledge*, and a brand asset is not knowledge;
+- the platform tiles were blocked on "no integrations" - they are link slots,
+  not integrations;
+- the Services list was blocked on quoting being off - but the rows come from
+  the owner's own saved material, not from the quoting engine.
+
+The QR goes the other way: E-5 added it, it was never in the prototype's owner
+screen, and the founder does not use it.
+
+### User stories
+
+#### US-1 A cover photo
+
+- [x] `.bk-photo-wrap`: 200px, tinted invitation while empty, the photo once set,
+  "Edit photo" pill in the corner
+- [x] Migration 0021 `tenant_assets` holds the bytes in Postgres, with a
+  `ponytail:` note naming object storage as the upgrade path
+- [x] Resized on a `<canvas>` before upload; 2MB server cap as the backstop
+- [x] Served behind the owner's session, so the page fetches it and hands an
+  object URL to the `<img>` - a bearer token cannot ride on `src`
+
+#### US-2 Services, without a model near a price
+
+- [x] Rows derived from the "What we offer" and "Prices" sections of the owner's
+  **saved** knowledge; a draft they have not reviewed is not published
+- [x] A price is a verbatim slice of the owner's own line, cut at the index the
+  pricing gate's extractor reports - the money rule held by construction
+- [x] Absent entirely when there is nothing saved; no empty heading
+
+#### US-3 The platform tiles are link slots
+
+- [x] Empty is dashed and reads "Add"; filled is solid and reads "Open"
+- [x] Tapping opens a panel and never navigates on the tap itself - navigating
+  left no way back to a link already saved
+- [x] Stored in `tenant_config.brand->links`; schemes allowlisted server side
+
+#### US-4 What does not ship
+
+- [x] The QR, and the `qrcode-generator` dependency with it
+- [x] The "Get a quote" CTA (quoting is a Stage 2 opt-in)
+- [x] Sharing is `navigator.share()` with a clipboard fallback, not the
+  prototype's hardcoded four-icon sheet
+
+### Known gap, deliberately left
+
+The page a customer lands on (`(customer)/page.tsx`) is still a bare chat
+surface with none of this. The Booking page is the owner's preview of a
+storefront that has not been built. Porting
+`agencx-storefront-customer-v3.html` is the next ticket, and until it lands the
+headings here claim only what is true.
+
+**E-5's "live / not-live state is legible" DoD bullet was never implemented** -
+nothing on the page reads `tenants.status`. E-6 did not add it either. It wants
+its own ticket rather than another silent carry-forward.
+
+### Definition of done
+
+- [x] `make check`, `check:tokens`, `make test-e2e` green
+- [x] Side by side against the prototype at 390px
