@@ -324,6 +324,23 @@ link + QR, and the **enabled-tools toggle (D-3)** - the per-tenant on/off for
 recommendations / quoting / order lookup that implements tool gating (PRD
 section 8). These are scope, not settings-tree creep (decision 7).
 
+**Shipped shape (E-5).** Business is a hub of `.bh-row`s
+(`renderScreen('business')`) holding **Booking page** and **Settings**.
+Schedule, Money and Plan are the prototype's Stage 2 rows and are absent, not
+disabled. The Booking page (`renderScreen('booking')`) shows the business name,
+a clamped one-line description built from the O-1 profile's services and hours,
+and the public link with a copy control - the address derived from the current
+host via `surfaceUrl()`, never hardcoded, and shown without its scheme or
+trailing slash while the whole URL is what gets copied. Three parts of the
+prototype's screen do not ship because nothing stands behind them in Stage 1:
+the cover photo (no image upload; images are refused by ruling, O-3), the
+platform buttons (no Google/Facebook/Instagram integrations), and the Services
+list (quoting is off by default, D-1/D-2).
+
+**The QR is still outstanding.** Nothing in the repo generates one, and QR
+encoding is a spec-defined algorithm with error correction and masking - the
+wrong thing to hand-roll. It needs a dependency decision before it ships.
+
 The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
 O-3 / D19) and is not a document table: a source is processed into fixed readable
 sections the owner corrects, held as a draft until they save it. E-1 re-homed

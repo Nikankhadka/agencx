@@ -38,11 +38,12 @@ it back. **C-6 is a ticket added during the build** (founder request, 2026-08-22
 and is spec'd in the phase file like the rest. `05-business-page.md` is re-cut by **D21**
 into four tickets - E-1 (the three-tab shell: Home, Chats, Business), E-4 (Home
 and its brief), E-5 (Business hub + Booking page), E-2 (hide the advanced
-screens). **E-1 and E-4 are landed**: the hamburger drawer is gone, the
-bottom tab bar below `lg` closes the long-standing 375px sidebar squeeze,
-`/chats` and `/settings` render inside the shell, and Home greets the owner
-with what needs them. Next is E-5, then E-2, with P-5 still outstanding from
-the chat spine.
+screens). **E-1, E-4 and E-5 are landed**: the hamburger drawer is gone,
+the bottom tab bar below `lg` closes the long-standing 375px sidebar squeeze,
+`/chats` and `/settings` render inside the shell, Home greets the owner with
+what needs them, and Business is a hub with its Booking page and share link.
+Next is E-2, with P-5 still outstanding from the chat spine and the Booking
+page's QR waiting on a dependency decision.
 
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
@@ -110,6 +111,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
+| Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. **QR outstanding** - needs a dependency decision, see known gaps |
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
@@ -171,7 +173,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
 | E-1 Three-tab shell (Home + Chats + Business) | done | this commit |
 | E-4 Home: the greeting and the brief | done | this commit |
-| E-5 Business hub + Booking page | not started | |
+| E-5 Business hub + Booking page | done (QR outstanding) | this commit |
 | E-2 Hide advanced screens, keep code | not started | |
 | E-3 Platform admin stays minimal | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
@@ -188,6 +190,13 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
+
+- **The Booking page has no QR** (E-5). The PRD names "share link + QR" and the
+  link half shipped; nothing in the repo generates a QR, and QR encoding is a
+  spec-defined algorithm with Reed-Solomon error correction and mask selection
+  - hand-rolling it would be worse code than a mature ~10KB dependency, and
+  adding a dependency is a founder call (conventions: "No new dependency if it
+  can be avoided"). Flagged, not decided.
 
 - **Live LLM calls run against free-tier models** (Google AI Studio primary,
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to

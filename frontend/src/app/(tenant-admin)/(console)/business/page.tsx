@@ -12,10 +12,10 @@ import { useAuth } from "@/components/AuthProvider";
  * and Plan as rows here, so growth costs a row rather than a re-cut of the
  * navigation.
  *
- * One row today, the same call `/settings` made when it shipped: the
- * prototype's other rows open onto Stage 2 machinery that does not exist, and
- * a row that opens onto nothing is worse than an absent one (PRD, "never build
- * dead surfaces"). E-5 adds the Booking page.
+ * Two rows, the same call `/settings` made when it shipped: the prototype's
+ * other rows (Schedule, Money, Plan) open onto Stage 2 machinery that does not
+ * exist, and a row that opens onto nothing is worse than an absent one (PRD,
+ * "never build dead surfaces"). They are absent, not disabled.
  *
  * Sign-out lives here because the hamburger drawer that used to hold it is
  * gone (E-1): on a phone the sidebar never renders, and sign-out must stay
@@ -27,6 +27,12 @@ export default function BusinessPage() {
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Business" back={false} />
       <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread">
+        <RowLink
+          href="/business/booking"
+          label="Booking page"
+          icon="arrow_forward"
+          detail="What customers see, and the link to it"
+        />
         <RowLink
           href="/settings"
           label="Settings"
