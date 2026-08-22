@@ -670,3 +670,166 @@ it happens.
 - [ ] The chat verifiably continues after every non-limit escalation
 - [ ] Owner queue + resolve flow work against an open conversation
 - [ ] Limit escalation still terminal; C-4 matrix green
+
+---
+
+## C-6: Human takeover - staff step in, and hand back
+
+### Summary
+
+Give the owner the other half of a handoff. C-5 stopped the customer's side of
+the conversation from dying; the owner's side is still a table row with a Claim
+button and a single canned Resolve message. C-6 makes the escalation carry a
+one-line note of what the customer actually wants, lets a staff member take the
+conversation over and talk to that customer directly with the assistant silent,
+hand it back when they are done, and makes "can I speak to a person?" a
+first-class request rather than something that happens to work.
+
+### Why
+
+Founder requirement raised during C-block planning (2026-08-22). A support
+agent a business cannot step into is not a support agent a business will put in
+front of its customers. Today the owner sees a reason string and can send
+exactly one message; there is no way to have a conversation, and no way to give
+it back. The distinction the code has never made is the whole ticket:
+
+- **An escalation is a notification** - "a human should look at this". It
+  creates a queue item. It does not change who is replying; the assistant keeps
+  helping (that is C-5).
+- **A takeover is a mode** - a staff member is the voice now, and the assistant
+  is silent until handed back.
+
+Separating them is what makes all four requirements fall out of one change.
+
+### User stories
+
+#### US-1 The owner sees what the customer wants, not a reason code
+
+**As** Sam, glancing at his phone between jobs,
+**I want** each waiting conversation to say what it is about in one line,
+**so that** I can tell a price question from a complaint without opening it.
+
+- [ ] `create_escalation` captures a `summary` alongside `reason` - one plain
+  line of what the customer wants ("Catering for 20 on Friday, wants a price")
+- [ ] The summary is written in the tool call the model already makes; no
+  extra LLM call and no second prompt pass
+- [ ] Owner-facing only: returned by the escalations API, never by any public
+  chat endpoint. The money guardrail deliberately does not apply to it - no
+  customer reads it, and it restates the customer's own request (founder
+  ruling, 2026-08-22)
+- [ ] Falls back to `reason` when the model omits it
+
+#### US-2 Staff take the conversation over
+
+**As** Sam, seeing a question only he can answer,
+**I want** to reply to that customer myself with the assistant out of the way,
+**so that** I am not fighting my own agent for the conversation.
+
+- [ ] Any conversation can be taken over, not only a flagged one - the
+  prototype's pill is always present
+- [ ] Takeover sets `conversations.status = 'human'`; while it holds, a
+  customer message is stored and no agent turn runs
+- [ ] A stamp lands in the transcript ("You took over this conversation") so
+  the history reads honestly to whoever scrolls it later
+- [ ] Staff replies post as `human_agent` and reach the customer's open chat
+  through the existing poll (C-5)
+
+#### US-3 Staff hand it back
+
+**As** Sam, done answering,
+**I want** to give the conversation back to the assistant,
+**so that** I do not have to keep watching it.
+
+- [ ] Handback returns the status to `'open'` and appends the symmetrical stamp
+- [ ] The next customer message gets a full agent turn
+- [ ] The takeover interlude stays in the history, so the assistant reads what
+  the human said and does not contradict it
+
+#### US-4 The customer can ask for a person
+
+**As** Alex, who would rather talk to a human,
+**I want** asking for one to actually summon one,
+**so that** I am not stuck negotiating with a bot.
+
+- [ ] The prompt instructs: if the customer asks to speak to a person, call
+  `create_escalation` immediately, say a human has been notified, and keep
+  helping in the meantime
+- [ ] Produces the same queue item and the same C-5 continue-the-chat behaviour
+
+#### US-5 Caps stay hard stops
+
+- [ ] `'escalated'` still means a limit stopped the conversation; the composer
+  locks and no takeover applies
+
+### Design reference
+
+The prototype's **Chats** screens in
+`docs/agencx/design/prototypes/agencx-prototype-v6.html` - both of them, not
+just the buttons. Port them; do not design from this text.
+
+- **List** (`renderScreen('chats')`): topbar + search (`openChatsSearch` /
+  `filterChats`, "No conversations found." empty state); filter row **All /
+  Action needed / Unread**, where "Action needed" is the escalation flag and so
+  *is* the owner's queue; `chat-row` with name, relative time, status dot, and a
+  one-line preview - the preview line is the summary note. Dots: `bdot-a` amber
+  = needs the owner, `bdot-t` teal = the assistant is handling it, none = idle.
+- **Thread** (`renderThreadScreen`, `alexTko`, `alexHbk`): `thr-st` status
+  reading "Handling" (teal) / "You're replying" (muted); `h-bar` pill "Take over
+  this conversation" swapping to `tko-bar` with "Hand back to Agencx" plus a
+  composer; `thr-pill` stamps both ways with `pillTime()` timestamps
+  (`thr-pill` is for stamps, `thr-pill-action` for actions - do not mix);
+  sent/read ticks on outgoing bubbles.
+
+Build on `ChatBubble`, never on `Thread.tsx`: `frontend.md` is explicit that the
+operator thread's two-bubble idiom and the onboarding thread's are different
+designs and must not be unified.
+
+### Technical spec
+
+- Migration **0020**: widen `conversations.status` to
+  `('open', 'human', 'escalated', 'closed')` and add `escalations.summary text`.
+  Strictly additive - no existing row changes meaning. (`0016` stays reserved
+  for D-2.)
+- `_CreateEscalationArgs` (`app/agents/agent_node.py`) gains `summary`; the
+  insert carries it.
+- `app/features/chat/service.py`: `resolve_conversation` reports the `'human'`
+  state; the chat API stores the message and returns without invoking the graph.
+- Takeover/handback are conversation-scoped, not escalation-scoped:
+  `POST /api/conversations/{id}/takeover` and `.../handback`. Each appends its
+  stamp as a transcript message.
+- Owner UI: Chats list and thread, mounted chrome-free (`CHROME_FREE_PREFIXES`,
+  the posture O-3 set for `/settings`) until E-1 builds the tab bar to hold
+  them. Every prototype value lands as a `theme.css` token.
+
+### Tests
+
+- Takeover: status `'human'`, customer message stored, graph never invoked, no
+  `escalated` event on the wire
+- Handback: status `'open'`, the next message gets a full agent turn, and that
+  turn's history contains the human's messages
+- Stamps present in both directions
+- Summary on the escalations API response and absent from every public chat
+  response (asserted, not assumed)
+- Leakage: a takeover on tenant A's conversation is invisible and unreachable
+  from tenant B
+- E2E: customer asks for a person -> queue item with the summary -> owner takes
+  over -> types a reply -> customer sees it in the open chat, composer never
+  locked -> owner hands back -> assistant answers the next question. This also
+  carries C-5's deferred E2E: the same UI contract, with no model in the loop.
+
+### Files touched
+
+- `backend/migrations/0020_conversation_human_takeover.sql`
+- `backend/app/features/chat/{api,service,controller}.py`
+- `backend/app/features/escalations/{api,controller,service}.py`
+- `backend/app/agents/agent_node.py`
+- `frontend/src/app/(tenant-admin)/(console)/conversations/**`
+- `docs/agencx/design/frontend.md` (S1 state table), `design/decisions.md` (D20)
+
+### Definition of done
+
+- [ ] An escalation carries a readable summary, owner-facing only
+- [ ] Staff can take over any conversation and reply directly
+- [ ] Handback restores the assistant, with the interlude in its history
+- [ ] Asking for a person summons one
+- [ ] Limit escalations still terminal; the C-4 matrix green

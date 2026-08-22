@@ -44,8 +44,10 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # login-in-chat auth_codes table (0016 is reserved for D-2's enabled_tools
     # lean default and intentionally skipped); 0018 adds P-4's documents
     # .updated_at + touch trigger, the knowledge_version derivation; 0019 adds
-    # O-3's draft status + documents.structured, the reviewable knowledge record.
-    assert len(on_disk) == 18, "expected migrations 0001-0015 + 0017-0019"
+    # O-3's draft status + documents.structured, the reviewable knowledge record;
+    # 0020 adds C-6's 'human' conversation status + escalations.summary, the
+    # takeover state and the owner's one-line note.
+    assert len(on_disk) == 19, "expected migrations 0001-0015 + 0017-0020"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

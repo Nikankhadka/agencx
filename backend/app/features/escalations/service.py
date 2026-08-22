@@ -12,7 +12,9 @@ import asyncpg
 
 from app.shared import db
 
-_SELECT_COLUMNS = "id, conversation_id, reason, status, created_at, resolved_at"
+# C-6: ``summary`` is the owner's one-line note of what the customer wants.
+# It ships on this surface and on no public one - a customer never reads it.
+_SELECT_COLUMNS = "id, conversation_id, reason, summary, status, created_at, resolved_at"
 
 
 async def list_escalations(*, tenant_id: str, limit: int, offset: int) -> list[dict[str, object]]:

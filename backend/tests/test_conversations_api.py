@@ -205,3 +205,122 @@ async def test_get_conversation_detail_cross_tenant_is_404(
 async def test_list_conversations_requires_auth(client: httpx.AsyncClient) -> None:
     response = await client.get("/api/conversations")
     assert response.status_code == 401
+
+
+# --- C-6: takeover, handback, and the human's own words --------------------
+
+
+def _auth(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _status_of(conn: asyncpg.Connection[Any], conversation_id: uuid.UUID) -> str:
+    return str(
+        await conn.fetchval("select status from conversations where id = $1", conversation_id)
+    )
+
+
+async def _roles_and_text(
+    conn: asyncpg.Connection[Any], conversation_id: uuid.UUID
+) -> list[tuple[str, str]]:
+    rows = await conn.fetch(
+        "select role, content from messages where conversation_id = $1 order by created_at, id",
+        conversation_id,
+    )
+    return [(r["role"], r["content"]) for r in rows]
+
+
+async def test_takeover_and_handback_move_the_conversation_and_leave_stamps(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    assert (
+        await client.post(f"/api/conversations/{conversation_id}/takeover", headers=_auth(token))
+    ).status_code == 204
+    assert await _status_of(superuser_conn, conversation_id) == "human"
+
+    assert (
+        await client.post(f"/api/conversations/{conversation_id}/handback", headers=_auth(token))
+    ).status_code == 204
+    assert await _status_of(superuser_conn, conversation_id) == "open"
+
+    # The transcript says who was speaking, and from when.
+    assert await _roles_and_text(superuser_conn, conversation_id) == [
+        ("system", "You took over this conversation"),
+        ("system", "Handed back to Agencx"),
+    ]
+
+
+async def test_takeover_is_idempotent_and_never_stamps_twice(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    first = await client.post(
+        f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
+    )
+    second = await client.post(
+        f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
+    )
+    assert first.status_code == 204
+    assert second.status_code == 409
+    assert len(await _roles_and_text(superuser_conn, conversation_id)) == 1
+
+
+async def test_a_limit_stopped_conversation_cannot_be_taken_over(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """A cap is a hard stop - taking it over would quietly reopen a
+    conversation the tenant is not paying to continue."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, status="escalated")
+
+    response = await client.post(
+        f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
+    )
+    assert response.status_code == 409
+    assert await _status_of(superuser_conn, conversation_id) == "escalated"
+
+
+async def test_reply_needs_the_conversation_taken_over_first(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Two voices in one thread, neither aware of the other mid-turn, is worse
+    than making the owner press one button first."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    too_early = await client.post(
+        f"/api/conversations/{conversation_id}/reply",
+        json={"message": "Hi, it's Sam."},
+        headers=_auth(token),
+    )
+    assert too_early.status_code == 409
+
+    await client.post(f"/api/conversations/{conversation_id}/takeover", headers=_auth(token))
+    accepted = await client.post(
+        f"/api/conversations/{conversation_id}/reply",
+        json={"message": "Hi, it's Sam."},
+        headers=_auth(token),
+    )
+    assert accepted.status_code == 204
+    assert ("human_agent", "Hi, it's Sam.") in await _roles_and_text(
+        superuser_conn, conversation_id
+    )
+
+
+async def test_takeover_is_scoped_to_its_own_tenant(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    _, other_tenant_id = await _signup_tenant_admin(client)
+    other_conversation = await _seed_conversation(superuser_conn, other_tenant_id)
+
+    response = await client.post(
+        f"/api/conversations/{other_conversation}/takeover", headers=_auth(token)
+    )
+    assert response.status_code == 409
+    assert await _status_of(superuser_conn, other_conversation) == "open"

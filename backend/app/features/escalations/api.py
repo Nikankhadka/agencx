@@ -24,6 +24,10 @@ class EscalationResponse(BaseModel):
     id: UUID
     conversation_id: UUID
     reason: str
+    # C-6: what the customer actually wants, in one line, for the owner to read
+    # in the Chats list instead of a reason code. Null on rows written before
+    # C-6 and whenever the model omitted it - the client falls back to reason.
+    summary: str | None = None
     status: str
     created_at: datetime
     resolved_at: datetime | None

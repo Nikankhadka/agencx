@@ -55,13 +55,22 @@ STEP_CAP_ESCALATION_REASON = "step_cap"
 # The turn ran past its latency cap - no leg produced a complete answer in time.
 TURN_BUDGET_ESCALATION_REASON = "turn_budget"
 # An unexpected failure mid-turn (provider returned garbage, a node raised).
-# The turn cannot be completed, so it escalates like any other dead end rather
-# than leaving the customer's stream hanging with no terminal event.
+# The turn cannot be completed, so it hands off rather than leaving the
+# customer's stream hanging with no terminal event. Unlike the cap reasons this
+# one is non-terminal (C-6): an upstream provider falling over is not a limit
+# the tenant hit, and the customer can simply ask again.
 PROVIDER_ERROR_ESCALATION_REASON = "provider_error"
 
 BUDGET_UNAVAILABLE_MESSAGE = (
     "We're unable to answer automatically right now, so I'm passing this to a "
     "human who'll follow up with you. Thanks for your patience."
+)
+
+# Same situation from the customer's side, different truth about what happens
+# next: this one invites them to try again, because they can.
+PROVIDER_UNAVAILABLE_MESSAGE = (
+    "Something went wrong on my side just then, so I've let the business know. "
+    "Try me again in a moment - I'm still here."
 )
 
 

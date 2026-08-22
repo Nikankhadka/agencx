@@ -218,3 +218,37 @@ the Knowledge screen. It carries no toggles and no preferences - it is the
 show-back surface this ADR asks for, at a different address. The rule the ADR
 protects ("if a setting can only exist as a toggle on a screen, it should not
 exist") is unchanged.
+
+---
+
+## D20: an escalation notifies; a takeover is what changes who is replying
+
+**Date:** 2026-08-22 (C-5 / C-6). **Status:** accepted.
+
+The schema had one terminal `escalated` status doing two jobs, and the result
+was that any handoff ended the conversation. One unanswerable pricing question
+could dead-end a support session that was working fine for everything else.
+
+They are separate concerns and the code now says so:
+
+- **An escalation is a notification** - "a human should look at this". It writes
+  a queue row and says nothing about who is replying. The assistant keeps
+  helping (C-5).
+- **A takeover is a mode** - `conversations.status = 'human'`. A staff member is
+  the voice; the assistant is silent until handed back (C-6). Reversible, and
+  the interlude stays in the transcript so the assistant reads what the human
+  said rather than contradicting it.
+- **`'escalated'` means a limit stopped it.** Daily budget, step cap, turn
+  budget. Written only by `record_limit_escalation`. This is the one hard stop,
+  and it is the behaviour being paid for.
+
+**A provider failure is not a limit.** It was originally routed through the
+terminal path because it is another way a turn dies, but an upstream fault the
+customer had no part in should not end their conversation - it hands off
+non-terminally and invites them to try again. This was found by the C-6 E2E,
+which the free-tier provider failed into on its first run.
+
+**Consequence for the owner surface:** the escalations queue stops being a
+separate destination - it is the "Action needed" filter on the Chats list, where
+the owner already is. The Wren-era `/escalations` and `/conversations` screens
+stay mounted for E-2 to hide.

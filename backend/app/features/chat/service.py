@@ -2,8 +2,9 @@
 and turn persistence (assistant message, tool_calls, cost_logs).
 
 Moved out of api/chat.py. The ticket-level rules stay in the handler docs:
-nothing is customer-visible until Inspection clears a draft, escalations are
-terminal, and step caps/budget stops hand off gracefully instead of erroring.
+nothing is customer-visible until Inspection clears a draft, only limit stops
+are terminal (C-5), and step caps/budget stops hand off gracefully instead of
+erroring.
 """
 
 from __future__ import annotations
@@ -34,12 +35,18 @@ async def resolve_conversation(
     tenant_id: UUID,
     conversation_id: UUID | None,
     message: str,
-) -> tuple[UUID, bool, TenantLimits, bool]:
+) -> tuple[UUID, str, TenantLimits, bool]:
     """Open or fetch the conversation, persist the customer message, and
     resolve this tenant's limits and remaining daily budget - all inside one
     customer-scoped transaction. Raises ValueError when the conversation id
     belongs to someone else. Returns
-    (conversation_id, already_escalated, limits, over_budget)."""
+    (conversation_id, status, limits, over_budget).
+
+    C-6 returns the status rather than an ``already_escalated`` boolean. Two
+    different states now stop the graph for two different reasons - a limit
+    stop ends the conversation, a human takeover just means someone else is
+    replying - and a boolean per state is how a status column gets
+    reimplemented one flag at a time."""
     async with db.tenant_context(tenant_id, "customer") as conn:
         if conversation_id is not None:
             row = await conn.fetchrow(
@@ -49,12 +56,12 @@ async def resolve_conversation(
             )
             if row is None:
                 raise ValueError("conversation not found")
-            already_escalated = row["status"] == "escalated"
+            status = str(row["status"])
         else:
             conversation_id = await conn.fetchval(
                 "insert into conversations (tenant_id) values ($1) returning id", tenant_id
             )
-            already_escalated = False
+            status = "open"
         await conn.execute(
             "insert into messages (tenant_id, conversation_id, role, content) "
             "values ($1, $2, 'customer', $3)",
@@ -73,20 +80,26 @@ async def resolve_conversation(
             config.get_settings(),
         )
         over_budget = await tenant_over_budget(conn, tenant_id, limits)
-    return conversation_id, already_escalated, limits, over_budget
+    return conversation_id, status, limits, over_budget
 
 
 async def record_limit_escalation(
-    *, tenant_id: UUID, conversation_id: UUID, reason: str, message: str
+    *, tenant_id: UUID, conversation_id: UUID, reason: str, message: str, terminal: bool = True
 ) -> None:
-    """T-028: a tenant hit a cap - record the escalation (deduped by 0011's
-    partial unique index) and persist the graceful handoff as the assistant
-    message. No graph runs.
+    """T-028: a turn ended without an answer - record the escalation (deduped
+    by 0011's partial unique index) and persist the graceful handoff as the
+    assistant message. No graph runs.
 
-    C-5 left this the *only* writer of ``conversations.status = 'escalated'``.
-    A cap is a hard stop by design: the chat really does end, the composer
-    locks, and that is the behaviour being paid for. Every agent-side handoff
-    now keeps the conversation open instead."""
+    ``terminal`` decides whether the conversation is also closed to further
+    turns, and C-5 left this the only place that can do it. A cap the tenant
+    actually hit - daily budget, step cap, turn budget - is a hard stop by
+    design: the chat ends, the composer locks, and that is the behaviour being
+    paid for.
+
+    A provider failure is not that. It is a transient upstream fault the
+    customer had no part in, and ending their conversation over it is exactly
+    the dead end C-5 removed everywhere else - so that path passes
+    ``terminal=False`` and the customer can simply ask again."""
     async with db.tenant_context(tenant_id, "customer") as conn:
         await conn.execute(
             "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
@@ -95,12 +108,13 @@ async def record_limit_escalation(
             conversation_id,
             reason,
         )
-        await conn.execute(
-            "update conversations set status = 'escalated' "
-            "where id = $1 and tenant_id = $2 and status <> 'escalated'",
-            conversation_id,
-            tenant_id,
-        )
+        if terminal:
+            await conn.execute(
+                "update conversations set status = 'escalated' "
+                "where id = $1 and tenant_id = $2 and status <> 'escalated'",
+                conversation_id,
+                tenant_id,
+            )
         await conn.execute(
             "insert into messages (tenant_id, conversation_id, role, content, metadata) "
             "values ($1, $2, 'assistant', $3, $4)",
@@ -108,6 +122,58 @@ async def record_limit_escalation(
             conversation_id,
             message,
             json.dumps({"limit_escalation": reason}),
+        )
+
+
+TAKEOVER_STAMP = "You took over this conversation"
+HANDBACK_STAMP = "Handed back to Agencx"
+
+
+async def set_conversation_handler(*, tenant_id: UUID, conversation_id: UUID, human: bool) -> bool:
+    """C-6: switch a conversation between the assistant and a staff member.
+
+    Returns False when the conversation does not exist, or when a tenant limit
+    already ended it - a cap is a hard stop and taking it over would quietly
+    reopen a conversation the tenant is not paying to continue. Idempotent: a
+    second takeover of an already-taken-over conversation changes nothing and
+    adds no second stamp.
+
+    The stamp is written as a ``system`` message so the transcript reads
+    honestly to whoever scrolls it later - who was speaking, and from when.
+    """
+    target = "human" if human else "open"
+    previous = "open" if human else "human"
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        updated = await conn.fetchval(
+            "update conversations set status = $3 "
+            "where id = $1 and tenant_id = $2 and status = $4 returning id",
+            conversation_id,
+            tenant_id,
+            target,
+            previous,
+        )
+        if updated is None:
+            return False
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'system', $3)",
+            tenant_id,
+            conversation_id,
+            TAKEOVER_STAMP if human else HANDBACK_STAMP,
+        )
+    return True
+
+
+async def post_human_reply(*, tenant_id: UUID, conversation_id: UUID, message: str) -> None:
+    """A staff member's own words, into an open conversation. The customer's
+    client picks it up on the poll C-5 left running."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'human_agent', $3)",
+            tenant_id,
+            conversation_id,
+            message,
         )
 
 

@@ -250,9 +250,23 @@ that test, and "Wrong email?" is already on screen.
 | Opening message | held behind the typing indicator for 820ms, then revealed as the lede - static messages are paced like streamed ones (section 9). Never re-paced for restored history |
 | Bad email typed | one calm line under the composer from the server; typed text kept |
 | Streaming | StreamingText in assistant bubble; TypingIndicator up while the turn is in flight (through the failover window, P-5); composer disabled with "answering..." hint; stop button |
-| Escalated | EscalationBanner replaces composer; conversation stays readable |
+| Handed off (C-5) | A topic went to a human. Handoff bubble, **composer stays live**, next message gets a full turn. The human-reply poll starts here |
+| Handled by a human (C-6) | Staff took the conversation over. The customer's messages are stored and reach the owner's thread; the assistant stays silent, the composer stays live |
+| Escalated (limit only) | A tenant limit ended the conversation - EscalationBanner replaces the composer; conversation stays readable. Since C-5 no agent path reaches this state |
 | Error / disconnect | inline retry in the failed bubble, never a blank screen |
 | Drop-off / return | full history renders from server (last 20 turns), scrolled to the most recent message; input state matches the in-progress beat |
+
+**The owner's side of the same surface (C-6).** `/chats` (list) and
+`/chats/[id]` (thread) are where the business reads its customer conversations
+and steps into them. Ported from the prototype's `chats` and `renderThreadScreen`
+screens: the **All / Action needed / Unread** filter row, where "Action needed"
+*is* the escalation queue; `chat-row` with name, relative time, a status dot
+(amber = the assistant asked for you, crimson = it is handling this) and a
+one-line preview that shows the assistant's own summary of what the customer
+wants; and in the thread, the "Handling" / "You're replying" status with the
+take-over and hand-back pills and their symmetrical `thr-pill` stamps. Built on
+`ChatBubble` with `perspective="operator"`, which mirrors which side is
+outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 
 ### S2 - Business (tenant app tab 2) - show-back of profile + knowledge
 
@@ -294,7 +308,7 @@ message list, composer pinned bottom. No auth. Share link + QR for distribution.
 | Empty conversation | Tenant-configured greeting as the first assistant bubble; starter chips if configured |
 | Streaming | StreamingText in assistant bubble; TypingIndicator through the failover window (P-5); composer disabled with "answering..." hint; stop button |
 | Citations | CitationChips on grounded sentences |
-| Escalated | EscalationBanner replaces composer-state messaging; conversation stays readable |
+| Escalated (limit only) | EscalationBanner replaces composer-state messaging; conversation stays readable |
 | Error / disconnect | Inline retry in the failed bubble, never a blank screen |
 
 ### Tenant console shell (nav re-cut, E-1/E-2)

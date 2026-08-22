@@ -71,7 +71,11 @@ _TOOL_GUIDANCE = (
     "- create_escalation: hand off to a human when you cannot help confidently\n"
     "If the customer is just greeting, saying thanks, or asking what you can do, "
     "respond directly without calling any tool. If you are unsure or the message "
-    "is unclear, escalate."
+    "is unclear, escalate.\n"
+    "If the customer asks to speak to a person, call create_escalation straight "
+    "away - do not try to talk them out of it. Tell them someone from the "
+    "business has been notified, and carry on helping with anything else they "
+    "ask in the meantime."
 )
 
 # The customer bubble renders plain text with citation chips - it does not parse
@@ -141,6 +145,17 @@ class _LookupOrderArgs(BaseModel):
 
 class _CreateEscalationArgs(BaseModel):
     reason: str = Field(description="Why this needs human attention")
+    # C-6: what the owner reads in their Chats list instead of a reason code.
+    # Captured in the tool call the model is already making - no extra call,
+    # no second prompt pass. Optional so an older/edge model that omits it
+    # still escalates; the row falls back to ``reason``.
+    summary: str = Field(
+        default="",
+        description=(
+            "One plain line of what the customer wants, for the business owner "
+            "to read - e.g. 'Catering for 20 on Friday, wants a price'"
+        ),
+    )
 
 
 async def _search_knowledge_impl(
@@ -248,16 +263,19 @@ async def _create_escalation_impl(
     tenant_id: UUID,
     conversation_id: UUID,
     reason: str,
+    summary: str = "",
 ) -> None:
     # C-5: records the handoff, does not end the conversation. The status flip
     # that used to live here is gone from every agent-side path - see
     # app/agents/escalation.py for why. Only limit escalations still terminate.
     await conn.execute(
-        "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
+        "insert into escalations (tenant_id, conversation_id, reason, summary) "
+        "values ($1, $2, $3, $4) "
         "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
         tenant_id,
         conversation_id,
         reason,
+        summary or None,
     )
 
 
@@ -551,6 +569,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             ctx.tenant_id,
                             UUID(state["conversation_id"]),
                             ce_args.reason,
+                            ce_args.summary,
                         )
                         writer({"type": "handoff"})
                         result_text = _tool_result(
