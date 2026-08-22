@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
-const SITE_URL = "http://localhost:3000/fixtures/example-business.html";
+// In the containerized e2e runner the backend itself fetches this URL, and
+// localhost:3000 inside that container is not the frontend (F-3) - compose
+// points E2E_SITE_URL at the frontend service over the compose network.
+const SITE_URL =
+  process.env.E2E_SITE_URL ?? "http://localhost:3000/fixtures/example-business.html";
 const EDITED = "We fix phones and laptops on the north side, e2e.";
 
 /**

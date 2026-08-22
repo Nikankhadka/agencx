@@ -101,7 +101,8 @@ The canonical set lives in `docs/agencx/`; everything pre-Agencx is archived in 
 
 ## Running it locally
 
-Prerequisites: Node 22+, [uv](https://docs.astral.sh/uv/), Docker.
+Prerequisite: Docker. Everything else (Node, Python, uv, Postgres, GoTrue,
+Mailpit) runs inside containers - the host installs nothing.
 
 ### One command (demo-ready)
 
@@ -109,27 +110,28 @@ Prerequisites: Node 22+, [uv](https://docs.astral.sh/uv/), Docker.
 make demo
 ```
 
-Starts a local GoTrue (Supabase Auth) + the database, fixes env files, runs
-migrations and a seeded demo world (two tenants, three logins), and brings up
-the backend + frontend.
+Starts the whole stack as compose services (database + GoTrue auth + auth-proxy
++ backend + frontend), fixes env files, runs migrations and a seeded demo world
+(two tenants, three logins). `make stop` brings it down; `make dev` restarts it
+without reseeding.
 
 ### Manual (step by step)
 
 ```bash
-make install    # install all deps (frontend + backend)
-make db-full    # Postgres + pgvector, GoTrue, auth-proxy
+make install    # deps into their container volumes
+make services   # Postgres + pgvector, GoTrue, auth-proxy
 make migrate    # apply schema
 make seed       # full demo world (two tenants + auth users)
-make dev-backend    # :8000, one terminal
-make dev-frontend   # :3000, another
+make dev        # backend :8000 + frontend :3000 as containers
 ```
 
-`make db` starts the database alone, which is not enough to log in - login needs
-GoTrue, which `make db-full` adds. Open http://bytefix.localhost:3000 after
+`make services` alone is not enough to log in for fresh seeds - `make seed`
+needs GoTrue, which `services` starts. Open http://bytefix.localhost:3000 after
 seeding, or http://app.localhost:3000/login for the tenant console.
 
 Config lives in `backend/.env` (created from the repo-root `.env.example` by
-`scripts/demo.sh`) and `frontend/.env.local`.
+`scripts/dev.sh`) and `frontend/.env.local`. Live reload works: edit source on
+the host, the containers pick it up.
 
 **Full walkthrough - logins, which command needs which service, and
 troubleshooting: [`docs/agencx/running.md`](docs/agencx/running.md).** See

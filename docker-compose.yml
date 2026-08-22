@@ -1,4 +1,94 @@
 services:
+  # Dev backend (F-3): the FastAPI app in a container, hot-reloading off the
+  # ./backend bind mount. Deps live in the wren-backend-venv volume (installed
+  # by `make install` or lazily at boot - see Dockerfile.dev), the HF model
+  # cache in wren-hf-cache so embedder/reranker downloads survive restarts.
+  #
+  # env_file is optional so a fresh checkout can still `docker compose up -d
+  # db`; scripts/dev.sh creates it before anything needs it. The environment
+  # block deliberately overrides .env values with compose-network addresses:
+  # inside this network the database is db:5432 (not localhost), GoTrue sits
+  # behind the auth-proxy shim (not :54321), and Mailpit is mailpit (when
+  # EMAIL_PROVIDER=smtp). pydantic-settings prefers real env vars over .env,
+  # so these win exactly where they must.
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/wren
+      SUPABASE_URL: http://auth-proxy
+      EMAIL_SMTP_HOST: mailpit
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - wren-backend-venv:/app/.venv
+      - wren-hf-cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-proxy:
+        condition: service_started
+
+  # Dev frontend (F-3): next dev hot-reloading off the ./frontend bind mount,
+  # deps in the wren-node-modules volume. Browser-facing URLs stay on
+  # localhost (published ports) because that is what the user's browser
+  # resolves; server-side fetches inside this container use API_INTERNAL_URL
+  # instead (read by src/lib/tenant.ts for the RSC tenant lookup - localhost
+  # would be the frontend container itself here). NEXT_PUBLIC_* values are
+  # read at dev-server start and inlined into client bundles; API_INTERNAL_URL
+  # has no NEXT_ prefix, so it never reaches browser code.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    env_file:
+      - path: ./frontend/.env.local
+        required: false
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+      API_INTERNAL_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - wren-node-modules:/app/node_modules
+      - wren-next-cache:/app/.next
+    depends_on:
+      - backend
+
+  # Playwright runner (profile e2e, `make test-e2e`): drives the stack that is
+  # already up. Chromium pins *.localhost to 127.0.0.1 (RFC 6761) and ignores
+  # /etc/hosts for them, so instead of hostname tricks the entry command
+  # mirrors the host's port layout onto this container's own loopback - inside
+  # it, the stack is indistinguishable from running on the host, and the
+  # specs' localhost URLs work untouched. Needs its own node_modules volume:
+  # the Playwright image is Ubuntu while the dev frontend image is Debian
+  # slim, and sharing one install across the two buys nothing.
+  e2e:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.e2e
+    profiles: ["e2e"]
+    working_dir: /app
+    environment:
+      # The loopback mirrors below stand in for the dev server, so the
+      # playwright webServer block must never try to spawn its own.
+      E2E_REUSE_SERVER: "1"
+      # The paste-a-link specs hand this URL to the backend, which fetches it
+      # from inside the compose network (localhost would be the backend).
+      E2E_SITE_URL: http://frontend:3000/fixtures/example-business.html
+    ports:
+      - "9323:9323"   # html report / ui mode while the container runs
+    volumes:
+      - ./frontend:/app
+      - wren-e2e-node-modules:/app/node_modules
+
   db:
     image: pgvector/pgvector:pg16
     environment:
@@ -25,7 +115,7 @@ services:
   #
   # The JWT secret is interpolated from the caller's environment
   # (${SUPABASE_JWT_SECRET:?...}) so the same secret in backend/.env signs
-  # both GoTrue tokens and backend verification - run via scripts/demo.sh,
+  # both GoTrue tokens and backend verification - run via scripts/dev.sh,
   # which exports it. A bare `docker compose up auth` without that var fails
   # fast (the :? is intentional).
   auth:
@@ -49,13 +139,13 @@ services:
       # explicit search_path instead.
       GOTRUE_DB_DATABASE_URL: "postgres://postgres:postgres@db:5432/wren?options=-c%20search_path%3Dauth"
       GOTRUE_DB_NAMESPACE: auth
-      # Single-sourced from backend/.env via scripts/demo.sh so GoTrue signing
+      # Single-sourced from backend/.env via scripts/dev.sh so GoTrue signing
       # and backend verify_token always agree. Non-fatal default (not :?) so
       # `docker compose up -d db` keeps working on a fresh checkout with no env
       # (compose parses the whole file even when only db is started). Running
       # `docker compose up auth` bare, without the secret, fails fast at the
       # GoTrue layer instead (it refuses to start on an empty JWT secret) - the
-      # documented path is scripts/demo.sh, which exports the real value.
+      # documented path is scripts/dev.sh, which exports the real value.
       GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_AUD: authenticated
@@ -106,7 +196,7 @@ services:
   # block in .env.example. Read the mail at http://localhost:8025.
   #
   # Gated behind the `mail` profile so it is opt-in (`make mail`): `docker
-  # compose up -d db`, scripts/up-infra.sh and scripts/demo.sh never start it,
+  # compose up -d db`, scripts/up-infra.sh and scripts/dev.sh never start it,
   # and its ports stay out of the demo preflight check. Nothing depends on it,
   # so it needs no healthcheck; messages live in memory and vanish on restart,
   # which is what a throwaway dev inbox should do.
@@ -121,7 +211,7 @@ services:
   # against the wren database. Plain SQL over lib/pq, so pgvector columns
   # render as their text form (`[0.1,0.2,...]`) - fine for inspection.
   # Gated behind the `dbui` profile like mailpit's `mail`: opt-in via
-  # `make dbui`, never started by demo.sh/up-infra.sh.
+  # `make dbui`, never started by dev.sh/up-infra.sh.
   pgweb:
     image: sosedoff/pgweb:0.17.0
     depends_on:
@@ -134,3 +224,8 @@ services:
 
 volumes:
   wren-pgdata:
+  wren-backend-venv:
+  wren-node-modules:
+  wren-next-cache:
+  wren-e2e-node-modules:
+  wren-hf-cache:

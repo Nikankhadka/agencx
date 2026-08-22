@@ -1,4 +1,9 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Server-side fetches (the RSC tenant lookup below) resolve the backend
+// through this instead when set: in the containerized dev stack localhost is
+// this container, not the backend (F-3). No NEXT_ prefix, so it never gets
+// inlined into browser bundles.
+const SERVER_API_URL = process.env.API_INTERNAL_URL ?? API_URL;
 
 /** Headers proxy.ts sets so server components can read the resolved surface/slug. */
 export const SURFACE_HEADER = "x-wren-surface";
@@ -102,7 +107,7 @@ export function customerSurfaceConfig(customer: Record<string, unknown> | undefi
  * not-found state instead of throwing.
  */
 export async function resolveTenantBySlug(slug: string): Promise<TenantResolution | null> {
-  const res = await fetch(`${API_URL}/api/public/tenant/${encodeURIComponent(slug)}`, {
+  const res = await fetch(`${SERVER_API_URL}/api/public/tenant/${encodeURIComponent(slug)}`, {
     cache: "no-store",
   });
   if (res.status === 404) return null;

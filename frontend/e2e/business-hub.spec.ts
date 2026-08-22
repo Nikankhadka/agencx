@@ -9,6 +9,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import jsQR from "jsqr";
 import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
@@ -74,13 +75,15 @@ test.describe("Business hub", () => {
     const qr = page.getByTestId("booking-qr");
     await expect(qr).toBeVisible();
 
-    // A real decode, not a "it looks like a QR" check. Chromium ships
-    // BarcodeDetector with qr_code support, so the test scans the thing the
-    // owner would point a phone at. This is the assertion that catches an
-    // orientation slip in the SVG we build from the module matrix - a
-    // transposed code still renders as a plausible-looking QR and simply does
-    // not scan.
-    const decoded = await page.evaluate(async () => {
+    // A real decode, not a "it looks like a QR" check. The SVG is rasterised
+    // in the page, then the pixels are decoded here in Node with jsQR. It
+    // used to scan with Chromium's BarcodeDetector, but that API is absent
+    // from Playwright's desktop Chromium builds (flag-gated upstream), so the
+    // assertion could never run in CI or a fresh checkout. This is still the
+    // assertion that catches an orientation slip in the SVG we build from the
+    // module matrix - a transposed code still renders as a plausible-looking
+    // QR and simply does not scan.
+    const raster = await page.evaluate(async () => {
       const svg = document.querySelector("[data-testid='booking-qr']")!;
       const markup = new XMLSerializer().serializeToString(svg);
 
@@ -102,16 +105,12 @@ test.describe("Business hub", () => {
       ctx.fillRect(0, 0, SIZE, SIZE);
       ctx.drawImage(img, 0, 0, SIZE, SIZE);
 
-      const Detector = (
-        window as unknown as {
-          BarcodeDetector: new (o: unknown) => {
-            detect(s: unknown): Promise<{ rawValue: string }[]>;
-          };
-        }
-      ).BarcodeDetector;
-      const found = await new Detector({ formats: ["qr_code"] }).detect(canvas);
-      return found[0]?.rawValue ?? null;
+      const { data, width, height } = ctx.getImageData(0, 0, SIZE, SIZE);
+      return { data: Array.from(data), width, height };
     });
+
+    const found = jsQR(new Uint8ClampedArray(raster.data), raster.width, raster.height);
+    const decoded = found?.data ?? null;
 
     expect(decoded).toMatch(/^https?:\/\/bytefix\./);
     expect(decoded).toBe(await page.getByTestId("booking-link").textContent().then((t) => `http://${t}`));

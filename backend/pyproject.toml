@@ -26,6 +26,9 @@ dependencies = [
 # ECS task definition binds EMBEDDER/RERANKER to hosted providers.
 local-ml = [
     "sentence-transformers>=5.6.0",
+    # Declared directly (not left transitive) so the [tool.uv.sources] pin
+    # below applies - uv routes sources only for direct dependencies.
+    "torch>=2.13.0",
 ]
 dev = [
     "import-linter>=2.5",
@@ -39,6 +42,19 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev", "local-ml"]
+
+# F-3: torch from the CPU wheel index. PyPI's linux torch wheels declare the
+# full CUDA stack (nvidia-* + triton, ~5GB) as dependencies - pointless weight
+# for a dev container and for CI's ubuntu runner, and the mac wheels were
+# already CPU-only. The cpu index ships every platform torch supports without
+# the CUDA baggage; sentence-transformers behavior is identical on CPU.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100

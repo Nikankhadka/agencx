@@ -1,0 +1,10 @@
+# E2E runner image (F-3): Playwright browsers plus socat. The runner mirrors
+# the host's port layout onto its own loopback (3000/8000/54321 -> the compose
+# services), because Chromium pins *.localhost to 127.0.0.1 and the specs
+# navigate those exact hosts. Inside this container the stack therefore looks
+# identical to how it looks on the host - no URL rewriting anywhere.
+FROM mcr.microsoft.com/playwright:v1.61.1-noble
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends socat \
+  && rm -rf /var/lib/apt/lists/*

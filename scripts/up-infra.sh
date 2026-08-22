@@ -4,8 +4,8 @@
 # only when backend/.env has actually opted into SMTP delivery.
 #
 # Safe to run while the dev servers are up (touches only containers), and
-# idempotent. Shared by `make db-full` and scripts/demo.sh so the container
-# bring-up logic lives in exactly one place.
+# idempotent. Shared by `make db-full`/`make services` and scripts/dev.sh so
+# the container bring-up logic lives in exactly one place.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -22,7 +22,7 @@ say "containers"
 # it from here into docker-compose.yml.
 jwt_secret="$(grep -E '^SUPABASE_JWT_SECRET=' backend/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
 if [[ -z "$jwt_secret" ]]; then
-  die "SUPABASE_JWT_SECRET is not set in backend/.env. Run ./scripts/demo.sh once (it generates one), then re-run this script."
+  die "SUPABASE_JWT_SECRET is not set in backend/.env. Run ./scripts/dev.sh once (it generates one), then re-run this script."
 fi
 export SUPABASE_JWT_SECRET="$jwt_secret"
 

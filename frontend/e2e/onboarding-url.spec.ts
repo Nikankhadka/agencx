@@ -3,7 +3,11 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const SITE_URL = "http://localhost:3000/fixtures/example-business.html";
+// In the containerized e2e runner the backend itself fetches this URL, and
+// localhost:3000 inside that container is not the frontend (F-3) - compose
+// points E2E_SITE_URL at the frontend service over the compose network.
+const SITE_URL =
+  process.env.E2E_SITE_URL ?? "http://localhost:3000/fixtures/example-business.html";
 
 /**
  * O-3 US-1: an owner pastes their site into the onboarding thread and the

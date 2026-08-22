@@ -95,8 +95,21 @@
 - **GoTrue needs `auth` schema pre-created**: `create schema if not exists auth` before auth starts.
 - **`search_path` collision**: GoTrue connects as `postgres` and queries `users` unqualified -> resolves to `public.users`. Fix: `GOTRUE_DB_DATABASE_URL` carries `?options=-c%20search_path%3Dauth`.
 - **nginx auth-proxy must resolve upstream at request time**, not startup: use `resolver 127.0.0.11 valid=10s` + `set $gotrue http://auth:9999; proxy_pass $gotrue;`. The `set` MUST come BEFORE `rewrite ... break;`.
-- **`GOTRUE_JWT_SECRET` needed in the shell**: export before `docker compose up -d auth auth-proxy` (`scripts/up-infra.sh` does this; `make db-full` and `scripts/demo.sh` both delegate to it).
-- **Login "Failed to fetch" = auth stack down, not a code bug**: `make dev` and `make db` never start GoTrue. Bring the stack up with `make db-full` (or `./scripts/demo.sh`). Port 54321 is only reachable when `auth` + `auth-proxy` containers run.
+- **`GOTRUE_JWT_SECRET` needed by compose interpolation**: `scripts/dev.sh` exports it AND persists it into the repo-root `.env` (compose project env file) - without that file, any raw compose command sees config drift and recreates auth with an empty secret, which GoTrue refuses to boot with (exit 1).
+- **Login "Failed to fetch" = auth stack down, not a code bug**: bring the stack up with `make dev` or `make services`. Port 54321 is only reachable when `auth` + `auth-proxy` containers run.
+
+### Containerized dev stack (K-1, F-3)
+
+- **Everything runs in containers now** - the host needs only Docker. Deps live in named volumes (`wren-backend-venv`, `wren-node-modules`, `wren-e2e-node-modules`, `wren-hf-cache`), NOT in images; `make install` refreshes them, lockfile changes never rebuild images. Dev images are toolchain-only (`Dockerfile.dev` files); the prod image (`backend/Dockerfile`) is untouched and stays lean.
+- **Compose env precedence is the whole trick**: real env vars beat `.env` values in pydantic-settings, so the compose `environment:` block repoints DATABASE_URL->db, SUPABASE_URL->auth-proxy, EMAIL_SMTP_HOST->mailpit inside containers while host-facing URLs stay localhost.
+- **Server-side vs browser URL split**: NEXT_PUBLIC_* values are inlined into browser bundles, so they must stay resolvable from the user's browser (localhost). Server-only fetches read `API_INTERNAL_URL` instead (see `src/lib/tenant.ts`) - no NEXT_ prefix means it never reaches client code.
+- **Chromium pins `*.localhost` to 127.0.0.1** regardless of /etc/hosts/extra_hosts - no aliasing trick works for e2e browsers. The e2e container therefore mirrors the stack onto its own loopback with three socat forwards (3000/8000/54321), making specs work untouched.
+- **Playwright's desktop Chromium has NO BarcodeDetector** (flag-gated upstream, absent even natively): the business-hub QR spec decodes with jsQR in Node after rasterising in-page.
+- **torch resolves from the CPU index** (`[tool.uv.sources]` in backend/pyproject.toml, torch declared as a DIRECT local-ml dep - uv routes sources only for direct deps). PyPI linux wheels drag ~5GB of CUDA packages; CPU index ships identical runtime. Regenerate lock via `uv lock` after touching sources.
+- **Dev container PATH must include `/app/.venv/bin`** (backend) - uv installs there but bare `python` otherwise resolves to system python with zero deps. Same class of bug: frontend CMD needs node_modules/.bin on PATH or `next` is "not found".
+- **The e2e runner needs git** (eval `_git_sha()` shells out); installed in Dockerfile.dev since hosts/CI always have it.
+- **E2E suite has pre-existing order-dependent flakes** (~2-4 specs per run fail differently each time; reproduced identically with a native runner against the same stack - not a containerization regression). Candidate follow-up ticket.
+- **Stale volume `wren_wren-pgdata`** predates the rename to project name `agencx`; safe to delete manually if disk matters, not touched by make targets.
 
 ### LLM & Eval
 

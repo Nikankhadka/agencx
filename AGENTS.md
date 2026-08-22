@@ -22,44 +22,46 @@ Detected from the scaffold (phase 0); pinned by the Architecture Doc:
 
 ## Commands
 
-All verified. Run from repo root via `make <target>` (the friendly entry point); the underlying raw command is shown in the second column for reference.
+All verified. Everything runs in containers (F-3): the host needs only Docker. Run from repo root via `make <target>`; the underlying raw command is shown in the second column for reference.
 
 | Purpose | `make` target | Raw command |
 |---|---|---|
-| One-command demo | `make demo` | `./scripts/demo.sh` |
-| Dev servers (both) | `make dev` | backend: `uv run uvicorn app.main:app --reload` + frontend: `npm run dev` |
-| Dev server (frontend) | `make dev-frontend` | `cd frontend && npm run dev` |
-| Dev server (backend) | `make dev-backend` | `cd backend && uv run uvicorn app.main:app --reload` |
+| One-command demo | `make demo` | `./scripts/dev.sh --seed` |
+| Dev stack (backend + frontend) | `make dev` / `make run` | `./scripts/dev.sh` |
+| Dev server (frontend only) | `make dev-frontend` | `docker compose up -d frontend` |
+| Dev server (backend only) | `make dev-backend` | `docker compose up -d backend` |
+| Stop all containers (data kept) | `make stop` / `make services.stop` | `docker compose down --remove-orphans` |
+| Full reset (containers + volumes + dev images) | `make clean` | `docker compose down -v --remove-orphans --rmi local` |
+| Install all deps into their volumes | `make install` | `docker compose build` + `uv sync` + `npm ci` inside containers |
 | Local database | `make db` | `docker compose up -d db` |
-| DB + auth (full demo infra) | `make db-full` | `./scripts/up-infra.sh` |
-| Tear down DB (volumes) | `make db-down` | `docker compose down -v` |
+| Infra only (db + GoTrue + auth-proxy) | `make services` / `make db-full` | `./scripts/up-infra.sh` |
+| Tear down DB (volumes) | `make db-down` | `docker compose down -v --remove-orphans` |
 | Local mail inbox (login codes) | `make mail` | `docker compose --profile mail up -d mailpit` |
 | DB browser UI | `make dbui` | `docker compose --profile dbui up -d pgweb` |
-| Apply migrations | `make migrate` | `cd backend && uv run python -m app.shared.migrate` |
-| Seed demo world | `make seed` | `cd backend && uv run python -m seeds.seed_demo` |
-| Seed tenant 1 | `make seed-tenant1` | `cd backend && uv run python -m seeds.seed_tenant1_phoneshop` |
-| Seed tenant 2 | `make seed-tenant2` | `cd backend && uv run python -m seeds.seed_tenant2_dental` |
-| Install deps | `make install` | `cd frontend && npm ci` + `cd backend && uv sync` |
-| Install deps (frontend) | `make install-frontend` | `cd frontend && npm ci` |
-| Install deps (backend) | `make install-backend` | `cd backend && uv sync` |
-| Lint (frontend) | `make lint-frontend` | `cd frontend && npm run lint && npm run check:tokens` |
-| Lint (backend) | `make lint-backend` | `cd backend && uv run ruff check .` |
+| Apply migrations | `make migrate` | `docker compose run --rm backend python -m app.shared.migrate` |
+| Seed demo world | `make seed` | `docker compose run --rm backend python -m seeds.seed_demo` |
+| Seed tenant 1 | `make seed-tenant1` | `docker compose run --rm backend python -m seeds.seed_tenant1_phoneshop` |
+| Seed tenant 2 | `make seed-tenant2` | `docker compose run --rm backend python -m seeds.seed_tenant2_dental --api-base http://backend:8000` (NEEDS `make dev`) |
+| Build frontend | `make build` | `docker compose run --rm --no-deps frontend npm run build` |
+| Lint (frontend) | `make lint-frontend` | `docker compose run --rm --no-deps frontend npm run lint && npm run check:tokens` |
+| Lint (backend) | `make lint-backend` | `docker compose run --rm --no-deps backend ruff check . && lint-imports` |
 | Lint (both) | `make lint` | frontend + backend lint |
-| Format check | `make format-check` | `cd backend && uv run ruff format --check .` |
-| Auto-format | `make format` | `cd backend && uv run ruff format .` (writes) |
-| Typecheck (frontend) | `make typecheck-frontend` | `cd frontend && npm run typecheck` |
-| Typecheck (backend) | `make typecheck-backend` | `cd backend && uv run mypy` |
+| Autofix lint/format | `make lint.fix` | ruff check --fix + format, eslint --fix (containers) |
+| Format check | `make format-check` | `docker compose run --rm --no-deps backend ruff format --check .` |
+| Auto-format | `make format` | `docker compose run --rm --no-deps backend ruff format .` (writes) |
+| Typecheck (frontend) | `make typecheck-frontend` | `docker compose run --rm --no-deps frontend npm run typecheck` |
+| Typecheck (backend) | `make typecheck-backend` | `docker compose run --rm --no-deps backend mypy` |
 | Typecheck (both) | `make typecheck` | frontend + backend typecheck |
-| Test (frontend) | `make test-frontend` | `cd frontend && npm run test` (vitest) |
-| Test (backend) | `make test-backend` | `cd backend && uv run pytest` |
+| Test (frontend) | `make test-frontend` | `docker compose run --rm --no-deps frontend npm run test` (vitest) |
+| Test (backend) | `make test-backend` | `docker compose run --rm backend pytest` (starts db for db-marked tests) |
 | Test (both) | `make test` | frontend + backend tests |
-| E2E tests | `make test-e2e` | `cd frontend && npm run test:e2e` (Playwright) |
-| E2E UI mode | `make test-e2e-ui` | `cd frontend && npm run test:e2e:ui` |
-| Eval gate | `make eval` | `cd backend && uv run python -m evals.run_gate` |
-| Eval (deterministic only) | `make eval-skip-llm` | `cd backend && uv run python -m evals.run_gate --skip-llm` |
+| E2E tests | `make test-e2e` | Playwright container with loopback mirrors (NEEDS `make dev && make seed`) |
+| E2E UI mode | `make test-e2e-ui` | same runner, `npm run test:e2e:ui` |
+| Eval gate | `make eval` | `docker compose run --rm backend python -m evals.run_gate` (NEEDS `make seed-tenant1`) |
+| Eval (deterministic only) | `make eval-skip-llm` | `docker compose run --rm backend python -m evals.run_gate --skip-llm` |
 | Fast inner loop | `make check` | lint + typecheck + test |
 | Full CI (local) | `make ci` | check + format-check + build |
-| Clean | `make clean` | remove node_modules, .venv, __pycache__ |
+| Terraform validation | `make ci-infra` | terraform fmt/init/validate (host binary) |
 
 Run `make help` for the full list with descriptions.
 

@@ -18,7 +18,10 @@ dotenv.config({ path: path.resolve(__dirname, ".env.local") });
  */
 
 const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+// E2E_BASE_URL exists for the containerized runner (compose profile e2e): the
+// browser inside that container must use a hostname it can resolve, and
+// localhost would point at itself (F-3). Defaults unchanged for local runs.
+const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -60,12 +63,19 @@ export default defineConfig({
     },
   ],
 
-  // Reuse the existing dev server in local dev; launch it in CI.
-  webServer: {
-    command: "npm run dev",
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-    cwd: __dirname,
-  },
+  // Reuse the existing dev server in local dev; launch it in CI. The
+  // containerized runner (compose profile e2e) drops webServer entirely: the
+  // stack must already be up (make dev), and spawning next dev inside the
+  // Playwright image would race the real frontend.
+  ...(process.env.E2E_REUSE_SERVER
+    ? {}
+    : {
+        webServer: {
+          command: "npm run dev",
+          url: BASE_URL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 30_000,
+          cwd: __dirname,
+        },
+      }),
 });
