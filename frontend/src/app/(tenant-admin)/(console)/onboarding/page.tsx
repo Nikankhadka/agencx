@@ -52,18 +52,30 @@ const OPENING_PACE_MS = 820;
 
 /**
  * E-1 US-3: after completion the owner lands on /home. The confirm keeps the
- * "You are live" activation summary readable for this long before the app
- * appears, so go-live reads as one conversation that became an app rather than
- * a hard cut.
+ * "You are live" line readable for this long before the app appears, so go-live
+ * reads as one conversation that became an app rather than a hard cut.
+ *
+ * O-8: this used to be 1400ms spent on an *empty* screen - the thread was
+ * replaced by that single line, so the pause read as a stall rather than as a
+ * beat. The line is now appended to the conversation the owner has been having,
+ * nothing is unmounted, and /home is prefetched the moment confirming becomes
+ * possible. With no blank frame to sit through, a shorter hold is enough.
  */
-const GO_LIVE_READ_MS = 1400;
+const GO_LIVE_READ_MS = 700;
+
+/** The activation line. Appended to the thread, so it is the assistant's last
+ *  word in the conversation rather than a screen of its own. */
+const GO_LIVE_LINE =
+  "You are live. Your customers get answers now, day or night.";
 
 /**
  * The prototype's `.proc-txt` line while a pasted link is being fetched. The
  * backend leads its URL turn with `progress: reading_site` precisely so this
  * covers the scrape, the ingest and the extraction.
  */
-const PROCESSING_COPY: Record<string, string> = { reading_site: "Reading your site\u2026" };
+const PROCESSING_COPY: Record<string, string> = {
+  reading_site: "Reading your site\u2026",
+};
 
 function historyToMessages(
   history: { role: string; content: string }[] | undefined,
@@ -99,6 +111,7 @@ export default function OnboardingPage() {
   const [loaded, setLoaded] = useState(false);
   const [openingPaced, setOpeningPaced] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const goLiveTimer = useRef<number | null>(null);
 
   function applyStateFields(fields: StateFields) {
     setCompleted(fields.completed);
@@ -127,9 +140,32 @@ export default function OnboardingPage() {
           setOpening(state.prompt);
         }
       })
-      .catch((err) => setError(err instanceof ApiError ? err.detail : "Failed to load onboarding"))
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.detail : "Failed to load onboarding",
+        ),
+      )
       .finally(() => setLoaded(true));
   }, [router]);
+
+  /**
+   * O-8: warm /home the moment the interview is finishable. The route pulls its
+   * own brief from three endpoints on mount, so an unprefetched navigation puts
+   * that cold work between the confirm and the first painted frame - which is
+   * the part that read as a lag.
+   */
+  useEffect(() => {
+    if (canConfirm) router.prefetch("/home");
+  }, [canConfirm, router]);
+
+  // Never leave a navigation queued against an unmounted page.
+  useEffect(
+    () => () => {
+      if (goLiveTimer.current !== null)
+        window.clearTimeout(goLiveTimer.current);
+    },
+    [],
+  );
 
   // Hold the typing indicator ahead of the (static) opening message.
   useEffect(() => {
@@ -139,14 +175,19 @@ export default function OnboardingPage() {
   }, [opening, openingPaced]);
 
   function updateById(id: string, update: Partial<Message>) {
-    setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, ...update } : message)));
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === id ? { ...message, ...update } : message,
+      ),
+    );
   }
 
   function updateLastAssistant(update: (last: Message) => Partial<Message>) {
     setMessages((prev) => {
       const next = [...prev];
       const last = next[next.length - 1];
-      if (last && last.role === "assistant") next[next.length - 1] = { ...last, ...update(last) };
+      if (last && last.role === "assistant")
+        next[next.length - 1] = { ...last, ...update(last) };
       return next;
     });
   }
@@ -221,7 +262,8 @@ export default function OnboardingPage() {
         // Stop before the first token leaves an empty bubble - drop it.
         setMessages((prev) => {
           const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && last.text === "") return prev.slice(0, -1);
+          if (last && last.role === "assistant" && last.text === "")
+            return prev.slice(0, -1);
           const next = [...prev];
           if (last) next[next.length - 1] = { ...last, streaming: false };
           return next;
@@ -254,18 +296,30 @@ export default function OnboardingPage() {
       for (const file of files) {
         const verdict = describeUpload(file.name);
         if (!verdict.accepted) {
-          setMessages((prev) => [...prev, { role: "assistant", text: verdict.message }]);
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: verdict.message },
+          ]);
           continue;
         }
         const id = crypto.randomUUID();
-        setMessages((prev) => [...prev, { id, role: "stamp", text: `${file.name} \u00b7 adding\u2026` }]);
+        setMessages((prev) => [
+          ...prev,
+          { id, role: "stamp", text: `${file.name} \u00b7 adding\u2026` },
+        ]);
         const form = new FormData();
         form.append("file", file);
         form.append("doc_type", "other");
         try {
-          await apiFetch("/api/knowledge/upload", { method: "POST", body: form });
+          await apiFetch("/api/knowledge/upload", {
+            method: "POST",
+            body: form,
+          });
           updateById(id, { text: `${file.name} \u00b7 added` });
-          setMessages((prev) => [...prev, { role: "assistant", text: verdict.message }]);
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: verdict.message },
+          ]);
         } catch (err) {
           updateById(id, { text: `${file.name} \u00b7 not added` });
           setMessages((prev) => [
@@ -297,7 +351,11 @@ export default function OnboardingPage() {
       applyStateFields(state);
       setMessages(historyToMessages(state.history));
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
+      setError(
+        err instanceof ApiError
+          ? err.detail
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -315,10 +373,24 @@ export default function OnboardingPage() {
       setCompleted(true);
       setCanConfirm(false);
       setInput(null);
-      window.setTimeout(() => router.replace("/home"), GO_LIVE_READ_MS);
+      // The payoff line joins the conversation instead of replacing it.
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: GO_LIVE_LINE },
+      ]);
+      goLiveTimer.current = window.setTimeout(
+        () => router.replace("/home"),
+        GO_LIVE_READ_MS,
+      );
+      // Deliberately no setBusy(false): the button stays held until the route
+      // changes. Releasing it re-armed a second click, and the second confirm
+      // 409s "already confirmed" - painting an error over the live line.
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
-    } finally {
+      setError(
+        err instanceof ApiError
+          ? err.detail
+          : "Something went wrong. Please try again.",
+      );
       setBusy(false);
     }
   }
@@ -334,7 +406,10 @@ export default function OnboardingPage() {
   if (!loaded) {
     return (
       <main className="flex flex-1 items-center justify-center bg-surface p-8">
-        <div aria-busy="true" className="h-8 w-8 animate-pulse rounded-full bg-surface-container" />
+        <div
+          aria-busy="true"
+          className="h-8 w-8 animate-pulse rounded-full bg-surface-container"
+        />
       </main>
     );
   }
@@ -348,42 +423,40 @@ export default function OnboardingPage() {
         watch={messages}
         data-testid="onboarding-thread"
       >
-        {completed ? (
-          <AgentLine>You are live. Your customers get answers now, day or night.</AgentLine>
-        ) : (
-          <>
-            {opening ? (
-              openingShown ? (
-                <LedeMessage>{opening}</LedeMessage>
-              ) : (
-                <TypingLine />
-              )
-            ) : null}
-            {messages.map((message, index) =>
-              message.role === "customer" ? (
-                <OwnerBubble key={index}>{message.text}</OwnerBubble>
-              ) : message.role === "stamp" ? (
-                <ThreadPill key={index}>{message.text}</ThreadPill>
-              ) : message.streaming && !message.text ? (
-                processing ? (
-                  <ProcessingLine key={index}>{processing}</ProcessingLine>
-                ) : (
-                  <TypingLine key={index} />
-                )
-              ) : (
-                <AgentLine key={index} streaming={message.streaming ?? false}>
-                  {message.text}
-                </AgentLine>
-              ),
-            )}
-          </>
+        {opening ? (
+          openingShown ? (
+            <LedeMessage>{opening}</LedeMessage>
+          ) : (
+            <TypingLine />
+          )
+        ) : null}
+        {messages.map((message, index) =>
+          message.role === "customer" ? (
+            <OwnerBubble key={index}>{message.text}</OwnerBubble>
+          ) : message.role === "stamp" ? (
+            <ThreadPill key={index}>{message.text}</ThreadPill>
+          ) : message.streaming && !message.text ? (
+            processing ? (
+              <ProcessingLine key={index}>{processing}</ProcessingLine>
+            ) : (
+              <TypingLine key={index} />
+            )
+          ) : (
+            <AgentLine key={index} streaming={message.streaming ?? false}>
+              {message.text}
+            </AgentLine>
+          ),
         )}
       </Thread>
 
       <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
         <div className="mx-auto w-full max-w-thread">
           {!completed && canConfirm ? (
-            <Button onClick={handleConfirm} loading={busy} data-testid="onboarding-confirm">
+            <Button
+              onClick={handleConfirm}
+              loading={busy}
+              data-testid="onboarding-confirm"
+            >
               Confirm and go live
             </Button>
           ) : !completed && input ? (
