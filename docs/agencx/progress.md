@@ -187,6 +187,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | F-2 Import boundary in CI | done | `1684a42` |
 | F-1 Hygiene | not started | |
 | G-1 Eval cases for the lean toolset | done | `acd2328` |
+| K-1 Everything runs in containers (`docs/agencx/spec/09-devex.md`) | done | `3453b85` |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
