@@ -51,7 +51,12 @@ export default defineConfig({
     {
       name: "mobile-chrome",
       use: { ...devices["iPhone 13"] },
-      testMatch: /mobile/,
+      // Must match spec files only. A per-project testMatch REPLACES the
+      // default `*.spec.ts` pattern, so a bare /mobile/ also claimed
+      // mobile-helpers.ts as a test file - and Playwright refuses to let one
+      // test file import another. Harmless until a mobile spec imported the
+      // helpers it was written for.
+      testMatch: /mobile.*\.spec\.ts$/,
     },
   ],
 

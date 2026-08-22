@@ -197,7 +197,37 @@ One Next.js app (App Router). Route groups: `(platform)` -> admin host,
 middleware (`proxy.ts`). Shared shell: `bg-bg`, max-width content column,
 `text-text` body.
 
-### S1 - Chat (tenant app tab 1) - login-in-chat, interview, everyday chat
+### S0 - Home (tenant app tab 1) - the greeting and the brief
+
+Where the owner lands after go-live, and the first of three tabs (D21). Home is
+the owner's own thread with the assistant, headed by a time-of-day greeting from
+the O-1 profile, and carrying **the brief**: the small set of things that want
+the owner right now, each a card with the one action that resolves it.
+
+Ported from `#greeting` / `#greeting-h1` and `showMorningBrief()` /
+`addCard(hl, chips, note)` in `agencx-prototype-v6.html`. `addJobRows()` is not
+ported - jobs are Stage 2 and there is nothing behind them.
+
+**Item kinds in Stage 1**, each rendered only when its state is real: customers
+waiting on the owner (`/api/conversations`, `needs_attention`), knowledge
+waiting to be saved (`/api/knowledge/records`, `status = draft` - a draft
+answers nothing until saved, D19), and the share nudge until the public page has
+been opened. Stage 2's quote and order approvals arrive as further kinds in the
+same list, never as new screens. E-4 builds this.
+
+**No composer, deliberately.** The prototype's home carries one, and Stage 1
+does not: `POST /api/onboarding/message` 409s once onboarding is confirmed and
+no everyday owner-Copilot route replaces it. An affordance that errors on every
+send is worse than an absent one; the composer waits for the backend that
+answers it.
+
+| State | Spec |
+|---|---|
+| Nothing waiting | The greeting and the thread, nothing else. Never a "you're all caught up" card - absence is the message |
+| Items waiting | Cards in the thread, most-urgent first: headline, action chip(s), one context note line |
+| Loading | No skeleton for the brief - a card that appears a beat late is better than a grey box that promises one |
+
+### S1 - Chats (tenant app tab 2) - login-in-chat, interview, the customers' threads
 
 The product opens into a conversation, not a home screen. The first
 conversation IS the product.
@@ -218,7 +248,8 @@ conversation IS the product.
   conversation.
 
 The thread is the progress indicator: no progress bars, no "% complete"
-anywhere. After go-live the app has exactly two tabs: Chat and Business.
+anywhere. After go-live the app has exactly three tabs: Home, Chats and
+Business (D21), and `/onboarding` sends an already-live owner on to Home.
 
 **Shipped shape (O-5).** Both halves of this conversation - `/login`
 (login-in-chat) and `/onboarding` (the interview) - render on the shared
@@ -268,7 +299,7 @@ take-over and hand-back pills and their symmetrical `thr-pill` stamps. Built on
 `ChatBubble` with `perspective="operator"`, which mirrors which side is
 outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 
-### S2 - Business (tenant app tab 2) - show-back of profile + knowledge
+### S2 - Business (tenant app tab 3) - show-back of profile + knowledge
 
 The Business tab displays the profile and knowledge the owner gave the agent -
 what the assistant believes about the business, and the uploaded material it
@@ -283,8 +314,9 @@ section 8). These are scope, not settings-tree creep (decision 7).
 
 The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
 O-3 / D19) and is not a document table: a source is processed into fixed readable
-sections the owner corrects, held as a draft until they save it. E-1 re-homes
-this screen inside the two-tab shell.
+sections the owner corrects, held as a draft until they save it. E-1 re-homed
+this screen inside the shell: it is reached from the Business hub's Settings
+row, and the Business tab stays lit while the owner is inside it.
 
 | State | Spec |
 |---|---|
@@ -313,24 +345,49 @@ message list, composer pinned bottom. No auth. Share link + QR for distribution.
 
 ### Tenant console shell (nav re-cut, E-1/E-2)
 
-Left sidebar nav re-cut to **Chat** and **Business** (E-1). The advanced Wren
-screens (Conversations with traces, Dashboards, Escalations, Pricing) are
-removed from the tenant nav but their routes and code remain (E-2), reachable by
-the platform owner until Stage 2 re-lands them. Platform admin stays minimal
-(E-3): one Tenants page (list, provision, suspend/reactivate) plus aggregate
-metrics.
+Nav re-cut to **Home**, **Chats** and **Business** (E-1, D21) - the sidebar at
+`lg+`, the bottom tab bar below it. The advanced Wren screens (Conversations
+with traces, Dashboards, Escalations, Pricing) are removed from the tenant nav
+but their routes and code remain (E-2), reachable by the platform owner until
+Stage 2 re-lands them. Platform admin stays minimal (E-3): one Tenants page
+(list, provision, suspend/reactivate) plus aggregate metrics.
+
+**Which tab owns which route.** A drill-down does not have to live under its
+tab's URL - Settings hangs off the Business hub but sits at `/settings` - so a
+nav item carries an `owns` list of extra prefixes. `isTabActive()` in
+`components/ui/TabBar.tsx` is exported and used by *both* renderings: if the
+sidebar and the bar computed this separately they could disagree, and the wrong
+one is whichever the owner is looking at.
+
+**A tab destination has no back control.** `ScreenTopbar` takes `back={false}`
+and renders the prototype's bare 36px spacer instead - both variants are in
+`agencx-prototype-v6.html`. Drill-downs (`/chats/[id]`, `/settings`,
+`/settings/knowledge`) keep theirs.
 
 ### Mobile-first app chrome (tenant app, D18)
 
-The tenant app is mobile-first: below `lg` the two-tab manifest renders as an
-app-style surface with a persistent **bottom tab bar** - Chat and Business as
-bottom tabs; at `lg+` the left sidebar stays (E-1). One codebase, responsive; no
-native app, no PWA shell in Stage 1.
+The tenant app is mobile-first: below `lg` the three-tab manifest renders as an
+app-style surface with a persistent **bottom tab bar** - Home, Chats and
+Business as bottom tabs (D21); at `lg+` the left sidebar stays (E-1). One
+codebase, responsive; no native app, no PWA shell in Stage 1.
 
 - Tab bar: icon + label per tab, minimum 44px touch target, ~64px height plus
-  `env(safe-area-inset-bottom)` padding for home-indicator devices
-- Active tab: accent-container pill with the filled Material Symbol; inactive:
-  quiet text with the outlined glyph - the same idiom as the sidebar items
+  `env(safe-area-inset-bottom)` padding for home-indicator devices. The bar is
+  64px but the tab inside it is a 48px pill inset 8px vertically and 24px
+  horizontally - that inset is what makes the active state read as a pill
+  rather than a full-height block, and it is easy to lose
+- Active tab: **accent text on a 9% accent wash** (`bg-accent-a09 text-accent`)
+  with the filled Material Symbol; inactive: `text-ink-a40` with the outlined
+  glyph. This is the prototype's `.tab.active` and it deliberately differs from
+  the sidebar's saturated accent-container pill: three of these sit side by
+  side on a small surface, where a saturated fill repeated three times reads as
+  loud. The sidebar has room the bar does not, and keeps its own idiom
+- The bar is **persistent, including over drill-downs**: in the prototype
+  `#screen-layer` is z-index 20 and stops 64px short of the bottom while
+  `#tabbar` is 21, so a pushed screen never covers the bar
+- Unread dot (`#ndot`): anchored to the tab's glyph, not to the bar, so it
+  stays put at any tab count. Driven by the same `needs_attention` the Chats
+  "Action needed" filter uses, so the two cannot disagree
 - The hamburger Drawer is no longer the tenant app's mobile nav; it stays
   available to the platform surface (E-3)
 - Brand header stays compact on mobile; sign-out is reachable, never hidden

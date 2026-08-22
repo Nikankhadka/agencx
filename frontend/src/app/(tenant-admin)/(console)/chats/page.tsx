@@ -69,9 +69,10 @@ export default function ChatsPage() {
   }, [query.data, filter, search]);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
       <ScreenTopbar
         title="Chats"
+        back={false}
         action={
           <button
             type="button"

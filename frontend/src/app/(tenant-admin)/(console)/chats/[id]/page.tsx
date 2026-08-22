@@ -90,7 +90,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   const customerName = detail?.customer_ref?.trim() || "Customer";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
       <ScreenTopbar title={customerName} backHref="/chats" />
       <p
         data-testid="thread-status"

@@ -35,10 +35,13 @@ O-3, O-4, then C-1, C-2, C-3, C-5, C-6, C-4. The assistant can now state a price
 the owner published, every reply passes one deterministic figure check, a handoff
 no longer ends the conversation, and staff can take a conversation over and hand
 it back. **C-6 is a ticket added during the build** (founder request, 2026-08-22)
-and is spec'd in the phase file like the rest. Next is `05-business-page.md`, re-cut
-by **D21** into four tickets - E-1 (the three-tab shell: Home, Chats,
-Business), E-4 (Home and its brief), E-5 (Business hub + Booking page), E-2
-(hide the advanced screens) - with P-5 still outstanding from the chat spine.
+and is spec'd in the phase file like the rest. `05-business-page.md` is re-cut by **D21**
+into four tickets - E-1 (the three-tab shell: Home, Chats, Business), E-4 (Home
+and its brief), E-5 (Business hub + Booking page), E-2 (hide the advanced
+screens). **E-1 is landed**: the hamburger drawer is gone, the bottom tab bar
+below `lg` closes the long-standing 375px sidebar squeeze, and `/chats` and
+`/settings` render inside the shell. Next is E-4, with P-5 still outstanding
+from the chat spine.
 
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
@@ -106,7 +109,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
-| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; **CHANGING** - E-1/E-2 re-cut to Home + Chats + Business (bottom tab bar on mobile below `lg`, sidebar at `lg+`; D18 as amended by D21); advanced screens hidden from nav |
+| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; **CHANGING** - P-5 adds the failover typing indicator; rebrand (B-1) |
@@ -164,7 +167,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
-| E-1 Three-tab shell (Home + Chats + Business) | not started | |
+| E-1 Three-tab shell (Home + Chats + Business) | done | this commit |
 | E-4 Home: the greeting and the brief | not started | |
 | E-5 Business hub + Booking page | not started | |
 | E-2 Hide advanced screens, keep code | not started | |
@@ -201,7 +204,3 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   prompt, and asks every tenant the same seven questions - which keeps I8
   cleanly satisfied, since no vertical name appears anywhere. Revisit when a
   real vertical needs a question the generic set does not cover.
-- **Console sidebar squeeze below ~375px** (pre-existing, surfaced by the
-  rebrand's 375px e2e check): resolved by design - E-1 replaces the tenant
-  app's mobile nav with the bottom tab bar (D18) - but the code fix ships with
-  E-1, not before.

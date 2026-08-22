@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import {
   AgentLine,
@@ -77,6 +78,7 @@ function historyToMessages(
  * The captured profile is shown back on the Business tab (S2), not here.
  */
 export default function OnboardingPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [opening, setOpening] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -100,6 +102,13 @@ export default function OnboardingPage() {
   useEffect(() => {
     apiFetch<OnboardingState>("/api/onboarding/state")
       .then((state) => {
+        // E-1: a business that is already live has no interview left to run -
+        // it belongs in the app. The in-session confirm still finishes here,
+        // so the owner reads "you are live" before the next visit redirects.
+        if (state.completed) {
+          router.replace("/home");
+          return;
+        }
         applyStateFields(state);
         const restored = historyToMessages(state.history);
         if (restored.length > 0) {
@@ -112,7 +121,7 @@ export default function OnboardingPage() {
       })
       .catch((err) => setError(err instanceof ApiError ? err.detail : "Failed to load onboarding"))
       .finally(() => setLoaded(true));
-  }, []);
+  }, [router]);
 
   // Hold the typing indicator ahead of the (static) opening message.
   useEffect(() => {

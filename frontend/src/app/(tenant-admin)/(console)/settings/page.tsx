@@ -14,9 +14,9 @@ import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
  */
 export default function SettingsPage() {
   return (
-    <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface">
-      <ScreenTopbar title="Settings" backHref="/onboarding" />
-      <div className="min-h-0 flex-1 overflow-y-auto pb-20">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
+      <ScreenTopbar title="Settings" backHref="/business" />
+      <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-20">
         <RowLink
           href="/settings/knowledge"
           label="Knowledge"

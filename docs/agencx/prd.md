@@ -108,7 +108,7 @@ the Wren build; evidence in `docs/archive/artifacts/generalization-proof.md`.)
 
 | Stage | What it is | Status |
 |---|---|---|
-| **Stage 1 - the assistant** | Owner self-onboards in a chat, lands in a two-tab app (Chat, Business), uploads knowledge, and an anonymous customer can ask its public page questions grounded in that material. No leads, no quotes, no payments, no scheduling, no invoicing. | **Build now** |
+| **Stage 1 - the assistant** | Owner self-onboards in a chat, lands in a three-tab app (Home, Chats, Business), uploads knowledge, and an anonymous customer can ask its public page questions grounded in that material. No leads, no quotes, no payments, no scheduling, no invoicing. | **Build now** |
 | **Stage 2 - the back-office** | Lead qualification, deterministic quoting, approval gates, payments, scheduling, write-once invoicing, post-job care. The assistant gains the machinery to close and manage work. | After Stage 1 validates |
 
 Stage 2 is the same product's promise, deferred - not a different product. It is
@@ -125,8 +125,8 @@ is not planned or ticketed until Stage 1 reports back.
 2. **The interview.** The same agent gathers name, business name, business type,
    headcount, hours, what is sold - into a small profile. The business type
    selects what is asked (config, not branches).
-3. **Going live.** The tenant reaches a ready state and lands in the two-tab
-   app: Chat and Business.
+3. **Going live.** The tenant reaches a ready state and lands in the three-tab
+   app: Home, Chats and Business.
 4. **Knowledge.** The owner adds material - menu, FAQs, catering rates, terms.
 5. **Share.** The owner hands out the public link or QR.
 6. **The anonymous visit.** Off-hours, an incognito visitor asks a plain-language
@@ -144,8 +144,9 @@ is not planned or ticketed until Stage 1 reports back.
 
 | # | Screen | Surface | Notes |
 |---|---|---|---|
-| S1 | **Chat** | tenant app tab 1 | contains login-in-chat, onboarding interview, then everyday conversation |
-| S2 | **Business** | tenant app tab 2 | the show-back surface (profile + knowledge), editable - NOT a settings tree |
+| S0 | **Home** | tenant app tab 1 | where the owner lands after go-live: the greeting and the brief - what needs them right now |
+| S1 | **Chats** | tenant app tab 2 | the customers' conversations, and stepping into one; contains login-in-chat and the onboarding interview before go-live |
+| S2 | **Business** | tenant app tab 3 | the show-back surface (profile + knowledge), editable - NOT a settings tree |
 | S3 | **Public page** | anonymous | per-tenant slug, share link + QR; the only customer surface in Stage 1 |
 
 The advanced Wren surfaces (conversations with traces, dashboards, escalations
@@ -153,8 +154,10 @@ queue, pricing editor) are hidden from the tenant app navigation, not deleted.
 They stay reachable by code and by the platform owner until Stage 2 re-lands
 them with a purpose.
 
-The two-tab app is mobile-first: on phones the tabs render as an app-style
-bottom tab bar (D18), on desktop as a sidebar (E-1).
+The three-tab app is mobile-first: on phones the tabs render as an app-style
+bottom tab bar (D18, D21), on desktop as a sidebar (E-1). D21 added Home
+because the prototype's home thread had no tab of its own - "your thread with
+the assistant" and "the customers' threads" are different places.
 
 ### What is explicitly out
 

@@ -113,6 +113,8 @@
   --text-lede-q--line-height: var(--text-lede-q-leading);
   --text-bubble: var(--text-bubble-size);
   --text-bubble--line-height: var(--text-bubble-leading);
+  --text-tab: var(--text-tab-size);
+  --text-tab--line-height: var(--text-tab-leading);
   --text-proc: var(--text-proc-size);
   --text-proc--line-height: var(--text-proc-leading);
   --text-screen-title: var(--text-screen-title-size);
@@ -154,6 +156,12 @@
   --spacing-code-cell-h: var(--size-code-cell-h);
   --spacing-topbar: var(--size-topbar);
   --spacing-icon-btn: var(--size-icon-btn);
+  --spacing-tabbar: var(--size-tabbar);
+  --spacing-tab: var(--size-tab);
+  --spacing-tab-inset: var(--size-tab-inset);
+  --spacing-tab-inset-x: var(--size-tab-inset-x);
+  --spacing-ndot: var(--size-ndot);
+  --radius-tab: var(--radius-tab);
 
   --container-thread: var(--width-thread);
 

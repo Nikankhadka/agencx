@@ -161,7 +161,7 @@ export default function KnowledgePage() {
   const saved = records.filter((record) => record.status !== "draft");
 
   return (
-    <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Knowledge" backHref="/settings" />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-gutter pb-20 pt-5">

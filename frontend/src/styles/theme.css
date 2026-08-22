@@ -125,6 +125,7 @@
   --text-sheet-title-size:  17px;  --text-sheet-title-leading:  17px;  /* .sh-title 500 17/1 */
   --text-row-label-size:    15px;  --text-row-label-leading:    15px;  /* .bh-lb / .set-hdr-lbl 500 15/1 */
   --text-action-size:       14px;  --text-action-leading:       14px;  /* .se-add 500 14/1 */
+  --text-tab-size:          10px;  --text-tab-leading:          10px;  /* .tab-lbl 500 10/1 */
   --text-field-size:        18px;  --text-field-leading:        25px;  /* .se-input 400 18/1.4 */
   --text-field-label-size:  11px;  --text-field-label-leading:  11px;  --text-field-label-tracking: 0.045em; /* .se-label 500 11/1 uppercase */
 }
@@ -227,6 +228,18 @@
   --size-code-cell-w: 46px;      /* .otp-cell */
   --size-code-cell-h: 52px;
   --width-thread: 640px;         /* desktop content column; mobile is full width + --gutter */
+
+  /* Bottom tab bar geometry, read off the prototype's #tabbar (D18, D21). The
+     bar is 64px; the tab inside it is a 48px pill with an 8px inset, which is
+     what makes the active state read as a pill rather than a full-height
+     block. */
+  --size-tabbar: 64px;           /* #tabbar */
+  --size-tab: 48px;              /* .tab */
+  --size-tab-inset: 8px;         /* .tab margin, vertical */
+  --size-tab-inset-x: 24px;      /* .tab margin, horizontal - what keeps the
+                                    active pill from filling its whole slot */
+  --radius-tab: 24px;            /* .tab */
+  --size-ndot: 8px;              /* #ndot */
 
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-2: 0 2px 8px rgb(0 0 0 / 0.07);

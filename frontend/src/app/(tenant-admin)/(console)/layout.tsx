@@ -3,52 +3,48 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Icon, type IconName } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/Icon";
 import { BrandMark } from "@/components/ui/BrandMark";
-import { Drawer } from "@/components/ui/Drawer";
+import { TabBar, isTabActive, type TabItem } from "@/components/ui/TabBar";
 import { useAuth } from "@/components/AuthProvider";
 import { apiFetch } from "@/lib/api";
+import { useApiQuery } from "@/lib/useApiQuery";
+import type { ConversationSummary } from "@/lib/api-schemas";
 
 /**
- * T-031: the Surface-2 admin-console shell (frontend.md 7.2). A left sidebar
- * nav wraps every authed console page; login/signup stay outside this route
- * group and keep their own centered-card layout. Route groups never appear in
- * the URL, so /knowledge and /onboarding are unchanged by living under
- * (console).
+ * E-1 / D21: the tenant app shell. Three destinations - Home, Chats, Business
+ * - as a bottom tab bar below `lg` and as the left sidebar at `lg+`. One nav
+ * model, two renderings.
  *
- * Settings is real now: it holds the Knowledge screen (O-3), where an owner
- * reads back and corrects what their assistant knows. The Wren-era /knowledge
- * console page it replaces stays mounted but leaves the nav - E-2's "hidden,
- * not deleted" posture, applied early because two doors onto the same thing
- * would be worse than one.
- * Dashboards (T-034) is temporarily hidden: its nav item is removed and
- * /dashboards redirects to /onboarding (next.config.ts redirects()).
+ * D21 replaced D18's two tabs because the prototype's home Copilot thread sits
+ * underneath its tab bar with no tab of its own, and `navBack()` lights Chats
+ * when you land there. "Your thread with the assistant" and "the customers'
+ * threads with the assistant" are different places, so they get different tabs.
  *
- * 7.2 specs "icons + labels": each item carries a Material Symbol; the active
- * item is an accent-container pill with the filled glyph, inactive items are
- * quiet text with the outlined glyph.
+ * The tab bar is persistent, including over drill-downs: in the prototype
+ * `#screen-layer` is z-index 20 and stops 64px short of the bottom while
+ * `#tabbar` is 21, so a pushed screen never covers the bar. Drill-downs keep
+ * their `ScreenTopbar` back control on top of that; a tab destination does not
+ * (`back={false}`).
  *
- * /onboarding and the /settings screens render chrome-free. In the prototype
- * the app has no navigation at all until the business is live (the bottom tab
- * bar appears only on `#phone.post`), and each destination screen carries its
- * own `.dst-topbar` with a back control instead. The auth guard below still
- * runs for them - only the chrome is dropped. E-1 re-homes all of this inside
- * the two-tab shell.
+ * /onboarding is the one chrome-free route. The prototype's app has no
+ * navigation at all until the business is live (`#phone.post`), and
+ * `onboarding.completed` is that signal - the page itself sends a completed
+ * owner on to /home.
+ *
+ * The Wren-era screens (/conversations, /escalations, /pricing, /knowledge)
+ * stay mounted and keep working; they are simply not in this list. E-2 owns
+ * that posture and its test. Hidden until Stage 2, never deleted.
  */
-// Screens ported from the prototype, which has no nav chrome of its own until
-// E-1's bottom tab bar lands - each carries the prototype's `.dst-topbar` back
-// control instead. Prefix match, so `/chats/<id>` is covered by `/chats`.
-const CHROME_FREE_PREFIXES = ["/onboarding", "/settings", "/chats"];
-const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
-  { href: "/onboarding", label: "Onboarding", icon: "rocket_launch" },
-  { href: "/settings", label: "Settings", icon: "settings" },
+const CHROME_FREE_PREFIXES = ["/onboarding"];
+
+const NAV_ITEMS: TabItem[] = [
+  { href: "/home", label: "Home", icon: "home" },
   { href: "/chats", label: "Chats", icon: "forum" },
-  // The Wren-era trace viewer. E-2 hides it; until then it keeps its place and
-  // an icon that reads as records rather than as conversation, since Chats is
-  // now what an owner means by that.
-  { href: "/conversations", label: "Conversations", icon: "folder_open" },
-  { href: "/escalations", label: "Escalations", icon: "support_agent" },
-  { href: "/pricing", label: "Pricing", icon: "sell" },
+  // Settings is reached from the Business hub but lives at its own top-level
+  // path, so Business has to claim it or the nav goes dark while the owner is
+  // inside it. E-5's Booking page will sit under /business and needs no entry.
+  { href: "/business", label: "Business", icon: "dashboard", owns: ["/settings"] },
 ];
 
 interface TenantMe {
@@ -62,7 +58,6 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { session, isLoading, signOut } = useAuth();
   const [tenant, setTenant] = useState<TenantMe | null>(null);
-  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !session) {
@@ -77,11 +72,16 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .catch(() => setTenant(null));
   }, [session]);
 
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- deliberate drawer reset on navigation */
-    setNavOpen(false);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pathname]);
+  // The prototype's `#ndot`: the Chats tab says someone is waiting, from
+  // wherever the owner happens to be standing. Same source as the Chats
+  // screen's "Action needed" filter, so the two can never disagree.
+  const conversations = useApiQuery<ConversationSummary[]>("/api/conversations", {
+    enabled: Boolean(session),
+  });
+  const waiting = (conversations.data ?? []).some((row) => row.needs_attention);
+  const items = NAV_ITEMS.map((item) =>
+    item.href === "/chats" ? { ...item, dot: waiting } : item
+  );
 
   if (isLoading) {
     return <div aria-busy="true" className="h-dvh bg-bg" />;
@@ -92,48 +92,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   }
 
   const displayName =
-    (tenant?.brand?.["display_name"] as string | undefined) ?? tenant?.name ?? "Wren";
+    (tenant?.brand?.["display_name"] as string | undefined) ?? tenant?.name ?? "Agencx";
   const logoUrl = tenant?.brand?.["logo_url"] as string | undefined;
-
-  const navContent = (
-    <>
-      <span className="flex items-center gap-2.5 px-3 py-2">
-        <BrandMark logoUrl={logoUrl} name={displayName} />
-        <span className="truncate text-title-3 font-semibold text-text">{displayName}</span>
-      </span>
-      <ul className="mt-2 flex flex-col gap-0.5">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={[
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium transition-colors duration-(--duration-fast)",
-                  active
-                    ? "bg-accent-container text-text-inverse"
-                    : "text-text-secondary hover:bg-surface-container hover:text-text",
-                ].join(" ")}
-              >
-                <Icon name={item.icon} filled={active} size={20} />
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-auto pt-4">
-        <button
-          onClick={() => signOut()}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-(--duration-fast)"
-        >
-          <Icon name="logout" filled={false} size={20} />
-          Sign out
-        </button>
-      </div>
-    </>
-  );
 
   return (
     <div className="flex h-dvh w-full">
@@ -141,21 +101,52 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         aria-label="Console"
         className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-sunken p-4 lg:flex"
       >
-        {navContent}
+        <span className="flex items-center gap-2.5 px-3 py-2">
+          <BrandMark logoUrl={logoUrl} name={displayName} />
+          <span className="truncate text-title-3 font-semibold text-text">{displayName}</span>
+        </span>
+        <ul className="mt-2 flex flex-col gap-0.5">
+          {items.map((item) => {
+            const active = isTabActive(item, pathname);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={[
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium transition-colors duration-(--duration-fast)",
+                    active
+                      ? "bg-accent-container text-text-inverse"
+                      : "text-text-secondary hover:bg-surface-container hover:text-text",
+                  ].join(" ")}
+                >
+                  <Icon name={item.icon} filled={active} size={20} />
+                  {item.label}
+                  {item.dot ? (
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto size-ndot rounded-full bg-warning"
+                    />
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-auto pt-4">
+          <button
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium text-text-secondary hover:bg-surface-container hover:text-text transition-colors duration-(--duration-fast)"
+          >
+            <Icon name="logout" filled={false} size={20} />
+            Sign out
+          </button>
+        </div>
       </nav>
 
-      <Drawer open={navOpen} onClose={() => setNavOpen(false)}>
-        {navContent}
-      </Drawer>
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface px-4 lg:hidden">
-          <button type="button" onClick={() => setNavOpen(true)} aria-label="Menu">
-            <Icon name="menu" size={24} />
-          </button>
-          <span className="truncate text-title-3 font-semibold text-text">{displayName}</span>
-        </header>
-        {children}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <TabBar items={items} pathname={pathname} />
       </div>
     </div>
   );
