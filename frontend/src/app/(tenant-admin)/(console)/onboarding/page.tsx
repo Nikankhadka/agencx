@@ -51,6 +51,14 @@ interface StateFields {
 const OPENING_PACE_MS = 820;
 
 /**
+ * E-1 US-3: after completion the owner lands on /home. The confirm keeps the
+ * "You are live" activation summary readable for this long before the app
+ * appears, so go-live reads as one conversation that became an app rather than
+ * a hard cut.
+ */
+const GO_LIVE_READ_MS = 1400;
+
+/**
  * The prototype's `.proc-txt` line while a pasted link is being fetched. The
  * backend leads its URL turn with `progress: reading_site` precisely so this
  * covers the scrape, the ingest and the extraction.
@@ -307,6 +315,7 @@ export default function OnboardingPage() {
       setCompleted(true);
       setCanConfirm(false);
       setInput(null);
+      window.setTimeout(() => router.replace("/home"), GO_LIVE_READ_MS);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : "Something went wrong. Please try again.");
     } finally {

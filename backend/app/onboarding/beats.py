@@ -127,6 +127,12 @@ def input_spec(beat: Beat) -> InputSpec:
     return InputSpec(kind=beat.kind, placeholder=beat.ask)
 
 
+# The optional website/documents ask (see agent._completion_reply) is not a
+# beat - it never gates the profile - but it still needs a text composer, so it
+# reuses the same InputSpec shape as the text beats it follows.
+KNOWLEDGE_INPUT = InputSpec(kind="text", placeholder='Paste a link, attach a file, or say "skip"')
+
+
 def check_completeness(draft: dict[str, Any]) -> list[str]:
     """Labels of every unsatisfied beat."""
     return [beat.label for beat in BEAT_ORDER if not beat.complete(draft)]

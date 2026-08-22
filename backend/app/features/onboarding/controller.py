@@ -19,11 +19,11 @@ from app.features.knowledge import service as knowledge_service
 from app.features.onboarding import service
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
-from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     prepare_turn,
     prepare_url_turn,
+    progress,
     run_turn,
     stream_reply,
 )
@@ -56,14 +56,14 @@ def _find_url(text: str) -> str | None:
 
 def _state_event(record: OnboardingRecord) -> dict[str, object]:
     record_data = record.to_jsonb()
-    nxt = beats.next_beat(record.draft)
+    stage, input_, can_confirm = progress(record)
     return {
         "type": "state",
-        "stage": nxt.key if nxt else "confirm",
+        "stage": stage,
         "draft": record_data.get("draft", {}),
         "completed": record_data.get("completed", False),
-        "input": beats.input_spec(nxt).model_dump() if nxt else None,
-        "can_confirm": nxt is None and not record_data.get("completed", False),
+        "input": input_.model_dump() if input_ else None,
+        "can_confirm": can_confirm,
     }
 
 
@@ -87,8 +87,7 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
     onboarding = OnboardingRecord.from_jsonb(record_data)
     draft = onboarding.draft
     completed = onboarding.completed
-    beat = beats.next_beat(draft)
-    stage = beat.key if beat else "confirm"
+    stage, input_, can_confirm = progress(onboarding)
     prompt = ""
     for msg in reversed(onboarding.history):
         if msg.get("role") == "assistant":
@@ -102,8 +101,8 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "draft": draft,
         "completed": completed,
         "history": onboarding.history,
-        "input": beats.input_spec(beat) if beat else None,
-        "can_confirm": beat is None and not completed,
+        "input": input_.model_dump() if input_ else None,
+        "can_confirm": can_confirm,
     }
 
 

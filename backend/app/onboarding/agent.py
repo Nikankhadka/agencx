@@ -89,6 +89,10 @@ class OnboardingRecord:
     history: list[dict[str, str]] = field(default_factory=list)
     off_topic_count: int = 0
     completed: bool = False
+    # O-3 follow-up: the optional website/documents ask is pending until the
+    # owner answers it (paste a link, attach a file, or say "skip"). It never
+    # gates go-live - confirm still requires only the seven profile fields.
+    knowledge_pending: bool = False
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -107,6 +111,7 @@ class OnboardingRecord:
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
+                knowledge_pending=raw.get("knowledge_pending", False),
             )
         return cls(
             version=3,
@@ -123,6 +128,7 @@ class OnboardingRecord:
             "history": self.history[-_MAX_HIST:],
             "off_topic_count": self.off_topic_count,
             "completed": self.completed,
+            "knowledge_pending": self.knowledge_pending,
         }
 
 
@@ -153,11 +159,44 @@ def _activation_summary(draft: dict[str, Any]) -> str:
     return f"{intro} Hit confirm to publish it."
 
 
-def _assistant_reply_for(draft: dict[str, Any]) -> str:
-    nxt = beats.next_beat(draft)
-    if nxt is None:
-        return _activation_summary(draft)
-    return f"Got it. {nxt.ask}"
+# The optional website/documents ask (founder request): asked once when the
+# profile completes, never a gate. Skipping is one word, and the same offer
+# names the Settings > Knowledge fallback so knowledge can always wait.
+_KNOWLEDGE_OFFER = (
+    " Do you have a website or any documents - a menu, price list, or FAQs? "
+    'Paste a link, attach a file, or say "skip", and you can add more any '
+    "time from Settings."
+)
+
+
+def _completion_reply(record: OnboardingRecord) -> str:
+    """The server-synthesized reply once the seven fields are captured.
+
+    First call fires the website/documents offer and opens the ``knowledge``
+    stage; every later call is the activation summary, so the offer never
+    repeats and "skip" (or a pasted link, cleared by ``prepare_url_turn``)
+    advances the owner to confirm.
+    """
+    if not record.knowledge_pending:
+        record.knowledge_pending = True
+        return _activation_summary(record.draft) + _KNOWLEDGE_OFFER
+    record.knowledge_pending = False
+    return _activation_summary(record.draft)
+
+
+def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, bool]:
+    """The interview's (stage, composer widget, can-confirm) triple.
+
+    The single source both ``_state_event`` and ``response_from_record`` read,
+    so the SSE state and the REST state never disagree. A completed profile
+    passes through the optional ``knowledge`` stage before ``confirm``.
+    """
+    nxt = beats.next_beat(record.draft)
+    if nxt is not None:
+        return nxt.key, beats.input_spec(nxt), False
+    if record.knowledge_pending:
+        return "knowledge", beats.KNOWLEDGE_INPUT, False
+    return "confirm", None, not record.completed
 
 
 def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
@@ -235,6 +274,10 @@ async def prepare_url_turn(
     )
     if update.profile is not None:
         record.draft = save_profile(record.draft, update.profile)
+    # A link pasted once the profile is complete is the owner's answer to the
+    # website ask - it satisfies the offer the same way "skip" does.
+    if beats.next_beat(record.draft) is None:
+        record.knowledge_pending = False
     record.history.append({"role": "user", "content": url})
     return TurnPlan(
         record=record,
@@ -333,7 +376,7 @@ async def prepare_turn(
         return TurnPlan(
             record=record,
             persist=persist,
-            summary=_assistant_reply_for(record.draft),
+            summary=_completion_reply(record),
             reply_msgs=None,
             off_topic=update.off_topic,
         )

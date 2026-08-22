@@ -268,7 +268,10 @@ conversation IS the product.
   celebration.
 - **Interview:** the same conversation continues as the onboarding interview
   (name, business name, business type, headcount, hours, what they sell).
-  Business type drives questions from config, never code (I8).
+  Business type drives questions from config, never code (I8). Once those seven
+  fields are captured the assistant offers a website/documents ask (paste a
+  link, attach a file, or say "skip") - optional, one word to decline, and it
+  never gates go-live; the confirm button appears after it is answered.
 - **Everyday chat: NOT in Stage 1.** This spec used to say the Chat tab holds
   the Copilot conversation after go-live. It does not, and no route answers
   one: `POST /api/onboarding/message` returns 409 once onboarding is confirmed

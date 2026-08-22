@@ -196,7 +196,10 @@ async def _walk(
 
 
 async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
+    # The seven beats land on the optional website/documents ask ("knowledge");
+    # one "skip" answers it and advances to confirm.
     await _walk(client, token)
+    await _send(client, {"Authorization": f"Bearer {token}"}, text="skip")
 
 
 async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
@@ -316,6 +319,30 @@ async def test_message_requires_exactly_one_of_text_or_selection(
     assert both.status_code == 422
     neither = await client.post("/api/onboarding/message", json={}, headers=headers)
     assert neither.status_code == 422
+
+
+async def test_knowledge_ask_then_skip_advances_to_confirm(
+    client: httpx.AsyncClient,
+) -> None:
+    """The website/documents ask is optional, not a gate: after the seven beats
+    the interview pauses on a ``knowledge`` stage with a text composer, and one
+    "skip" answers it so confirm becomes available."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    body: dict[str, Any] = {}
+    for step in _FULL_WALK:
+        body = await _send(client, headers, text=step[1])
+
+    # Profile complete -> the offer fires, and the stage is the non-blocking ask.
+    assert body["stage"] == "knowledge"
+    assert body["can_confirm"] is False
+    assert body["input"]["kind"] == "text"
+
+    final = await _send(client, headers, text="skip")
+    assert final["stage"] == "confirm"
+    assert final["can_confirm"] is True
+    assert final["input"] is None
 
 
 async def test_full_flow_confirm_writes_profile(
