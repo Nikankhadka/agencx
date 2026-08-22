@@ -4,6 +4,9 @@ decides pass/fail."""
 
 from __future__ import annotations
 
+import pytest
+
+from evals import run_gate as run_gate_module
 from evals.run_gate import GateReport, absolute_pass, regression_pass
 
 
@@ -60,3 +63,34 @@ def test_gate_report_passes_only_when_all_pass() -> None:
 
 def test_gate_report_empty_is_vacuously_passing() -> None:
     assert GateReport().passed
+
+
+async def test_absolute_gates_run_even_when_llm_is_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G-1 US-3: no flag skips an absolute gate.
+
+    The deterministic evals - the money guardrail matrix (C-4), cross-tenant
+    leakage, retrieval recall - are the ones with a fixed floor and no judge in
+    the loop. `--skip-llm` exists so the gate is runnable without a key; it must
+    never become a way to run the gate without the checks that do not need one.
+    """
+    ran: list[str] = []
+
+    def _fake_subprocess(module: str, *args: str) -> int:
+        ran.append(module)
+        return 0
+
+    monkeypatch.setattr(run_gate_module, "_run_eval_subprocess", _fake_subprocess)
+
+    report = await run_gate_module.run_gate(skip_llm=True)
+
+    assert ran == list(run_gate_module._ABSOLUTE_GATES)
+    assert "money_guardrail_eval" in ran, "C-4's matrix is an absolute gate"
+    assert report.passed
+
+    # And the skip says which reason, so a deliberate --skip-llm run does not
+    # read as a broken environment.
+    skipped = [r for r in report.results if "skipped" in r.detail]
+    assert skipped, "the judged gates should report as skipped, not silently vanish"
+    assert all("--skip-llm" in r.detail for r in skipped)

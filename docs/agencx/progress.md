@@ -106,9 +106,9 @@ open for US-2, the `STATUS_TONE` map.
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Generation eval (faithfulness, relevancy, citation) | BUILT | `aed2086`; **CHANGING** - G-1 re-cuts cases for the lean toolset |
+| Generation eval (faithfulness, relevancy, citation) | BUILT | `aed2086`; G-1 took the refusal set from 3 obviously-off-topic cases to 12, adding the in-domain-but-unstated kind (crypto, instalments, student discount, Sunday hours) - each verified absent from tenant 1's corpus first |
 | Judge calibration | BLOCKED | `19d68e0` - needs founder hand-labeling (circular if agent-generated) |
-| Golden agent-task set + trajectory scorer | BUILT | `22f9cae`, `cd868c4`; **CHANGING** - G-1 updates for the supervisor-with-tools shape |
+| Golden agent-task set + trajectory scorer | BUILT | `22f9cae`, `cd868c4`; G-1 added 6 lean cases (30 -> 36) asserting the outcome the lean default produces - answered from the corpus, no quote row, every figure sourced. The step-efficiency table was already current: C-2 and P-3 kept it so |
 | Prompt-injection defense + adversarial set | BUILT | `598f3a7` |
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; F-2 added the import boundary - three import-linter contracts (pricing never reaches a model, services never ask one for words, the provider seam is a leaf) plus the frontend's presentational-UI rule. The ADR claiming this had been enforced "from the very first commit" was corrected: nothing enforced it until F-2 |
@@ -183,7 +183,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-3 Platform admin stays minimal | done | this commit |
 | F-2 Import boundary in CI | done | this commit |
 | F-1 Hygiene | not started | |
-| G-1 Eval cases for the lean toolset | not started | |
+| G-1 Eval cases for the lean toolset | done | this commit |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
@@ -212,6 +212,25 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   promising it. This is a new agent route, not a screen - too large for a
   polish ticket. Revisit after Stage 1 reports back.
 
+
+- **Google's tier rejects our multi-tool turns** (found by G-1's live run,
+  2026-08-22). `openai.BadRequestError: 400 - Function call is missing a
+  thought_signature in functionCall parts ... function call
+  `default_api:lookup_order_or_ticket`, position 2`. Gemini now requires a
+  `thought_signature` echoed back on function-call parts, and it surfaces
+  through the OpenAI-compat endpoint we speak to. It fires on turns with more
+  than one tool call, so `generation_eval`, `trajectory_eval` and
+  `injection_eval` all error out against the primary tier; the deterministic
+  gates are unaffected.
+  **Failover does not absorb it**: `_FAILOVER_ERRORS` in `app/llm/failover.py`
+  covers rate limits, connection faults, upstream errors and validation errors
+  - not `BadRequestError`. That default is right in general (a 400 usually
+  means the request is wrong, and retrying it elsewhere would hide a real bug),
+  and wrong for a *provider-specific* 400 like this one, which the same request
+  survives on Groq or OpenRouter. Needs its own ticket: either echo the
+  signature in the provider shim, or classify provider-specific 400s as
+  failover-eligible. Not fixed inside G-1 - it is an `app/llm/` change, not an
+  eval one.
 
 - **Live LLM calls run against free-tier models** (Google AI Studio primary,
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to

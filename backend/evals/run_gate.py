@@ -162,10 +162,14 @@ async def run_gate(*, skip_llm: bool) -> GateReport:
         )
 
     # 2. LLM-judged regression gates - only when a provider is configured.
+    # Say which reason. "no LLM provider configured" printed on a --skip-llm
+    # run reads as a broken environment when it was a deliberate choice, and
+    # the two want different responses from whoever is looking.
+    reason = "--skip-llm" if skip_llm else "no LLM provider configured"
     run_llm = not skip_llm and _llm_configured()
     if not run_llm:
         for module, _metric, _run_type in _REGRESSION_GATES:
-            report.add(module, True, "skipped (no LLM provider configured)")
+            report.add(module, True, f"skipped ({reason})")
         return report
 
     tenant_id = await _seeded_tenant_id()

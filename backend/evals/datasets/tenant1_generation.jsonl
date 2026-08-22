@@ -32,3 +32,12 @@
 {"question": "What's the capital of France?", "reference_facts": [], "expected_sources": [], "negative": true}
 {"question": "Can you recommend a good pizza place nearby?", "reference_facts": [], "expected_sources": [], "negative": true}
 {"question": "What's the current stock price of Apple?", "reference_facts": [], "expected_sources": [], "negative": true}
+{"question": "Can I pay in crypto?", "negative": true}
+{"question": "Do you offer a payment plan or instalments on a big repair?", "negative": true}
+{"question": "Is there a student discount?", "negative": true}
+{"question": "Do you take trade-ins against the cost of a repair?", "negative": true}
+{"question": "Can you bill my phone insurance directly?", "negative": true}
+{"question": "Do you post repaired phones back by courier?", "negative": true}
+{"question": "Are you open on Sunday?", "negative": true}
+{"question": "Is there parking outside the shop?", "negative": true}
+{"question": "Do you sell gift cards?", "negative": true}

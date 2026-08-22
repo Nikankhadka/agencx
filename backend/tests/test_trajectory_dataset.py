@@ -44,9 +44,20 @@ def _seeded_status(ref_code: str) -> str | None:
 pytestmark = pytest.mark.db
 
 
-def test_dataset_has_20_to_30_cases() -> None:
+def test_dataset_size_and_lean_weighting() -> None:
+    """G-1: big enough to mean something, and weighted to the shape that ships.
+
+    The upper bound used to be 30, sized for T-025's five-specialist topology.
+    The lean default (D-2) makes "answered straight from the corpus, no tool"
+    the common case, so the set now carries enough of those to measure it - the
+    old weighting had four knowledge cases against seventeen commerce ones,
+    which measured a product that is now opt-in.
+    """
     cases = load_cases()
-    assert 20 <= len(cases) <= 30
+    assert 20 <= len(cases) <= 45
+
+    knowledge = [c for c in cases if c.expected_route == ["knowledge"]]
+    assert len(knowledge) >= 8, "the lean path is the common one; measure it like it"
 
 
 def test_dataset_covers_every_specialist_at_least_four_times() -> None:
