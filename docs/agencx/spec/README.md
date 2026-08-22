@@ -26,9 +26,11 @@ prototype screen and porting it, never by designing from the ticket text.** The
 ticket says what the screen must do; the prototype says what it looks like and
 how it behaves.
 
-- `agencx-prototype-v6.html` - **current.** Tenant app: onboarding thread, Chat
-  (list + thread), Business hub, Booking page, Settings, plus the Stage 2
-  screens (Schedule, Money, Plan) that Phase 1 hides. Trusted for screen
+- `agencx-prototype-v6.html` - **current.** Tenant app: the home thread and its
+  morning brief, onboarding thread, Chats (list + thread), Business hub,
+  Booking page, Settings, plus the Stage 2 screens (Schedule, Money, Plan) that
+  Phase 1 hides. Its tab bar carries two tabs; D21 makes it three - take the
+  geometry and states from it, not the tab count. Trusted for screen
   inventory, states, interaction vocabulary, mobile chrome (D18), and the
   shipped crimson identity (D17).
 - `agencx-storefront-customer-v3.html` - **superseded.** Customer storefront;
@@ -54,7 +56,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | `02-onboarding.md` | O-1, O-2, O-5 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
 | `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5, C-6 |
-| `05-business-page.md` | E-1, E-2 |
+| `05-business-page.md` | E-1, E-4, E-5, E-2 |
 | `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
 | `07-hygiene.md` | F-1 |
 | `08-deferred.md` | B-2, D-1, D-3, D-4 |

@@ -35,8 +35,10 @@ O-3, O-4, then C-1, C-2, C-3, C-5, C-6, C-4. The assistant can now state a price
 the owner published, every reply passes one deterministic figure check, a handoff
 no longer ends the conversation, and staff can take a conversation over and hand
 it back. **C-6 is a ticket added during the build** (founder request, 2026-08-22)
-and is spec'd in the phase file like the rest. Next is `05-business-page.md`
-(E-1/E-2), with P-5 still outstanding from the chat spine.
+and is spec'd in the phase file like the rest. Next is `05-business-page.md`, re-cut
+by **D21** into four tickets - E-1 (the three-tab shell: Home, Chats,
+Business), E-4 (Home and its brief), E-5 (Business hub + Booking page), E-2
+(hide the advanced screens) - with P-5 still outstanding from the chat spine.
 
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
@@ -104,7 +106,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; **CHANGING** - F-2 wires import-boundary enforcement in CI |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
-| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; **CHANGING** - E-1/E-2 re-cut to Chat + Business (bottom tab bar on mobile, D18); advanced screens hidden from nav |
+| Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; **CHANGING** - E-1/E-2 re-cut to Home + Chats + Business (bottom tab bar on mobile below `lg`, sidebar at `lg+`; D18 as amended by D21); advanced screens hidden from nav |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; **CHANGING** - P-5 adds the failover typing indicator; rebrand (B-1) |
@@ -143,7 +145,9 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
+D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer. The E block is four tickets
+since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
+(Business hub + Booking page) -> E-2 (hide the advanced screens).
 
 | Ticket | Status | Commit |
 |---|---|---|
@@ -160,7 +164,11 @@ D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer.
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | not started (Phase 1) | |
-| E-1..E-3 Three screens (Chat + Business + Public) | not started | |
+| E-1 Three-tab shell (Home + Chats + Business) | not started | |
+| E-4 Home: the greeting and the brief | not started | |
+| E-5 Business hub + Booking page | not started | |
+| E-2 Hide advanced screens, keep code | not started | |
+| E-3 Platform admin stays minimal | not started | |
 | F-1..F-2 Hygiene + import boundary in CI | not started | |
 | G-1 Eval cases for the lean toolset | not started | |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |

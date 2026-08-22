@@ -2,8 +2,8 @@
 
 The decision ledger: every consequential choice, old and new, with the reason it
 was made. Nothing changes silently. The 11 decisions below were carried from
-the planning phase (reasons condensed); D12-D17 are the decisions that shape the
-Agencx build.
+the planning phase (reasons condensed); D12 onward are the decisions that shape
+the Agencx build.
 
 ## The carried decisions (1-11)
 
@@ -150,6 +150,9 @@ link, already chat-first and mobile. D17 stands for the prototype's identity
 elements (teal, cleaning copy, Hivee emblem). This decision sets the
 direction; E-1 delivers the chrome.
 
+**Amended by D21 (2026-08-22):** the manifest is three tabs, not two - Home
+joins Chat and Business. Everything else here stands unchanged.
+
 ### D19: Knowledge is one readable text the owner corrects, held until they save
 
 **Decision:** A knowledge source - a pasted link or an uploaded file - is
@@ -252,3 +255,45 @@ which the free-tier provider failed into on its first run.
 separate destination - it is the "Action needed" filter on the Chats list, where
 the owner already is. The Wren-era `/escalations` and `/conversations` screens
 stay mounted for E-2 to hide.
+
+---
+
+## D21: three tabs, and Home is a place
+
+**Date:** 2026-08-22 (pre-E-1, founder). **Status:** accepted. **Amends D18.**
+
+The tenant app has **three** top-level destinations, not two:
+
+- **Home** - the owner's own thread with the assistant, and the surface that
+  greets them with what needs them today.
+- **Chats** - the customers' threads with the assistant, and where the owner
+  steps into one (C-6).
+- **Business** - the hub: the show-back of what the assistant knows, the
+  booking page and share link, Settings. Its rows are what grows in Stage 2.
+
+Below `lg` these render as the bottom tab bar D18 established; at `lg+` they are
+the left sidebar. One nav model, two renderings.
+
+**Why:** two tabs could not name three places, and the prototype shows the
+strain. In `agencx-prototype-v6.html` the home Copilot thread - greeting,
+morning brief, command pill - is the base layer *underneath* the tab bar with no
+tab of its own, and `navBack()` lights the **Chats** tab when you land back on
+it. "Your thread with the assistant" and "customers' threads with the
+assistant" are different destinations; collapsing them is exactly why that back
+behaviour reads as muddled. Naming Home makes the third place addressable and
+gives the brief somewhere to live.
+
+**Why not a sidebar/drawer instead of the tab bar.** On a phone a sidebar is a
+hamburger drawer: two taps to every destination, and no persistent answer to
+"where am I". D18 retired it for that reason, and it is the cause of the
+≤375px squeeze still open in `progress.md`. The founder's proposed row list -
+Chats, Money, Business page, Settings - is the prototype's **Business hub**
+(`renderScreen('business')`), not its top-level nav, and it stays there.
+
+**Boundary:** this amends D18's tab count and nothing else. Mobile-first, the
+tab-bar idiom, the retired drawer, and the untouched public page (S3) all stand.
+**Money, Schedule and Plan remain Business-hub rows that Stage 2 adds** - they
+are never top-level tabs, and until Stage 2 they are absent rather than
+disabled (PRD, "never build dead surfaces"). Home's brief carries only item
+kinds backed by real state; Stage 2's quote and order approvals arrive as new
+kinds in the same list, not as new screens.
