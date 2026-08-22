@@ -5,7 +5,8 @@ kinds of check, matching the ticket's design:
 
 - **Absolute gates** (security + retrieval): each eval enforces its own
   ``--gate`` threshold and we hard-fail on a non-zero exit. Leakage and
-  price-provenance are zero-tolerance - they must be 100%. Retrieval recall
+  price-provenance are zero-tolerance - they must be 100% (the money matrix,
+  money_guardrail_eval, is that gate since C-4). Retrieval recall
   has a fixed floor. These are deterministic enough to gate on an absolute
   number every run.
 - **Regression gates** (LLM-judged quality: generation, trajectory,
@@ -42,8 +43,10 @@ from app.shared import config, db
 _REGRESSION_TOLERANCE = 0.03
 
 # Deterministic evals gated on their own absolute --gate threshold. Order is
-# cheapest-first so a fast security failure surfaces before the slow ones.
-_ABSOLUTE_GATES = ("leakage_eval", "retrieval_eval")
+# cheapest-first so a fast security failure surfaces before the slow ones - the
+# money matrix is pure functions with no DB or provider, so it goes first and
+# costs milliseconds.
+_ABSOLUTE_GATES = ("money_guardrail_eval", "leakage_eval", "retrieval_eval")
 
 # LLM-judged evals: (module, metric key in eval_runs, run_type). Compared in
 # regression mode against the previous run of the same run_type.
