@@ -142,7 +142,8 @@ export function BeatComposer({
           data-testid="onboarding-masked-input"
           leading={
             input.prefix ? (
-              <span className="py-3.5 pl-5 pr-3 text-row-label font-medium text-ink-a40">
+              // `.abn-pre` is `font:500 13px/1` - the same type spec as a chip.
+              <span className="py-3.5 pl-5 pr-3 text-chip font-medium text-ink-a40">
                 {input.prefix}
               </span>
             ) : null

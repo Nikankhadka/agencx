@@ -463,7 +463,9 @@ export default function OnboardingPage() {
             data-testid={error ? "onboarding-error" : undefined}
             className="mt-2 h-4 text-meta text-text-secondary"
           >
-            {error ?? (busy ? "Answering…" : "")}
+            {/* Nothing is being answered during the go-live hold - `busy` stays
+                true there only to keep the confirm button from re-arming. */}
+            {error ?? (busy && !completed ? "Answering…" : "")}
           </p>
         </div>
       </div>

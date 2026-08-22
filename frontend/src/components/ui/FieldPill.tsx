@@ -85,7 +85,11 @@ export function FieldPill({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center rounded-pill bg-surface shadow-pill">
+      {/* `command-pill` is the CSS hook that makes the pill light up as one
+          rounded control on focus instead of drawing a hard rectangle around
+          the input inside it (globals.css). It is the same object as the
+          composer here, so it wants the same behaviour. */}
+      <div className="command-pill flex items-center rounded-pill bg-surface shadow-pill">
         {leading ? (
           <div className="flex shrink-0 items-center border-r border-ink-a07">
             {leading}

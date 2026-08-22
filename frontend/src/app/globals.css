@@ -206,9 +206,11 @@ body {
   outline-offset: 2px;
 }
 
-/* The composer pill is one control visually, so the pill's rounded shape is what
-   lights up on focus - never a hard rectangle around the textarea inside it
-   (the prototype's inputs are all `outline:none` with the pill as the affordance).
+/* A pill is one control visually, so the pill's rounded shape is what lights up
+   on focus - never a hard rectangle around the input inside it (the prototype's
+   inputs are all `outline:none` with the pill as the affordance). Worn by
+   CommandPill and by FieldPill, which is the same object with a segment welded
+   into its left edge.
    Both rules must stay unlayered to beat the generic :focus-visible above. */
 .command-pill:focus-within {
   outline: 2px solid var(--color-focus-ring);
