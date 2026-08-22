@@ -10,7 +10,7 @@ from uuid import UUID
 from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
-from app.agents.drafting import stream_draft
+from app.agents.drafting import MONEY_GUIDANCE, stream_draft
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ChatMessage
@@ -76,7 +76,8 @@ def _build_knowledge_prompt(
         "Answer the customer's question using ONLY the numbered context below. "
         "Cite every factual claim with its bracket number, e.g. [1]. If the "
         "context doesn't fully answer the question, say what you don't know - "
-        "never invent information.\n\n"
+        "never invent information.\n"
+        f"{MONEY_GUIDANCE}\n\n"
         f"Context:\n{context_block}"
     )
     return prompt + _redraft_note(violations)

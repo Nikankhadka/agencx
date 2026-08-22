@@ -38,6 +38,7 @@ from langgraph.runtime import get_runtime
 from pydantic import BaseModel, Field
 
 from app.agents.draft_node import citation_source
+from app.agents.drafting import MONEY_GUIDANCE
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
@@ -296,6 +297,9 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
         parts.append(f"Business facts the owner gave you:\n{profile}")
     parts.append(_TOOL_GUIDANCE)
     parts.append(_STYLE_GUIDANCE)
+    # Unconditional: a figure can appear in any answer, on any path, whether or
+    # not the corpus made it into this turn's prompt.
+    parts.append(MONEY_GUIDANCE)
     if package.fast_path and package.chunks:
         parts.append(_FAST_PATH_GUIDANCE)
         parts.append(

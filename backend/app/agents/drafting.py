@@ -18,6 +18,21 @@ from app.llm.provider import ChatMessage, LLMProvider
 
 logger = logging.getLogger("app.agents.drafting")
 
+# C-3: the prompt half of the money guardrail, shared by every surface that
+# authors customer-facing prose - the one-call agent turn (agent_node) and
+# every redraft (draft_node). The deterministic gate remains the sole arbiter;
+# this exists so the model mostly complies and the gate mostly passes instead
+# of mostly rewriting, because every catch costs a redraft and a redraft is
+# latency the customer feels (PRD section 9).
+MONEY_GUIDANCE = (
+    "About prices, fees, and any other amounts: state a figure only when the "
+    "material contains that exact figure. Never add amounts together, work out "
+    "a total, apply tax or a discount, round, or estimate - and never soften "
+    "one with 'about', 'around' or 'roughly'. A figure is either the one the "
+    "business published or it is not yours to give. If you are not sure of a "
+    "price, say so plainly and offer to have the owner confirm it."
+)
+
 
 async def stream_draft(provider: LLMProvider, messages: list[ChatMessage]) -> str:
     """Stream ``messages`` through ``provider``, forwarding each delta as a
