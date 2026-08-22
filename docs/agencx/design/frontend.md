@@ -208,12 +208,24 @@ Ported from `#greeting` / `#greeting-h1` and `showMorningBrief()` /
 `addCard(hl, chips, note)` in `agencx-prototype-v6.html`. `addJobRows()` is not
 ported - jobs are Stage 2 and there is nothing behind them.
 
-**Item kinds in Stage 1**, each rendered only when its state is real: customers
-waiting on the owner (`/api/conversations`, `needs_attention`), knowledge
-waiting to be saved (`/api/knowledge/records`, `status = draft` - a draft
-answers nothing until saved, D19), and the share nudge until the public page has
-been opened. Stage 2's quote and order approvals arrive as further kinds in the
-same list, never as new screens. E-4 builds this.
+**Item kinds in Stage 1 (shipped, E-4)**, each rendered only when its state is
+real: customers waiting on the owner (`/api/conversations`, `needs_attention`),
+knowledge waiting to be saved (`/api/knowledge/records`, `status = draft` - a
+draft answers nothing until saved, D19), and the share nudge. Stage 2's quote
+and order approvals arrive as further kinds in the same list, never as new
+screens.
+
+**"Not shared yet" is derived, not tracked.** The nudge shows while the tenant
+has no conversations at all - a customer having written is the only proof the
+link reached anyone, and it needs no column to record it.
+
+**The brief is composed on the client**, in `home/lib/brief.ts`, from the two
+endpoints that already serve this state - two queries is not a reason to build a
+route. `BriefItem` is the contract Stage 2 promotes to a single `/api/brief`
+when the kind count grows; the change is then server-side only. Both queries
+must have answered before composing, because an empty conversation list is the
+share nudge's trigger and composing early flashes a card that is about to be
+wrong.
 
 **No composer, deliberately.** The prototype's home carries one, and Stage 1
 does not: `POST /api/onboarding/message` 409s once onboarding is confirmed and

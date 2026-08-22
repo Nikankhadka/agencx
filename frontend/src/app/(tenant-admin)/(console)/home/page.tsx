@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { useApiQuery } from "@/lib/useApiQuery";
+import type { ConversationSummary } from "@/lib/api-schemas";
+import type { KnowledgeRecord } from "../settings/knowledge/lib/types";
+import { buildBrief } from "./lib/brief";
+import { BriefCard } from "./components/BriefCard";
 
 /**
- * E-1 / D21: Home, the tenant app's first tab and the place the owner lands
- * after go-live. This ticket builds the greeting and the surface it heads;
- * E-4 fills it with the brief - the things waiting on the owner right now.
+ * E-4 / D21: Home, the tenant app's first tab - the greeting and the brief.
+ * Ported from `#greeting` / `#greeting-h1` and `showMorningBrief()` in
+ * agencx-prototype-v6.html.
  *
- * Ported from `#greeting` / `#greeting-h1` in agencx-prototype-v6.html.
+ * The brief carries only kinds backed by real Stage 1 state (see lib/brief.ts).
+ * With nothing waiting the screen is the greeting alone: there is deliberately
+ * no "you're all caught up" card, because absence is already the message and a
+ * card that congratulates the owner for a normal morning is noise.
  *
- * The prototype's home also carries a composer, and Stage 1 deliberately does
- * not: `POST /api/onboarding/message` 409s once onboarding is confirmed
- * (controller.py `run_message`), and no everyday owner-Copilot route replaces
- * it. A composer that errors on every send is worse than no composer, so the
- * affordance waits for the backend that answers it.
+ * No composer, and that is a scope fact rather than an omission:
+ * `POST /api/onboarding/message` 409s once onboarding is confirmed
+ * (features/onboarding/controller.py) and no everyday owner-Copilot route
+ * replaces it yet. A send box that errors on every send is worse than none.
  */
 
 interface OnboardingState {
@@ -38,13 +45,28 @@ export default function HomePage() {
       .catch(() => setName(null));
   }, []);
 
+  const conversations = useApiQuery<ConversationSummary[]>("/api/conversations");
+  const records = useApiQuery<KnowledgeRecord[]>("/api/knowledge/records");
+
+  // Both queries have to have answered before the brief means anything: an
+  // empty conversation list is the share nudge's trigger, so composing while
+  // one is still in flight would flash a card that is about to be wrong.
+  const ready = conversations.data !== undefined && records.data !== undefined;
+  const items = ready ? buildBrief(conversations.data, records.data) : [];
+
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface px-gutter pt-thread-top">
+    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface px-gutter pb-thread-tail pt-thread-top lg:mx-auto lg:w-full lg:max-w-thread">
       <h1 className="text-greeting font-bold tracking-[var(--text-greeting-tracking)] text-text">
         {greetingFor(new Date())},
         <br />
         {name ?? "there"}.
       </h1>
+
+      <div data-testid="home-brief">
+        {items.map((item) => (
+          <BriefCard key={item.kind} item={item} />
+        ))}
+      </div>
     </main>
   );
 }

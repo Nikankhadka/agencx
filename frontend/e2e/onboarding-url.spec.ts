@@ -21,6 +21,16 @@ test("pasting a link reads the site and reads it back", async ({ page, request }
   const thread = page.getByTestId("onboarding-thread");
   await expect(thread).toBeVisible();
 
+  // The thread is the tenant's stored history, so a re-run against the same
+  // demo tenant starts with the previous run's read-back already in it. Count
+  // what is there first and assert this turn ADDS one - "a read-back is
+  // visible" would be satisfied by a stale line, and once there were two it
+  // failed strict mode outright.
+  const readBack = thread.getByText(
+    /what I've got from your site|couldn't pin down the details/
+  );
+  const before = await readBack.count();
+
   const composer = page.getByTestId("onboarding-composer");
   await composer.getByRole("textbox").fill(SITE_URL);
   await composer.getByRole("button", { name: "Send" }).click();
@@ -31,9 +41,8 @@ test("pasting a link reads the site and reads it back", async ({ page, request }
 
   // The read-back lands: either the fields the page stated, or the honest
   // "couldn't pin down the details" when it stated none.
-  await expect(
-    thread.getByText(/what I've got from your site|couldn't pin down the details/)
-  ).toBeVisible({ timeout: 90_000 });
+  await expect(readBack).toHaveCount(before + 1, { timeout: 90_000 });
+  await expect(readBack.last()).toBeVisible();
   // ...and the stamp it replaces is gone.
   await expect(thread.getByText(/Reading your site/)).toHaveCount(0);
   await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
