@@ -340,7 +340,7 @@ export default function OnboardingPage() {
         data-testid="onboarding-thread"
       >
         {completed ? (
-          <AgentLine>You are live. Your assistant is answering for you now.</AgentLine>
+          <AgentLine>You are live. Your customers get answers now, day or night.</AgentLine>
         ) : (
           <>
             {opening ? (

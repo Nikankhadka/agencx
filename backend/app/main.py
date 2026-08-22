@@ -84,7 +84,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await db.close_pool()
 
 
-app = FastAPI(title="Wren", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Agencx", version="0.1.0", lifespan=lifespan)
 # Order matters: add_middleware prepends, so the LAST added is outermost. CORS
 # must be outermost so its headers land on every response - including the
 # structured 500 that RequestContextMiddleware (inner) produces for an

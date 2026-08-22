@@ -67,7 +67,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
 
   const navContent = (
     <>
-      <span className="px-3 py-2 text-title-3 font-semibold text-text">Wren</span>
+      <span className="px-3 py-2 text-title-3 font-semibold text-text">Agencx</span>
       <ul className="mt-2 flex flex-col gap-0.5">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -133,7 +133,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
           <button type="button" onClick={() => setNavOpen(true)} aria-label="Menu">
             <Icon name="menu" size={24} />
           </button>
-          <span className="truncate text-title-3 font-semibold text-text">Wren</span>
+          <span className="truncate text-title-3 font-semibold text-text">Agencx</span>
         </header>
         <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">{children}</main>
       </div>

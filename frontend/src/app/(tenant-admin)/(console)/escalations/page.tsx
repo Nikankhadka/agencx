@@ -198,7 +198,7 @@ export default function EscalationsPage() {
         emptyState={
           <EmptyState
             title="Nothing needs you right now."
-            description="When your assistant escalates a conversation, it will appear here."
+            description="When a conversation needs a person, it shows up here."
           />
         }
       />

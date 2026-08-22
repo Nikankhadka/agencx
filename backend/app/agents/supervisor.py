@@ -6,7 +6,7 @@ route is forced to 'escalation' regardless of what the model guessed - low
 confidence never gets to guess, per the ticket's own wording. The routing
 prompt describes intents by capability ("wants a price for something",
 "asking about a policy"), never by vertical - a vertical-named intent would
-violate the domain-agnostic hard rule (Wren_AGENTS.md section 9).
+violate the domain-agnostic hard rule (docs/conventions.md; PRD section 6).
 """
 
 from __future__ import annotations

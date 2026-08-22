@@ -95,7 +95,7 @@ export default function BookingPage() {
         <section className="mt-6 border-t border-hairline px-gutter pt-5">
           <h3 className="mb-1.5 text-row-label font-medium text-text">How customers reach you</h3>
           <p className="mb-3.5 text-meta text-ink-a40">
-            Share this link and anyone can ask your assistant a question.
+            Share this link and anyone can ask you a question, any time.
           </p>
 
           {shown ? (

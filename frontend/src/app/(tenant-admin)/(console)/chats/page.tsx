@@ -132,7 +132,7 @@ export default function ChatsPage() {
             description={
               search
                 ? "Try a different name or word."
-                : "When a customer messages your assistant, the conversation shows up here."
+                : "When a customer messages you, the conversation shows up here."
             }
           />
         ) : null}
@@ -159,7 +159,7 @@ export default function ChatsPage() {
                     className="size-[7px] rounded-full bg-highlight"
                   />
                 ) : row.status === "open" ? (
-                  <span aria-label="Handled by your assistant" className="size-[7px] rounded-full bg-accent" />
+                  <span aria-label="Being handled for you" className="size-[7px] rounded-full bg-accent" />
                 ) : null}
               </span>
             </div>

@@ -16,9 +16,11 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Wren",
-  description:
-    "A private, branded AI support and sales agent for any business.",
+  title: "Agencx",
+  // PRD section 13: user-facing copy never says "AI", "agent" or "automated".
+  // This description said both, which made the browser tab the one place the
+  // product still sold its mechanism instead of what it does.
+  description: "Answer your customers day and night, in your own words.",
 };
 
 export const viewport: Viewport = {

@@ -22,7 +22,10 @@ test.describe("Business hub", () => {
     await page.goto("/business");
 
     const rows = page.getByRole("main").getByRole("link");
-    await expect(rows).toHaveText(["Booking pageWhat customers see, and the link to it", "SettingsWhat your assistant knows"]);
+    await expect(rows).toHaveText([
+      "Booking pageWhat customers see, and the link to it",
+      "SettingsWhat your customers are told",
+    ]);
 
     // Absent, not disabled - the prototype carries them, Stage 1 does not.
     for (const label of STAGE_2_ROWS) {

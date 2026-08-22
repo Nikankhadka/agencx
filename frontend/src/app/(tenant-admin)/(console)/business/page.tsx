@@ -37,7 +37,7 @@ export default function BusinessPage() {
           href="/settings"
           label="Settings"
           icon="settings"
-          detail="What your assistant knows"
+          detail="What your customers are told"
         />
         <button
           type="button"

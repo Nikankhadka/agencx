@@ -62,8 +62,8 @@ TURN_BUDGET_ESCALATION_REASON = "turn_budget"
 PROVIDER_ERROR_ESCALATION_REASON = "provider_error"
 
 BUDGET_UNAVAILABLE_MESSAGE = (
-    "We're unable to answer automatically right now, so I'm passing this to a "
-    "human who'll follow up with you. Thanks for your patience."
+    "I can't get you an answer right now, so I'm passing this to a human "
+    "who'll follow up with you. Thanks for your patience."
 )
 
 # Same situation from the customer's side, different truth about what happens

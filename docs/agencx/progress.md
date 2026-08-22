@@ -120,7 +120,8 @@ open for US-2, the `STATUS_TONE` map.
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
 | Customer chat surface (final polish) | BUILT | `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
-| Marketing pages | BUILT | `b2c46e9`, `27537d7`; **CHANGING** - B-1 copy rename to Agencx |
+| Marketing pages | BUILT | `b2c46e9`, `27537d7`; superseded - the bare host is login-in-chat now (O-2), so B-1 had no marketing copy left to rename |
+| Copy rules enforced on screen | BUILT | B-1: the product is Agencx everywhere a user can see it, and `e2e/copy-rules.spec.ts` sweeps each surface's rendered text for "AI", "agent", "automated", "assistant" and "Wren". Proven to fail on a planted violation before being trusted green |
 
 ### Deployment & portfolio
 
@@ -162,7 +163,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 |---|---|---|
 | A-1 Docs restructure + archive | done | `fce4d71` |
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
-| B-1 Copy rename to Agencx | not started | |
+| B-1 Copy rename to Agencx | done | this commit |
 | B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
 | B-3 Semantic colour convention + lighter primary | US-1 done (O-5), US-2 not started | |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
@@ -192,6 +193,15 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | this commit |
 
 ## Known gaps (not ticket failures - waiting on external setup)
+
+- **There is no everyday owner Copilot** (found during E-4, deferred by founder
+  2026-08-22). S1 promised that after go-live the owner's chat tab holds an
+  ongoing conversation with their assistant. No route answers one:
+  `POST /api/onboarding/message` 409s once onboarding is confirmed and nothing
+  replaces it. Home ships without a composer rather than with one that errors
+  on every send, and `design/frontend.md` S1 has been corrected to stop
+  promising it. This is a new agent route, not a screen - too large for a
+  polish ticket. Revisit after Stage 1 reports back.
 
 
 - **Live LLM calls run against free-tier models** (Google AI Studio primary,

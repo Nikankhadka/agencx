@@ -81,7 +81,7 @@ export default function PlatformLoginPage() {
     <main className="flex min-h-dvh items-center justify-center p-4 sm:p-8">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-1">
         <h1 className="text-title-2 font-semibold">Log in</h1>
-        <p className="mt-1 text-body-sm text-text-secondary">Wren platform</p>
+        <p className="mt-1 text-body-sm text-text-secondary">Agencx platform</p>
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
           <Input
             label="Email"

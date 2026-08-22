@@ -15,7 +15,7 @@ without it - so these role keys can never be used as an API bearer (same
 property as hosted Supabase's keys, already regression-tested by
 ``test_signup_wrong_audience_token_is_unauthorized``). The role keys are
 only ever presented to GoTrue (Admin API) or handed to supabase-js
-(client init), never to the Wren backend.
+(client init), never to the Agencx backend.
 
 Usage: ``uv run python -m seeds.supabase_keys anon`` (or ``service_role``)
 prints the key for the caller's ``settings.supabase_jwt_secret``.

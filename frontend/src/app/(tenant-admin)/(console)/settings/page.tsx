@@ -21,7 +21,7 @@ export default function SettingsPage() {
           href="/settings/knowledge"
           label="Knowledge"
           icon="folder_open"
-          detail="What your assistant answers from"
+          detail="Where your customers' answers come from"
         />
       </div>
     </main>

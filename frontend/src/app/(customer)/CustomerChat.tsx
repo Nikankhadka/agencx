@@ -241,7 +241,7 @@ export function CustomerChat({
         });
       } else {
         updateLastAssistant(() => ({
-          text: "Something went wrong reaching the assistant.",
+          text: "Something went wrong just then. Try again?",
           error: true,
           streaming: false,
         }));

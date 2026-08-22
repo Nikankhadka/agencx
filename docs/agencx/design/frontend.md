@@ -256,8 +256,14 @@ conversation IS the product.
 - **Interview:** the same conversation continues as the onboarding interview
   (name, business name, business type, headcount, hours, what they sell).
   Business type drives questions from config, never code (I8).
-- **Everyday chat:** after go-live, the Chat tab holds the Copilot
-  conversation.
+- **Everyday chat: NOT in Stage 1.** This spec used to say the Chat tab holds
+  the Copilot conversation after go-live. It does not, and no route answers
+  one: `POST /api/onboarding/message` returns 409 once onboarding is confirmed
+  (`features/onboarding/controller.py`), and nothing replaces it. Home
+  therefore ships without a composer (S0) rather than with one that errors on
+  every send. Deferred by founder ruling (2026-08-22); revisit after Stage 1
+  reports back, since a running conversation with the owner about their own
+  business belongs with Stage 2's back-office story.
 
 The thread is the progress indicator: no progress bars, no "% complete"
 anywhere. After go-live the app has exactly three tabs: Home, Chats and

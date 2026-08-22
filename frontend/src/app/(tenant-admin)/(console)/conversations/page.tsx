@@ -98,7 +98,7 @@ export default function ConversationsPage() {
         emptyState={
           <EmptyState
             title="No conversations yet"
-            description="Once customers start chatting with your assistant, they'll show up here."
+            description="Once customers start chatting, they'll show up here."
           />
         }
       />

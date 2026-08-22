@@ -86,8 +86,8 @@ export function buildBrief(
   if (conversations.length === 0) {
     items.push({
       kind: "share",
-      headline: "Nobody has messaged your assistant yet.",
-      note: "Share your link and customers can ask it anything you have taught it.",
+      headline: "Nobody has messaged you yet.",
+      note: "Share your link and customers can ask anything you have written down.",
       chips: [{ label: "Get your link", href: "/business" }],
     });
   }
