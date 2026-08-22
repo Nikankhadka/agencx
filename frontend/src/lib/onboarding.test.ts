@@ -3,7 +3,6 @@ import {
   ACCEPTED_UPLOAD_EXTENSIONS,
   describeUpload,
   foldReply,
-  isMultiSelect,
   parseOnboardingEvent,
 } from "./onboarding";
 
@@ -39,40 +38,6 @@ describe("parseOnboardingEvent", () => {
   });
 });
 
-describe("isMultiSelect", () => {
-  it("is true only for chips beats carrying a dashed chip", () => {
-    expect(
-      isMultiSelect({
-        kind: "chips",
-        placeholder: "",
-        chips: [{ label: "My website", value: "website", dashed: true }],
-        mask: null,
-        cta_label: null,
-      }),
-    ).toBe(true);
-
-    expect(
-      isMultiSelect({
-        kind: "chips",
-        placeholder: "",
-        chips: [{ label: "Yes", value: "yes" }],
-        mask: null,
-        cta_label: null,
-      }),
-    ).toBe(false);
-
-    expect(
-      isMultiSelect({
-        kind: "text",
-        placeholder: "",
-        chips: [],
-        mask: null,
-        cta_label: null,
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("foldReply", () => {
   it("accumulates token deltas into the reply", () => {
     const tokens = ["Hello", ", ", "world"];
@@ -91,12 +56,16 @@ describe("foldReply", () => {
 
   it("reconciles the full reply event to the same text the tokens built", () => {
     const fromTokens = foldReply("Hello", { type: "token", text: "!" });
-    expect(foldReply(fromTokens, { type: "reply", text: "Hello!" })).toBe("Hello!");
+    expect(foldReply(fromTokens, { type: "reply", text: "Hello!" })).toBe(
+      "Hello!",
+    );
   });
 
   it("ignores non-text events", () => {
     expect(foldReply("abc", { type: "done" })).toBe("abc");
-    expect(foldReply("abc", { type: "progress", stage: "processing" })).toBe("abc");
+    expect(foldReply("abc", { type: "progress", stage: "processing" })).toBe(
+      "abc",
+    );
   });
 });
 

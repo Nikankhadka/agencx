@@ -251,6 +251,7 @@
   --shadow-pill: 0 0 0 1.5px rgb(0 0 0 / 0.06), 0 2px 12px rgb(0 0 0 / 0.06);
   --shadow-drawer: 4px 0 32px rgb(0 0 0 / 0.12);
   --shadow-sheet: 0 -6px 40px rgb(0 0 0 / 0.13);
+  --shadow-popover: 0 4px 32px rgb(0 0 0 / 0.15);   /* #cc-pick, the country picker */
 
   --duration-fast: 150ms;
   --duration-base: 250ms;

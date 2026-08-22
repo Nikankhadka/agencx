@@ -46,6 +46,8 @@ _FAKE_UPDATES: list[dict[str, object]] = [
     {"profile": {"hours": "Mon-Fri 9-6"}},
     {"profile": {"services": "screen repairs, battery replacements"}},
     {"profile": {"contact": "555-0100"}},
+    {"profile": {"abn": "51 824 753 556"}},
+    {"profile": {"gst": "yes"}},
 ]
 
 _CHAT_REPLIES = [
@@ -56,6 +58,8 @@ _CHAT_REPLIES = [
     "Hours noted.",
     "Services recorded.",
     "Contact details saved.",
+    "ABN saved.",
+    "GST noted.",
 ]
 
 # The full walk: seven text turns, one per lean beat.
@@ -67,6 +71,8 @@ _FULL_WALK: list[tuple[Any, ...]] = [
     ("text", "open weekdays 9 to 6"),
     ("text", "screen repairs and batteries"),
     ("text", "call 555-0100"),
+    ("text", "yes, 51 824 753 556"),
+    ("text", "yes we are"),
 ]
 
 
@@ -196,8 +202,8 @@ async def _walk(
 
 
 async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
-    # The seven beats land on the optional website/documents ask ("knowledge");
-    # one "skip" answers it and advances to confirm.
+    # The beats land on the optional website/documents ask ("knowledge"); one
+    # "skip" answers it and advances to confirm.
     await _walk(client, token)
     await _send(client, {"Authorization": f"Bearer {token}"}, text="skip")
 
@@ -217,17 +223,65 @@ async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     assert body["input"]["kind"] == "text"
 
 
-async def test_every_beat_renders_the_text_pill(client: httpx.AsyncClient) -> None:
-    """O-1: the interview is text-only, so no beat ever asks for a chip."""
+async def test_every_beat_still_accepts_typed_text(client: httpx.AsyncClient) -> None:
+    """O-6: chips are an accelerator, never a gate. Every beat keeps ``kind``
+    "text", so the pill renders on all of them and a typed answer is always a
+    way through - which is also what keeps the one-tool extraction loop the
+    single path into the draft."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
     for step in _FULL_WALK[:-1]:
         body = await _send(client, headers, text=step[1])
         assert body["input"]["kind"] == "text"
-        assert body["input"]["chips"] == []
-        assert body["input"]["mask"] is None
         assert body["input"]["cta_label"] is None
+
+
+async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) -> None:
+    """O-6: the beats the prototype chips are the beats that carry chips here.
+
+    Ported from agencx-prototype-v6.html: `otpVerified()` (Just me / Got a team),
+    `handlePricing()` (Yes / No, not yet on the ABN) and `handleAbn()`'s GST
+    follow-up.
+    """
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def labels(body: dict[str, Any]) -> list[str]:
+        return [c["label"] for c in body["input"]["chips"]]
+
+    # Two beats in: the team-size question offers the prototype's two chips.
+    await _send(client, headers, text=_FULL_WALK[0][1])
+    await _send(client, headers, text=_FULL_WALK[1][1])
+    body = await _send(client, headers, text=_FULL_WALK[2][1])
+    assert body["stage"] == "headcount"
+    assert labels(body) == ["Just me", "Got a team"]
+    # A chipped beat invites typing past the chips, never blocks it.
+    assert body["input"]["placeholder"] == "or type…"
+
+    await _send(client, headers, text=_FULL_WALK[3][1])
+    body = await _send(client, headers, text=_FULL_WALK[4][1])
+    assert body["stage"] == "services"
+    assert body["input"]["chips"] == []
+
+    body = await _send(client, headers, text=_FULL_WALK[5][1])
+    assert body["stage"] == "contact"
+    # The phone chip swaps the composer rather than submitting its label, and
+    # the email chip's label is the client's to fill from its own session.
+    assert labels(body) == ["Phone number"]
+    assert body["input"]["chips"][0]["widget"] == "phone"
+    assert body["input"]["suggest_owner_email"] is True
+
+    body = await _send(client, headers, text=_FULL_WALK[6][1])
+    assert body["stage"] == "abn"
+    assert labels(body) == ["Yes", "No, not yet"]
+    assert body["input"]["chips"][0]["widget"] == "masked"
+    assert body["input"]["mask"] == "XX XXX XXX XXX"
+    assert body["input"]["prefix"] == "ABN"
+
+    body = await _send(client, headers, text=_FULL_WALK[7][1])
+    assert body["stage"] == "gst"
+    assert labels(body) == ["Yes", "Not yet"]
 
 
 async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClient) -> None:
@@ -391,6 +445,8 @@ async def test_full_flow_confirm_writes_profile(
         "hours": "Mon-Fri 9-6",
         "services": "screen repairs, battery replacements",
         "contact": "555-0100",
+        "abn": "51 824 753 556",
+        "gst": "yes",
     }
 
 

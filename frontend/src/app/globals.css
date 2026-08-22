@@ -172,6 +172,7 @@
   --shadow-pill: var(--shadow-pill);
   --shadow-drawer: var(--shadow-drawer);
   --shadow-sheet: var(--shadow-sheet);
+  --shadow-popover: var(--shadow-popover);
 
   --duration-fast: var(--duration-fast);
   --duration-base: var(--duration-base);

@@ -13,6 +13,7 @@ import {
   ThreadVeil,
   TypingLine,
 } from "@/components/ui/Thread";
+import { useAuth } from "@/components/AuthProvider";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 import {
   describeUpload,
@@ -99,6 +100,10 @@ function historyToMessages(
  */
 export default function OnboardingPage() {
   const router = useRouter();
+  // O-6: the address O-2 captured at login, offered as a one-tap chip on the
+  // contact beat. Only the client holds it - it lives in Supabase auth, not in
+  // the `users` table the API can read.
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [opening, setOpening] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -339,28 +344,6 @@ export default function OnboardingPage() {
     }
   }
 
-  async function sendSelection(values: string[]) {
-    if (busy || !stage) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const state = await apiFetch<OnboardingState>("/api/onboarding/message", {
-        method: "POST",
-        body: JSON.stringify({ selection: { beat: stage, values } }),
-      });
-      applyStateFields(state);
-      setMessages(historyToMessages(state.history));
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.detail
-          : "Something went wrong. Please try again.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function handleStop() {
     abortRef.current?.abort();
   }
@@ -465,8 +448,8 @@ export default function OnboardingPage() {
               input={input}
               busy={busy}
               onText={(text) => void sendText(text)}
-              onSelect={(values) => void sendSelection(values)}
               onStop={handleStop}
+              ownerEmail={user?.email ?? null}
               onFiles={(files) => void uploadFiles(files)}
             />
           ) : null}

@@ -23,6 +23,11 @@ class ProfileDraft(BaseModel):
     hours: str = ""
     services: str = ""
     contact: str = ""
+    # O-6: an ABN is what a business puts on an invoice, so the interview asks
+    # for it. "none" is the stated answer of an owner who does not have one -
+    # a distinct value from "not asked yet", which is the empty string.
+    abn: str = ""
+    gst: str = ""
 
 
 class DraftUpdate(BaseModel):

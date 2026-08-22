@@ -59,8 +59,9 @@ class Directive:
 _COPILOT = (
     "You are an onboarding assistant. Help a small-business owner describe "
     "their name, business name, business type, team size, opening hours, what "
-    "they sell, and how customers reach them. Be friendly and concise. Answer "
-    "meta questions in one line, then gently return to onboarding."
+    "they sell, how customers reach them, and their ABN and GST registration. "
+    "Be friendly and concise. Answer meta questions in one line, then gently "
+    "return to onboarding."
 )
 
 # C-3: a figure the extractor rounds into the profile becomes a figure the
@@ -71,9 +72,12 @@ _EXTRACT_PROMPT = (
     "You are extracting business information from a small-business owner who is "
     "onboarding their assistant. Read the conversation and update the profile "
     "with anything new the owner stated: name, business_name, business_type, "
-    "headcount, hours, services, contact. Fill only what the owner actually "
-    "said - never invent a value. Copy any price or other amount exactly as the "
-    "owner wrote it: never round it, convert it, tidy it up, or work one out. "
+    "headcount, hours, services, contact, abn, gst. Fill only what the owner "
+    "actually said - never invent a value. Copy any price or other amount "
+    "exactly as the owner wrote it: never round it, convert it, tidy it up, or "
+    "work one out. Two fields have a fixed vocabulary: set abn to the digits "
+    'the owner gave, or to "none" if they said they do not have one yet; set '
+    'gst to "yes" or "no". '
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false and set next_question "

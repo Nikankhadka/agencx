@@ -7,13 +7,24 @@
  * never aborts an in-progress stream.
  */
 
-export type WidgetKind = "text" | "chips" | "masked" | "cta";
+export type WidgetKind = "text" | "chips" | "masked" | "cta" | "phone";
 
 export interface ChipSpec {
   label: string;
   value: string;
-  /** Dashed suggestion chip - marks a multi-select beat (e.g. inbound channels). */
+  /**
+   * Dashed suggestion chip (the prototype's `.c-suggest`). A style, not a
+   * behaviour: O-6 uses it to mark a chip that opens a different input rather
+   * than answering outright. It used to mean "multi-select"; nothing is
+   * multi-select any more, and the helper that read it this way is gone.
+   */
   dashed?: boolean;
+  /**
+   * O-6: tapping this chip swaps the composer to that widget instead of
+   * submitting its label. The country-code phone pill and the ABN pill both
+   * arrive this way, so the client never has to know which beat it is on.
+   */
+  widget?: WidgetKind | null;
 }
 
 export interface InputSpec {
@@ -22,6 +33,14 @@ export interface InputSpec {
   chips: ChipSpec[];
   mask: string | null;
   cta_label: string | null;
+  /** O-6: the label welded inside the pill's left edge (the prototype's `.abn-pre`). */
+  prefix?: string | null;
+  /**
+   * O-6: prepend a one-tap chip carrying the address the owner logged in with.
+   * The server declares that the chip belongs here but cannot supply it - the
+   * address lives in Supabase auth, and the client already holds it in session.
+   */
+  suggest_owner_email?: boolean;
 }
 
 /**
@@ -64,7 +83,9 @@ export type OnboardingStreamEvent =
  * it is not valid JSON with a string `type`. Returning `null` (rather than
  * throwing) lets the caller skip a bad frame and keep reading the stream.
  */
-export function parseOnboardingEvent(payload: string): OnboardingStreamEvent | null {
+export function parseOnboardingEvent(
+  payload: string,
+): OnboardingStreamEvent | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(payload);
@@ -79,11 +100,6 @@ export function parseOnboardingEvent(payload: string): OnboardingStreamEvent | n
     return parsed as OnboardingStreamEvent;
   }
   return null;
-}
-
-/** True when a beat's chips carry the dashed multi-select marker. */
-export function isMultiSelect(input: InputSpec): boolean {
-  return input.kind === "chips" && input.chips.some((chip) => chip.dashed);
 }
 
 /**
@@ -145,7 +161,10 @@ function extensionOf(filename: string): string {
 export function describeUpload(filename: string): UploadVerdict {
   const ext = extensionOf(filename);
   if ((ACCEPTED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
-    return { accepted: true, message: `Got your ${filename} - I'll answer from it now.` };
+    return {
+      accepted: true,
+      message: `Got your ${filename} - I'll answer from it now.`,
+    };
   }
   if (IMAGE_EXTENSIONS.includes(ext)) {
     return {

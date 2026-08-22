@@ -1,87 +1,159 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
 import { CommandPill } from "@/components/ui/CommandPill";
-import { Icon } from "@/components/ui/Icon";
-import { Input } from "@/components/ui/Input";
-import { ACCEPTED_UPLOAD_EXTENSIONS, isMultiSelect, type InputSpec } from "@/lib/onboarding";
+import { Chip } from "@/components/ui/Chip";
+import { FieldPill } from "@/components/ui/FieldPill";
+import { PhonePill } from "@/components/ui/PhonePill";
+import {
+  ACCEPTED_UPLOAD_EXTENSIONS,
+  type InputSpec,
+  type WidgetKind,
+} from "@/lib/onboarding";
 
 export interface BeatComposerProps {
   /** The widget the server wants for this beat. */
   input: InputSpec;
   busy: boolean;
   onText: (text: string) => void;
-  onSelect: (values: string[]) => void;
   onStop: () => void;
   /** Files picked through the pill's "+" (O-3); omitted, the affordance is inert. */
   onFiles?: (files: File[]) => void;
+  /**
+   * The address the owner logged in with. Rendered as a one-tap chip on any
+   * beat whose InputSpec asks for it - the server declares the chip, the client
+   * supplies the value, because only the client has it.
+   */
+  ownerEmail?: string | null;
 }
 
 /**
- * The per-beat composer. Renders exactly the widget the server's InputSpec
- * asks for (text / chips / masked / cta), so the frontend never guesses what a
- * beat wants - the beat system in app/onboarding/beats.py is the single source
- * of truth. Chip and masked selections submit as deterministic ``selection``
- * messages (no LLM); only text beats stream.
+ * The per-beat composer, ported from `buildCmdPill(placeholder, onSubmit,
+ * chips)` in the ONBOARDING section of agencx-prototype-v6.html.
  *
- * The pill's "+" opens a file picker when ``onFiles`` is given (O-3): uploads
+ * Layout follows the prototype exactly: a `.chips-row` sits **above** the pill
+ * inside the same widget, never beside or below it, and the pill is always
+ * there. Chips are an accelerator, never a gate - "or type…" is the
+ * placeholder, and typing past them always works.
+ *
+ * O-6: tapping a chip **sends its label as ordinary text**, down the same
+ * streaming route a typed answer uses. There is no deterministic selection
+ * path: extraction reads "Just me" exactly as if the owner had typed it, which
+ * is what keeps `save_profile` the single way anything reaches the draft.
+ *
+ * A chip carrying `widget` is the exception - it swaps the composer to that
+ * widget and sends nothing until that widget's own value is submitted. That is
+ * how the country-code phone pill and the welded ABN pill arrive, without this
+ * component ever knowing which beat it is on.
+ *
+ * The pill's "+" opens a file picker when `onFiles` is given (O-3): uploads
  * belong to the conversation, so there is no dropzone and no uploads screen.
- *
- * Multi-select is signalled by dashed chips (inbound channels): chips toggle
- * and a Continue button commits the set. The root fades up in 80ms on beat
- * change (remounted via its ``key`` in page.tsx).
- *
- * Layout follows the prototype's ``buildCmdPill(placeholder, onSubmit, chips)``:
- * a chips row sits ABOVE the pill in the same widget, never beside or below it.
- * ``beats.py`` makes all seven lean beats text-only today, so in the live flow
- * only the text branch renders; the rest are kept because the InputSpec wire
- * contract still carries them.
+ * The root fades up in 80ms on beat change (remounted via its `key` in page.tsx).
  */
 export function BeatComposer({
   input,
   busy,
   onText,
-  onSelect,
   onStop,
   onFiles,
+  ownerEmail,
 }: BeatComposerProps) {
   const [text, setText] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
   const [masked, setMasked] = useState("");
+  // Which widget a chip has swapped us into, if any. No reset needed on beat
+  // change: page.tsx remounts this component on `key={stage}`.
+  const [swapped, setSwapped] = useState<WidgetKind | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleTextSubmit(value: string) {
+  function submitText(value: string) {
     const trimmed = value.trim();
     if (!trimmed || busy) return;
     setText("");
     onText(trimmed);
   }
 
-  function toggle(chipValue: string) {
-    setSelected((prev) =>
-      prev.includes(chipValue)
-        ? prev.filter((v) => v !== chipValue)
-        : [...prev, chipValue],
-    );
+  const kind = swapped ?? input.kind;
+
+  /**
+   * The prototype's ABN mask: `XX XXX XXX XXX`, grouped as the owner types,
+   * armed at exactly 11 digits. The value sent is the formatted string - the
+   * owner's own rendering of their own number.
+   */
+  function formatMask(value: string) {
+    const d = value.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0, 2)} ${d.slice(2)}`;
+    if (d.length <= 8) return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5)}`;
+    return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
   }
 
-  function commitMasked() {
-    const trimmed = masked.trim();
-    if (trimmed) onSelect([trimmed]);
-  }
-
-  const multi = isMultiSelect(input);
+  const chips = [
+    ...(input.suggest_owner_email && ownerEmail
+      ? [{ label: ownerEmail, value: ownerEmail, dashed: false, widget: null }]
+      : []),
+    ...input.chips,
+  ];
 
   return (
-    <div className="animate-beat-in flex flex-col gap-2.5" data-testid="onboarding-composer">
-      {input.kind === "text" ? (
+    <div
+      className="animate-beat-in flex flex-col gap-2.5"
+      data-testid="onboarding-composer"
+    >
+      {/* `.chips-row` - above the pill, in the same widget, wrapping. It stays
+          up after a widget swap, so a beat is never a trap: tapping the active
+          chip again drops back to the pill, and the other chips still answer.
+          The prototype needs an edit pencil on the sent bubble for this; here
+          the chips have not gone anywhere, so they can just be the way back. */}
+      {chips.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {chips.map((chip) => (
+            <Chip
+              key={chip.value}
+              label={chip.label}
+              dashed={chip.dashed}
+              selected={chip.widget != null && chip.widget === swapped}
+              disabled={busy}
+              data-testid={`onboarding-chip-${chip.value}`}
+              onClick={() => {
+                if (!chip.widget) submitText(chip.label);
+                else
+                  setSwapped((prev) =>
+                    prev === chip.widget ? null : (chip.widget ?? null),
+                  );
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {kind === "phone" ? (
+        <PhonePill disabled={busy} onSubmit={(value) => submitText(value)} />
+      ) : kind === "masked" ? (
+        <FieldPill
+          value={masked}
+          onChange={(value) => setMasked(formatMask(value))}
+          onSubmit={(value) => submitText(value)}
+          placeholder={input.mask ?? ""}
+          disabled={busy}
+          canSubmit={masked.replace(/\D/g, "").length === 11}
+          inputMode="numeric"
+          type="tel"
+          aria-label={input.prefix ?? "Number"}
+          data-testid="onboarding-masked-input"
+          leading={
+            input.prefix ? (
+              <span className="py-3.5 pl-5 pr-3 text-row-label font-medium text-ink-a40">
+                {input.prefix}
+              </span>
+            ) : null
+          }
+        />
+      ) : (
         <>
           <CommandPill
             value={text}
             onChange={setText}
-            onSubmit={handleTextSubmit}
+            onSubmit={submitText}
             placeholder={input.placeholder}
             disabled={busy}
             busy={busy}
@@ -103,124 +175,7 @@ export function BeatComposer({
             }}
           />
         </>
-      ) : null}
-
-      {input.kind === "chips" && !multi ? (
-        <div className="flex flex-wrap gap-2">
-          {input.chips.map((chip) => (
-            <Chip
-              key={chip.value}
-              label={chip.label}
-              data-testid={`onboarding-chip-${chip.value}`}
-              disabled={busy}
-              onClick={() => onSelect([chip.value])}
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {input.kind === "chips" && multi ? (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap gap-2">
-            {input.chips.map((chip) => (
-              <Chip
-                key={chip.value}
-                label={chip.label}
-                dashed
-                selected={selected.includes(chip.value)}
-                data-testid={`onboarding-chip-${chip.value}`}
-                disabled={busy}
-                onClick={() => toggle(chip.value)}
-              />
-            ))}
-          </div>
-          <div>
-            <Button
-              size="sm"
-              disabled={busy || selected.length === 0}
-              data-testid="onboarding-chip-continue"
-              onClick={() => {
-                onSelect(selected);
-                setSelected([]);
-              }}
-            >
-              Continue
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {input.kind === "masked" ? (
-        <div className="flex flex-col gap-2.5">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              commitMasked();
-            }}
-            className="flex items-end gap-2"
-          >
-            <div className="flex-1">
-              <Input
-                label="Business number"
-                value={masked}
-                onChange={(event) => setMasked(event.target.value)}
-                placeholder={input.mask ?? ""}
-                disabled={busy}
-                inputMode="numeric"
-                data-testid="onboarding-masked-input"
-              />
-            </div>
-            <Button type="submit" disabled={busy || !masked.trim()}>
-              Continue
-            </Button>
-          </form>
-          {input.chips.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {input.chips.map((chip) => (
-                <Chip
-                  key={chip.value}
-                  label={chip.label}
-                  dashed
-                  data-testid={`onboarding-chip-${chip.value}`}
-                  disabled={busy}
-                  onClick={() => onSelect([chip.value])}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {input.kind === "cta" ? (
-        <div className="flex flex-col gap-2.5">
-          <div>
-            <Button
-              disabled={busy}
-              data-testid="onboarding-cta"
-              onClick={() => onSelect([])}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Icon name="verified_user" size={20} />
-                {input.cta_label ?? "Continue"}
-              </span>
-            </Button>
-          </div>
-          {input.chips.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {input.chips.map((chip) => (
-                <Chip
-                  key={chip.value}
-                  label={chip.label}
-                  dashed
-                  data-testid={`onboarding-chip-${chip.value}`}
-                  disabled={busy}
-                  onClick={() => onSelect([chip.value])}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      )}
     </div>
   );
 }

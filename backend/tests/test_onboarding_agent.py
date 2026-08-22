@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from app.llm.provider import ChatMessage, SchemaT
+from app.onboarding import beats
 from app.onboarding.agent import (
     Directive,
     OnboardingRecord,
@@ -121,7 +122,38 @@ def _complete_draft() -> dict[str, Any]:
         "hours": "Mon-Fri 9-6",
         "services": "screen repairs, battery replacements",
         "contact": "555-0100",
+        "abn": "51 824 753 556",
+        "gst": "yes",
     }
+
+
+def test_gst_is_not_asked_of_a_business_without_an_abn() -> None:
+    """O-6: the prototype's `handleAbn()` "no" branch goes straight past GST -
+    a registration you cannot hold is not a question. Expressed in the beat's
+    own predicate, so the gate and the interview cannot disagree about it."""
+    without = _complete_draft() | {"abn": beats.NO_ABN, "gst": ""}
+    assert beats.next_beat(without) is None
+    assert request_finalize(without).ok
+
+    # ...but a business that gave an ABN is still asked.
+    with_abn = _complete_draft() | {"abn": "51 824 753 556", "gst": ""}
+    nxt = beats.next_beat(with_abn)
+    assert nxt is not None and nxt.key == "gst"
+    assert "GST registration" in request_finalize(with_abn).missing
+
+
+def test_no_beat_branches_on_the_business_type() -> None:
+    """I8: the question set is the same for every vertical. ABN and GST are
+    conditional on a previous *answer*, never on what the business does."""
+    asked = []
+    for business_type in ("dental clinic", "butcher", "online store"):
+        draft = {"business_type": business_type}
+        keys = []
+        while (nxt := beats.next_beat(draft)) is not None:
+            keys.append(nxt.key)
+            draft[nxt.key] = "x"
+        asked.append(keys)
+    assert asked[0] == asked[1] == asked[2]
 
 
 def test_completeness_gate_passes_when_every_field_present() -> None:
