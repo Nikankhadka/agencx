@@ -443,8 +443,31 @@ codebase, responsive; no native app, no PWA shell in Stage 1.
 |---|---|---|
 | `onboarding_beat_completed` | A capture beat promotes to confirmed | Business tab (show-back surface) |
 | `escalation_triggered` | Agent escalates to tenant | Chat thread, EscalationBanner |
-| `turn_started` | A customer turn begins (send) | TypingIndicator enters active (P-5) |
-| `failover_engaged` | Primary timed out, fallback raced (never customer-visible text) | Tracing/cost attributes only; the TypingIndicator keeps animating |
+| `failover_engaged` | Primary timed out, fallback raced (never customer-visible text) | Tracing/cost attributes only; the indicator keeps animating |
+
+**`turn_started` was specified and is not built (P-5).** The client raises the
+indicator on send, which is strictly earlier than any server event could arrive
+- a `turn_started` frame would only ever confirm something already on screen.
+The row is removed rather than left as a promise.
+
+**The indicator, and what may not interrupt it (P-5).** `ThinkingDots` is up
+from send until the first inspected token: `CustomerChat` pushes
+`{streaming: true, text: ""}` on send, and `StreamingText`'s `pending` renders
+the dots whenever a streaming message has no text yet. Three consequences worth
+stating, because each is a way the continuity could be lost by accident:
+
+- **`progress` never touches the bubble.** A stage label belongs in the
+  `aria-live` region under the composer; in the bubble it would read as a
+  half-answer.
+- **P-2's provider race is invisible by construction.** The losing leg is
+  cancelled server-side and nothing about the switch is streamed, so a slow
+  primary is indistinguishable from a slow answer. There is nothing to hide,
+  which is why there is no code here - only a test that no provider,
+  failover or switching vocabulary reaches the customer.
+- **`redraft` returns to the dots deliberately.** The price gate rejected the
+  streamed draft, so the rejected sentence is cleared and the assistant is
+  visibly thinking again - a retracted half-answer left on screen would be
+  worse than the wait.
 
 ## 9. Interaction rules (load-bearing)
 
@@ -452,7 +475,7 @@ codebase, responsive; no native app, no PWA shell in Stage 1.
   progress indicator.
 - **Typing indicator before static messages** - conversational pacing must feel
   consistent from the first beat; the indicator must never stop mid-turn to
-  reveal a provider switch (P-5).
+  reveal a provider switch (P-5, pinned by `e2e/typing-indicator.spec.ts`).
 - **Confirmation-card pattern** for every action that touches money or
   customer-facing records (Stage 2; Stage 1 has no autonomous writes).
 - **No undo bar** - the confirmation card covers the same ground.

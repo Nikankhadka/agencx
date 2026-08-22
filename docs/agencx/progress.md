@@ -118,7 +118,7 @@ open for US-2, the `STATUS_TONE` map.
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; **CHANGING** - hidden from the tenant nav (E-2) |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; stays minimal (E-3) |
-| Customer chat surface (final polish) | BUILT | `c0adc77`; **CHANGING** - P-5 adds the failover typing indicator; rebrand (B-1) |
+| Customer chat surface (final polish) | BUILT | `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
 | Marketing pages | BUILT | `b2c46e9`, `27537d7`; **CHANGING** - B-1 copy rename to Agencx |
 
@@ -184,7 +184,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
 | P-2 Latency budget + first-wins failover | done | this commit |
-| P-5 Typing indicator through the failover window | not started | |
+| P-5 Typing indicator through the failover window | done | this commit |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
 | O-5 Onboarding UI: prototype thread port | done | this commit |
