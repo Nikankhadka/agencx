@@ -341,10 +341,18 @@ answers from - so the owner can trust and correct it. Editable through the
 Copilot ("change my rate to $160"), never through settings forms. No
 configuration that exists only as a toggle.
 
-The thin, product-required exceptions: a "live / not live" indicator, the share
-link, and the **enabled-tools toggle (D-3)** - the per-tenant on/off for
-recommendations / quoting / order lookup that implements tool gating (PRD
-section 8). These are scope, not settings-tree creep (decision 7).
+The thin, product-required exceptions: the share link and the **enabled-tools
+toggle (D-3)** - the per-tenant on/off for recommendations / quoting / order
+lookup that implements tool gating (PRD section 8). These are scope, not
+settings-tree creep (decision 7).
+
+The "live / not live" indicator that used to head that list is **void**, ruled
+2026-08-23 while closing E-5. There is no not-live state to show: `tenants.status`
+defaults to `active`, self-signup inserts `active`, and onboarding confirm never
+touches it - so the indicator would read "Live" through the whole interview.
+What "live" means for a self-onboarded tenant is `config->onboarding.completed`,
+which is already true by the time the owner can open the screen. `tenants.status`
+is a platform-admin lifecycle (suspend / reactivate), not an owner-facing one.
 
 **Shipped shape (E-5).** Business is a hub of `.bh-row`s
 (`renderScreen('business')`) holding **Booking page** and **Settings**.
@@ -397,6 +405,16 @@ O-3 / D19) and is not a document table: a source is processed into fixed readabl
 sections the owner corrects, held as a draft until they save it. E-1 re-homed
 this screen inside the shell: it is reached from the Business hub's Settings
 row, and the Business tab stays lit while the owner is inside it.
+
+**Settings holds a second row from O-9: ABN & Tax.** The interview asks for an
+ABN and a GST registration (O-6); this is where they are read back
+(`51 824 753 556 · GST registered`) and corrected, in the prototype's
+`openSettingsEdit('abn')` sheet. It is not the start of a settings tree - the
+other seven profile fields are still written once, at confirm, and have no
+editor. The digits are what is stored; grouping them is the screen's job, done
+by `lib/abn.ts`, which is the same function the interview's masked pill uses.
+GST is a chip pair rather than the prototype's toggle: the same question the
+interview asks, with the control the interview asks it with.
 
 | State | Spec |
 |---|---|
