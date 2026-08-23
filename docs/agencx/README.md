@@ -19,6 +19,7 @@ under `docs/archive/` (indexed there) and is not maintained.
 | [`design/frontend.md`](design/frontend.md) | The UI: design system, tokens, components, the three screens and their states |
 | [`spec/`](spec/) | The tickets: every piece of change work with detailed user stories, acceptance criteria, and done definitions |
 | [`running.md`](running.md) | How do I run it? Setup, logins, which command needs which service, troubleshooting |
+| [`deploy.md`](deploy.md) | How do I ship it? The free production stack (Vercel + Cloud Run + Supabase), founder steps, env vars, CI/CD |
 
 ## How to read the build
 
