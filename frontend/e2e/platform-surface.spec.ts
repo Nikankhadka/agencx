@@ -96,6 +96,11 @@ test.describe("suspension reaches the customer", () => {
     // Scoped to main: Next's dev-mode RSC payload carries the same sentence in
     // a script tag, and an unscoped getByText matches both.
     const quiet = page.locator("main");
+    // And settled first: `next dev` streams the server tree and the client
+    // tree into the DOM together for a beat after load, so there are two of
+    // everything - including this main - until it resolves (the same artifact
+    // typing-indicator.spec.ts waits out).
+    await expect(quiet).toHaveCount(1);
     await expect(quiet.getByText("currently unavailable")).toBeVisible();
 
     // B-1's copy rules apply to states copy-rules.spec.ts cannot reach without

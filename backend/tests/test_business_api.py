@@ -300,3 +300,35 @@ async def test_a_field_outside_the_editable_slice_is_refused(client: httpx.Async
 async def test_the_profile_needs_a_session(client: httpx.AsyncClient) -> None:
     assert (await client.get("/api/business/profile")).status_code == 401
     assert (await client.patch("/api/business/profile", json={"gst": "no"})).status_code == 401
+
+
+async def test_the_patch_leaves_the_rest_of_the_onboarding_record_alone(
+    client: httpx.AsyncClient,
+) -> None:
+    """The draft lives inside the record that also holds `completed` and the
+    transcript. Clobbering those would re-interview an owner who only wanted to
+    fix their ABN."""
+    import json
+
+    headers, tenant_id = await _signup(client)
+    record = {
+        "version": 3,
+        "draft": {"name": "Sam", "abn": "none"},
+        "history": [{"role": "user", "content": "hi"}],
+        "completed": True,
+    }
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true) "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps(record),
+        )
+
+    await client.patch("/api/business/profile", json={"abn": "51824753556"}, headers=headers)
+
+    onboarding = (await _config_of(tenant_id))["onboarding"]
+    assert onboarding["completed"] is True
+    assert onboarding["history"] == [{"role": "user", "content": "hi"}]
+    assert onboarding["draft"]["name"] == "Sam"
+    assert onboarding["draft"]["abn"] == "51824753556"

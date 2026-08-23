@@ -23,7 +23,13 @@ const sse = (...events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
 async function ask(page: Page, question = "What do you charge for a screen?") {
-  await page.getByLabel("Message").fill(question);
+  // `next dev` streams this page, and for a beat after load the server tree
+  // and the client tree are both in the DOM - two composers, and a strict-mode
+  // violation for anything addressing one of them. Settling first is what a
+  // customer does anyway; nothing here is testing the first 30ms.
+  const box = page.getByLabel("Message");
+  await expect(box).toHaveCount(1);
+  await box.fill(question);
   await page.getByRole("button", { name: "Send" }).click();
 }
 
