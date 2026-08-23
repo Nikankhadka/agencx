@@ -7,13 +7,12 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 import { MOBILE_WIDTHS, expectNoHorizontalOverflow, expectTapTargets } from "./mobile-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
 test.describe("tenant app shell on a phone", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   test("the bottom tab bar replaces the sidebar and the hamburger", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);

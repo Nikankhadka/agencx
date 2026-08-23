@@ -9,7 +9,6 @@ controller.py, persistence in service.py.
 
 from __future__ import annotations
 
-import re
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -17,25 +16,17 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.features.tenants import controller
+from app.features.tenants.slug import validate_slug
 from app.shared import auth
 
 router = APIRouter(prefix="/api/tenants", tags=["tenants"])
-
-# Mirrors the DDL check on tenants.slug (database.md section 3) exactly, so a
-# bad slug is rejected at the API layer (422) before it can reach the insert.
-_SLUG_RE = re.compile(r"^[a-z0-9](-?[a-z0-9])*$")
 
 
 class TenantSignupRequest(BaseModel):
     slug: str = Field(min_length=3, max_length=40)
     name: str = Field(min_length=1, max_length=120)
 
-    @field_validator("slug")
-    @classmethod
-    def _valid_slug(cls, value: str) -> str:
-        if not _SLUG_RE.fullmatch(value):
-            raise ValueError("slug must match ^[a-z0-9](-?[a-z0-9])*$")
-        return value
+    _check_slug = field_validator("slug")(validate_slug)
 
 
 class TenantSignupResponse(BaseModel):

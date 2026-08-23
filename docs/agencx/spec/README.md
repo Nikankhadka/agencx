@@ -95,7 +95,7 @@ the final escalation/takeover behaviour rather than the terminal one.
 
 | Ticket | Why deferred |
 |---|---|
-| B-2 | Domain + CORS to `agencx.app` - needs external DNS/Vercel founder step; local dev unaffected |
+| B-2 | Point `agencx.app` at the deployed stack - founder buys the domain; one DNS record since D22; local dev unaffected |
 | D-1, D-3, D-4 | Tool-gating machinery + toggle UI + tests - Phase 2 (merge-plan open question) |
 | D-2 | *Kept in Phase 1*: flips the tenant default to the lean toolset so quoting/pricing stays OFF by accident - one-line migration 0016 |
 | Payments, quoting, scheduling, invoicing, leads, money screens | No tickets; unticketed Stage 2 backlog (`docs/archive/agencx-planning/stage-2-backlog.md`) - not built now |
@@ -181,7 +181,7 @@ the final escalation/takeover behaviour rather than the terminal one.
 
 | Id | Title |
 |---|---|
-| B-2 | Domain + CORS to agencx.app |
+| B-2 | Point agencx.app at the deployed stack |
 | D-1 | Tools built from the tenant enabled set |
 | D-3 | Business-tab tool toggle UI |
 | D-4 | Tool gating tests |

@@ -1,7 +1,7 @@
 /**
  * E2E browser tests for the bare host (was marketing, now login-in-chat).
  *
- * Surface: tenant-admin (http://localhost:3000 - the bare apex host)
+ * Surface: tenant-admin (http://localhost:3000 - the apex)
  *
  * The bare host now renders the login-in-chat surface so business owners land
  * directly in the conversation.
@@ -27,8 +27,8 @@ test.describe("bare host (was marketing, now login-in-chat)", () => {
     ).toBeVisible();
   });
 
-  test("tenant subdomains still resolve to the customer surface", async ({ page }) => {
-    await page.goto("http://bytefix.localhost:3000/");
+  test("a tenant slug path resolves to the customer surface", async ({ page }) => {
+    await page.goto("/bytefix");
     // The customer surface is the public chat, never the login-in-chat.
     await expect(page.getByPlaceholder("you@example.com")).toHaveCount(0);
   });

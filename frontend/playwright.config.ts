@@ -7,11 +7,14 @@ import path from "path";
 dotenv.config({ path: path.resolve(__dirname, ".env.local") });
 
 /**
- * E2E test configuration for Wren.
+ * E2E test configuration for Agencx.
  *
- * Tenant-admin surface:  http://app.localhost:3000
- * Platform surface:      http://admin.localhost:3000
- * Customer surface:      http://{slug}.localhost:3000
+ * One origin, three surfaces by path (D22):
+ *   Tenant-admin:  http://localhost:3000        (/, /login, /home, ...)
+ *   Platform:      http://localhost:3000/admin
+ *   Customer:      http://localhost:3000/{slug}
+ *
+ * Specs use relative paths against baseURL; none of them names a host.
  *
  * The Next.js dev server is assumed to be running on port 3000. On CI the
  * config launches it automatically; locally it reuses the existing server.

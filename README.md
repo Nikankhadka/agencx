@@ -3,7 +3,7 @@
 This repo is **Agencx**: a multi-tenant SaaS where any small business - a
 dentist, a butcher, a phone repair shop, an online store - signs up, describes
 itself in a conversation, and gets its own private, branded support-and-sales
-agent at `{slug}.agencx.app`. The agent answers questions from the business's
+agent at `agencx.app/{slug}`. The agent answers questions from the business's
 own uploaded knowledge (with citations), hands off to a human when it should,
 and can recommend, quote, and track orders when the owner turns those on. The
 codebase and its roles keep the `wren` names it was built with (standing names
@@ -14,7 +14,7 @@ Agencx on every user-facing surface.
 
 ## Architecture at a glance
 
-One Next.js app serves three surfaces on three host patterns; one FastAPI
+One Next.js app serves three surfaces on one origin, split by path; one FastAPI
 service runs the agents; one Postgres holds every tenant's data behind
 row-level security. Vertical behavior lives entirely in configuration and
 uploaded knowledge - never in code.
@@ -22,7 +22,7 @@ uploaded knowledge - never in code.
 ```
    SURFACE 1                 SURFACE 2                  SURFACE 3
    Platform owner            Tenant admin               Customer chat
-   admin.agencx.app          app.agencx.app             {slug}.agencx.app
+   agencx.app/admin          agencx.app/login           agencx.app/{slug}
    all-tenants view,         onboarding, knowledge,     streaming Q&A,
    provisioning              conversations + traces,    quotes, citations,
                              pricing, dashboards        human handoff
@@ -126,8 +126,8 @@ make dev        # backend :8000 + frontend :3000 as containers
 ```
 
 `make services` alone is not enough to log in for fresh seeds - `make seed`
-needs GoTrue, which `services` starts. Open http://bytefix.localhost:3000 after
-seeding, or http://app.localhost:3000/login for the tenant console.
+needs GoTrue, which `services` starts. Open http://localhost:3000/bytefix after
+seeding, or http://localhost:3000/login for the tenant console.
 
 Config lives in `backend/.env` (created from the repo-root `.env.example` by
 `scripts/dev.sh`) and `frontend/.env.local`. Live reload works: edit source on
@@ -155,7 +155,7 @@ scope, and why" per the project's own rule.
 |---|---|
 | Subscriptions / billing automation | Phase 2. The platform-owner surface proves the SaaS shape without a billing product eating the clock. |
 | SMS / voice / email channels | Phase 2. The chat surface already proves the agent; extra channels are integration volume, low incremental AI signal. |
-| Custom domains (vs subdomains) | Phase 2. Subdomains prove private-per-tenant access; custom domains are DNS/cert plumbing. |
+| Per-tenant custom domains | Phase 2. A tenant is a path on one origin (D22), which is what makes the link work with no DNS step; a business bringing its own domain is DNS/cert plumbing on top. |
 | Open-ended "magic" onboarding interviewer | Guided-conversational onboarding proves the concept; a fully open interviewer that reliably configures any business is itself a hard agent-research problem. |
 | Fine-tuning, SSO / SOC2 certs, multi-language | Poor time-to-signal for a solo 30-day portfolio core; documented as deliberate. |
 

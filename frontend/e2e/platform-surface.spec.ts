@@ -1,7 +1,7 @@
 /**
  * E2E for the platform-owner surface (E-3).
  *
- * Surface: platform (http://admin.localhost:3000)
+ * Surface: platform (/admin)
  *
  * E-3 is a verification ticket - no new platform features land in Stage 1 -
  * so this spec exists to hold the surface to its job: list tenants with the
@@ -18,7 +18,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { DEMO_USERS, loginAsPlatformAdmin, platformHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsPlatformAdmin } from "./auth-helpers";
 
 const FOUNDER = DEMO_USERS.find((u) => u.surface === "platform")!;
 const TENANT = "lumident";
@@ -30,7 +30,7 @@ function actionFor(page: Page, label: "Suspend" | "Reactivate") {
 
 /** Put the tenant back to active, whatever state a previous step left it in. */
 async function ensureActive(page: Page) {
-  await page.goto(`http://${platformHost()}`);
+  await page.goto("/admin");
   // Wait for the row before asking which button it carries. `count()` does not
   // retry, so checking it against a table that has not fetched yet reads zero
   // and quietly decides there is nothing to restore - which is how the tenant
@@ -44,7 +44,6 @@ async function ensureActive(page: Page) {
 }
 
 test.describe("the platform owner's one page", () => {
-  test.use({ baseURL: `http://${platformHost()}` });
 
   test("lists every tenant with the numbers worth watching", async ({ page }) => {
     await loginAsPlatformAdmin(page, FOUNDER);
@@ -72,7 +71,6 @@ test.describe("the platform owner's one page", () => {
 });
 
 test.describe("suspension reaches the customer", () => {
-  test.use({ baseURL: `http://${platformHost()}` });
 
   test.afterEach(async ({ page }) => {
     await ensureActive(page);
@@ -92,7 +90,7 @@ test.describe("suspension reaches the customer", () => {
     await expect(actionFor(page, "Reactivate")).toBeVisible();
 
     // The consequence, on the surface the customer actually visits.
-    await page.goto(`http://${TENANT}.localhost:3000`);
+    await page.goto(`/${TENANT}`);
     // Scoped to main: Next's dev-mode RSC payload carries the same sentence in
     // a script tag, and an unscoped getByText matches both.
     const quiet = page.locator("main");
@@ -113,7 +111,7 @@ test.describe("suspension reaches the customer", () => {
 
     // And back.
     await ensureActive(page);
-    await page.goto(`http://${TENANT}.localhost:3000`);
+    await page.goto(`/${TENANT}`);
     await expect(page.locator("main").getByText("currently unavailable")).toHaveCount(0);
   });
 });

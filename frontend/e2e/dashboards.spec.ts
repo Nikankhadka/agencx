@@ -1,7 +1,7 @@
 /**
  * E2E browser tests for the tenant-admin Dashboards route (T-034).
  *
- * Surface: tenant-admin (http://app.localhost:3000)
+ * Surface: tenant-admin (http://localhost:3000)
  * Entry point: /dashboards (after login)
  *
  * Dashboards is hidden the way every advanced screen is hidden (E-2): absent
@@ -11,12 +11,11 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
 test.describe("tenant dashboards (unlinked, still serving)", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   test("/dashboards serves the cost and eval watch", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);

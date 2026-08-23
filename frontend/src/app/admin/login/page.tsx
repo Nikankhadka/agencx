@@ -30,7 +30,7 @@ export default function PlatformLoginPage() {
     let active = true;
     apiFetch<{ ok: boolean }>("/api/platform/ping")
       .then(() => {
-        if (active) router.replace("/");
+        if (active) router.replace("/admin");
       })
       .catch(() => {
         /* signed in but not a platform admin - stay on the login form */
@@ -54,7 +54,7 @@ export default function PlatformLoginPage() {
       }
       await apiFetch<{ ok: boolean }>("/api/platform/ping");
       toast.success("Logged in successfully");
-      router.replace("/");
+      router.replace("/admin");
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 403

@@ -1,7 +1,7 @@
 /**
  * E2E for Home and its brief (E-4 / D21).
  *
- * Surface: tenant-admin (http://app.localhost:3000)
+ * Surface: tenant-admin (http://localhost:3000)
  *
  * Scope note: the *composition* matrix - which kinds appear for which state,
  * how they are worded and ordered - is covered exhaustively by the unit tests
@@ -14,12 +14,11 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
 test.describe("Home - the greeting and the brief", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   test("greets the owner and shows who is waiting", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
@@ -54,9 +53,18 @@ test.describe("Home - the greeting and the brief", () => {
 
     // Both read `needs_attention`; if one says someone is waiting, so must the
     // other. Disagreement here is the bug the shared source exists to prevent.
-    const carded = await waitingCard.count();
-    const dotted = await chatsTab.locator("span[aria-hidden='true']").count();
-    expect(carded > 0).toBe(dotted > 0);
+    //
+    // Polled, not sampled once: the dot and the card are fed by two separate
+    // queries (the console layout's and Home's), so a bare count() can catch
+    // them mid-flight and call a race a disagreement. A real disagreement
+    // never converges and still fails here, on timeout.
+    await expect
+      .poll(async () => {
+        const carded = await waitingCard.count();
+        const dotted = await chatsTab.locator("span[aria-hidden='true']").count();
+        return carded > 0 === dotted > 0;
+      })
+      .toBe(true);
   });
 
   test("Home has no composer - there is no everyday copilot route to answer it", async ({

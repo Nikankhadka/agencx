@@ -18,7 +18,7 @@ import { useAuth } from "@/components/AuthProvider";
  * surface.
  */
 const NAV_ITEMS: { href: string; label: string; icon: IconName }[] = [
-  { href: "/", label: "Tenants", icon: "groups" },
+  { href: "/admin", label: "Tenants", icon: "groups" },
 ];
 
 const SOON_ITEMS = ["Dashboards", "Settings"] as const;
@@ -52,7 +52,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
         if (active) setPlatformAuthed(true);
       })
       .catch(() => {
-        if (active) router.replace("/login");
+        if (active) router.replace("/admin/login");
       })
       .finally(() => {
         if (active) setPlatformChecking(false);

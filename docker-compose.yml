@@ -63,11 +63,13 @@ services:
       - backend
 
   # Playwright runner (profile e2e, `make test-e2e`): drives the stack that is
-  # already up. Chromium pins *.localhost to 127.0.0.1 (RFC 6761) and ignores
-  # /etc/hosts for them, so instead of hostname tricks the entry command
-  # mirrors the host's port layout onto this container's own loopback - inside
-  # it, the stack is indistinguishable from running on the host, and the
-  # specs' localhost URLs work untouched. Needs its own node_modules volume:
+  # already up. The frontend inlines absolute API/auth origins on localhost
+  # into the browser bundle, and in here localhost is this container - so the
+  # entry command mirrors the host's port layout onto its own loopback, and
+  # the stack becomes indistinguishable from running on the host. (Before D22
+  # this also carried the *.localhost tenant subdomains, which Chromium pins
+  # to 127.0.0.1 regardless of /etc/hosts; tenants are paths now, but the
+  # inlined origins still need the mirrors.) Needs its own node_modules volume:
   # the Playwright image is Ubuntu while the dev frontend image is Debian
   # slim, and sharing one install across the two buys nothing.
   e2e:
@@ -151,8 +153,8 @@ services:
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
-      GOTRUE_SITE_URL: http://app.localhost:3000
-      GOTRUE_URI_ALLOW_LIST: http://*.localhost:3000
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_URI_ALLOW_LIST: http://localhost:3000
       # GoTrue's own externally-reachable URL (used to build redirect/confirmation
       # links and as the JWT issuer). Note: no GOTRUE_ prefix on this one -
       # supabase's self-hosting compose sets it as bare API_EXTERNAL_URL.
@@ -166,7 +168,9 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: "true"
       GOTRUE_SMS_AUTOCONFIRM: "true"
       GOTRUE_DISABLE_SIGNUP: "false"
-      GOTRUE_CORS_ALLOWED_ORIGINS: "http://app.localhost:3000,http://admin.localhost:3000,http://bytefix.localhost:3000,http://lumident.localhost:3000"
+      # One origin since D22 (tenants are paths, not subdomains). This used
+      # to be a hand-maintained list with every dev tenant named in it.
+      GOTRUE_CORS_ALLOWED_ORIGINS: "http://localhost:3000"
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9999/health"]
       interval: 5s

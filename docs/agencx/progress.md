@@ -84,7 +84,7 @@ open for US-2, the `STATUS_TONE` map.
 | Full schema + forward-only migrations | BUILT | `3d070d5`; schema documented in `design/database.md` |
 | RLS enforcement + schema audit | BUILT | `c0b798b` (audit teeth), `d1826e4` |
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
-| Tenant resolution by slug | BUILT | `075e17a`; **CHANGING** - B-2 points the public domain to agencx.app |
+| Tenant resolution by slug | BUILT | `075e17a`; **CHANGED** - D22 moved the slug from a subdomain to a path (`agencx.app/{slug}`); the resolver itself is untouched |
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile`. Unticketed founder follow-up (2026-08-22): after the seven fields the interview offers a skippable website/documents ask (paste a link, attach a file, or "skip"), and confirm lands the owner on `/home` in-session rather than stranding them on the go-live line  **O-6 (founder walkthrough, 2026-08-23) put the prototype's chips back**: a chip sends its label as ordinary text on the same route a typed answer uses, so the one-tool loop is untouched and only `Beat.chips` is new. Two chips instead swap the composer - the contact beat's phone pill (ported `initPhone()`, AU/NZ/US/UK/SG) and the ABN beat's welded `.abn-pill`. `abn` and `gst` are new beats; `gst` is conditional on the answer to `abn`, not on the vertical. O-7 made a link that cannot be read say so and log why; O-8 stopped go-live blanking the thread. **O-9 gives the two new fields a screen**: Settings holds an "ABN & Tax" row reading back `51 824 753 556 · GST registered`, and the prototype's edit sheet behind it corrects both. The rest of the profile stays frozen after go-live - the ticket says so rather than implying it. |
 | Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
 | Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI); O-5 adds `services/email_address.py` - prose extraction + syntax validation, answered as one calm line |
@@ -148,7 +148,7 @@ open for US-2, the `STATUS_TONE` map.
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Deploy runbook (`docs/agencx/deploy.md`) | BUILT | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what only works once B-2 wires the wildcard domain. This is the plan of record; the AWS path below is dormant |
+| Deploy runbook (`docs/agencx/deploy.md`) | BUILT | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what the auto URLs serve. Since D22 that is all three surfaces - the wildcard domain it used to wait on is gone. This is the plan of record; the AWS path below is dormant |
 | Terraform AWS backend | BUILT | `d368b03`; live `terraform apply` is a founder step (needs AWS secrets) |
 | Deploy end-to-end (CI image push + Vercel) | BLOCKED | needs founder AWS/Vercel/Supabase credentials; `deploy.yml` no-ops gracefully |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
@@ -186,7 +186,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | A-1 Docs restructure + archive | done | `fce4d71` |
 | A-2 Pointer updates (README, AGENTS.md, memory, conventions) | done | `6ad4aa6` |
 | B-1 Copy rename to Agencx | done | `99e95c3` |
-| B-2 Domain + CORS to agencx.app | deferred (external DNS/Vercel) | |
+| B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |

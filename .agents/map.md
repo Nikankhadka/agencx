@@ -53,18 +53,15 @@ wren/
 │   ├── README.md                    - Wren-specific pointer (surfaces, tokens, make targets)
 │   ├── package.json                 - scripts: dev, build, lint, typecheck, check:tokens, test (vitest), test:e2e (Playwright)
 │   ├── src/
-│   │   ├── proxy.ts                 - host-based routing: resolves {slug}.localhost -> tenant, routes surfaces
 │   │   ├── app/
 │   │   │   ├── layout.tsx           - root layout (Inter via next/font, theme + branding scripts)
-│   │   │   ├── (customer)/          - customer chat surface at {slug}.* (streaming Q&A, QuoteCard, citations, escalation)
+│   │   │   ├── [slug]/              - customer chat surface at /{slug} (streaming Q&A, QuoteCard, citations, escalation)
 │   │   │   ├── (tenant-admin)/      - tenant console: login, signup, onboarding, knowledge, conversations, escalations, pricing, dashboards
-│   │   │   ├── (platform)/          - platform-owner surface at admin.* (all-tenants, provision, suspend/reactivate)
-│   │   │   ├── admin-surface/       - proxy-rewritten platform surface (route groups can't segment URLs)
-│   │   │   └── marketing-surface/   - proxy-rewritten marketing landing + /product, /pricing, /demo, /about
+│   │   │   ├── admin/               - platform surface at /admin (all-tenants, provision, suspend/reactivate)
 │   │   ├── components/ui/           - shared primitives: Button, Input, Select, Table, EmptyState, Badge, MetricCard, Modal, Icon, etc.
 │   │   ├── lib/
 │   │   │   ├── api.ts               - typed fetch wrapper for the FastAPI backend (attaches Supabase JWT)
-│   │   │   ├── tenant.ts            - resolveHost, surfaceUrl, tenant context
+│   │   │   ├── tenant.ts            - resolveTenantBySlug, customer surface config
 │   │   │   ├── supabase.ts          - lazy-singleton browser Supabase client
 │   │   │   └── brand.ts             - per-tenant runtime accent override with WCAG AA contrast gate
 │   │   └── styles/

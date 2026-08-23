@@ -1,88 +1,91 @@
 # Phase 2 / Deferred (B-2, D-1, D-3, D-4)
 
-Tickets deferred out of Phase 1: the domain/CORS move (external DNS/Vercel
-founder step) and the full per-tenant tool-gating machinery + toggle UI + tests
+Tickets deferred out of Phase 1: the domain/CORS move (the founder buys a
+domain) and the full per-tenant tool-gating machinery + toggle UI + tests
 (Phase 2, with a merge-plan open question on scope). D-1's registry is the
 machinery D-2 depends on, but D-2 itself stays in Phase 1.
 
 Tickets in this file:
 
-- B-2: Domain + CORS to agencx.app (deferred - external DNS/Vercel)
+- B-2: Point agencx.app at the deployed stack (deferred - founder buys the domain)
 - D-1: Tools built from the tenant enabled set (Phase 2)
 - D-3: Business-tab tool toggle UI (Phase 2)
 - D-4: Tool gating tests (Phase 2)
 
 ---
 
-## B-2: Domain + CORS to agencx.app
+## B-2: Point agencx.app at the deployed stack
 
 ### Summary
 
-Point the public surface at `agencx.app` (wildcard `{slug}.agencx.app`,
-tenant console `app.agencx.app`, platform `admin.agencx.app`, apex
-`agencx.app`) and update CORS/allowed-hosts configuration accordingly. Slug
-resolution itself is unchanged - only the host patterns around it move.
+Buy the domain, point it at the Vercel project and the backend service, and
+narrow CORS to it. No wildcard: since **D22** a tenant is a path
+(`agencx.app/{slug}`), so this is one A/CNAME record and one certificate that
+Vercel issues automatically.
 
 ### Why
 
-The product promise is a link at `{slug}.agencx.app`. The Wren build serves
-`{slug}.wren.app`; the rebrand must move the surface without touching tenant
-data or the resolver (the resolver is tenant-scoped, not host-scoped).
+The product promise is a link the owner can hand out. Everything needed to
+serve it already works on the deploy's auto URLs - D22 removed the wildcard DNS
+and certificate that used to stand between the build and a reachable customer
+page. What is left is the founder step of owning a domain.
 
 ### User stories
 
-#### US-1 Host middleware accepts the Agencx hosts
+#### US-1 The surfaces serve on the real domain
 
 **As** the founder,
-**I want** the Next.js host middleware (`proxy.ts`) and FastAPI CORS to
-accept `agencx.app` patterns,
-**so that** the three surfaces serve on the product's real domain.
+**I want** `agencx.app` pointed at the deployed frontend and backend,
+**so that** the link an owner hands out is the product's own address.
 
-- [ ] `proxy.ts` routes `app.agencx.app` -> tenant-admin segment,
-  `admin.agencx.app` -> platform segment, `{slug}.agencx.app` -> customer
-  segment, apex -> marketing
-- [ ] FastAPI `CORS_ALLOW_ORIGINS` (or equivalent config) covers the three
-  host patterns plus local dev hosts
-- [ ] Local dev keeps working on `*.localhost:3000` / `localhost:8000`
+- [ ] `agencx.app` (apex + `www`) resolves to the Vercel project; `www`
+  redirects to the apex so one address is canonical
+- [ ] `agencx.app/{slug}`, `agencx.app/login` and `agencx.app/admin` all serve
+- [ ] The backend has its own hostname and TLS
 
-#### US-2 The old domain still resolves (gracefully)
+#### US-2 CORS names the real origin
 
-**As** the founder,
-**I want** `wren.app` traffic to keep working during the transition,
-**so that** nothing 404s on rename day.
+**As** the maintainer,
+**I want** `_ALLOWED_ORIGIN_REGEX` to name the production origin,
+**so that** the deploy stops relying on the auto-URL widening.
 
-- [ ] Both host families resolve; the old hosts are not removed in this
-  ticket (removal is a later founder call)
+- [ ] `backend/app/main.py` and `docker/auth-proxy.conf` carry the same origin
+  set (they mirror each other by comment today - keep them in step)
+- [ ] `backend/tests/test_health.py`'s allow/reject matrix covers it
+- [ ] Local dev keeps working on `http://localhost:3000`
 
 #### US-3 Nothing else changes
 
 **As** the maintainer,
-**I want** the resolver, slugs, and tenant data untouched,
-**so that** the domain move is pure configuration.
+**I want** the resolver, slugs and tenant data untouched,
+**so that** the domain move stays a configuration change.
 
-- [ ] `resolve_tenant_slug` untouched; no migration in this ticket
-- [ ] Seeded slugs resolve identically on the new hosts
+- [ ] `resolve_tenant_slug` untouched; no migration
+- [ ] Seeded slugs resolve identically on the new domain
 
 ### Technical spec
 
-- Host patterns are config (env/vercel.json + `proxy.ts`), not code branches
-- DNS/Vercel domain wiring is the founder's external step; the ticket
-  delivers the config so the flip is one DNS entry
+- **The TLD is open** (D22): `.com` reads as a website to the small-business
+  customers who tap the link and is the default choice; `.app` is a fine
+  fallback if `agencx.com` is taken, and is HSTS-preloaded so it is
+  HTTPS-only by construction. Either is one DNS record.
+- Origins are config, not code branches
+- DNS and the Vercel domain binding are founder steps; the ticket delivers the
+  config so the flip is one record
 
 ### Tests
 
-- E2E: host-resolution checks for all four host shapes (marketing, app,
-  admin, slug) on local hosts
-- Backend CORS test: allowed-origin matrix
+- Backend CORS test: allow/reject origin matrix
+- E2E unchanged - the specs are relative to `baseURL` and name no host
 
 ### Files touched
 
-- `frontend/proxy.ts` (or middleware), `frontend/vercel.json`
-- `backend/app/main.py` (CORS config), env examples
+- `backend/app/main.py`, `docker/auth-proxy.conf`, `backend/tests/test_health.py`
+- `docs/agencx/deploy.md`, `README.md` (the domain appears in prose)
 
 ### Definition of done
 
-- [ ] All three surfaces + marketing serve on agencx.app host patterns
+- [ ] All three surfaces serve on the real domain
 - [ ] CORS matrix green
 - [ ] Local dev unaffected
 

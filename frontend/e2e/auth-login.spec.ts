@@ -1,7 +1,7 @@
 /**
  * E2E browser tests for tenant-admin login-in-chat (O-2).
  *
- * Surface: tenant-admin (http://app.localhost:3000 and bare http://localhost:3000)
+ * Surface: tenant-admin (http://localhost:3000)
  * Entry point: /login (reachable from both hosts)
  *
  * Login is now inside the conversation: email -> 6-digit code -> session. The
@@ -9,10 +9,9 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 test.describe("tenant-admin login-in-chat (app host)", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   for (const user of DEMO_USERS.filter((u) => u.surface === "tenant-admin")) {
     test(`login as ${user.email}`, async ({ page, request }) => {
@@ -50,17 +49,15 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
   }
 });
 
-test.describe("tenant-admin login-in-chat (bare host)", () => {
-  test.use({ baseURL: "http://localhost:3000" });
+test.describe("tenant-admin login-in-chat (apex)", () => {
 
-  test("bare host renders the login chat (proxy rewrite)", async ({ page }) => {
+  test("the apex redirects to the login chat", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
   });
 });
 
 test.describe("tenant-admin login-in-chat errors", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   test("wrong code shows a calm retry line", async ({ page }) => {
     await page.goto("/login");

@@ -19,8 +19,8 @@ test("a pasted link is read back as sections, then saved", async ({
 }) => {
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
 
-  // Relative: the login helper signs in on the bare host, and the session lives
-  // on that origin - app.localhost is a different one.
+  // Relative, like every other spec: since D22 there is one origin, so the
+  // session the login helper established is simply still here.
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toHaveCount(0);
   await page.getByText("Knowledge", { exact: true }).click();

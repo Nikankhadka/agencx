@@ -205,9 +205,12 @@ Every component takes only semantic tokens. Each lists its required states.
 
 ## 7. Surface specs
 
-One Next.js app (App Router). Route groups: `(platform)` -> admin host,
-`(tenant-admin)` -> app host, `(customer)` -> `{slug}` host, resolved by host
-middleware (`proxy.ts`). Shared shell: `bg-bg`, max-width content column,
+One Next.js app (App Router), one origin, surfaces separated by path (D22):
+`(tenant-admin)/` serves the apex and the console routes (`/login`, `/home`,
+`/chats`, ...), `admin/` is the platform at `/admin`, and `[slug]/` is the
+customer page at `/{slug}` - the app's only dynamic top-level segment, which
+catches everything the static routes do not. There is no host middleware; the
+customer page reads `params`. Shared shell: `bg-bg`, max-width content column,
 `text-text` body.
 
 ### S0 - Home (tenant app tab 1) - the greeting and the brief

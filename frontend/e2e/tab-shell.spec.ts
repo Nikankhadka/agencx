@@ -3,7 +3,7 @@
  * Business - as the sidebar at desktop width, with the advanced Wren screens
  * unlinked but still serving.
  *
- * Surface: tenant-admin (http://app.localhost:3000)
+ * Surface: tenant-admin (http://localhost:3000)
  *
  * The mobile half of this ticket (the bottom tab bar at 375px) lives in
  * tab-shell-mobile.spec.ts, which the mobile-chrome project picks up by
@@ -11,14 +11,13 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin, tenantAdminHost } from "./auth-helpers";
+import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
 const HIDDEN_LINKS = ["Conversations", "Escalations", "Pricing", "Dashboards", "Onboarding"];
 
 test.describe("tenant app shell - three destinations", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   test("the sidebar is Home, Chats and Business - and nothing else", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);

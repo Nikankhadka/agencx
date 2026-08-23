@@ -19,8 +19,6 @@ import asyncpg
 
 from app.shared import db
 
-_SLUG_RE = r"^[a-z0-9](-?[a-z0-9])*$"
-
 _CACHE_TTL_SECONDS = 60.0
 
 

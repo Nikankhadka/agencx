@@ -1,22 +1,30 @@
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { brandStyle } from "@/lib/brand";
-import { customerSurfaceConfig, resolveTenantBySlug, SLUG_HEADER } from "@/lib/tenant";
+import { customerSurfaceConfig, resolveTenantBySlug } from "@/lib/tenant";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { CustomerChat } from "./CustomerChat";
 
 /**
- * T-005/T-011/T-032: the customer surface. Resolves the slug proxy.ts attached
- * to the request (server-side, so brand never flashes to default), injects the
- * tenant's accent override (frontend.md section 5 - derived steps, AA contrast
- * fallback handled inside brandStyle), shows the calm not-found state for an
- * unknown slug and the unavailable state for a suspended tenant, then hands
- * off to CustomerChat with the tenant-configured greeting + starter chips.
+ * T-005/T-011/T-032: the customer surface, at `/{slug}` (D22 - the slug is a
+ * path segment, not a subdomain). Resolves the tenant server-side so brand
+ * never flashes to default, injects the tenant's accent override (frontend.md
+ * section 5 - derived steps, AA contrast fallback handled inside brandStyle),
+ * shows the calm not-found state for an unknown slug and the unavailable state
+ * for a suspended tenant, then hands off to CustomerChat with the
+ * tenant-configured greeting + starter chips.
+ *
+ * This is the app's only dynamic top-level segment, so it catches every path
+ * the console's static routes do not. Next resolves static segments before
+ * dynamic ones, which is what keeps `/settings` the console and `/bytefix` a
+ * tenant; `RESERVED_SLUGS` (backend/app/features/tenants/api.py) is the other
+ * half of that contract - it stops a tenant ever claiming a console name.
  */
-export default async function CustomerHome() {
-  const slug = (await headers()).get(SLUG_HEADER);
-  if (!slug) notFound();
-
+export default async function CustomerHome({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) notFound();
 

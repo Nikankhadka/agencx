@@ -25,22 +25,21 @@ Two decisions shape the rest:
    `text-embedding-004` truncated to 384 dims (matches the schema, no
    re-ingest); reranking uses Cohere.
 2. We ship on **auto URLs first** (`<project>.vercel.app` and
-   `<service>.run.app`). The wildcard `{slug}.agencx.app` domain move is ticket
-   B-2, deferred.
+   `<service>.run.app`). Buying `agencx.app` and pointing it here is ticket B-2,
+   deferred - but nothing waits on it.
 
 ## What you can see with auto URLs
 
-Surface routing is host-based (`frontend/src/lib/tenant.ts` +
-`frontend/src/proxy.ts`): `admin.*` -> platform, `app.*` -> tenant-admin,
-`{slug}.*` -> customer, bare base -> tenant-admin. Vercel's free tier gives a
-single `<project>.vercel.app` with no wildcard subdomains, so:
+**All three surfaces, on the one Vercel URL.** Since D22 the surfaces are paths,
+not hosts, so a single `<project>.vercel.app` serves the whole product:
 
-- **tenant-admin** (owner login/onboarding) works at the bare Vercel URL.
-- **customer** (`{slug}`) and **platform** (`admin.*`) need a wildcard custom
-  domain - that is B-2, which this deploy does not do.
+- **tenant-admin** at `<project>.vercel.app` (`/login`, `/home`, ...)
+- **customer** at `<project>.vercel.app/{slug}` - the real product link
+- **platform** at `<project>.vercel.app/admin`
 
-This deploy proves the pipeline and the owner surface live; the customer-facing
-`{slug}` link goes live when B-2 wires `*.agencx.app`.
+This is what D22 bought: the customer page used to be unreachable on this deploy
+because Vercel's free tier has no wildcard subdomains, and it sat behind a
+wildcard certificate nobody had purchased. There is no DNS step left in the way.
 
 ## Prerequisites
 
@@ -209,11 +208,10 @@ in the repo and ship on a branch (`feat/deploy-gcp-vercel`):
    `get_embedder`.
 2. `backend/app/shared/config.py` - `embedder` accepts `'google'`; new
    `google_embed_model` field.
-3. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` widened to accept
-   `*.vercel.app` and `*.run.app` (B-2 later narrows this to `*.agencx.app`).
-4. `frontend/src/lib/tenant.ts` - the Vercel auto URL resolves to tenant-admin
-   instead of being misread as a customer slug.
-5. `.github/workflows/deploy.yml` - the backend job re-targets Cloud Run
+3. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` widened to accept the
+   `<project>.vercel.app` origin (B-2 later narrows this to `agencx.app`).
+   Note it is a single origin now, not a wildcard label (D22).
+4. `.github/workflows/deploy.yml` - the backend job re-targets Cloud Run
    (build/push image to Artifact Registry, `deploy-cloudrun`, smoke test).
    The frontend stays on Vercel's Git integration.
 6. `.env.example` files - document the new `EMBEDDER=google` / `RERANKER=cohere`
@@ -232,8 +230,8 @@ push and PR). `deploy.yml` fires via `workflow_run` only after CI is green on
 4. Vercel deploys `frontend` on merge; open `<project>.vercel.app` -> owner
    login -> onboarding -> go-live lands on Home.
 5. A seeded tenant resolves:
-   `curl https://<service>.run.app/api/public/tenant/bytefix` (expect 200). The
-   customer chat page itself renders only once B-2 wires the wildcard domain.
+   `curl https://<service>.run.app/api/public/tenant/bytefix` (expect 200), and
+   its page renders at `<project>.vercel.app/bytefix`.
 
 ## Caveats to keep in mind
 
@@ -244,6 +242,6 @@ push and PR). `deploy.yml` fires via `workflow_run` only after CI is green on
 - **Google's `thought_signature` 400** (known gap in `progress.md`) can reject
   multi-tool turns on the primary tier; it is a separate ticket, not a deploy
   concern, but may surface live.
-- **B-2** (wildcard `*.agencx.app` plus the final CORS/BASE_HOSTS move) is the
-  real domain launch; the `vercel.app`/`run.app` tweaks here are its temporary
-  stand-ins.
+- **B-2** (buy `agencx.app`, point it here, narrow CORS) is the real domain
+  launch; the `vercel.app`/`run.app` origins here are its stand-ins. It is a
+  single DNS record now - D22 removed the wildcard.

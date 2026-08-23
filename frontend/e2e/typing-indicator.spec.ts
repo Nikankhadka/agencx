@@ -1,7 +1,7 @@
 /**
  * E2E for the failover typing indicator (P-5).
  *
- * Surface: customer (http://<slug>.localhost:3000)
+ * Surface: customer (/<slug>)
  *
  * The ticket's promise is about continuity: the indicator is up from send
  * until the first inspected token, and nothing in between interrupts it - not
@@ -17,7 +17,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const SLUG = "bytefix";
-const CUSTOMER_URL = `http://${SLUG}.localhost:3000`;
+const CUSTOMER_URL = `/${SLUG}`;
 
 const sse = (...events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");

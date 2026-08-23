@@ -161,11 +161,11 @@ if [[ "$SEED" == 1 ]]; then
 
 ${c_green}${c_bold}Agencx demo is up (all containers).${c_reset}
 
-  ${c_bold}Customer chat${c_reset}   http://bytefix.localhost:3000    (no login)
-                http://lumident.localhost:3000
-  ${c_bold}Tenant console${c_reset}  http://app.localhost:3000/login   owner@bytefix.dev  / wren-demo
-                http://app.localhost:3000/login   owner@lumident.dev / wren-demo
-  ${c_bold}Platform${c_reset}        http://admin.localhost:3000      founder@wren.dev   / wren-demo
+  ${c_bold}Customer chat${c_reset}   http://localhost:3000/bytefix     (no login)
+                http://localhost:3000/lumident
+  ${c_bold}Tenant console${c_reset}  http://localhost:3000/login       owner@bytefix.dev  / wren-demo
+                http://localhost:3000/login       owner@lumident.dev / wren-demo
+  ${c_bold}Platform${c_reset}        http://localhost:3000/admin       founder@wren.dev   / wren-demo
 
   ${c_dim}Logs: docker compose logs -f backend frontend${c_reset}
   ${c_dim}Stop: make stop (data survives) or make clean (full reset)${c_reset}

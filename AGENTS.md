@@ -4,7 +4,7 @@
 
 ## Project Context
 
-Agencx is a domain-agnostic, multi-tenant SaaS where any small business (dentist, butcher, phone repair shop, online store) self-onboards through a conversation and gets its own private, branded support-and-sales agent at `{slug}.agencx.app` that answers from the business's own knowledge, and escalates to a human when it should; recommending, quoting, and order tracking are per-tenant opt-ins. Built on the shipped Wren build (the repo, roles, and env keep the `wren` names). Solo portfolio venture (Ronin Khadka). **The Wren build is complete; the Agencx change build proceeds ticket by ticket from `docs/agencx/spec/`.**
+Agencx is a domain-agnostic, multi-tenant SaaS where any small business (dentist, butcher, phone repair shop, online store) self-onboards through a conversation and gets its own private, branded support-and-sales agent at `agencx.app/{slug}` that answers from the business's own knowledge, and escalates to a human when it should; recommending, quoting, and order tracking are per-tenant opt-ins. Built on the shipped Wren build (the repo, roles, and env keep the `wren` names). Solo portfolio venture (Ronin Khadka). **The Wren build is complete; the Agencx change build proceeds ticket by ticket from `docs/agencx/spec/`.**
 
 **Do not load the archived docs (`docs/archive/`) into context - all of it.** Start at `README.md`, then `docs/agencx/progress.md` for progress. The canonical set is `docs/agencx/` (`prd.md`, `architecture.md`, `design/`, `spec/`). The only doc that always binds in full is `docs/conventions.md` (summarized under Conventions below). Human-readable progress lives in `docs/agencx/progress.md` - update its row for a ticket whenever you commit one.
 

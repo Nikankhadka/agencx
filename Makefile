@@ -13,9 +13,11 @@ BE_ := $(DC) run --rm --no-deps backend
 FE  := $(DC) run --rm frontend
 FE_ := $(DC) run --rm --no-deps frontend
 E2E := $(DC) --profile e2e run --rm e2e
-# Loopback mirrors of the stack: Chromium pins *.localhost to 127.0.0.1, so
-# the e2e container forwards its own 3000/8000/54321 to the compose services
-# and every spec URL behaves exactly as it does on the host.
+# Loopback mirrors of the stack. The browser bundle inlines absolute origins
+# (NEXT_PUBLIC_API_URL=http://localhost:8000, NEXT_PUBLIC_SUPABASE_URL=
+# http://localhost:54321), and inside this container localhost is the container
+# itself - so the e2e runner forwards its own 3000/8000/54321 to the compose
+# services and every spec URL behaves exactly as it does on the host.
 E2E_NET := sh -c 'socat TCP-LISTEN:3000,fork,reuseaddr,bind=127.0.0.1 TCP:frontend:3000 & socat TCP-LISTEN:8000,fork,reuseaddr,bind=127.0.0.1 TCP:backend:8000 & socat TCP-LISTEN:54321,fork,reuseaddr,bind=127.0.0.1 TCP:auth-proxy:80 & exec "$$@"' --
 
 .PHONY: help

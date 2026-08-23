@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Icon } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
-import { surfaceUrl } from "@/lib/tenant";
 import { CoverPhoto } from "./components/CoverPhoto";
 import { PlatformLinks } from "./components/PlatformLinks";
 
@@ -53,16 +52,13 @@ export default function BookingPageScreen() {
   useEffect(load, [load]);
 
   const slug = page?.slug;
-  // Derived from the current host so the base domain and port carry over -
-  // app.localhost:3000 in dev, the real domain in production, never hardcoded.
-  // The trailing slash goes: it is the same page either way, and this address
-  // is going into a text message or onto a shop window.
+  // The tenant's page is a path on this same origin (D22), so the base domain
+  // and port carry over for free - localhost:3000 in dev, the real domain in
+  // production, never hardcoded. This address goes into a text message or onto
+  // a shop window, so it stays as short as the scheme allows.
   const publicUrl =
     slug && typeof window !== "undefined"
-      ? surfaceUrl({ surface: "customer", slug }, window.location.host).replace(
-          /\/$/,
-          "",
-        )
+      ? `${window.location.origin}/${slug}`
       : null;
   // The pill shows the address without its scheme, the way the prototype does;
   // what gets copied is the whole URL, which is what a customer needs.

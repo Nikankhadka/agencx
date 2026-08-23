@@ -35,19 +35,9 @@ export const DEMO_USERS: DemoUser[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Host helpers (Next.js 16 proxy.ts routes by Host header)
-// ---------------------------------------------------------------------------
-
-/** Reconstruct the tenant-admin host. */
-export function tenantAdminHost(): string {
-  return "app.localhost:3000";
-}
-
-/** Reconstruct the platform host. */
-export function platformHost(): string {
-  return "admin.localhost:3000";
-}
+// Since D22 every surface is one origin - the tenant is a path (`/{slug}`)
+// and the platform lives under `/admin`. Specs use the config baseURL and
+// relative paths; there are no per-surface hosts to reconstruct.
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -108,12 +98,12 @@ export async function loginAsTenantAdmin(
 }
 
 /**
- * Log in as a platform-admin user, then verify redirect to the admin console
- * root ("/") which shows the Tenants page.
+ * Log in as a platform-admin user, then verify redirect to the platform console
+ * root ("/admin") which shows the Tenants page.
  */
 export async function loginAsPlatformAdmin(page: Page, user: DemoUser): Promise<void> {
-  await page.goto("/login");
+  await page.goto("/admin/login");
   await submitLoginForm(page, user.email, user.password);
-  // T-033: on success the page redirects to "/" which is the Tenants page.
+  // T-033: on success the page redirects to "/admin", the Tenants page.
   await page.getByRole("heading", { name: "Tenants" }).waitFor({ timeout: 10_000 });
 }

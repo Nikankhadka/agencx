@@ -236,6 +236,24 @@ async def test_provision_bad_slug_is_unprocessable(
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize("slug", ["admin", "login", "settings", "api"])
+async def test_provision_reserved_slug_is_unprocessable(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], slug: str
+) -> None:
+    """D22: a tenant is served at `/{slug}`, so a slug matching a route the
+    frontend already serves would be shadowed by it and the tenant would be
+    unreachable. Reserved names are refused at provision time."""
+    admin_id = uuid.uuid4()
+    await _insert_platform_admin(superuser_conn, admin_id)
+
+    response = await client.post(
+        "/api/platform/tenants",
+        json={"slug": slug, "name": "Shadowed Co"},
+        headers=_admin_headers(admin_id),
+    )
+    assert response.status_code == 422
+
+
 async def test_non_admin_cannot_provision(client: httpx.AsyncClient) -> None:
     response = await client.post(
         "/api/platform/tenants",

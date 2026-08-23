@@ -54,10 +54,10 @@ stack cannot be a make prerequisite.
 
 | Surface | URL | Login |
 |---|---|---|
-| Customer chat | `http://bytefix.localhost:3000` | none |
-| | `http://lumident.localhost:3000` | none |
-| Tenant console | `http://app.localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev` |
-| Platform | `http://admin.localhost:3000` | `founder@wren.dev` / `wren-demo` |
+| Customer chat | `http://localhost:3000/bytefix` | none |
+| | `http://localhost:3000/lumident` | none |
+| Tenant console | `http://localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev` |
+| Platform | `http://localhost:3000/admin` | `founder@wren.dev` / `wren-demo` |
 | Backend API | `http://localhost:8000` | |
 | GoTrue (via auth-proxy) | `http://localhost:54321` | |
 

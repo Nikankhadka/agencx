@@ -14,7 +14,6 @@ the claim mechanism.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
@@ -24,13 +23,11 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.features.platform import controller
 from app.features.platform.service import PROVISION_NOTE
+from app.features.tenants.slug import validate_slug
 from app.shared import auth
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
 
-# Mirrors the DDL check on tenants.slug (database.md section 3), same as the
-# tenant signup validator.
-_SLUG_RE = re.compile(r"^[a-z0-9](-?[a-z0-9])*$")
 _VALID_STATUSES = frozenset({"provisioning", "active", "suspended"})
 
 
@@ -53,12 +50,7 @@ class ProvisionTenantRequest(BaseModel):
     slug: str = Field(min_length=3, max_length=40)
     name: str = Field(min_length=1, max_length=120)
 
-    @field_validator("slug")
-    @classmethod
-    def _valid_slug(cls, value: str) -> str:
-        if not _SLUG_RE.fullmatch(value):
-            raise ValueError("slug must match ^[a-z0-9](-?[a-z0-9])*$")
-        return value
+    _check_slug = field_validator("slug")(validate_slug)
 
 
 class ProvisionTenantResponse(BaseModel):

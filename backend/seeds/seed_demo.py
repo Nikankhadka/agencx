@@ -811,9 +811,10 @@ async def seed(
 
         print(
             "\ndemo world ready. Logins (password wren-demo):\n"
-            f"  tenant console: http://app.localhost:3000/login  {BYTEFIX_OWNER_EMAIL}\n"
-            f"  tenant console: http://app.localhost:3000/login  {LUMIDENT_OWNER_EMAIL}\n"
-            f"  platform:       http://admin.localhost:3000      {FOUNDER_EMAIL}"
+            f"  tenant console: http://localhost:3000/login  {BYTEFIX_OWNER_EMAIL}\n"
+            f"  tenant console: http://localhost:3000/login  {LUMIDENT_OWNER_EMAIL}\n"
+            f"  platform:       http://localhost:3000/admin  {FOUNDER_EMAIL}\n"
+            f"  customer pages: http://localhost:3000/bytefix, /lumident"
         )
         return {
             "bytefix_id": bytefix_id,

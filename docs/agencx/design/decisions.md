@@ -331,3 +331,76 @@ are never top-level tabs, and until Stage 2 they are absent rather than
 disabled (PRD, "never build dead surfaces"). Home's brief carries only item
 kinds backed by real state; Stage 2's quote and order approvals arrive as new
 kinds in the same list, not as new screens.
+
+---
+
+## D22: a tenant is a path, not a subdomain
+
+**Date:** 2026-08-23 (founder). **Status:** accepted. **Supersedes decision 10's
+"frontend host open"; rewrites B-2.**
+
+**Decision:** A tenant is addressed at `agencx.app/{slug}`. The three surfaces
+are paths on one origin, not three host patterns:
+
+| Surface | Was | Is |
+|---|---|---|
+| Customer chat | `{slug}.agencx.app` | `agencx.app/{slug}` |
+| Tenant console | `app.agencx.app` / apex | `agencx.app` (`/login`, `/home`, `/chats`, ...) |
+| Platform | `admin.agencx.app` | `agencx.app/admin` |
+
+Host resolution is gone, not made configurable: `resolveHost`, `surfaceUrl`,
+`BASE_HOSTS`, the `x-wren-surface`/`x-wren-slug` request headers and
+`frontend/src/proxy.ts` itself are all deleted. The customer page is a plain
+dynamic segment (`app/[slug]/page.tsx`) that reads `params`.
+
+**Why:** The subdomain scheme had stopped paying for itself.
+
+It blocked the deploy outright. Vercel Hobby serves one `<project>.vercel.app`
+with no wildcard subdomains, so the customer chat page - the product - could not
+be reached at all on the deployed stack, and neither could the platform. Both
+sat behind a wildcard DNS entry and a certificate nobody had bought. Paths make
+the customer link work on the free tier the day it deploys, with no DNS step.
+
+It also leaked downward. `GOTRUE_CORS_ALLOWED_ORIGINS` was a hand-maintained
+list naming every dev tenant individually; the same wildcard origin regex was
+written out three times (backend CORS, the auth-proxy shim, GoTrue); and the
+platform surface needed an entire fake path segment (`admin-surface/`) plus a
+proxy rewrite, because route groups do not segment URLs and two surfaces
+collided at `/`. All of that is deleted rather than ported.
+
+**Why not subdomains.** The case for them was private-per-tenant access. But
+the isolation was never real - there is one backend, one database and one RLS
+boundary behind all of it, and that boundary is `tenant_id`, not the host. The
+subdomain bought an *appearance* of separation while charging for a wildcard
+certificate, a hand-kept origin list and a middleware layer.
+
+**Why not slug-scoped consoles** (`/{slug}/login`, `/{slug}/home`). It removes
+the reserved-word problem, and it was rejected anyway. Slugs are generated at
+first login as `{email-local}-{4 random}`, so an owner would have to know a
+string they never chose in order to reach the page that would tell them what it
+is. And the backend resolves the tenant from the JWT - a slug in the console URL
+is a second source of tenant identity that can disagree with the first, which is
+new authorization logic bought for nothing. The owner logs in at a global
+`/login` and types their email, exactly as before.
+
+**The cost, and the guard.** Every top-level route name is now a name no tenant
+can have. `RESERVED_SLUGS` (`backend/app/features/tenants/slug.py`) refuses them
+at signup and at platform provisioning, and
+`frontend/src/lib/reserved-slugs.test.ts` fails the build if a route directory
+is added without reserving its name - proven against a planted collision. Next
+resolves static segments before the dynamic one, so a collision would not be
+ambiguous, it would make a paying tenant silently unreachable.
+
+**The other accepted cost:** one origin means the public customer page shares
+`localStorage` with the authenticated console (`frontend/src/lib/auth-session.ts`,
+key `agencx.login-session`). The separation the subdomain gave here was real,
+if thin - both are our own first-party code, and the exposure only matters given
+an XSS on the customer page, which would be serious regardless.
+
+**Boundary:** the resolver is untouched - `resolve_tenant_slug()` is still the
+single audited RLS bypass, the slug DDL and its regex are unchanged, and no
+migration ships with this. The API is unchanged too: the backend never read a
+`Host` header, so slugs still arrive as a path param, a body field or a query
+param exactly as before. **The TLD is not bound by this decision** - `.app`,
+`.com` or anything else is a purchase and a find-and-replace, made when B-2
+ships.

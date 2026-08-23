@@ -49,16 +49,15 @@ async def test_health_unavailable_when_db_down() -> None:
     "origin",
     [
         "http://localhost:3000",
-        "http://bytefix.localhost:3000",
-        "http://admin.localhost:3000",
-        "https://bytefix.wren.app",
-        "https://app.wren.app",
+        "http://localhost",
+        "https://wren.app",
     ],
 )
 async def test_cors_allows_frontend_origins(origin: str) -> None:
-    """T-011: frontend and backend are always different origins (every
-    tenant gets its own subdomain) - a browser fetch from any of them must
-    not be silently blocked by a missing CORS header."""
+    """T-011: the frontend and backend are always different origins - a browser
+    fetch from the frontend must not be silently blocked by a missing CORS
+    header. Since D22 the frontend is a single origin (tenants are paths), so
+    this is the whole matrix."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.options(
@@ -75,5 +74,26 @@ async def test_cors_rejects_unrelated_origins() -> None:
         response = await client.options(
             "/api/chat",
             headers={"Origin": "https://evil.example.com", "Access-Control-Request-Method": "POST"},
+        )
+    assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "origin",
+    [
+        # D22 retired the wildcard label: a tenant is a path on the one origin,
+        # so a subdomain of it is no longer ours and must not be reflected.
+        "http://bytefix.localhost:3000",
+        "https://bytefix.wren.app",
+        "https://app.wren.app",
+    ],
+)
+async def test_cors_rejects_subdomain_origins(origin: str) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.options(
+            "/api/chat",
+            headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
         )
     assert "access-control-allow-origin" not in response.headers

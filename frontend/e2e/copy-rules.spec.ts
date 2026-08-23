@@ -20,8 +20,6 @@ import {
   DEMO_USERS,
   loginAsTenantAdmin,
   loginAsPlatformAdmin,
-  tenantAdminHost,
-  platformHost,
 } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
@@ -49,13 +47,13 @@ async function expectCleanCopy(page: Page, where: string) {
 
 test.describe("copy rules - the customer's side", () => {
   test("the public page says nothing about the mechanism", async ({ page }) => {
-    await page.goto("http://bytefix.localhost:3000");
+    await page.goto("/bytefix");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expectCleanCopy(page, "the public page");
   });
 
   test("the browser tab is Agencx", async ({ page }) => {
-    await page.goto("http://bytefix.localhost:3000");
+    await page.goto("/bytefix");
     // The tenant surface is branded by the tenant, but the document title is
     // the product's and used to read "Wren".
     await expect(page).toHaveTitle(/Agencx/);
@@ -63,7 +61,6 @@ test.describe("copy rules - the customer's side", () => {
 });
 
 test.describe("copy rules - the owner's side", () => {
-  test.use({ baseURL: `http://${tenantAdminHost()}` });
 
   for (const path of ["/home", "/business", "/business/booking", "/settings"]) {
     test(`${path} is clean`, async ({ page, request }) => {
@@ -76,7 +73,6 @@ test.describe("copy rules - the owner's side", () => {
 });
 
 test.describe("copy rules - the platform surface", () => {
-  test.use({ baseURL: `http://${platformHost()}` });
 
   test("the platform chrome is Agencx, not Wren", async ({ page }) => {
     await loginAsPlatformAdmin(page, FOUNDER);

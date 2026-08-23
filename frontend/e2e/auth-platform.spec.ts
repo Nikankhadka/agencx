@@ -1,7 +1,7 @@
 /**
  * E2E browser tests for platform-admin login.
  *
- * Surface: platform (http://admin.localhost:3000)
+ * Surface: platform (/admin)
  * Entry point: /login
  *
  * The platform login page lives under the internal `admin-surface/` segment
@@ -14,11 +14,9 @@ import {
   DEMO_USERS,
   loginAsPlatformAdmin,
   submitLoginForm,
-  platformHost,
 } from "./auth-helpers";
 
 test.describe("platform admin login", () => {
-  test.use({ baseURL: `http://${platformHost()}` });
 
   const founder = DEMO_USERS.find((u) => u.surface === "platform")!;
 
@@ -33,7 +31,7 @@ test.describe("platform admin login", () => {
   test("non-admin user gets forbidden error on platform surface", async ({ page }) => {
     const tenantAdmin = DEMO_USERS.find((u) => u.surface === "tenant-admin")!;
 
-    await page.goto("/login");
+    await page.goto("/admin/login");
     await submitLoginForm(page, tenantAdmin.email, tenantAdmin.password);
 
     // The platform login page should show a 403 error for a non-admin user

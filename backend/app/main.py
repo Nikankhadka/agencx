@@ -27,11 +27,12 @@ from app.shared import db
 from app.shared.config import get_settings
 from app.shared.startup import check_startup_config
 
-# The frontend and backend are always different origins - three tenant-facing
-# subdomains in dev (localhost:3000) and prod ({slug|admin|app}.wren.app), none
-# of them known in advance since every tenant gets its own subdomain. No
-# cookies are used (bearer tokens only), so allow_credentials stays False.
-_ALLOWED_ORIGIN_REGEX = r"^https?://([a-z0-9-]+\.)?(localhost|wren\.app)(:\d+)?$"
+# The frontend and backend are always different origins, but since D22 the
+# frontend is a single origin rather than one per tenant - tenants are paths
+# (`/{slug}`), not subdomains, so no wildcard label is needed and no origin is
+# unknown in advance. No cookies are used (bearer tokens only), so
+# allow_credentials stays False.
+_ALLOWED_ORIGIN_REGEX = r"^https?://(localhost|wren\.app)(:\d+)?$"
 
 logger = logging.getLogger("app.main")
 
