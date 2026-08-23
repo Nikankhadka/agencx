@@ -76,7 +76,7 @@ open for US-2, the `STATUS_TONE` map.
 
 ## Feature status matrix
 
-### Foundations & tenancy
+### Foundations and tenancy
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -91,7 +91,7 @@ open for US-2, the `STATUS_TONE` map.
 | URL scrape knowledge ingest path | BUILT | O-3: pasting a link in the onboarding thread scrapes it, ingests it as a `website` document, and reads back what it found; attaching a file works from the command pill's `+`. Images are refused (nothing reads them) |
 | Settings > Knowledge screen | BUILT | O-3 / D19: a source is processed into readable sections the owner corrects, held as a draft until they save it. Mobile-first, built from the prototype's destination screens. Pulled forward from S2; E-1 re-homes it in the two-tab shell |
 
-### Knowledge & retrieval
+### Knowledge and retrieval
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -102,7 +102,7 @@ open for US-2, the `STATUS_TONE` map.
 | `get_business_context` seam | BUILT | O-4 (`app/services/retrieval.py`): whole-corpus fast path under a measured token budget, hybrid pipeline above it, one shape |
 | Knowledge version + context-package cache | BUILT | P-4 derivation (0018 + `services/knowledge_version.py`) + P-3 package cache keyed by `(tenant_id, knowledge_version)` |
 
-### Agents & the money boundary
+### Agents and the money boundary
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -120,7 +120,7 @@ open for US-2, the `STATUS_TONE` map.
 | Cross-tenant leakage test | BUILT | `e7be3d2`; stays an absolute gate |
 | Spotlight delimiter fence | BUILT | `598f3a7`; stays |
 
-### Eval, observability & operations
+### Eval, observability and operations
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -144,19 +144,19 @@ open for US-2, the `STATUS_TONE` map.
 | Marketing pages | BUILT | `b2c46e9`, `27537d7`; superseded - the bare host is login-in-chat now (O-2), so B-1 had no marketing copy left to rename |
 | Copy rules enforced on screen | BUILT | B-1: the product is Agencx everywhere a user can see it, and `e2e/copy-rules.spec.ts` sweeps each surface's rendered text for "AI", "agent", "automated", "assistant" and "Wren". Proven to fail on a planted violation before being trusted green |
 
-### Deployment & portfolio
+### Deployment and portfolio
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Deploy runbook (`docs/agencx/deploy.md`) | BUILT | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what the auto URLs serve. Since D22 that is all three surfaces - the wildcard domain it used to wait on is gone. This is the plan of record; the AWS path below is dormant |
+| Deploy runbook (`docs/agencx/deploy.md`) | CHANGING (B-4) | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what the auto URLs serve. Since D22 that is all three surfaces - the wildcard domain it used to wait on is gone. **B-4 supersedes the Cloud Run half**: both services become containers in one Vercel project on one origin. The doc carries a status banner naming exactly which sections are historical until B-4 lands |
 | Terraform AWS backend | BUILT | `d368b03`; live `terraform apply` is a founder step (needs AWS secrets) |
-| Deploy end-to-end (CI image push + Vercel) | BLOCKED | needs founder AWS/Vercel/Supabase credentials; `deploy.yml` no-ops gracefully |
+| Deploy end-to-end (both services on Vercel) | CHANGING (B-4) | was BLOCKED on founder AWS/Vercel/Supabase credentials. B-4 is the ticket that ships it: both services as containers built from this repo's Dockerfiles into one Vercel project, CI and deploy retriggered on `development` and `staging`, and a post-deploy smoke test. Still needs Supabase and Vercel accounts from the founder |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
 | Eval report | BUILT | evidence in `docs/archive/artifacts/eval-report.md` |
 | Security write-up | BUILT | evidence in `docs/archive/artifacts/security.md` |
 | Demo walkthrough video | NEW | founder step, unticketed |
 
-## Provider & latency (new Agencx work, all NEW until P-tickets land)
+## Provider and latency (new Agencx work, all NEW until P-tickets land)
 
 | Feature | Status | Ticket |
 |---|---|---|
@@ -177,8 +177,8 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer. The E block is four tickets
-since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
+D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3/D-4 and B-2 defer. The E block is four
+tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 (Business hub + Booking page) -> E-2 (hide the advanced screens).
 
 | Ticket | Status | Commit |
@@ -188,6 +188,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
+| B-4 Deploy as two containers behind one Vercel origin (`10-deploy.md`) | in progress | branch `feat/deploy-containers-cicd`; supersedes the Cloud Run half of `deploy.md` and the AWS ECS target in `architecture.md` |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |

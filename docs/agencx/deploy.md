@@ -5,6 +5,26 @@ push-to-deploy CI/CD. This supersedes the dormant AWS ECS/Terraform path
 (`infra/*.tf`, and the AWS half of `.github/workflows/deploy.yml`, which
 currently no-op) with a stack that is actually free to run.
 
+> **Status: partly superseded by ticket B-4** (`spec/10-deploy.md`), which runs
+> the backend as a second container service in the same Vercel project and drops
+> Google Cloud Run. Until B-4 lands, read these parts as historical rather than
+> current:
+>
+> - the backend row of the stack table below (Cloud Run),
+> - all of "Step 2 - Google Cloud Run",
+> - the `GCP_*` secrets in "Step 6 - GitHub Actions secrets",
+> - Step 3's "root directory to `frontend`" - the `services` block in
+>   `vercel.json` needs the project rooted at the repo root,
+> - `NEXT_PUBLIC_API_URL`, which becomes empty rather than a `run.app` URL
+>   because both services share one origin,
+> - every reference to deploying from `main`, a branch this repo does not have;
+>   B-4 puts CI on `development` and `staging` and deploys from `staging`,
+> - "What the repo changes deliver", which names a branch
+>   (`feat/deploy-gcp-vercel`) that was never created.
+>
+> Supabase, the API keys, and the backend environment variables are unchanged by
+> B-4 and still apply as written.
+
 ## The stack
 
 | Concern | Where | Cost |
@@ -24,7 +44,7 @@ Two decisions shape the rest:
    embeddings and reranking are hosted, not local. Embeddings use Google
    `text-embedding-004` truncated to 384 dims (matches the schema, no
    re-ingest); reranking uses Cohere.
-2. We ship on **auto URLs first** (`<project>.vercel.app` and
+2. Ship on **auto URLs first** (`<project>.vercel.app` and
    `<service>.run.app`). Buying `agencx.app` and pointing it here is ticket B-2,
    deferred - but nothing waits on it.
 
@@ -214,7 +234,7 @@ in the repo and ship on a branch (`feat/deploy-gcp-vercel`):
 4. `.github/workflows/deploy.yml` - the backend job re-targets Cloud Run
    (build/push image to Artifact Registry, `deploy-cloudrun`, smoke test).
    The frontend stays on Vercel's Git integration.
-6. `.env.example` files - document the new `EMBEDDER=google` / `RERANKER=cohere`
+5. `.env.example` files - document the new `EMBEDDER=google` / `RERANKER=cohere`
    / pooler `DATABASE_URL` settings.
 
 `ci.yml` is unchanged and remains the gate (lint/typecheck/test/eval on every
@@ -233,7 +253,7 @@ push and PR). `deploy.yml` fires via `workflow_run` only after CI is green on
    `curl https://<service>.run.app/api/public/tenant/bytefix` (expect 200), and
    its page renders at `<project>.vercel.app/bytefix`.
 
-## Caveats to keep in mind
+## Known limitations
 
 - **Supabase free tier pauses after 7 days idle** (architecture section 13).
   Fine for a portfolio; keep it warm or move to Pro ($25/month) if it bites.

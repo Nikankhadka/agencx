@@ -465,9 +465,10 @@ prototype so the hub's shape is right, not because Phase 1 ships them.
 
 ---
 
-## E-6: the Booking page as the customer's view
+## E-6: The Booking page as the customer's view
 
-Added during the build (founder walkthrough, 2026-08-23).
+**Amendment** - recorded after the work shipped (founder walkthrough,
+2026-08-23). Shape per `README.md`.
 
 ### Summary
 

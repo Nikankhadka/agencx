@@ -8,7 +8,55 @@
 
 ## 1. Writing style
 
-- Never use the em dash "-". Use a plain dash "-" instead, in all prose, commit messages, code comments, and documentation.
+The base standard is the Google developer documentation style guide
+(developers.google.com/style), applied at two tiers. Where Google and this
+section conflict, this section wins.
+
+**Standing override:** never use the em dash, anywhere - prose, commit
+messages, code comments, documentation. Plain dash "-" only. Google permits the
+em dash; this repo does not.
+
+### Tier A - reference and procedure
+
+`running.md`, `deploy.md`, everything in `spec/`, every README index, the
+`AGENTS.md` command tables, and all agent output. Full Google style:
+
+- Second person, present tense, active voice. The reader is "you"; never "we"
+  or "our" for something the reader does.
+- Procedures are numbered lists of imperative steps, one action per step. State
+  the outcome before the command, not after.
+- Headings are sentence case and name a task or a thing. Write "and", never "&".
+- Link text names the destination. No "here", no bare URLs, no "see above" or
+  "see below" - link to the section instead.
+- Code font for commands, paths, filenames, env vars, and identifiers. No `$`
+  prompt inside shell blocks.
+- Banned: simply, just, easy, obviously, please, note that, sanity check, dummy.
+- Serial comma. Numerals for 10 and up; words for zero through nine, except in
+  measurements, versions, and table cells.
+
+### Tier B - narrative and record
+
+`prd.md`, `architecture.md`, `design/decisions.md`, `design/frontend.md`,
+`design/database.md`, `progress.md`, `LEARNINGS.md`, and this file. The essay
+voice in these documents is deliberate and stays. They obey the mechanical
+rules only: sentence case headings, "and" not "&", descriptive link text, no
+directional cross-references, code font for code, and the banned-word list.
+
+### Agent output: plans and messages
+
+Plans and chat replies follow Tier A, plus:
+
+- Lead with the finding or the answer. No preamble about what you are about to
+  do, no restating the request back.
+- Every file, symbol, or line referenced is a relative markdown link
+  (`[running.md:33](docs/agencx/running.md#L33)`), never a bare backticked path.
+- A claim about this codebase carries the path and line that proves it. An
+  unverified claim is labelled unverified, or is not made.
+- Say what you did not do and why, in the same message as what you did.
+- No status theatre: no "Perfect!", no summary of the summary, no closing recap
+  of a message the reader has just read.
+- A plan file runs in this order: Context (why this change exists), the work
+  itself, then Verification (how to prove it end to end).
 
 ## 2. Git conventions
 
