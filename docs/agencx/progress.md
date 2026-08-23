@@ -49,6 +49,21 @@ E-3, D-2, F-2 and G-1 all landed. What remains for Stage 1 is `07-hygiene.md`
 Google tier's `thought_signature` rejection, and the absent everyday owner
 Copilot.
 
+**The prototype-parity work is merged** (2026-08-23). `feat/docker-dev-stack`
+went to `main` first so both lines shared one base - K-1's containerized dev
+stack (`3453b85`, `213f6f6`) plus the deploy runbook (`b3e578d`) - and
+`feat/prototype-parity-onboarding` was rebased onto it and fast-forwarded in,
+one commit per ticket rather than squashed, so the hashes in the table below
+each point at their own ticket. It carries five tickets (O-6, O-7, O-8, E-6,
+O-9) and four supporting commits: E-5's live/not-live bullet ruled void
+(`c1028ca`), `design/frontend.md` catching up with both (`6ba8a86`), `make
+dev-reset` for the Turbopack cache trap that cost an hour during E-6
+(`5bcefa1`), and the e2e fix for `next dev` serving a half-rendered page
+(`b438b95`). Verified before the merge: `make ci` green - lint, the three
+import contracts, typecheck, 78 frontend and 747 backend tests, format-check,
+production build - and the full Playwright suite **71 of 71**, where the
+baseline before the container fix was 56 passing with 8 failing.
+
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 `/chats` and `/chats/[id]` are mounted chrome-free until E-1's tab bar re-homes
@@ -133,6 +148,7 @@ open for US-2, the `STATUS_TONE` map.
 
 | Feature | Status | Evidence / change |
 |---|---|---|
+| Deploy runbook (`docs/agencx/deploy.md`) | BUILT | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what only works once B-2 wires the wildcard domain. This is the plan of record; the AWS path below is dormant |
 | Terraform AWS backend | BUILT | `d368b03`; live `terraform apply` is a founder step (needs AWS secrets) |
 | Deploy end-to-end (CI image push + Vercel) | BLOCKED | needs founder AWS/Vercel/Supabase credentials; `deploy.yml` no-ops gracefully |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
@@ -183,11 +199,11 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR `e1f2f76` (QR later removed by E-6) |
-| E-6 Booking page: cover, services, link slots; QR out | done | this branch |
-| O-6 Onboarding chips + ABN/GST + contact widgets | done | this branch |
-| O-7 URL ingest: browser headers, logged reasons | done | this branch |
-| O-8 Go-live transition | done | this branch |
-| O-9 Settings: an ABN the owner can read and correct | done | this branch |
+| E-6 Booking page: cover, services, link slots; QR out | done | `f984612` (backend) + `166a49b` |
+| O-6 Onboarding chips + ABN/GST + contact widgets | done | `c905e1d` + `a491f85` (shared with O-8) |
+| O-7 URL ingest: browser headers, logged reasons | done | `1534049` |
+| O-8 Go-live transition | done | `39e019f` + `a491f85` (shared with O-6) |
+| O-9 Settings: an ABN the owner can read and correct | done | `f4088af` |
 | E-2 Hide advanced screens, keep code | done | `ac6199a` |
 | E-3 Platform admin stays minimal | done | `ecdaffb` |
 | F-2 Import boundary in CI | done | `1684a42` |
