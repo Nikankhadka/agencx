@@ -214,7 +214,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | P-3 Agent-ready pre-load (context package) | done | `72b4ecb` |
 | P-1 Provider layer: Google/Groq/OpenRouter tiers | done | `a8fd09f` |
 | P-2 Latency budget + first-wins failover | done | `0cdff0c` |
-| P-5 Typing indicator through the failover window | done | `14ace05` + `be24802` |
+| P-5 Typing indicator through the failover window | done | `be24802` |
 | O-2 Login-in-chat: email + 6-digit code | done | `70ba4f6` |
 | O-1 Onboarding: one tool + LLM turn loop | done | `ceb0f77` |
 | O-5 Onboarding UI: prototype thread port | done | `969bfdd` |
