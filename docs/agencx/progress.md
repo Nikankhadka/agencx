@@ -116,6 +116,7 @@ open for US-2, the `STATUS_TONE` map.
 | Per-tenant cost/step caps + timeouts | BUILT | `ad07483`; P-2 adds the 4s TTFT race and the per-turn `turn_budget_s` cap alongside the existing per-call timeouts |
 | CI regression gate | BUILT | `46c3be4`; F-2 added the import boundary - three import-linter contracts (pricing never reaches a model, services never ask one for words, the provider seam is a leaf) plus the frontend's presentational-UI rule. The ADR claiming this had been enforced "from the very first commit" was corrected: nothing enforced it until F-2 |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
+| "Live" for a self-onboarded tenant | n/a | It is `config->onboarding.completed`, not `tenants.status`. `status` defaults to `active` and self-signup inserts `active`, so it is never anything else for a tenant that onboarded itself - it is a platform-admin lifecycle (suspend/reactivate), read only by the customer page. E-5's "live / not-live state is legible" bullet is void for that reason, recorded in the ticket rather than ticked |
 | Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. **E-6 finished the screen** against the prototype: cover photo (migration 0021 `tenant_assets`, bytes in Postgres, resized client-side), platform tiles as link slots in `brand->links`, and a Services list derived from the owner's saved knowledge with the money rule held by construction. The QR and the `qrcode-generator` dependency are **gone** - never in the prototype's owner screen, and unused; sharing is `navigator.share()` with a clipboard fallback |
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
 | Advanced screens hidden, not deleted | BUILT | E-2: `/conversations`, `/escalations`, `/pricing` and `/knowledge` are absent from `NAV_ITEMS` and from nothing else - each still serves when typed, renders inside the shell, and is pinned by `e2e/hidden-screens.spec.ts`, which also holds the platform surface unchanged |
@@ -205,6 +206,15 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
 
 ## Known gaps (not ticket failures - waiting on external setup)
+
+- **A platform-provisioned tenant is stuck at `provisioning`** (found while
+  closing E-5's live/not-live bullet, 2026-08-23). `POST /api/platform/tenants`
+  inserts `status='provisioning'` (`features/platform/service.py:66`) pending a
+  founder decision on the claim mechanism, and the admin table renders an action
+  only for `active` (Suspend) and `suspended` (Reactivate) - a provisioning row
+  gets `null` (`admin-surface/(console)/page.tsx`). The API already accepts the
+  change (`_VALID_STATUSES` covers all three), so this is a missing control, not
+  a missing capability. Self-signup is unaffected: it inserts `active`.
 
 - **`enabled_tools` has no reader yet** (D-2). The column now says lean and
   `agents/agent_node.py::_tools_for` still offers every tool to every tenant -

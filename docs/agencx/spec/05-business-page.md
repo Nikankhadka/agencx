@@ -311,8 +311,8 @@ than a tab, and the prototype already renders it that way.
 **I want** Business to be a short list of places,
 **so that** I can find the one thing I came for.
 
-- [ ] Rows in Stage 1: **Booking page** and **Settings**. Nothing else
-- [ ] Schedule, Money and Plan are **absent**, not disabled (E-2, PRD "never
+- [x] Rows in Stage 1: **Booking page** and **Settings**. Nothing else
+- [x] Schedule, Money and Plan are **absent**, not disabled (E-2, PRD "never
   build dead surfaces")
 
 #### US-2 The booking page shows what customers see
@@ -321,11 +321,24 @@ than a tab, and the prototype already renders it that way.
 **I want** to see my business as a customer finds it, and get the link,
 **so that** I can share it and trust what it says.
 
-- [ ] Profile show-back from the O-1 interview profile
+- [x] Profile show-back from the O-1 interview profile
   (`tenant_config.config->profile`): business name, what it does, hours
-- [ ] The public URL with a Copy control
-- [ ] A QR for the same URL
-- [ ] Live / not-live state is legible
+- [x] The public URL with a Copy control
+- [-] A QR for the same URL - **built, then removed by E-6.** It was never in
+  the prototype's owner screen, nothing used it, and it carried a dependency
+  (`qrcode-generator`) for that. Sharing is `navigator.share()` with a
+  clipboard fallback
+- [-] Live / not-live state is legible - **void.** The bullet was written
+  against an assumption that does not hold: there is no not-live state to
+  render. `tenants.status` defaults to `'active'` (migration 0003) and
+  self-signup inserts `'active'` outright
+  (`features/tenants/service.py:63`); onboarding confirm never touches it. A
+  badge reading that column would say "Live" throughout the interview, which
+  is worse than showing nothing. What "live" means for a self-onboarded tenant
+  is `config->onboarding.completed`, and by the time the owner can reach this
+  screen it is already true. `tenants.status` is a platform-admin lifecycle
+  (its only writer is the suspend control, its only reader the customer page),
+  not an owner-facing one
 
 ### Design reference
 
@@ -363,9 +376,9 @@ built from the same anchor, with the same "one row, no dead rows" call - reuse
 
 ### Definition of done
 
-- [ ] Two hub rows, no dead rows
-- [ ] Booking page shows the profile, the link, and a working QR
-- [ ] `make check` green, e2e green
+- [x] Two hub rows, no dead rows
+- [x] Booking page shows the profile and the link (the QR is gone - see US-2)
+- [x] `make check` green, e2e green
 
 ---
 
