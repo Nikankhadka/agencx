@@ -27,9 +27,16 @@ async function ask(page: Page, question = "What do you charge for a screen?") {
   // and the client tree are both in the DOM - two composers, and a strict-mode
   // violation for anything addressing one of them. Settling first is what a
   // customer does anyway; nothing here is testing the first 30ms.
-  const box = page.getByLabel("Message");
-  await expect(box).toHaveCount(1);
-  await box.fill(question);
+  //
+  // A one-shot `toHaveCount(1)` before the fill is not enough: the count goes
+  // 1 -> 2 -> 1 as hydration lands, so a guard that passes can be stale by the
+  // time `fill` re-resolves the locator. Retrying the pair together is what
+  // actually waits for the page to settle.
+  await expect(async () => {
+    const box = page.getByLabel("Message");
+    await expect(box).toHaveCount(1);
+    await box.fill(question);
+  }).toPass({ timeout: 15_000 });
   await page.getByRole("button", { name: "Send" }).click();
 }
 
