@@ -4,7 +4,7 @@ Chat and embeddings are independently swappable on purpose: the default $0
 stack pairs a local sentence-transformers embedder (no API key, no rate
 limit) with any hosted chat provider, and production can rebind either side
 by env alone. ``get_embedder`` picks the implementation from
-``settings.embedder`` ('local' or 'azure'), matching ``get_reranker``'s
+``settings.embedder`` ('local', 'azure' or 'google'), matching ``get_reranker``'s
 pattern (app/retrieval/rerank.py).
 
 Every implementation must produce vectors of exactly
@@ -12,15 +12,17 @@ Every implementation must produce vectors of exactly
 ``knowledge_chunks.embedding vector(N)`` (migration 0010). AzureOpenAIEmbedder
 meets it by asking the API to truncate (text-embedding-3 models support a
 ``dimensions`` parameter), so local<->azure swaps need no migration;
-LocalEmbedder fails loudly on first use if the configured model's native
-dimension disagrees.
+GoogleEmbedder does the same through ``outputDimensionality``; LocalEmbedder
+fails loudly on first use if the configured model's native dimension disagrees.
 """
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+import httpx
 from starlette.concurrency import run_in_threadpool
 
 if TYPE_CHECKING:
@@ -30,6 +32,11 @@ if TYPE_CHECKING:
     from app.shared.config import Settings
 
 _AZURE_API_VERSION = "2024-10-21"
+
+# The native embeddings endpoint, not the OpenAI-compatible one LLM_BASE_URL
+# points at: only the native API exposes outputDimensionality, which is what
+# keeps a hosted embedder inside the vector(384) schema contract.
+_GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
 class Embedder(ABC):
@@ -118,7 +125,76 @@ class AzureOpenAIEmbedder(Embedder):
         return [item.embedding for item in response.data]
 
 
+class GoogleEmbedder(Embedder):
+    """Google's native embeddings API, truncated server-side to ``expected_dim``
+    via ``outputDimensionality`` (Matryoshka truncation), so it stays
+    schema-compatible with the local default without a migration.
+
+    Reuses ``LLM_API_KEY`` rather than introducing a second Google credential:
+    the same AI Studio key serves chat and embeddings, and a second field would
+    be one more thing to get out of sync in the deploy."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._api_key = settings.llm_api_key
+        self._model = settings.google_embed_model
+        self._expected_dim = settings.embedding_dim
+        # Lazily created and then held for the process, the same lifecycle
+        # AzureOpenAIEmbedder's client has: get_embedder_dependency is
+        # lru_cached, so there is one embedder and one pool per process.
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        response = await self._get_client().post(
+            f"{_GOOGLE_API_BASE}/models/{self._model}:batchEmbedContents",
+            headers={"x-goog-api-key": self._api_key},
+            json={
+                "requests": [
+                    {
+                        "model": f"models/{self._model}",
+                        "content": {"parts": [{"text": text}]},
+                        # Nested, not the deprecated top-level field of the same
+                        # name. A server that ignored it would return the model's
+                        # native width, which the guard below catches.
+                        "embedContentConfig": {"outputDimensionality": self._expected_dim},
+                    }
+                    for text in texts
+                ]
+            },
+        )
+        response.raise_for_status()
+        vectors = [item["values"] for item in response.json()["embeddings"]]
+
+        if vectors and len(vectors[0]) != self._expected_dim:
+            raise ValueError(
+                f"google embedding model {self._model!r} returned "
+                f"{len(vectors[0])}-dim vectors but EMBEDDING_DIM={self._expected_dim} "
+                f"(and knowledge_chunks.embedding is vector({self._expected_dim})); "
+                "the endpoint ignored outputDimensionality - check the model name"
+            )
+        # Truncating a Matryoshka embedding costs it its unit norm, and the local
+        # default normalizes (LocalEmbedder passes normalize_embeddings=True).
+        # Renormalizing here keeps the two interchangeable for anything that
+        # reads raw magnitudes, not just for cosine distance.
+        return [_normalize(vector) for vector in vectors]
+
+
+def _normalize(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0.0:
+        return vector
+    return [value / norm for value in vector]
+
+
 def get_embedder(settings: Settings) -> Embedder:
     if settings.embedder == "azure":
         return AzureOpenAIEmbedder(settings)
+    if settings.embedder == "google":
+        return GoogleEmbedder(settings)
     return LocalEmbedder(settings.local_embed_model, settings.embedding_dim)

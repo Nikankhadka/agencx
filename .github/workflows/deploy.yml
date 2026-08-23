@@ -1,26 +1,25 @@
 name: Deploy (production)
 
-# T-036: the production pipeline, kept as a separate flow from CI (ci.yml is
-# the development gate: lint/typecheck/test on every push/PR). This workflow
-# only runs after CI has already gone green on main (workflow_run trigger),
-# so a broken build can never reach the deploy step.
+# B-4: production verification, kept as a separate flow from CI (ci.yml is the
+# development gate: lint/typecheck/test/eval on every push and PR).
 #
-# Every AWS/Vercel step is gated on its secrets actually existing (same
-# pattern as ci.yml's eval-gate job gating on LLM_API_KEY) - until T-035's
-# Terraform stands up the ECR repo / ECS service / ALB and the founder adds
-# the secrets below, this workflow no-ops with a clear notice instead of
-# failing. It activates for real the moment that infra + secrets exist, no
-# workflow changes needed.
+# There is no build or push step here any more. Since B-4 the whole product is
+# one Vercel project running two container services (vercel.json: frontend and
+# backend, routed by rewrites), and Vercel's own Git integration builds and
+# deploys both on every push to the production branch. A pipeline that also
+# built them would be a second, slower copy of a deploy that already happened.
 #
-# Required repo secrets (none set yet - see infra/main.tf / T-035):
-#   AWS_ROLE_ARN                          - OIDC role deploy assumes (no long-lived AWS keys)
-#   AWS_REGION                            - e.g. us-east-1
-#   ECR_REPOSITORY                        - repo name from terraform output
-#   ECS_CLUSTER / ECS_SERVICE             - from terraform output
-#   SMOKE_TEST_BASE_URL                   - the ALB DNS name / production API URL
-#   (all five above gate backend_ready as one group - a deploy with no way to
-#   verify it landed is treated the same as a deploy that can't run at all)
-#   VERCEL_DEPLOY_HOOK_URL                - Vercel project's production deploy hook
+# What is left is the part Vercel does not do: proving the deployed origin is
+# actually answering. This workflow waits for CI to go green on `staging` (the
+# production branch) and then smoke-tests the live origin.
+#
+# The superseded AWS ECS path (infra/*.tf, T-035/T-036) is kept and dormant -
+# validated by ci.yml's `infra` job so it cannot rot, deployed by nothing.
+#
+# Required repo secret:
+#   SMOKE_TEST_BASE_URL - the production origin, e.g. https://agencx.vercel.app
+#     Until it is set this workflow no-ops with a notice instead of failing,
+#     the same pattern ci.yml's eval-gate uses for LLM_API_KEY.
 
 permissions:
   contents: read
@@ -29,95 +28,62 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
+    branches: [staging]
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  check-readiness:
+  smoke-test:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    outputs:
-      backend_ready: ${{ steps.check.outputs.backend_ready }}
-      frontend_ready: ${{ steps.check.outputs.frontend_ready }}
+    environment: production
     steps:
+      # The `secrets` context is not available in a job-level `if:`, so
+      # readiness is computed in a step and every later step reads its output.
       - id: check
         env:
-          HAS_AWS: ${{ secrets.AWS_ROLE_ARN != '' && secrets.ECR_REPOSITORY != '' && secrets.ECS_CLUSTER != '' && secrets.ECS_SERVICE != '' && secrets.SMOKE_TEST_BASE_URL != '' }}
-          HAS_VERCEL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+          HAS_BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL != '' }}
         run: |
-          echo "backend_ready=${HAS_AWS}" >> "$GITHUB_OUTPUT"
-          echo "frontend_ready=${HAS_VERCEL}" >> "$GITHUB_OUTPUT"
-          if [ "${HAS_AWS}" != "true" ]; then
-            echo "::notice::AWS deploy secrets not set - skipping backend deploy (T-035 Terraform not applied yet)"
-          fi
-          if [ "${HAS_VERCEL}" != "true" ]; then
-            echo "::notice::VERCEL_DEPLOY_HOOK_URL not set - skipping frontend deploy"
+          echo "ready=${HAS_BASE_URL}" >> "$GITHUB_OUTPUT"
+          if [ "${HAS_BASE_URL}" != "true" ]; then
+            echo "::notice::SMOKE_TEST_BASE_URL not set - skipping the production smoke test (see docs/agencx/deploy.md)"
           fi
 
-  deploy-backend:
-    needs: check-readiness
-    if: needs.check-readiness.outputs.backend_ready == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      # workflow_run defaults to checking out the default branch's current
-      # HEAD, not the commit CI actually validated - pin explicitly so a
-      # commit landing on main between CI finishing and this job starting
-      # can never sneak into the image that gets tagged with the older sha.
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
-      - name: Build and push image
-        working-directory: backend
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          docker build -t "$REGISTRY/$REPOSITORY:$IMAGE_TAG" -t "$REGISTRY/$REPOSITORY:latest" .
-          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
-          docker push "$REGISTRY/$REPOSITORY:latest"
-      - name: Force new ECS deployment
-        env:
-          CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          SERVICE: ${{ secrets.ECS_SERVICE }}
-        run: aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
-      - name: Wait for service stability
-        env:
-          CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          SERVICE: ${{ secrets.ECS_SERVICE }}
-        run: aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
-
-  deploy-frontend:
-    needs: check-readiness
-    if: needs.check-readiness.outputs.frontend_ready == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Trigger Vercel production deploy hook
-        env:
-          DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-        run: curl -fsSL -X POST "$DEPLOY_HOOK_URL"
-
-  smoke-test:
-    needs: [deploy-backend, deploy-frontend]
-    if: always() && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Backend health check
-        if: needs.deploy-backend.result == 'success'
+      # Vercel promotes the new deployment asynchronously, so the origin can
+      # still be serving the previous build for a few seconds after CI reports
+      # green. Retry rather than race it.
+      - name: Backend health
+        if: steps.check.outputs.ready == 'true'
         env:
           BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
-        run: curl -fsSL "$BASE_URL/health"
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsSL --max-time 20 "$BASE_URL/health"; then
+              exit 0
+            fi
+            echo "attempt $attempt failed, retrying in 10s"
+            sleep 10
+          done
+          echo "::error::$BASE_URL/health never returned 200"
+          exit 1
+
+      # Proves more than liveness: this route reads the database and resolves a
+      # tenant by slug, so a 200 means the pooled connection, the schema and
+      # tenant resolution all survived the deploy. `bytefix` is the slug seeded
+      # by backend/seeds/seed_tenant1_phoneshop.py (deploy.md step 1).
+      - name: Seeded tenant resolves
+        if: steps.check.outputs.ready == 'true'
+        env:
+          BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
+        run: curl -fsSL --max-time 20 "$BASE_URL/api/public/tenant/bytefix" > /dev/null
+
+      # The customer page is the product's actual promise, and it is the surface
+      # the rewrite rules are most likely to get wrong: it is served by the
+      # frontend service while every path it fetches is served by the backend.
+      - name: Customer page serves
+        if: steps.check.outputs.ready == 'true'
+        env:
+          BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
+        run: curl -fsSL --max-time 30 "$BASE_URL/bytefix" > /dev/null

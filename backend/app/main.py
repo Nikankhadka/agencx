@@ -27,12 +27,14 @@ from app.shared import db
 from app.shared.config import get_settings
 from app.shared.startup import check_startup_config
 
-# The frontend and backend are always different origins, but since D22 the
-# frontend is a single origin rather than one per tenant - tenants are paths
-# (`/{slug}`), not subdomains, so no wildcard label is needed and no origin is
-# unknown in advance. No cookies are used (bearer tokens only), so
-# allow_credentials stays False.
-_ALLOWED_ORIGIN_REGEX = r"^https?://(localhost|wren\.app)(:\d+)?$"
+# Local dev only. B-4 deploys the frontend and backend as two services behind
+# one Vercel origin (vercel.json routes /api/* and /health to the backend), so
+# in production the browser never makes a cross-origin request and no preflight
+# happens at all - there is no deployed host to list here. Only the dev stack is
+# split across ports (frontend :3000 -> backend :8000), which `localhost`
+# covers. No cookies are used (bearer tokens only), so allow_credentials stays
+# False.
+_ALLOWED_ORIGIN_REGEX = r"^https?://localhost(:\d+)?$"
 
 logger = logging.getLogger("app.main")
 

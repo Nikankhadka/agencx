@@ -50,14 +50,17 @@ async def test_health_unavailable_when_db_down() -> None:
     [
         "http://localhost:3000",
         "http://localhost",
-        "https://wren.app",
     ],
 )
 async def test_cors_allows_frontend_origins(origin: str) -> None:
-    """T-011: the frontend and backend are always different origins - a browser
-    fetch from the frontend must not be silently blocked by a missing CORS
-    header. Since D22 the frontend is a single origin (tenants are paths), so
-    this is the whole matrix."""
+    """T-011: a browser fetch from the frontend must not be silently blocked by
+    a missing CORS header.
+
+    B-4 shrank this matrix to local dev alone. The deploy runs the frontend and
+    the backend as two services behind one Vercel origin, so in production the
+    browser makes no cross-origin request and there is no deployed host to
+    allow. Only the dev stack is split across ports (frontend :3000 -> backend
+    :8000), which `localhost` covers."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.options(
@@ -87,9 +90,13 @@ async def test_cors_rejects_unrelated_origins() -> None:
         "http://bytefix.localhost:3000",
         "https://bytefix.wren.app",
         "https://app.wren.app",
+        # B-4: the deployed origin is same-origin, so even the bare product
+        # domain is not an allowed cross-origin caller any more.
+        "https://wren.app",
+        "https://agencx.app",
     ],
 )
-async def test_cors_rejects_subdomain_origins(origin: str) -> None:
+async def test_cors_rejects_subdomain_and_deployed_origins(origin: str) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.options(

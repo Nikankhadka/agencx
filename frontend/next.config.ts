@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   // where the keep/pivot/stop signals live, and a redirect made it the one
   // hidden screen that had actually stopped existing.
 
+  // B-4: the frontend deploys as a container (frontend/Dockerfile), so the
+  // build has to emit a self-contained server rather than assume a host that
+  // runs `next start` against an installed node_modules. `standalone` traces
+  // exactly the files the server needs into .next/standalone; the Dockerfile
+  // copies `public` and `.next/static` in beside it, which that server does not
+  // gather itself.
+  output: "standalone",
 };
 
 export default nextConfig;

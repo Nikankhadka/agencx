@@ -92,7 +92,7 @@ services:
       - wren-e2e-node-modules:/app/node_modules
 
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.6-pg16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -185,7 +185,7 @@ services:
   # docker/auth-proxy.conf. Port 54321 matches the supabase convention and the
   # URL already sitting in frontend/.env.local.
   auth-proxy:
-    image: nginx:alpine
+    image: nginx:1.31.2-alpine
     depends_on:
       auth:
         condition: service_healthy

@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-tests/
+# tests/ is deliberately NOT ignored: the Dockerfile's `test` stage runs the
+# suite (B-4), and .dockerignore filters the build context before any stage can
+# COPY from it. The runtime stage drops them again.
 var/
 .git/

@@ -1,57 +1,57 @@
 # Deploying Agencx
 
 The one page for shipping Agencx to the internet on free infrastructure, with
-push-to-deploy CI/CD. This supersedes the dormant AWS ECS/Terraform path
-(`infra/*.tf`, and the AWS half of `.github/workflows/deploy.yml`, which
-currently no-op) with a stack that is actually free to run.
+push-to-deploy CI/CD. B-4 is the ticket that delivers it.
 
-> **Status: partly superseded by ticket B-4** (`spec/10-deploy.md`), which runs
-> the backend as a second container service in the same Vercel project and drops
-> Google Cloud Run. Until B-4 lands, read these parts as historical rather than
-> current:
->
-> - the backend row of the stack table below (Cloud Run),
-> - all of "Step 2 - Google Cloud Run",
-> - the `GCP_*` secrets in "Step 6 - GitHub Actions secrets",
-> - Step 3's "root directory to `frontend`" - the `services` block in
->   `vercel.json` needs the project rooted at the repo root,
-> - `NEXT_PUBLIC_API_URL`, which becomes empty rather than a `run.app` URL
->   because both services share one origin,
-> - every reference to deploying from `main`, a branch this repo does not have;
->   B-4 puts CI on `development` and `staging` and deploys from `staging`,
-> - "What the repo changes deliver", which names a branch
->   (`feat/deploy-gcp-vercel`) that was never created.
->
-> Supabase, the API keys, and the backend environment variables are unchanged by
-> B-4 and still apply as written.
+This supersedes two earlier plans: the AWS ECS/Terraform stack (`infra/*.tf`,
+kept and dormant - still validated by CI so it cannot rot, deployed by nothing)
+and the Google Cloud Run backend this page described before B-4. Both are
+replaced by a single Vercel project running two container services.
 
 ## The stack
 
 | Concern | Where | Cost |
 |---|---|---|
-| Frontend (Next.js 16, three surfaces) | Vercel Hobby | $0 |
-| Backend (FastAPI) | Google Cloud Run (project `agencx`) | free tier + credits |
+| Frontend (Next.js 16, three surfaces) | Vercel, `frontend` container service | $0 |
+| Backend (FastAPI) | Vercel, `backend` container service | $0 |
 | DB + Auth (Postgres + pgvector + GoTrue + RLS) | hosted Supabase | $0 (7-day idle pause) |
 | Chat LLM | Google AI Studio + Groq + OpenRouter | $0 |
 | Embeddings | Google `text-embedding-004` | $0 / credits |
 | Reranker | Cohere | $0 free tier |
 | Login-in-chat email | SMTP relay (Resend/Brevo) or `console` | $0 |
-| CI/CD | GitHub Actions + Vercel Git integration | $0 |
+| CI/CD | GitHub Actions (gate) + Vercel Git integration (deploy) | $0 |
 
-Two decisions shape the rest:
+Three decisions shape the rest:
 
-1. The production image stays **lean** (no `sentence-transformers`/`torch`), so
+1. **One project, two services, one origin.** `vercel.json` declares a
+   `frontend` and a `backend` service, each built from its own Dockerfile, and
+   rewrites `/api/*` and `/health` to the backend and everything else to the
+   frontend. The browser therefore never makes a cross-origin request in
+   production: no preflight, no CORS allowlist to maintain, and one hostname to
+   point a domain at later (B-2).
+2. The production image stays **lean** (no `sentence-transformers`/`torch`), so
    embeddings and reranking are hosted, not local. Embeddings use Google
    `text-embedding-004` truncated to 384 dims (matches the schema, no
    re-ingest); reranking uses Cohere.
-2. Ship on **auto URLs first** (`<project>.vercel.app` and
-   `<service>.run.app`). Buying `agencx.app` and pointing it here is ticket B-2,
-   deferred - but nothing waits on it.
+3. The product ships on the **auto URL** first (`<project>.vercel.app`).
+   Buying `agencx.app` and pointing it at the project is ticket B-2, deferred -
+   nothing waits on it.
 
-## What you can see with auto URLs
+## Branches
 
-**All three surfaces, on the one Vercel URL.** Since D22 the surfaces are paths,
-not hosts, so a single `<project>.vercel.app` serves the whole product:
+| Branch | What it is | What Vercel does |
+|---|---|---|
+| `development` | integration; feature branches PR into it | preview deployment |
+| `staging` | production | production deployment |
+
+There is no `main`. `ci.yml` gates pushes to both branches and every PR;
+`deploy.yml` fires after CI goes green on `staging` and smoke-tests the live
+origin.
+
+## What you can see with the auto URL
+
+**All three surfaces, on the one URL.** Since D22 the surfaces are paths, not
+hosts, so a single `<project>.vercel.app` serves the whole product:
 
 - **tenant-admin** at `<project>.vercel.app` (`/login`, `/home`, ...)
 - **customer** at `<project>.vercel.app/{slug}` - the real product link
@@ -63,7 +63,6 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 
 ## Prerequisites
 
-- A Google Cloud project named `agencx` with billing (credits fine).
 - A Supabase account.
 - A Vercel account.
 - Free API keys: Google AI Studio, Cohere, optionally Groq + OpenRouter.
@@ -75,85 +74,40 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
    - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project Settings > API).
    - `SUPABASE_JWT_SECRET` (the JWT secret under Project Settings > API).
    - The database connection string. Use the **transaction pooler** string
-     (port `6543`) - Cloud Run needs IPv4, and Supavisor provides it.
+     (port `6543`) - the serverless container gets a fresh IP per instance and
+     Supavisor is what makes that survivable.
 2. Apply migrations once, from a machine with this repo checked out:
 
    ```bash
-   cd backend
-   DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres' \
-     uv run python -m app.shared.migrate
+   docker compose run --rm \
+     -e DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres' \
+     backend python -m app.shared.migrate
    ```
 
    This creates the schema, the `wren_app` role, and the pgvector indexes.
    pgvector is preinstalled on Supabase.
-3. Optional demo tenant, same shell:
+3. Seed the demo tenant, same shell (the deploy smoke test looks for it):
 
    ```bash
-   DATABASE_URL='<pooler url>' uv run python -m seeds.seed_tenant1_phoneshop
+   docker compose run --rm \
+     -e DATABASE_URL='<pooler url>' \
+     backend python -m seeds.seed_tenant1_phoneshop
    ```
 
-## Step 2 - Google Cloud Run (project `agencx`)
+## Step 2 - Vercel
 
-1. Enable the APIs: Cloud Run, Artifact Registry, IAM Credentials.
-2. Create an Artifact Registry repository for the backend image, e.g.
-   `backend` in region `us-central1`:
+1. Import the GitHub repo. **Leave the root directory at the repo root** - not
+   `frontend/`. `vercel.json` at the root is what declares the two services;
+   pointing the project at `frontend/` hides it and you get a frontend-only
+   deploy that 404s every `/api` call.
+2. Set the **production branch to `staging`** (Settings > Git). `development`
+   then produces preview deployments.
+3. Set the `backend` service's port to **8000** if the project offers a port
+   setting; otherwise set `PORT` as a backend env var in Step 4. Neither image
+   bakes a port - the host decides, and the container listens wherever `PORT`
+   says.
 
-   ```bash
-   gcloud artifacts repositories create backend \
-     --repository-format=docker --location=us-central1 --project=agencx
-   ```
-
-3. Create a service account for the deploy pipeline:
-
-   ```bash
-   gcloud iam service-accounts create github-deploy --project=agencx
-   gcloud projects add-iam-policy-binding agencx \
-     --member="serviceAccount:github-deploy@agencx.iam.gserviceaccount.com" \
-     --role=roles/run.admin
-   gcloud projects add-iam-policy-binding agencx \
-     --member="serviceAccount:github-deploy@agencx.iam.gserviceaccount.com" \
-     --role=roles/iam.serviceAccountUser
-   gcloud projects add-iam-policy-binding agencx \
-     --member="serviceAccount:github-deploy@agencx.iam.gserviceaccount.com" \
-     --role=roles/artifactregistry.writer
-   ```
-
-4. Wire GitHub to that service account with Workload Identity Federation (OIDC)
-   so the workflow uses no long-lived key:
-
-   ```bash
-   gcloud iam workload-identity-pools create github-pool \
-     --location=global --project=agencx
-   gcloud iam workload-identity-pools providers create-oidc github-provider \
-     --location=global --project=agencx \
-     --workload-identity-pool=github-pool \
-     --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-     --issuer-uri="https://token.actions.githubusercontent.com" \
-     --allowed-audiences="https://github.com/Nikankhadka"
-   gcloud iam service-accounts add-iam-policy-binding \
-     github-deploy@agencx.iam.gserviceaccount.com --project=agencx \
-     --role=roles/iam.workloadIdentityUser \
-     --member="principalSet://iam.googleapis.com/projects/$(gcloud projects describe agencx --format='value(projectNumber)')/locations/global/workloadIdentityPools/github-pool/attribute.repository/Nikankhadka/agencx"
-   ```
-
-   Capture these two values for the GitHub secrets in Step 6:
-   - Workload Identity Provider resource name (the full
-     `projects/.../locations/global/workloadIdentityPools/github-pool/providers/github-provider`).
-   - Service account email `github-deploy@agencx.iam.gserviceaccount.com`.
-
-   The quick alternative to OIDC is a service-account JSON key stored as a
-   GitHub secret (`GCP_SA_KEY`) - works, but OIDC is the repo's existing pattern
-   (AWS uses it) and leaves no key to rotate.
-
-## Step 3 - Vercel
-
-1. Import the GitHub repo; Vercel auto-detects Next.js. Set the framework
-   preset to Next.js and the **root directory to `frontend`**.
-2. Vercel's native Git integration auto-deploys on every push to `main`. No
-   deploy hook is needed; the `VERCEL_DEPLOY_HOOK_URL` path in `deploy.yml` can
-   stay unused.
-
-## Step 4 - API keys (all free)
+## Step 3 - API keys (all free)
 
 - Google AI Studio key -> `LLM_API_KEY` (also reused for embeddings).
 - Cohere key -> `COHERE_API_KEY` (rerank).
@@ -163,11 +117,15 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
   host/port/user/pass, or leave `EMAIL_PROVIDER=console` to log codes instead of
   sending (demo-only).
 
-## Step 5 - Environment variables
+## Step 4 - Environment variables
 
-Backend, as Cloud Run service env vars:
+All of these are Vercel project environment variables. Set them for both
+Production and Preview, or the preview deploys will boot against nothing.
+
+Backend service:
 
 ```
+PORT=8000
 DATABASE_URL=<Supabase transaction pooler string, port 6543>
 WREN_APP_DB_PASSWORD=<8+ chars, no quotes/backslash/$>
 SUPABASE_URL=<...>
@@ -197,64 +155,93 @@ EMAIL_SMTP_FROM=<...>
 ENVIRONMENT=production
 ```
 
-Frontend, as Vercel project env vars (all `NEXT_PUBLIC_`, inlined at build
-time - set these before the first deploy):
+`EMBEDDER=local` and `RERANKER=local` are not available in production: the image
+ships without those packages on purpose, and either value fails at first use
+with `ModuleNotFoundError`, by design.
+
+Frontend service - two values, both `NEXT_PUBLIC_`, inlined into the browser
+bundle at **build** time, so they must exist before the first deploy:
 
 ```
-NEXT_PUBLIC_API_URL=https://<service>.run.app
 NEXT_PUBLIC_SUPABASE_URL=<...>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<...>
 ```
 
-## Step 6 - GitHub Actions secrets
+`NEXT_PUBLIC_API_URL` is deliberately **not set**. The callers read
+`process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`, and the frontend
+image defaults it to an empty string, which `??` preserves - so every API call
+becomes a relative `/api/...` on the same origin the backend service serves.
+Setting it to an absolute URL would reintroduce the cross-origin request the
+whole topology exists to avoid.
 
-For `deploy.yml` (backend to Cloud Run):
+## Step 5 - GitHub Actions secret
+
+For `deploy.yml`'s smoke test:
 
 ```
-GCP_PROJECT=agencx
-GCP_REGION=us-central1
-GCP_ARTIFACT_REPO=backend
-GCP_WORKLOAD_IDENTITY_PROVIDER=<the full provider resource name from Step 2>
-GCP_SERVICE_ACCOUNT=github-deploy@agencx.iam.gserviceaccount.com
+SMOKE_TEST_BASE_URL=https://<project>.vercel.app
 ```
+
+Until it is set the workflow no-ops with a notice rather than failing.
 
 ## What the repo changes deliver
 
-The founder steps above are external. The code changes that make them work live
-in the repo and ship on a branch (`feat/deploy-gcp-vercel`):
+The founder steps above are external. The code that makes them work is B-4
+(`docs/agencx/spec/10-deploy.md`, branch `feat/deploy-containers-cicd`):
 
-1. `backend/app/llm/embedder.py` - a `GoogleEmbedder` (native
-   `embedContent`, `outputDimensionality=384`) and a `'google'` branch in
-   `get_embedder`.
-2. `backend/app/shared/config.py` - `embedder` accepts `'google'`; new
-   `google_embed_model` field.
-3. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` widened to accept the
-   `<project>.vercel.app` origin (B-2 later narrows this to `agencx.app`).
-   Note it is a single origin now, not a wildcard label (D22).
-4. `.github/workflows/deploy.yml` - the backend job re-targets Cloud Run
-   (build/push image to Artifact Registry, `deploy-cloudrun`, smoke test).
-   The frontend stays on Vercel's Git integration.
-5. `.env.example` files - document the new `EMBEDDER=google` / `RERANKER=cohere`
-   / pooler `DATABASE_URL` settings.
+1. `vercel.json` - the two services and the rewrites that route them.
+2. `frontend/Dockerfile` + `output: "standalone"` in `next.config.ts` - the
+   frontend as a self-contained container.
+3. `backend/Dockerfile` - retargeted off ECS, `PORT`-driven, plus a `test` stage
+   CI runs the suite in.
+4. `backend/app/llm/embedder.py` - a `GoogleEmbedder` (native `embedContent`,
+   `outputDimensionality=384`) and a `'google'` branch in `get_embedder`;
+   `backend/app/shared/config.py` accepts `'google'` and adds
+   `google_embed_model`.
+5. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` narrowed to `localhost`,
+   because production is same-origin and has no preflight to allow.
+6. `backend/app/features/knowledge/api.py` - the upload cap lowered to 4MB, so
+   an oversized file gets the backend's own 422 rather than the platform's
+   opaque 413.
+7. `.github/workflows/` - `ci.yml` gates `staging`/`development` and runs the
+   backend suite in the image's `test` stage; `deploy.yml` drops the AWS build
+   and push entirely and smoke-tests the live origin instead.
+8. `.env.example` - documents `EMBEDDER=google`, `RERANKER=cohere` and the
+   pooler `DATABASE_URL`.
 
-`ci.yml` is unchanged and remains the gate (lint/typecheck/test/eval on every
-push and PR). `deploy.yml` fires via `workflow_run` only after CI is green on
-`main`, so a broken build can never reach production.
+`ci.yml` remains the gate on every push and PR. `deploy.yml` fires via
+`workflow_run` only after CI is green on `staging`.
 
 ## Verifying
 
 1. Locally: `make check` and `make ci` stay green.
-2. Push a branch -> PR: `ci.yml` passes.
-3. Merge to `main`: `deploy.yml` builds and pushes the image, deploys Cloud Run,
-   and smoke-tests `<service>.run.app/health` (expect 200).
-4. Vercel deploys `frontend` on merge; open `<project>.vercel.app` -> owner
-   login -> onboarding -> go-live lands on Home.
-5. A seeded tenant resolves:
-   `curl https://<service>.run.app/api/public/tenant/bytefix` (expect 200), and
-   its page renders at `<project>.vercel.app/bytefix`.
+2. Locally, the two images that actually ship:
 
-## Known limitations
+   ```bash
+   docker build --target test -t wren-backend-test backend/   # what CI runs
+   docker build -t wren-frontend frontend/
+   ```
 
+3. Push a branch -> PR into `development`: `ci.yml` passes.
+4. Merge to `staging`: Vercel builds and deploys both services, then
+   `deploy.yml` smoke-tests `/health`, `/api/public/tenant/bytefix` and
+   `/bytefix` on the live origin.
+5. Open `<project>.vercel.app` -> owner login -> onboarding -> go-live lands on
+   Home. The seeded tenant's page renders at `<project>.vercel.app/bytefix`.
+
+## Caveats to keep in mind
+
+- **Vercel container services are a young feature.** If the first build ignores
+  the Dockerfiles, add `"runtime": "container"` to each service in
+  `vercel.json` - the docs show both that form and the bare
+  `root`/`entrypoint` pair this repo uses.
+- **Check the built bundle for the Supabase URL after the first deploy.**
+  `frontend/Dockerfile` declares `NEXT_PUBLIC_*` as build args and re-exports
+  them as `ENV`. If Vercel supplies project env vars to the build as
+  environment rather than as build args, that `ENV` line overwrites them with
+  empty strings and the browser bundle ships with no Supabase URL. The fix is
+  to drop the forced `ENV` for those two and let the build environment provide
+  them.
 - **Supabase free tier pauses after 7 days idle** (architecture section 13).
   Fine for a portfolio; keep it warm or move to Pro ($25/month) if it bites.
 - **Free-tier LLM and embedding models train on your inputs** (section 13). No
@@ -262,6 +249,7 @@ push and PR). `deploy.yml` fires via `workflow_run` only after CI is green on
 - **Google's `thought_signature` 400** (known gap in `progress.md`) can reject
   multi-tool turns on the primary tier; it is a separate ticket, not a deploy
   concern, but may surface live.
-- **B-2** (buy `agencx.app`, point it here, narrow CORS) is the real domain
-  launch; the `vercel.app`/`run.app` origins here are its stand-ins. It is a
-  single DNS record now - D22 removed the wildcard.
+- **B-2** (buy `agencx.app`, point it here) is the real domain launch; the
+  `vercel.app` origin here is its stand-in. It is a single DNS record now - D22
+  removed the wildcard, and the same-origin topology removed the CORS half of
+  the ticket.

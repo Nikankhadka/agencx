@@ -21,6 +21,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.knowledge.api import MAX_UPLOAD_BYTES
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
 from app.shared import db
@@ -204,7 +205,10 @@ async def test_upload_rejects_unsupported_extension(client: httpx.AsyncClient) -
 
 async def test_upload_rejects_oversized_file(client: httpx.AsyncClient) -> None:
     token = await _signup_tenant_admin(client)
-    oversized = b"x" * (10 * 1024 * 1024 + 1)
+    # Derived from the constant, never a repeated literal: B-4 lowered the cap to
+    # sit under Vercel's 4.5MB request-body limit, and a hardcoded size here
+    # would have kept passing while testing nothing.
+    oversized = b"x" * (MAX_UPLOAD_BYTES + 1)
     response = await client.post(
         "/api/knowledge/upload",
         headers={"Authorization": f"Bearer {token}"},
@@ -212,6 +216,15 @@ async def test_upload_rejects_oversized_file(client: httpx.AsyncClient) -> None:
         data={"doc_type": "other"},
     )
     assert response.status_code == 422
+    # The owner must get our message, not the platform's opaque 413.
+    assert "upload limit" in response.json()["detail"]
+
+
+async def test_upload_cap_stays_under_the_vercel_body_limit() -> None:
+    """The deploy target rejects request bodies over 4.5MB at the edge, before
+    the app sees them. If this cap ever rises above that, the 422 above becomes
+    unreachable and owners get an unexplained failure instead."""
+    assert MAX_UPLOAD_BYTES <= 4 * 1024 * 1024
 
 
 async def test_upload_rejects_bad_doc_type(client: httpx.AsyncClient) -> None:

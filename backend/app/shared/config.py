@@ -117,12 +117,16 @@ class Settings(BaseSettings):
     azure_openai_chat_deployment: str = "gpt-4o-mini"
     azure_openai_embed_deployment: str = "text-embedding-3-small"
 
-    # Embedder: 'local' | 'azure' - independent of llm_provider on purpose
-    # (local embeddings + hosted chat is the default $0 stack). embedding_dim
-    # must match knowledge_chunks.embedding's vector(N) (migration 0010);
-    # pointing at a model with a different dimension needs a migration + re-ingest.
+    # Embedder: 'local' | 'azure' | 'google' - independent of llm_provider on
+    # purpose (local embeddings + hosted chat is the default $0 stack).
+    # embedding_dim must match knowledge_chunks.embedding's vector(N) (migration
+    # 0010); pointing at a model with a different dimension needs a migration +
+    # re-ingest. 'google' is the deployed default (B-4): the production image
+    # ships without sentence-transformers, so 'local' is not available there.
+    # It reuses llm_api_key rather than taking a Google key of its own.
     embedder: str = "local"
     local_embed_model: str = "BAAI/bge-small-en-v1.5"
+    google_embed_model: str = "text-embedding-004"
     embedding_dim: int = 384
 
     # Reranker (T-009): 'cohere' | 'local'

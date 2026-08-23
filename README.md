@@ -29,12 +29,12 @@ uploaded knowledge - never in code.
         \                         |                          /
          \________________________|_________________________/
                                   |
-                    Next.js frontend (Vercel)
+                    Next.js frontend (Vercel container service)
                     tokens-only theming, per-tenant branding
                                   |
-                             HTTPS / bearer JWT
+                        same-origin /api/* rewrite
                                   |
-                    FastAPI backend  (AWS ECS Fargate)
+                    FastAPI backend (Vercel container service)
         +-------------------------------------------------------+
         |  Supervisor (LangGraph)                               |
         |    -> Knowledge  (hybrid RAG + citations)             |
@@ -72,7 +72,7 @@ report) - the one release-criteria item that needs a person, not the codebase.
 ```
 frontend/   Next.js + TypeScript + Tailwind - one app serving all three surfaces
 backend/    Python + FastAPI - agents, RAG, pricing engine, migrations, seeds, evals
-infra/      Terraform (7-file AWS stack: VPC, ALB, ECR, ECS Fargate, IAM, Secrets Manager)
+infra/      Terraform (7-file AWS stack, dormant since B-4 - kept as evidence, deployed by nothing)
 docs/       All documentation - see the guide below
 .agents/    Working files for AI coding agents (file map, session memory)
 ```

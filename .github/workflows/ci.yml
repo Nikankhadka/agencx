@@ -1,14 +1,18 @@
 name: CI
 
 # The development gate (T-029): lint/typecheck/test/eval on every PR and every
-# push to main. Kept as a separate workflow from deploy.yml (T-036, the
-# production pipeline) - deploy.yml watches this workflow via workflow_run and
-# only fires once this one is green on main, so a broken build can never
-# reach production.
+# push to an integration branch. Kept as a separate workflow from deploy.yml
+# (the production verification) - deploy.yml watches this workflow via
+# workflow_run and only fires once this one is green on `staging`, so a broken
+# build can never be declared deployed.
+#
+# B-4 corrected the branch list: this repo has `development` (integration) and
+# `staging` (production), and no `main` at all, so the original `[main]` filter
+# meant pushes were never gated and deploy.yml never fired once.
 
 on:
   push:
-    branches: [main]
+    branches: [staging, development]
   pull_request:
 
 # One in-flight run per ref; a newer push cancels the older run.
@@ -55,7 +59,7 @@ jobs:
         working-directory: backend
     services:
       db:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:0.8.6-pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -87,8 +91,27 @@ jobs:
         run: uv run ruff format --check .
       - name: Typecheck
         run: uv run mypy
+
+      # B-4: the suite runs inside the shipping image's `test` stage, not
+      # against the runner's uv environment. The stage installs `dev` but not
+      # `local-ml`, exactly like the image that deploys - so a test that has
+      # quietly come to depend on torch/sentence-transformers fails here rather
+      # than at deploy time. Lint/typecheck stay on the runner above, where the
+      # dependency split is irrelevant and the uv cache is worth having.
+      #
+      # --network host puts the container on the runner's network namespace, so
+      # the `db` service's published 5432 is reachable at localhost, which is
+      # what DATABASE_URL already says. conftest.py creates wren_test and runs
+      # the migrations itself.
+      - name: Build the test image
+        run: docker build --target test -t wren-backend-test .
       - name: Tests
-        run: uv run pytest
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL \
+            -e WREN_APP_DB_PASSWORD \
+            -e SUPABASE_JWT_SECRET \
+            wren-backend-test
 
   infra:
     runs-on: ubuntu-latest
@@ -115,7 +138,7 @@ jobs:
         working-directory: backend
     services:
       db:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:0.8.6-pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

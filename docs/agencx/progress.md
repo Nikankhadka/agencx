@@ -64,6 +64,24 @@ import contracts, typecheck, 78 frontend and 747 backend tests, format-check,
 production build - and the full Playwright suite **71 of 71**, where the
 baseline before the container fix was 56 passing with 8 failing.
 
+**The deploy is B-4** (`spec/10-deploy.md`, 2026-08-24). The whole product
+ships as one Vercel project running two container services - `vercel.json`
+routes `/api/*` and `/health` to the backend and everything else to the
+frontend, so all three surfaces serve from one origin and the browser never
+makes a cross-origin request in production. That supersedes both earlier plans:
+the AWS ECS/Terraform stack (`infra/*.tf`, kept and dormant, still validated by
+CI) and the Google Cloud Run backend `deploy.md` described before. The
+production image stays lean, so the deploy embeds through Google's hosted API
+(`GoogleEmbedder`, truncated to the schema's 384 dims) and reranks through
+Cohere. Two CI/CD breakages were found and fixed in the same ticket: this repo
+has `development` and `staging` and no `main`, so `ci.yml`'s `[main]` push
+filter meant pushes were never gated and `deploy.yml` had never fired once; and
+`deploy.yml` was still deploying the backend to AWS ECS. `staging` is now the
+production branch, `deploy.yml` builds nothing (Vercel's Git integration
+deploys) and smoke-tests the live origin instead, and the backend suite runs
+inside the shipping image's `test` stage so a test that quietly needs
+torch/sentence-transformers fails in CI rather than at deploy.
+
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 `/chats` and `/chats/[id]` are mounted chrome-free until E-1's tab bar re-homes
@@ -148,9 +166,9 @@ open for US-2, the `STATUS_TONE` map.
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Deploy runbook (`docs/agencx/deploy.md`) | CHANGING (B-4) | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what the auto URLs serve. Since D22 that is all three surfaces - the wildcard domain it used to wait on is gone. **B-4 supersedes the Cloud Run half**: both services become containers in one Vercel project on one origin. The doc carries a status banner naming exactly which sections are historical until B-4 lands |
-| Terraform AWS backend | BUILT | `d368b03`; live `terraform apply` is a founder step (needs AWS secrets) |
-| Deploy end-to-end (both services on Vercel) | CHANGING (B-4) | was BLOCKED on founder AWS/Vercel/Supabase credentials. B-4 is the ticket that ships it: both services as containers built from this repo's Dockerfiles into one Vercel project, CI and deploy retriggered on `development` and `staging`, and a post-deploy smoke test. Still needs Supabase and Vercel accounts from the founder |
+| Deploy runbook ([deploy.md](deploy.md)) | BUILT | `b3e578d`, rewritten by B-4 for the Vercel topology: one project, two container services, hosted Supabase, and the free LLM, embedding and rerank tiers. The status banner is gone because the procedure it warned about is now the current one. Since D22 the auto URL serves all three surfaces |
+| Terraform AWS backend | BUILT | `d368b03`; superseded by B-4 and dormant. `infra/*.tf` is kept as evidence and still validated by the `infra` job in `ci.yml`, so it cannot rot silently, but nothing deploys through it |
+| Deploy end-to-end (both services on Vercel) | BUILT | B-4: `vercel.json` (two services plus rewrites), `frontend/Dockerfile` with `output: "standalone"`, `backend/Dockerfile` retargeted with a `test` stage, `GoogleEmbedder`, the 4MB upload cap under the platform body limit, and both workflows pointed at branches that exist. The live deploy is still a founder step (Supabase project, Vercel import, keys); `deploy.yml` no-ops with a notice until `SMOKE_TEST_BASE_URL` exists |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
 | Eval report | BUILT | evidence in `docs/archive/artifacts/eval-report.md` |
 | Security write-up | BUILT | evidence in `docs/archive/artifacts/security.md` |
@@ -188,7 +206,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
-| B-4 Deploy as two containers behind one Vercel origin (`10-deploy.md`) | in progress | branch `feat/deploy-containers-cicd`; supersedes the Cloud Run half of `deploy.md` and the AWS ECS target in `architecture.md` |
+| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); the live deploy stays a founder step |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
