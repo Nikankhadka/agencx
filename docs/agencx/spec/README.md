@@ -53,13 +53,19 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | Phase file | Tickets |
 |---|---|
 | `01-foundation.md` | A-1, A-2 |
-| `02-onboarding.md` | O-1, O-2, O-5 |
+| `02-onboarding.md` | O-1, O-2, O-5, O-6, O-7, O-8, O-9 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
 | `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5, C-6 |
-| `05-business-page.md` | E-1, E-4, E-5, E-2 |
+| `05-business-page.md` | E-1, E-4, E-5, E-2, E-6 |
 | `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
 | `07-hygiene.md` | F-1 |
 | `08-deferred.md` | B-2, D-1, D-3, D-4 |
+| `09-devex.md` | K-1 |
+
+Tickets added during the build keep the numbering of the phase they belong to
+rather than starting a new file: O-6 to O-9 and E-6 all came out of founder
+walkthroughs after their phase had closed, and K-1 is developer experience
+rather than product, so it sits outside the pillar order below.
 
 ## Phases and dependencies
 
@@ -109,6 +115,11 @@ the final escalation/takeover behaviour rather than the terminal one.
 |---|---|
 | O-1 | Onboarding: one tool + LLM turn loop |
 | O-2 | Login-in-chat: email + 6-digit code |
+| O-5 | Onboarding UI: port the prototype thread |
+| O-6 | Chips, the contact widget, and the ABN beat |
+| O-7 | A link that cannot be read says so, and says why |
+| O-8 | Go-live lands on Home without a blank screen |
+| O-9 | An ABN the owner can read, and correct |
 
 ### Chat spine (`03-chat-spine.md`)
 
@@ -137,7 +148,10 @@ the final escalation/takeover behaviour rather than the terminal one.
 
 | Id | Title |
 |---|---|
-| E-1 | Tenant console -> Chat + Business |
+| E-1 | Tenant console -> Home + Chats + Business |
+| E-4 | Home: the greeting and the brief |
+| E-5 | Business hub + Booking page |
+| E-6 | The Booking page as the customer's view |
 | E-2 | Hide advanced screens, keep code |
 
 ### Polish (`06-polish.md`)
@@ -156,6 +170,12 @@ the final escalation/takeover behaviour rather than the terminal one.
 | Id | Title |
 |---|---|
 | F-1 | Delete dead agent code |
+
+### Developer experience (`09-devex.md`)
+
+| Id | Title |
+|---|---|
+| K-1 | Everything runs in containers |
 
 ### Deferred (`08-deferred.md`)
 
