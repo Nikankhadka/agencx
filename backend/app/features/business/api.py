@@ -1,9 +1,10 @@
 """E-6: the Booking page - the business as a customer finds it.
 
-One read for the whole screen, a write for the four links, and the cover photo
-in and out. The Services rows are derived in ``offerings.py``, where the money
-rule is held by construction: no model runs on this path, and a price is a
-verbatim slice of the owner's own line.
+One read for the whole screen, a write for the four links, the cover photo in
+and out, and (O-9) the two profile fields that stay correctable after go-live.
+The Services rows are derived in ``offerings.py``, where the money rule is held
+by construction: no model runs on this path, and a price is a verbatim slice of
+the owner's own line.
 """
 
 from __future__ import annotations
@@ -12,9 +13,10 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.features.business import controller, service
+from app.onboarding.beats import NO_ABN
 from app.shared import auth
 
 router = APIRouter(prefix="/api/business", tags=["business"])
@@ -81,6 +83,75 @@ async def patch_links(
     current = await service.read_links(tenant_id=admin.tenant_id)
     current.update(body.links)
     return await service.write_links(tenant_id=admin.tenant_id, links=current)
+
+
+class ProfileUpdate(BaseModel):
+    """The ABN and its GST answer - the slice of the profile that stays
+    correctable after go-live.
+
+    Extra keys are refused rather than ignored: the rest of the profile is
+    frozen at confirm, and a request that thought otherwise should hear so.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    abn: str | None = None
+    gst: str | None = None
+
+    def normalized(self) -> dict[str, str]:
+        """The fields as they are stored, or a ValueError an owner can read.
+
+        Not field validators: pydantic prefixes those with "Value error," and
+        this message is rendered verbatim under the field the owner is typing
+        in.
+        """
+        fields: dict[str, str] = {}
+        if self.abn is not None:
+            fields["abn"] = _normalize_abn(self.abn)
+        if self.gst is not None:
+            gst = self.gst.strip().lower()
+            if gst not in ("yes", "no"):
+                raise ValueError("GST is either yes or no.")
+            fields["gst"] = gst
+        return fields
+
+
+def _normalize_abn(value: str) -> str:
+    """Stored as the eleven digits, the way the interview stores them.
+
+    Cleared means "no ABN" - the same stated answer the interview's "No, not
+    yet" chip leaves - rather than "never asked", which is what an empty string
+    means everywhere else in the draft.
+    """
+    if not value.strip() or value.strip().lower() == NO_ABN:
+        return NO_ABN
+    digits = "".join(char for char in value if char.isdigit())
+    if len(digits) != 11:
+        raise ValueError("An ABN is 11 digits.")
+    return digits
+
+
+@router.get("/profile", response_model=dict[str, str])
+async def get_profile(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> dict[str, str]:
+    return await service.read_profile(tenant_id=admin.tenant_id)
+
+
+@router.patch("/profile", response_model=dict[str, str])
+async def patch_profile(
+    body: ProfileUpdate,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> dict[str, str]:
+    try:
+        fields = body.normalized()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    if not fields:
+        return await service.read_profile(tenant_id=admin.tenant_id)
+    return await service.write_profile(tenant_id=admin.tenant_id, fields=fields)
 
 
 @router.put("/cover", status_code=status.HTTP_204_NO_CONTENT)

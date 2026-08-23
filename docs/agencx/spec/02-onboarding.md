@@ -310,6 +310,9 @@ Five deviations are deliberate and documented in code:
 4. No "Already with Agencx? Log in" link - O-2 made login and signup one path
 5. Chips keep a 44px touch target (prototype ~29px) - `frontend.md` section 10
 
+O-9 adds a sixth, in the Settings sheet rather than the thread: GST is a chip
+pair, not the prototype's toggle.
+
 The prototype's 46ms-per-word reveal is not ported: real SSE `token` events
 already pace the text, and a client-side word queue would fight the stream.
 
@@ -481,3 +484,96 @@ Measured on the running stack: confirm to `/home` in 827ms.
 
 Not covered by a test: there is no component-test harness in this repo, and the
 only route to this code is an LLM-driven e2e interview. Verified by hand.
+
+---
+
+## O-9: An ABN the owner can read, and correct
+
+### Summary
+
+Show the ABN and GST answer back on a Settings row, and let the owner fix them
+in the prototype's "ABN & Tax" edit sheet.
+
+### Why
+
+O-6 taught the interview to ask for an ABN and a GST registration. Both land in
+the profile and are rendered by nothing: of the nine captured fields only three
+reach a screen (`name` on Home, `business_name` on the Booking page, and
+`services` + `hours` fused into its tagline). So the product asks a small
+business for its tax number and then never shows it - which is worse than not
+asking, because a wrong answer can never be corrected. The extract prompt tells
+the model to store the digits, so it is held as `51824753556`; that only
+matters once something displays it, which is the point of this ticket.
+
+### User stories
+
+**US-1 - I can see what you have** (owner)
+
+- [x] Settings holds an "ABN & Tax" row under Knowledge
+- [x] Its line is the prototype's summary (`setSummary('abn')`):
+  `51 824 753 556 · GST registered` / `· Not GST registered`
+- [x] An owner who said they have no ABN reads "No ABN", not the `none`
+  sentinel, and is not told the answer to a GST question they never heard
+- [x] Nothing captured reads "Not set"
+- [x] The stored digits render grouped - the formatting is the screen's job,
+  never what is written down
+
+**US-2 - I can fix it** (owner)
+
+- [x] The row opens the prototype's edit sheet (`openSettingsEdit('abn')`): a
+  masked ABN field and the GST answer
+- [x] The mask is the interview's, because it is now literally the same
+  function - `formatMask()` left `BeatComposer` and became `lib/abn.ts`
+- [x] GST is asked only of a business that has an ABN, the same condition the
+  interview's conditional beat carries
+- [x] Clearing the field is the stated "I do not have one", not "never asked"
+- [x] An ABN that is not eleven digits is refused in the owner's words ("An ABN
+  is 11 digits."), with the sheet still open and the typed value intact
+- [x] The correction survives a reload
+
+**US-3 - the two copies stay together** (engineering)
+
+- [x] `PATCH /api/business/profile` writes `config->profile` (what confirm
+  writes, and what the E-5 spec names) and `config->onboarding.draft` (what the
+  Booking page reads) in one statement
+- [x] A field outside the editable slice is refused, not ignored
+- [x] `GET /api/business/profile` reads the profile, falling back per field to
+  the draft
+
+### Deliberately not done
+
+The rest of the profile - business name, hours, what you offer, how customers
+reach you - stays frozen after go-live. `config->profile` is only ever written
+at confirm, and that is the real gap here; the ABN slice was chosen over
+building the settings tree the PRD forbids. It is written down rather than
+implied: an owner who moves premises still cannot say so, and that wants its
+own ticket with its own screen.
+
+`ShowBack.tsx` is deleted in this ticket. It had been orphaned since O-5 dropped
+its import, its field list predates these beats, and the profile show-back it
+was written for is not what is being built here.
+
+### Deviation from the prototype
+
+GST is a `Chip` pair (Yes / Not yet), not the prototype's `se_toggleField`
+switch. It is the same question the interview asks, asked with the control the
+interview asks it with, and it keeps a switch primitive out of the system for
+one boolean. Recorded with O-5's list above.
+
+### Files touched
+
+- `backend/app/features/business/api.py`, `service.py`, `tests/test_business_api.py`
+- `frontend/src/lib/abn.ts` (new) + `abn.test.ts` (new)
+- `frontend/src/app/(tenant-admin)/(console)/settings/page.tsx` +
+  `components/AbnSheet.tsx` (new)
+- `frontend/src/components/ui/RowLink.tsx` (a row can open a sheet)
+- `frontend/src/app/(tenant-admin)/(console)/onboarding/components/BeatComposer.tsx`
+  (uses the promoted formatter), `ShowBack.tsx` (deleted)
+- `frontend/e2e/settings-abn.spec.ts` (new)
+
+### Definition of done
+
+- [x] The row reads back what was captured, formatted
+- [x] The sheet corrects it, and the correction survives a reload
+- [x] Both jsonb copies move together
+- [x] `make check` green, the new e2e green

@@ -5,6 +5,7 @@ import { CommandPill } from "@/components/ui/CommandPill";
 import { Chip } from "@/components/ui/Chip";
 import { FieldPill } from "@/components/ui/FieldPill";
 import { PhonePill } from "@/components/ui/PhonePill";
+import { formatAbn } from "@/lib/abn";
 import {
   ACCEPTED_UPLOAD_EXTENSIONS,
   type InputSpec,
@@ -74,19 +75,6 @@ export function BeatComposer({
 
   const kind = swapped ?? input.kind;
 
-  /**
-   * The prototype's ABN mask: `XX XXX XXX XXX`, grouped as the owner types,
-   * armed at exactly 11 digits. The value sent is the formatted string - the
-   * owner's own rendering of their own number.
-   */
-  function formatMask(value: string) {
-    const d = value.replace(/\D/g, "").slice(0, 11);
-    if (d.length <= 2) return d;
-    if (d.length <= 5) return `${d.slice(0, 2)} ${d.slice(2)}`;
-    if (d.length <= 8) return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5)}`;
-    return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
-  }
-
   const chips = [
     ...(input.suggest_owner_email && ownerEmail
       ? [{ label: ownerEmail, value: ownerEmail, dashed: false, widget: null }]
@@ -131,7 +119,7 @@ export function BeatComposer({
       ) : kind === "masked" ? (
         <FieldPill
           value={masked}
-          onChange={(value) => setMasked(formatMask(value))}
+          onChange={(value) => setMasked(formatAbn(value))}
           onSubmit={(value) => submitText(value)}
           placeholder={input.mask ?? ""}
           disabled={busy}

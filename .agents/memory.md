@@ -68,6 +68,7 @@
 - **psql-based RLS experiments**: must wrap `set_config(..., true)` + queries in one `begin/commit` - autocommit makes transaction-local settings vanish per statement.
 - **Always run migrator against the real dev DB** after adding a migration - the test suite applying migrations fresh per run says nothing about the dev DB state.
 - **Demo env files**: pydantic-settings takes the FIRST occurrence of a duplicate key. Never APPEND a duplicate KEY= to an env file expecting it to win.
+- **The business profile is kept in two jsonb copies** (2026-08-23, O-9): `tenant_config.config->'profile'` is written once, at onboarding confirm, and `config->'onboarding'.draft` is what the interview accumulates - and what the Booking page and `read_profile` actually read. Anything that edits a profile field must write BOTH (`features/business/service.py::write_profile` does it in one statement); writing one is how they silently diverge. Only `abn`/`gst` have an editor today - the other seven fields are frozen after go-live.
 
 ### Frontend
 
@@ -78,6 +79,8 @@
 - **Landing/marketing e2e specs pin h1 copy and absolute hrefs verbatim** - any copy change MUST update the spec in the SAME commit or e2e goes red.
 - **Embedded NUL byte (`\x00`)**: can end up in a source file from a generated template-literal escape. `git diff` treats the file as binary, hiding the diff. Check with `python3 -c "print(b'\\x00' in open(path,'rb').read())"`.
 - **Live-verify authed pages without real Supabase**: mint HS256 JWT, POST to /api/tenants, inject session into localStorage under `sb-<host>-auth-token`. See full recipe in archive.
+- **`Sheet` never unmounts** (it toggles `inert` and translates off-screen so it can animate), so Playwright still calls a closed sheet visible - `toBeHidden()` on the dialog role hangs. Assert on something inside it instead: the sheets render their body only while open, so `expect(page.getByTestId(<a field>)).toHaveCount(0)` is what "closed" means. The knowledge sheet appears to pass a `toBeHidden` check only because its title changes when it closes.
+- **Next mounts its own empty `role="alert"`** (the route announcer), so a bare `getByRole("alert")` is ambiguous. Scope alert assertions to the dialog or region under test (O-9).
 
 ### Backend
 

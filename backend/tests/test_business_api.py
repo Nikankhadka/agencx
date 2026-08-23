@@ -220,3 +220,83 @@ async def test_the_page_needs_a_session(client: httpx.AsyncClient) -> None:
     ):
         response = await getattr(client, method)(path)
         assert response.status_code == 401, f"{method} {path}"
+
+
+async def _config_of(tenant_id: uuid.UUID) -> dict[str, Any]:
+    import json
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select config from tenant_config where tenant_id = $1", tenant_id
+        )
+    return json.loads(raw) if isinstance(raw, str) else (raw or {})
+
+
+async def test_profile_patch_moves_both_keys_together(client: httpx.AsyncClient) -> None:
+    """`config->profile` is what confirm writes; `config->onboarding.draft` is
+    what the Booking page reads. They are allowed to differ already - a
+    correction must not be the thing that makes them differ."""
+    headers, tenant_id = await _signup(client)
+    saved = await client.patch(
+        "/api/business/profile",
+        json={"abn": "51 824 753 556", "gst": "yes"},
+        headers=headers,
+    )
+    assert saved.status_code == 200, saved.text
+    # Stored as the digits, the way the interview stores them - the formatting
+    # is the screen's job.
+    assert saved.json() == {"abn": "51824753556", "gst": "yes"}
+
+    read_back = await client.get("/api/business/profile", headers=headers)
+    assert read_back.json() == {"abn": "51824753556", "gst": "yes"}
+
+    config = await _config_of(tenant_id)
+    assert config["profile"]["abn"] == "51824753556"
+    assert config["onboarding"]["draft"]["abn"] == "51824753556"
+    assert config["profile"]["gst"] == "yes"
+    assert config["onboarding"]["draft"]["gst"] == "yes"
+
+
+async def test_profile_patch_leaves_absent_fields_alone(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    await client.patch(
+        "/api/business/profile", json={"abn": "51824753556", "gst": "yes"}, headers=headers
+    )
+    saved = await client.patch("/api/business/profile", json={"gst": "no"}, headers=headers)
+    assert saved.json() == {"abn": "51824753556", "gst": "no"}
+
+
+async def test_a_cleared_abn_is_the_stated_no(client: httpx.AsyncClient) -> None:
+    """Blank means "I do not have one", the same answer the interview's "No,
+    not yet" chip leaves - not "never asked"."""
+    headers, _ = await _signup(client)
+    saved = await client.patch("/api/business/profile", json={"abn": "  "}, headers=headers)
+    assert saved.json()["abn"] == "none"
+
+
+@pytest.mark.parametrize("abn", ["123", "5182475355", "518247535567", "abc"])
+async def test_an_abn_must_be_eleven_digits(client: httpx.AsyncClient, abn: str) -> None:
+    headers, _ = await _signup(client)
+    response = await client.patch("/api/business/profile", json={"abn": abn}, headers=headers)
+    assert response.status_code == 422, response.text
+
+
+async def test_gst_takes_only_yes_or_no(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    response = await client.patch("/api/business/profile", json={"gst": "maybe"}, headers=headers)
+    assert response.status_code == 422
+
+
+async def test_a_field_outside_the_editable_slice_is_refused(client: httpx.AsyncClient) -> None:
+    """The rest of the profile is frozen at confirm. A request that thought
+    otherwise hears so, instead of being quietly ignored."""
+    headers, _ = await _signup(client)
+    response = await client.patch(
+        "/api/business/profile", json={"business_name": "Renamed Co"}, headers=headers
+    )
+    assert response.status_code == 422
+
+
+async def test_the_profile_needs_a_session(client: httpx.AsyncClient) -> None:
+    assert (await client.get("/api/business/profile")).status_code == 401
+    assert (await client.patch("/api/business/profile", json={"gst": "no"})).status_code == 401

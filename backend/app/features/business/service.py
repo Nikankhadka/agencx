@@ -89,3 +89,52 @@ async def delete_cover(*, tenant_id: UUID) -> None:
             tenant_id,
             COVER_KIND,
         )
+
+
+# O-9: the slice of the profile an owner can correct after go-live. The rest of
+# the profile is written once, at confirm, and stays frozen - the ticket says
+# why, and a settings tree that edits all of it is not being built.
+PROFILE_FIELDS = ("abn", "gst")
+
+
+async def read_profile(*, tenant_id: UUID) -> dict[str, str]:
+    """The editable profile fields, empty string where nothing was captured.
+
+    Reads `config->profile` (what confirm writes) and falls back per field to
+    `config->onboarding.draft` (what an interview in flight has), so a value is
+    shown whichever half of the pair holds it.
+    """
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select config from tenant_config where tenant_id = $1", tenant_id
+        )
+    config = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    profile = config.get("profile") or {}
+    draft = (config.get("onboarding") or {}).get("draft") or {}
+    return {key: str(profile.get(key) or draft.get(key) or "") for key in PROFILE_FIELDS}
+
+
+async def write_profile(*, tenant_id: UUID, fields: dict[str, str]) -> dict[str, str]:
+    """Merge `fields` into both places the profile is kept.
+
+    `config->profile` is what confirm writes and what the E-5 spec names;
+    `config->onboarding.draft` is what the Booking page reads. They are already
+    allowed to diverge - this does not add a second way for them to, so one
+    statement moves both. Each object is rebuilt from itself with `||` so a
+    tenant missing either key gains it rather than silently keeping the old
+    value.
+    """
+    patch = json.dumps({key: value for key, value in fields.items() if key in PROFILE_FIELDS})
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set config = jsonb_set("
+            "  jsonb_set(config, '{profile}', "
+            "    coalesce(config->'profile', '{}'::jsonb) || $2::jsonb, true), "
+            "  '{onboarding}', "
+            "    coalesce(config->'onboarding', '{}'::jsonb) || jsonb_build_object('draft', "
+            "      coalesce(config->'onboarding'->'draft', '{}'::jsonb) || $2::jsonb), true"
+            "), updated_at = now() where tenant_id = $1",
+            tenant_id,
+            patch,
+        )
+    return await read_profile(tenant_id=tenant_id)
