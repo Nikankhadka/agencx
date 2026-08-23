@@ -35,7 +35,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,6 +44,7 @@ from starlette.concurrency import run_in_threadpool
 from app.llm.dependency import get_llm_provider
 from app.llm.provider import LLMProvider
 from app.shared import db
+from evals._git import git_sha
 from evals.generation_eval import (
     CitationVerdict,
     ClaimVerdict,
@@ -228,21 +228,14 @@ async def run_calibration(
     return metrics, comparisons
 
 
-def _git_sha() -> str:
-    result = subprocess.run(  # noqa: S603 - fixed args, no shell, dev-tool only
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
-    )
-    return result.stdout.strip()
-
-
 async def _write_eval_run(conn: Any, tenant_id: Any, metrics: dict[str, float]) -> None:
-    git_sha = await run_in_threadpool(_git_sha)
+    sha = await run_in_threadpool(git_sha)
     await conn.execute(
         "insert into eval_runs (tenant_id, run_type, metrics, git_sha) "
         "values ($1, 'generation', $2, $3)",
         tenant_id,
         json.dumps(metrics),
-        git_sha,
+        sha,
     )
 
 

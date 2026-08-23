@@ -4,8 +4,12 @@ decides pass/fail."""
 
 from __future__ import annotations
 
+import subprocess
+from subprocess import CompletedProcess
+
 import pytest
 
+from evals import _git as git_module
 from evals import run_gate as run_gate_module
 from evals.run_gate import GateReport, absolute_pass, regression_pass
 
@@ -94,3 +98,27 @@ async def test_absolute_gates_run_even_when_llm_is_skipped(
     skipped = [r for r in report.results if "skipped" in r.detail]
     assert skipped, "the judged gates should report as skipped, not silently vanish"
     assert all("--skip-llm" in r.detail for r in skipped)
+
+
+def test_git_sha_is_empty_when_git_is_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """B-4: the production image and the `test` stage built from it carry no
+    git and no `.git/`, so an eval run there must record an empty SHA rather
+    than crash on exec. Found by running the suite inside that image, where
+    every eval that writes a run row died with FileNotFoundError."""
+
+    def _no_git(*args: object, **kwargs: object) -> object:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(subprocess, "run", _no_git)
+    assert git_module.git_sha() == ""
+
+
+def test_git_sha_is_empty_outside_a_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The other unknowable case, already covered by check=False: git exists but
+    the working tree is not a repository, so it exits non-zero with no stdout."""
+
+    def _not_a_repo(*args: object, **kwargs: object) -> CompletedProcess[str]:
+        return CompletedProcess(args=["git"], returncode=128, stdout="", stderr="fatal: not a git")
+
+    monkeypatch.setattr(subprocess, "run", _not_a_repo)
+    assert git_module.git_sha() == ""
