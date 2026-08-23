@@ -48,6 +48,12 @@ dev-frontend: ## Start the frontend container only (:3000)
 	@printf "\033[0;32m>>> Starting frontend\033[0m\n"
 	$(DC) up -d frontend
 
+.PHONY: dev-reset
+dev-reset: ## Wipe the frontend build cache and restart it (a new theme token has no effect)
+	@printf "\033[0;32m>>> Clearing the frontend build cache\033[0m\n"
+	$(FE_) find /app/.next -mindepth 1 -delete
+	$(DC) restart frontend
+
 .PHONY: stop
 stop: ## Stop all containers (data survives - volumes are kept)
 	@printf "\033[0;32m>>> Stopping all services\033[0m\n"

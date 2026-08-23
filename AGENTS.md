@@ -31,6 +31,7 @@ All verified. Everything runs in containers (F-3): the host needs only Docker. R
 | Dev server (frontend only) | `make dev-frontend` | `docker compose up -d frontend` |
 | Dev server (backend only) | `make dev-backend` | `docker compose up -d backend` |
 | Stop all containers (data kept) | `make stop` / `make services.stop` | `docker compose down --remove-orphans` |
+| Clear the frontend build cache | `make dev-reset` | `docker compose run --rm --no-deps frontend find /app/.next -mindepth 1 -delete` + `docker compose restart frontend` (a new `@theme` token that does nothing - see `docs/agencx/running.md`) |
 | Full reset (containers + volumes + dev images) | `make clean` | `docker compose down -v --remove-orphans --rmi local` |
 | Install all deps into their volumes | `make install` | `docker compose build` + `uv sync` + `npm ci` inside containers |
 | Local database | `make db` | `docker compose up -d db` |

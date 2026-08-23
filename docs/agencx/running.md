@@ -106,6 +106,19 @@ provisional tenant holding that auth user. Drop the provisional tenants
 `make dev && make seed` first - the Playwright container drives whatever is
 already running, it starts nothing itself.
 
+**A new theme token has no effect** (text renders at 16px, a colour stays the
+old one, a radius does not change). Turbopack keeps the set of files it scans
+for `@theme` inside `/app/.next`, which is a named volume - so a stale scan
+survives `docker restart`, and survives deleting `/app/.next/cache`. Only wiping
+the whole directory clears it, which is all `make dev-reset` does (a few
+seconds, and nothing but regenerable state). Reach for it before suspecting the
+code: if the token still has no effect afterwards, it is the token or the class
+name, not the cache - check the value is in `frontend/src/styles/theme.css` and
+that the utility namespace actually exists (Tailwind v4 has no `--duration`
+namespace, for one, so `duration-fast` silently compiles to nothing). `make
+clean` clears the same cache, along with every other volume, the database
+included.
+
 **Backend container restarts on boot.** Usually a bad `backend/.env`: the
 migrate runner fails closed on the `change-me` password placeholder, and empty
 required values abort startup off local. `make clean && make demo` regenerates
