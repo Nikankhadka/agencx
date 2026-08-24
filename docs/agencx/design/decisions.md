@@ -18,7 +18,7 @@ the Agencx build.
 | 7 | "No settings screen, ever" | Second tab is **Business** - shown-back profile and knowledge | The owner must be able to trust and correct what the agent knows; it is not a settings tree |
 | 8 | `AGENCX` mode value | `PLATFORM` in `payment_processing_mode` | Brand names in schema become rename migrations; settle before any row exists |
 | 9 | `discovery_mode_teach_me` fork | Removed | "We don't serve your trade" contradicts I8; the geographic fork survives |
-| 10 | Hosting "chosen" (Cloudflare) | Backend: ECS via Wren's Terraform. Frontend host **open**, decided at the Phase 5 ticket | Do not lock in a host before the frontend's own phase exists to decide it |
+| 10 | Hosting "chosen" (Cloudflare) | **Closed by B-4:** both services are containers in one Vercel project behind one origin. The ECS Terraform stays dormant, still CI-validated, deployed by nothing | The frontend host stayed open until its own phase could decide it; B-4 is that phase, and it closed the backend target too - one provider, one origin, no CORS surface |
 | 11 | Wren copy ported verbatim | Copy rewritten inside the porting ticket, never "later" | Wren surfaces said "AI"/"agent"; user-facing copy never does |
 
 ## New decisions (D12-D17)

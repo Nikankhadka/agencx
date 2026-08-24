@@ -92,7 +92,7 @@ to have something fast to protect.
 - `backend/app/services/context_package.py` (deterministic assembly - no
   model calls; sits in `services/`)
 - In-process cache (module-level dict + lock; single-worker dev is fine,
-  `ponytail:` note: per-process cache means multi-worker ECS will
+  `ponytail:` note: per-process cache means multi-worker container hosting will
   reassemble per worker - acceptable at Stage 1 scale, upgrade path is a
   shared cache keyed identically)
 - The whole-corpus path reuses the O-4 threshold check

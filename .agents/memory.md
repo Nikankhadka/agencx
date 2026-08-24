@@ -111,7 +111,7 @@
 - **A new `@theme` token silently does nothing until `/app/.next` is wiped** (2026-08-23): Turbopack's `@theme` scan set lives in the `wren-next-cache` VOLUME, so it survives `docker restart` and survives `rm -rf /app/.next/cache` - the whole directory has to go. `make dev-reset` does exactly that and restarts the frontend; cost about a minute of rebuild. This burned an hour during E-6, with a token rendering at the 16px fallback while the CSS was correct.
 - **torch resolves from the CPU index** (`[tool.uv.sources]` in backend/pyproject.toml, torch declared as a DIRECT local-ml dep - uv routes sources only for direct deps). PyPI linux wheels drag ~5GB of CUDA packages; CPU index ships identical runtime. Regenerate lock via `uv lock` after touching sources.
 - **Dev container PATH must include `/app/.venv/bin`** (backend) - uv installs there but bare `python` otherwise resolves to system python with zero deps. Same class of bug: frontend CMD needs node_modules/.bin on PATH or `next` is "not found".
-- **The e2e runner needs git** (eval `_git_sha()` shells out); installed in Dockerfile.dev since hosts/CI always have it.
+- **Git is optional for the eval gate, not required** (corrected 2026-08-24): `evals/_git.py::git_sha()` stamps `eval_runs.git_sha` and returns `""` when git is missing or the tree is not a repository. Dockerfile.dev still installs git so dev runs record a real SHA - that is a nicety, not a dependency. The old note here claimed "hosts/CI always have it"; see the Deploy (B-4) entry for why that was wrong.
 - **E2E suite has pre-existing order-dependent flakes** (~2-4 specs per run fail differently each time; reproduced identically with a native runner against the same stack - not a containerization regression). Candidate follow-up ticket.
 - **Stale volume `wren_wren-pgdata`** predates the rename to project name `agencx`; safe to delete manually if disk matters, not touched by make targets.
 
@@ -139,6 +139,14 @@
   `ModuleNotFoundError`, by design. Every real import of
   sentence-transformers/torch in `app/` is lazy and inside a function, which is
   what lets the lean image import the modules at all.
+- **The `test` stage has no git, and that broke every eval that writes a run row**
+  (`54cc0cd`, the fix that followed B-4). The lean production image carries no git
+  binary and `.dockerignore` keeps `.git/` out of the build context, so the shell-out
+  cannot succeed there by construction. `subprocess.run(..., check=False)` does not
+  cover this: a missing binary fails at exec, before there is a return code to check.
+  The helper had been copy-pasted byte-for-byte into six eval modules, so the guard
+  went into one shared `evals/_git.py` and the six copies went away. **The general
+  lesson: `check=False` is not the same as "this cannot raise".**
 
 ### LLM and eval
 

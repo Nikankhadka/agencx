@@ -157,6 +157,8 @@ cannot rot silently, but nothing deploys through it.
   platform limit
 - `backend/tests/test_health.py`: the CORS allow/reject matrix over the narrowed
   regex
+- `backend/tests/test_run_gate.py`: `git_sha()` returns `""` both when git is not
+  installed (the deployed shape) and when the tree is not a repository (`54cc0cd`)
 - `make ci` green; full Playwright suite green (71/71 at the K-1 merge)
 - `docker build --target test` + pytest inside it, which is what CI now runs
 
@@ -169,13 +171,21 @@ cannot rot silently, but nothing deploys through it.
 - `backend/pyproject.toml`, `backend/uv.lock`, `frontend/package.json`,
   `frontend/package-lock.json`, `docker-compose.yml`
 - `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`
-- `backend/tests/test_google_embedder.py` (new), `backend/tests/test_knowledge_api.py`
-- `docs/agencx/deploy.md`, `docs/agencx/progress.md`, `.env.example`
+- `backend/.dockerignore` - stopped excluding `tests/`, without which the `test`
+  stage could not have run a suite at all
+- `backend/tests/test_google_embedder.py` (new), `backend/tests/test_knowledge_api.py`,
+  `backend/tests/test_health.py`
+- `backend/evals/_git.py` (new, `54cc0cd`) and the six eval modules that had each
+  copy-pasted the same `_git_sha()`
+- `docs/agencx/deploy.md`, `docs/agencx/progress.md`, `docs/agencx/architecture.md`,
+  `docs/agencx/spec/08-deferred.md`, `README.md`, `AGENTS.md`, `.agents/memory.md`,
+  `.env.example`
 
 ### Definition of done
 
-- [ ] Three surfaces serve from one origin, no cross-origin request in prod
-- [ ] Lean image embeds through Google at the schema's dimension
-- [ ] CI runs the backend suite in the shipping image's `test` stage
-- [ ] Both workflows fire on branches that exist
-- [ ] A production deploy smoke-tests itself
+- [x] Three surfaces serve from one origin, no cross-origin request in prod
+- [x] Lean image embeds through Google at the schema's dimension
+- [x] CI runs the backend suite in the shipping image's `test` stage
+- [x] Both workflows fire on branches that exist
+- [ ] A production deploy smoke-tests itself - **founder-blocked**: the job no-ops
+  until `SMOKE_TEST_BASE_URL` is set, and `staging` has not been deployed yet

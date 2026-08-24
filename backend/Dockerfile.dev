@@ -24,8 +24,9 @@ ENV PYTHONUNBUFFERED=1 \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# The eval gate stamps eval_runs.git_sha by shelling out to git; hosts and CI
-# always have it, so the dev container must too.
+# The eval gate stamps eval_runs.git_sha by shelling out to git. Since 54cc0cd
+# that shell-out degrades to an empty SHA when git is absent, so this install is
+# what makes a dev eval run record a real SHA - a nicety, not a dependency.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git \
   && rm -rf /var/lib/apt/lists/*

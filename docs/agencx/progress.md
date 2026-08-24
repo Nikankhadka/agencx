@@ -82,6 +82,16 @@ deploys) and smoke-tests the live origin instead, and the backend suite runs
 inside the shipping image's `test` stage so a test that quietly needs
 torch/sentence-transformers fails in CI rather than at deploy.
 
+That `test` stage caught something on its very first run, and `54cc0cd` fixed it:
+every eval that writes an `eval_runs` row died with `FileNotFoundError: 'git'`. The
+lean image carries no git binary and `.dockerignore` keeps `.git/` out of the build
+context, so the shell-out cannot succeed there by construction, and the `check=False`
+already on it does not help - a missing binary fails at exec, before there is a return
+code. The helper had been copy-pasted byte for byte into six eval modules, so the guard
+went into one shared `evals/_git.py::git_sha()` and the six copies went: 60 lines
+deleted, 18 added, two unit tests pinning both ways a SHA can be unknowable. An eval
+run in the image now records an empty SHA instead of crashing.
+
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 `/chats` and `/chats/[id]` are mounted chrome-free until E-1's tab bar re-homes
@@ -206,7 +216,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
-| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); the live deploy stays a founder step |
+| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | `21da213` + `54cc0cd` (eval git shell-out); supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); the live deploy stays a founder step |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
