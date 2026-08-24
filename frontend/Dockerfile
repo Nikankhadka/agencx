@@ -2,7 +2,7 @@
 # container is Dockerfile.dev (toolchain only, deps in a named volume, source
 # bind-mounted); this one is self-contained and is the artifact that ships.
 
-FROM node:22.23.2-bookworm-slim AS deps
+FROM node:24.19.0-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:22.23.2-bookworm-slim AS builder
+FROM node:24.19.0-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 
 RUN npm run build
 
-FROM node:22.23.2-bookworm-slim AS runtime
+FROM node:24.19.0-bookworm-slim AS runtime
 
 WORKDIR /app
 

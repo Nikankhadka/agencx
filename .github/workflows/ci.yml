@@ -34,10 +34,14 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # Pinned to the same patch frontend/Dockerfile builds on, so CI cannot
+      # test one runtime and ship another. A floating "24" would drift from the
+      # image between runs, which is the thing B-4's exact-pin rule exists to
+      # stop. Node 24 (Krypton) is the Active LTS line, supported to 2028-04-30.
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "24.19.0"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
@@ -72,9 +76,9 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - name: Sync deps
@@ -119,8 +123,8 @@ jobs:
       run:
         working-directory: infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.7.5"
       - name: Format check
@@ -161,9 +165,9 @@ jobs:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_MODEL: google/gemma-4-26b-a4b-it:free
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - name: Sync deps
@@ -171,7 +175,7 @@ jobs:
       # Cache the HuggingFace models the local embedder/reranker download, so
       # the deterministic gate doesn't re-fetch ~180MB every run.
       - name: Cache HF models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-models-bge-small-minilm-v1
