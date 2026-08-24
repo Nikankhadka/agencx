@@ -110,6 +110,16 @@
 - **`next dev` briefly holds two copies of a streamed page** (2026-08-23): on some loads of the customer surface the server tree and the client tree are both in the DOM for up to ~half a second, then it settles to one. Anything that addresses an element right after `goto` gets a Playwright strict-mode violation ("resolved to 2 elements"), intermittently and on a different test each run. The tell is that one copy carries React's SSR id (`_r_0_`) and no `autofocus`, the other a client id and the attribute. Fix in the spec, not the app - but a one-shot `toHaveCount(1)` before the fill is NOT enough (B-4): the count goes 1 -> 2 -> 1 as hydration lands, so a guard that passed can be stale by the time the next call re-resolves the locator. Wrap the guard and the interaction together in `await expect(async () => {...}).toPass()` (`e2e/typing-indicator.spec.ts::ask`). Not reproduced against a production build.
 - **A new `@theme` token silently does nothing until `/app/.next` is wiped** (2026-08-23): Turbopack's `@theme` scan set lives in the `wren-next-cache` VOLUME, so it survives `docker restart` and survives `rm -rf /app/.next/cache` - the whole directory has to go. `make dev-reset` does exactly that and restarts the frontend; cost about a minute of rebuild. This burned an hour during E-6, with a token rendering at the 16px fallback while the CSS was correct.
 - **torch resolves from the CPU index** (`[tool.uv.sources]` in backend/pyproject.toml, torch declared as a DIRECT local-ml dep - uv routes sources only for direct deps). PyPI linux wheels drag ~5GB of CUDA packages; CPU index ships identical runtime. Regenerate lock via `uv lock` after touching sources.
+- **Node is pinned to 24.19.0 (Krypton), and 26 is deliberately not used**
+  (2026-08-24): v22 Jod went to Maintenance 2025-10-21, so the stack was already
+  off Active LTS. v24 is Active LTS to 2026-10-20 and supported to **2028-04-30**;
+  v26 does not become LTS until 2026-10-28, and production runs LTS only. Node 24
+  goes to Maintenance in Oct 2026 - that is expected and fine, the support window
+  is what was bought, not the label. Pinned in four places that must agree:
+  `frontend/Dockerfile` (3 stages), `frontend/Dockerfile.dev`, `ci.yml`'s
+  `node-version`, and `@types/node`. **Check `nodejs/Release/schedule.json`, not
+  the table on nodejs.org/en/about/previous-releases** - that page renders the
+  v22/v24 statuses inverted.
 - **Dev container PATH must include `/app/.venv/bin`** (backend) - uv installs there but bare `python` otherwise resolves to system python with zero deps. Same class of bug: frontend CMD needs node_modules/.bin on PATH or `next` is "not found".
 - **Git is optional for the eval gate, not required** (corrected 2026-08-24): `evals/_git.py::git_sha()` stamps `eval_runs.git_sha` and returns `""` when git is missing or the tree is not a repository. Dockerfile.dev still installs git so dev runs record a real SHA - that is a nicety, not a dependency. The old note here claimed "hosts/CI always have it"; see the Deploy (B-4) entry for why that was wrong.
 - **E2E suite has pre-existing order-dependent flakes** (~2-4 specs per run fail differently each time; reproduced identically with a native runner against the same stack - not a containerization regression). Candidate follow-up ticket.
