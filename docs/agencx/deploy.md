@@ -73,14 +73,18 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 1. Create a new hosted project. Note these values:
    - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project Settings > API).
    - `SUPABASE_JWT_SECRET` (the JWT secret under Project Settings > API).
-   - The database connection string. Use the **transaction pooler** string
-     (port `6543`) - the serverless container gets a fresh IP per instance and
-     Supavisor is what makes that survivable.
+   - The database connection string. Use the pooler host, but the
+     **session** port (`5432`), not the transaction port (`6543`). Supavisor's
+     transaction mode does not support prepared statements and asyncpg uses
+     them everywhere; on `6543` both the migration runner and the app pool die
+     with a "cannot insert multiple commands into a prepared statement" style
+     error. The pooler is still the right target - the direct host
+     (`db.<ref>.supabase.co`) is IPv6-only and does not resolve from Vercel.
 2. Apply migrations once, from a machine with this repo checked out:
 
    ```bash
    docker compose run --rm \
-     -e DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres' \
+     -e DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres' \
      backend python -m app.shared.migrate
    ```
 
@@ -102,10 +106,9 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
    deploy that 404s every `/api` call.
 2. Set the **production branch to `staging`** (Settings > Git). `development`
    then produces preview deployments.
-3. Set the `backend` service's port to **8000** if the project offers a port
-   setting; otherwise set `PORT` as a backend env var in Step 4. Neither image
-   bakes a port - the host decides, and the container listens wherever `PORT`
-   says.
+3. Do **not** set `PORT`. Vercel injects it per service (the frontend was
+   observed listening on 80) and both images honour it. A project-level `PORT`
+   would apply to both services and send one of them to the wrong socket.
 
 ## Step 3 - API keys (all free)
 
@@ -125,8 +128,7 @@ Production and Preview, or the preview deploys will boot against nothing.
 Backend service:
 
 ```
-PORT=8000
-DATABASE_URL=<Supabase transaction pooler string, port 6543>
+DATABASE_URL=<Supabase session pooler string, port 5432>
 WREN_APP_DB_PASSWORD=<8+ chars, no quotes/backslash/$>
 SUPABASE_URL=<...>
 SUPABASE_ANON_KEY=<...>
@@ -159,13 +161,15 @@ ENVIRONMENT=production
 ships without those packages on purpose, and either value fails at first use
 with `ModuleNotFoundError`, by design.
 
-Frontend service - two values, both `NEXT_PUBLIC_`, inlined into the browser
-bundle at **build** time, so they must exist before the first deploy:
+Frontend service - nothing extra. The browser gets its Supabase config from
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` above, read at request time by the root
+layout and written into the page (`frontend/src/lib/public-config.ts`).
 
-```
-NEXT_PUBLIC_SUPABASE_URL=<...>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<...>
-```
+`NEXT_PUBLIC_*` is **not** usable here: those are inlined when `next build`
+runs, which happens inside the image build, and Vercel builds container
+services with `buildah build` passing no `--build-arg`. They would resolve to
+empty strings. This is also why the root layout is `force-dynamic` - statically
+prerendering it would freeze the build-time (empty) config into the HTML.
 
 `NEXT_PUBLIC_API_URL` is deliberately **not set**. The callers read
 `process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`, and the frontend
@@ -231,17 +235,16 @@ The founder steps above are external. The code that makes them work is B-4
 
 ## Caveats to keep in mind
 
-- **Vercel container services are a young feature.** If the first build ignores
-  the Dockerfiles, add `"runtime": "container"` to each service in
-  `vercel.json` - the docs show both that form and the bare
-  `root`/`entrypoint` pair this repo uses.
-- **Check the built bundle for the Supabase URL after the first deploy.**
-  `frontend/Dockerfile` declares `NEXT_PUBLIC_*` as build args and re-exports
-  them as `ENV`. If Vercel supplies project env vars to the build as
-  environment rather than as build args, that `ENV` line overwrites them with
-  empty strings and the browser bundle ships with no Supabase URL. The fix is
-  to drop the forced `ENV` for those two and let the build environment provide
-  them.
+- **Settled on 2026-08-25, first real deploy.** Container services work on the
+  hobby plan; the bare `root`/`entrypoint` pair is accepted and no
+  `"runtime": "container"` key is needed. The `NEXT_PUBLIC_*` question resolved
+  the other way from the guess above - Vercel passes no build args at all, so
+  those values moved to runtime.
+- **Supabase's `postgres` is not a superuser.** Migrations that rely on
+  superuser waivers pass locally and fail there. Two showed up in 0003:
+  `alter function ... owner to` needs membership in the receiving role, and
+  needs that role to hold CREATE on the schema. Both grants now live in
+  `0002_roles.sql`.
 - **Supabase free tier pauses after 7 days idle** (architecture section 13).
   Fine for a portfolio; keep it warm or move to Pro ($25/month) if it bites.
 - **Free-tier LLM and embedding models train on your inputs** (section 13). No
