@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+    # Presented to GoTrue's Admin API and to Storage. Projects created after
+    # Supabase moved to asymmetric (ES256) session signing have no symmetric JWT
+    # secret to mint a service token from, so the real key is the only way in.
+    supabase_service_role_key: str = ""
 
     # Login-in-chat email delivery (O-2): 'console' (log the code - the local
     # demo path) or 'smtp' (a standard relay). Adding a vendor (e.g. Resend) is
@@ -133,8 +137,13 @@ class Settings(BaseSettings):
     reranker: str = "local"
     cohere_api_key: str = ""
 
-    # Uploads root (T-007)
+    # Uploads root (T-007). Local filesystem path, used only when
+    # ``uploads_bucket`` is empty - see app/shared/storage.py.
     uploads_dir: str = "var/uploads"
+    # Supabase Storage bucket for raw uploads. Set in any deployment whose disk
+    # does not survive between requests (Vercel container services): the upload
+    # request writes the file and a later save request reads it back to chunk.
+    uploads_bucket: str = ""
 
     # O-4 whole-corpus fast path: the total prompt budget, in tokens, a tenant's
     # corpus is allowed to occupy before retrieval scoring is worth its latency.
