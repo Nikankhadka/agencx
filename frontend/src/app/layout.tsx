@@ -24,6 +24,18 @@ export const metadata: Metadata = {
   description: "Answer your customers day and night, in your own words.",
 };
 
+/**
+ * Rendered per request, not prerendered at build.
+ *
+ * The runtime public config below is only "runtime" if this layout actually
+ * runs on a request. Statically prerendered, it executes during `next build`
+ * inside the image build - which has no project env - and bakes
+ * `{"supabaseUrl":"","supabaseAnonKey":""}` into the HTML forever. That is
+ * exactly what the first deploy shipped. Nothing here is static anyway: every
+ * surface reads tenant state from the backend.
+ */
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
