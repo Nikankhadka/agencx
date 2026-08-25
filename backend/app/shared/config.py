@@ -160,9 +160,20 @@ class Settings(BaseSettings):
 
     @property
     def app_database_url(self) -> str:
-        """The same database, but as the un-privileged ``wren_app`` role the API uses."""
+        """The same database, but as the un-privileged ``wren_app`` role the API uses.
+
+        A connection pooler that routes by username needs that routing key kept
+        when the role changes. Supabase's Supavisor encodes the project as a
+        ``{role}.{project_ref}`` username, so rewriting ``postgres.abc123`` to a
+        bare ``wren_app`` loses the ref and the pooler rejects the connection
+        with ENOIDENTIFIER before any password is checked. Carry the suffix
+        across. A plain ``postgres`` username (local compose) has none, so this
+        is a no-op there.
+        """
         parts = urlsplit(self.database_url)
-        netloc = f"wren_app:{quote(self.wren_app_db_password, safe='')}@{parts.hostname}"
+        _, sep, pooler_tenant = (parts.username or "").partition(".")
+        user = f"wren_app.{pooler_tenant}" if sep else "wren_app"
+        netloc = f"{user}:{quote(self.wren_app_db_password, safe='')}@{parts.hostname}"
         if parts.port:
             netloc = f"{netloc}:{parts.port}"
         return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
