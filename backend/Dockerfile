@@ -64,7 +64,12 @@ USER wren
 
 EXPOSE 8000
 
+# The venv interpreter is named absolutely rather than resolved through PATH.
+# A container host is free to inject its own environment over the image's, and
+# Vercel does: the first deploy died with `sh: 1: exec: uvicorn: not found`
+# even though ENV PATH above puts the venv first and the binary is present.
+# ${PORT:-8000} still needs a shell, so this stays `sh -c` rather than exec form.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('PORT','8000'))" || exit 1
+    CMD /app/.venv/bin/python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('PORT','8000'))" || exit 1
 
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
