@@ -26,16 +26,10 @@ from app.ingestion.url import extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.shared import db
-from app.shared.config import get_settings
+from app.shared.storage import document_key, get_storage
 
 _SELECT_COLUMNS = "id, filename, doc_type, status, error"
 _RECORD_COLUMNS = f"{_SELECT_COLUMNS}, structured"
-
-
-def _write_upload(path: Path, body: bytes) -> None:
-    """Blocking filesystem write - always run via ``run_in_threadpool``."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(body)
 
 
 async def list_documents(*, tenant_id: UUID) -> list[dict[str, Any]]:
@@ -63,8 +57,7 @@ async def upload_document(
     pending documents row keeping the admin's original filename as the display
     column, then run the ingestion pipeline to completion. Returns the
     resulting row."""
-    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}{extension}"
-    await run_in_threadpool(_write_upload, document_path, body)
+    await get_storage().put(document_key(tenant_id, document_id, extension), body)
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
@@ -112,8 +105,7 @@ async def ingest_website(
     row stores the URL as its display filename only. Idempotent: re-pasting a
     URL this tenant already ingested returns the existing row untouched.
     """
-    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}.txt"
-    await run_in_threadpool(_write_upload, document_path, text.encode("utf-8"))
+    await get_storage().put(document_key(tenant_id, document_id, ".txt"), text.encode("utf-8"))
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         existing = await conn.fetchrow(
@@ -189,11 +181,6 @@ async def reprocess_document(
     return dict(row) if row is not None else None
 
 
-def _read_file(path: Path) -> bytes:
-    """Blocking filesystem read - always run via ``run_in_threadpool``."""
-    return path.read_bytes()
-
-
 def _record(row: Any) -> dict[str, Any]:
     """One document as the knowledge screen reads it: the row plus its readable
     sections (``structured`` is jsonb, so it arrives as a string from asyncpg)."""
@@ -255,8 +242,7 @@ async def draft_from_upload(
     ``{document_id}{ext}`` rule as every other upload, so a re-structure never
     needs the browser to send it again.
     """
-    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}{extension}"
-    await run_in_threadpool(_write_upload, document_path, body)
+    await get_storage().put(document_key(tenant_id, document_id, extension), body)
     raw_text = await run_in_threadpool(extract_text, body, extension)
     sections = await structure_document(raw_text, provider=provider)
     return await _insert_draft(
@@ -290,8 +276,7 @@ async def draft_from_url(
             url,
         )
     target = existing or document_id
-    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{target}.txt"
-    await run_in_threadpool(_write_upload, document_path, text.encode("utf-8"))
+    await get_storage().put(document_key(tenant_id, target, ".txt"), text.encode("utf-8"))
 
     if existing is None:
         return await _insert_draft(
@@ -328,8 +313,7 @@ async def save_record(
     scrape - an edit here is the correction, not a note beside it.
     """
     text = render_sections([dict(section) for section in sections])
-    document_path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}.txt"
-    await run_in_threadpool(_write_upload, document_path, text.encode("utf-8"))
+    await get_storage().put(document_key(tenant_id, document_id, ".txt"), text.encode("utf-8"))
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         source = await conn.fetchval(
@@ -398,12 +382,12 @@ async def get_record(
 async def _stored_text(*, tenant_id: UUID, filename: str, document_id: UUID) -> str:
     """The document's text as last ingested, read back off disk. Empty when the
     file is gone (a catalog document has no file at all)."""
-    directory = Path(get_settings().uploads_dir) / str(tenant_id)
     extension = ".txt" if filename.startswith("http") else Path(filename).suffix.lower()
-    for candidate in (directory / f"{document_id}{extension}", directory / f"{document_id}.txt"):
-        if candidate.exists():
-            body = await run_in_threadpool(_read_file, candidate)
-            return extract_text(body, candidate.suffix.lower())
+    storage = get_storage()
+    for ext in (extension, ".txt"):
+        body = await storage.get(document_key(tenant_id, document_id, ext))
+        if body is not None:
+            return extract_text(body, ext)
     return ""
 
 
@@ -417,8 +401,5 @@ async def delete_record(*, tenant_id: UUID, document_id: UUID) -> bool:
         )
     if deleted is None:
         return False
-    directory = Path(get_settings().uploads_dir) / str(tenant_id)
-    if directory.exists():
-        for path in directory.glob(f"{document_id}.*"):
-            await run_in_threadpool(path.unlink)
+    await get_storage().delete_prefix(document_key(tenant_id, document_id))
     return True
