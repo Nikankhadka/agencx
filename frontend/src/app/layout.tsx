@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { QueryProvider } from "@/components/QueryProvider";
 import { Toaster } from "@/components/Toaster";
+import { PUBLIC_CONFIG_GLOBAL, serverPublicConfig } from "@/lib/public-config";
 
 // Plus Jakarta Sans (self-hosted by next/font) is exposed as the
 // --font-jakarta CSS variable, which theme.css picks up for --font-sans and
@@ -36,6 +37,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`h-full antialiased ${jakarta.variable}`}>
+      <head>
+        {/* Runtime public config: read on the server, where Vercel injects
+            project env vars, because container builds get no --build-arg and
+            so cannot inline NEXT_PUBLIC_*. Must run before any client
+            component asks for the Supabase client. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.${PUBLIC_CONFIG_GLOBAL}=${JSON.stringify(serverPublicConfig())}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AuthProvider><QueryProvider>{children}</QueryProvider></AuthProvider>
         <Toaster />
