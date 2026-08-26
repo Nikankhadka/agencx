@@ -252,6 +252,19 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
+- **The platform console (`/admin`) is out of Phase 1 and does not work on the
+  hosted Supabase project** (founder decision, 2026-08-26). It is not one of the
+  three pillars, so nothing depends on it. It signs in through supabase-js
+  `signInWithPassword`, and the project issues ES256 session tokens while
+  `shared/auth.py::verify_token` only verifies HS256 - so every console request
+  gets a 401. The owner and customer surfaces are unaffected: they use the
+  backend-minted HS256 session (`services/identity.py::mint_session`). Fixing it
+  means verifying ES256 through the project JWKS, which needs `pyjwt[crypto]`
+  and a change at the auth boundary - its own ticket, not a deploy step.
+  The `platform_admin` **database** role is unaffected and stays: it is created
+  in migration 0002, carries live RLS policies, and `tests/test_rls.py` asserts
+  on it.
+
 - **A platform-provisioned tenant is stuck at `provisioning`** (found while
   closing E-5's live/not-live bullet, 2026-08-23). `POST /api/platform/tenants`
   inserts `status='provisioning'` (`features/platform/service.py:66`) pending a

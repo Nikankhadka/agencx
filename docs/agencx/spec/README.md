@@ -98,6 +98,12 @@ Phase 1 ships only: **(1) business onboarding, (2) customer chat query handling,
 leads, quotes, payments, scheduling, or invoicing as default flows). Everything
 else defers to Phase 2 / Stage 2 backlog.
 
+The **platform console (`/admin`) is not a pillar** and is not part of Phase 1.
+It is built and works locally, but its hosted login is broken on an
+asymmetric-signing Supabase project - see Known gaps in
+[progress.md](../progress.md). Treat it as out of scope when judging whether
+Phase 1 is done.
+
 | Order | Phase file | Pillar | Blocked by |
 |---|---|---|---|
 | 1 | `01-foundation.md` | Foundation (docs restructure) - **done** | - |
