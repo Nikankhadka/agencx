@@ -313,10 +313,12 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to
   upstream 429 rate-limiting; all LLM-touching code paths are proven with
   stubbed providers in CI.
-- **No hosted Supabase project yet**: real email/password login from the browser
-  is blocked until it exists; backend auth is fully tested with locally minted
-  tokens. The login-in-chat (O-2) work also needs an email-sending provider for
-  real delivery.
+- **Login-in-chat has no email provider wired for real delivery** (O-2). The
+  hosted Supabase project now exists and the deployed stack authenticates against
+  it, so browser login is no longer blocked on that - backend auth remains fully
+  tested with locally minted tokens either way. What is left is delivery:
+  `EMAIL_PROVIDER=console` logs the code rather than sending it, and a real
+  cohort needs an SMTP relay configured per `deploy.md` step 3.
 - **Business type does not vary the interview (O-1, US-2).** The PRD glossary
   describes a `business_types` row carrying "a profile template and prompt
   fragments"; neither half has a consumer in Phase 1, and none of the seven

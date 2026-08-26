@@ -39,14 +39,29 @@ Three decisions shape the rest:
 
 ## Branches
 
-| Branch | What it is | What Vercel does |
-|---|---|---|
-| `development` | integration; feature branches PR into it | preview deployment |
-| `staging` | production | production deployment |
+| Branch | What it is | What Vercel does | URL |
+|---|---|---|---|
+| `staging` | production (the Production Branch) | production deployment | `<project>.vercel.app`, later `agencx.app` (B-2) |
+| `development` | integration; feature branches PR into it | preview deployment | `<project>-git-development-<scope>.vercel.app` |
+| `feat/*` | in-flight work | preview deployment | one stable alias per branch |
 
 There is no `main`. `ci.yml` gates pushes to both branches and every PR;
 `deploy.yml` fires after CI goes green on `staging` and smoke-tests the live
 origin.
+
+One Vercel project serves both lanes, and which lane a push lands in is decided
+by exactly one setting - Settings > Git > **Production Branch**, set to
+`staging`. Every other branch produces a preview deployment with its own stable
+alias (`<project>-git-<branch>.vercel.app`). There is no way to get both lanes
+out of a single branch automatically: production versus preview is a property of
+the branch. A preview can be promoted to production by hand from the dashboard,
+which re-uses the build it already has - useful for a hotfix, not a pipeline.
+
+The two lanes get **two Supabase projects**, joined to their lane by Vercel's
+per-target environment variables: the same variable name carries a different
+value for Production and for Preview. One shared project would mean preview
+deploys writing into live tenant data, and a migration run from a feature branch
+reaching production the moment it is pushed.
 
 ## What you can see with the auto URL
 
@@ -68,10 +83,17 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 - Free API keys: Google AI Studio, Cohere, optionally Groq + OpenRouter.
 - Push access to the GitHub repo.
 
-## Step 1 - Supabase
+## Step 1 - Supabase (two projects)
 
-1. Create a new hosted project. Note these values:
+Create **two** hosted projects, one per lane - production and preview - and run
+every step below against each. The free tier allows two active projects.
+
+1. Note these values, per project:
    - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project Settings > API).
+   - `SUPABASE_SERVICE_ROLE_KEY` (same page). The backend presents it to GoTrue's
+     Admin API and to Storage. A project created since Supabase moved to ES256
+     session signing has no symmetric secret to mint a service token from, so the
+     real key is the only way in. Server-side only - it never reaches the browser.
    - `SUPABASE_JWT_SECRET` (the JWT secret under Project Settings > API).
    - The database connection string. Use the pooler host, but the
      **session** port (`5432`), not the transaction port (`6543`). Supavisor's
@@ -80,7 +102,13 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
      with a "cannot insert multiple commands into a prepared statement" style
      error. The pooler is still the right target - the direct host
      (`db.<ref>.supabase.co`) is IPv6-only and does not resolve from Vercel.
-2. Apply migrations once, from a machine with this repo checked out:
+2. Create a private Storage bucket for uploads (Storage > New bucket). Its name
+   becomes `UPLOADS_BUCKET`. Without it the backend falls back to local disk, and
+   a document attached during onboarding is gone by the time the owner saves:
+   the upload and the chunk-and-embed pass are two different requests, and a
+   container host does not promise they land on the same instance. The failure is
+   silent - the document is just marked failed.
+3. Apply migrations once, from a machine with this repo checked out:
 
    ```bash
    docker compose run --rm \
@@ -90,7 +118,7 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 
    This creates the schema, the `wren_app` role, and the pgvector indexes.
    pgvector is preinstalled on Supabase.
-3. Seed the demo tenant, same shell (the deploy smoke test looks for it):
+4. Seed the demo tenant, same shell (the deploy smoke test looks for it):
 
    ```bash
    docker compose run --rm \
@@ -122,8 +150,15 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 
 ## Step 4 - Environment variables
 
-All of these are Vercel project environment variables. Set them for both
-Production and Preview, or the preview deploys will boot against nothing.
+All of these are Vercel project environment variables, and every one must exist
+for **both** Production and Preview - the lane with the gap boots against
+nothing.
+
+Seven of them identify a Supabase project and therefore differ per target:
+`DATABASE_URL`, `WREN_APP_DB_PASSWORD`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and `UPLOADS_BUCKET`. Set each
+twice, once per lane, pointing at that lane's project from step 1. Everything
+else (LLM keys, Cohere, SMTP) is the same on both.
 
 Backend service:
 
@@ -133,6 +168,7 @@ WREN_APP_DB_PASSWORD=<8+ chars, no quotes/backslash/$>
 SUPABASE_URL=<...>
 SUPABASE_ANON_KEY=<...>
 SUPABASE_JWT_SECRET=<...>
+SUPABASE_SERVICE_ROLE_KEY=<...>
 LLM_PROVIDER=openai_compat
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 LLM_API_KEY=<Google AI Studio key>
@@ -150,6 +186,7 @@ GOOGLE_EMBED_MODEL=text-embedding-004
 EMBEDDING_DIM=384
 RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
+UPLOADS_BUCKET=<Storage bucket name from step 1>
 EMAIL_PROVIDER=smtp            # or console
 EMAIL_SMTP_HOST=<...>          # when smtp
 EMAIL_SMTP_PORT=587
@@ -160,6 +197,13 @@ ENVIRONMENT=production
 `EMBEDDER=local` and `RERANKER=local` are not available in production: the image
 ships without those packages on purpose, and either value fails at first use
 with `ModuleNotFoundError`, by design.
+
+`UPLOADS_BUCKET` is not optional here either, and unlike those two it fails
+quietly. Left empty, `app/shared/storage.py` selects `LocalStorage` and the
+container writes uploads to a disk the next request may not see - so onboarding's
+"attach a document" step appears to work and the document is marked failed later.
+Empty is correct only where the filesystem persists, which is local dev and the
+test suite.
 
 Frontend service - nothing extra. The browser gets its Supabase config from
 `SUPABASE_URL` and `SUPABASE_ANON_KEY` above, read at request time by the root

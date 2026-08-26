@@ -52,11 +52,12 @@ COPY --from=builder --chown=wren:wren /app /app
 RUN rm -rf /app/tests
 
 # PORT is the contract every container host in play sets for us, and it is
-# deliberately NOT baked in here: the host decides. Vercel Functions route to 80
-# unless PORT is set in project settings (deploy.md sets it to 8000), Cloud Run
-# injects 8080, and local compose leaves it unset so the 8000 fallback in CMD
-# applies. Baking ENV PORT would make the container listen somewhere the host is
-# not sending traffic.
+# deliberately NOT baked in here: the host decides. Vercel injects it per service
+# (the frontend was observed on 80), which is why deploy.md step 2 says to leave
+# PORT unset - a project-level value would apply to BOTH services and send one of
+# them to the wrong socket. Cloud Run injects 8080, and local compose leaves it
+# unset so the 8000 fallback in CMD applies. Baking ENV PORT would make the
+# container listen somewhere the host is not sending traffic.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
