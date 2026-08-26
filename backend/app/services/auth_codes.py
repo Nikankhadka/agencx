@@ -2,7 +2,8 @@
 
 Deterministic by design: no model, no tenant isolation dependency. Only the
 sha-256 hash of a code is ever persisted; the raw code is returned to the caller
-for delivery. Verification is attempt-bounded, TTL-bounded, and single-use.
+for delivery. Verification is attempt-bounded, TTL-bounded, and single-use, and
+issuance is rate-bounded per address.
 """
 
 from __future__ import annotations
@@ -17,12 +18,18 @@ from app.shared import db
 
 CODE_TTL = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
+# Issuance ceiling per address. Same number as MAX_ATTEMPTS deliberately: one
+# figure to remember, and both answer the same question - how much abuse one
+# email address is allowed to generate before we stop.
+ISSUE_WINDOW = timedelta(hours=1)
+MAX_CODES_PER_WINDOW = 5
 
 
 class CodeError(RuntimeError):
-    """Verification failed; ``kind`` selects the calm one-liner the client shows.
+    """Issue or verification failed; ``kind`` selects the one-liner the client shows.
 
-    ``invalid`` (wrong code or none outstanding), ``expired``, ``too_many``.
+    ``invalid`` (wrong code or none outstanding), ``expired``, ``too_many``,
+    ``rate_limited`` (too many codes requested for one address).
     """
 
     def __init__(self, kind: str):
@@ -41,12 +48,33 @@ def _digest_matches(stored: str, code: str) -> bool:
 async def issue_code(*, email: str, tenant_id: UUID | None = None) -> str:
     """Issue a fresh 6-digit code for ``email`` and return the raw code.
 
-    Always succeeds (even for a duplicate/unknown email) so account existence
-    never leaks. The previous outstanding code for the email is superseded by
-    the newest row (verification only ever looks at the latest unverified row).
+    Succeeds for a duplicate or unknown email so account existence never leaks;
+    the only refusal is the rate limit, which is keyed on an address the caller
+    already supplied and therefore tells them nothing they did not know. The
+    previous outstanding code is superseded by the newest row (verification only
+    ever looks at the latest unverified row).
+
+    Raises :class:`CodeError` with kind ``rate_limited`` past the ceiling. This
+    endpoint is unauthenticated and, once a real relay is configured, sends mail
+    to whatever address it is handed - without a cap it is an open email relay
+    that would drain a free tier in a minute and get the account suspended.
+
+    ponytail: per-address only, so rotating addresses walks around it. That
+    still bounds what any single mailbox can be made to receive, which is the
+    part that gets a sender blacklisted. Per-IP is the upgrade, and needs
+    request-context plumbing this layer deliberately has none of.
     """
     code = f"{secrets.randbelow(1_000_000):06d}"
     async with db.tenant_context(None, "service") as conn:
+        # Served by auth_codes_email_created_idx (email, created_at desc).
+        recent = await conn.fetchval(
+            "select count(*) from auth_codes "
+            "where email = $1 and created_at > now() - $2::interval",
+            email,
+            ISSUE_WINDOW,
+        )
+        if int(recent) >= MAX_CODES_PER_WINDOW:
+            raise CodeError("rate_limited")
         await conn.execute(
             "insert into auth_codes (tenant_id, email, code_hash, expires_at) "
             "values ($1, $2, $3, now() + $4::interval)",

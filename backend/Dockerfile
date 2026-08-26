@@ -52,11 +52,12 @@ COPY --from=builder --chown=wren:wren /app /app
 RUN rm -rf /app/tests
 
 # PORT is the contract every container host in play sets for us, and it is
-# deliberately NOT baked in here: the host decides. Vercel Functions route to 80
-# unless PORT is set in project settings (deploy.md sets it to 8000), Cloud Run
-# injects 8080, and local compose leaves it unset so the 8000 fallback in CMD
-# applies. Baking ENV PORT would make the container listen somewhere the host is
-# not sending traffic.
+# deliberately NOT baked in here: the host decides. Vercel injects it per service
+# (the frontend was observed on 80), which is why deploy.md step 2 says to leave
+# PORT unset - a project-level value would apply to BOTH services and send one of
+# them to the wrong socket. Cloud Run injects 8080, and local compose leaves it
+# unset so the 8000 fallback in CMD applies. Baking ENV PORT would make the
+# container listen somewhere the host is not sending traffic.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
@@ -64,7 +65,12 @@ USER wren
 
 EXPOSE 8000
 
+# The venv interpreter is named absolutely rather than resolved through PATH.
+# A container host is free to inject its own environment over the image's, and
+# Vercel does: the first deploy died with `sh: 1: exec: uvicorn: not found`
+# even though ENV PATH above puts the venv first and the binary is present.
+# ${PORT:-8000} still needs a shell, so this stays `sh -c` rather than exec form.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('PORT','8000'))" || exit 1
+    CMD /app/.venv/bin/python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:%s/health' % os.environ.get('PORT','8000'))" || exit 1
 
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

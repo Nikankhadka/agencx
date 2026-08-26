@@ -25,6 +25,7 @@ _COPY = {
     "invalid": "That code didn't work. Try again, or resend.",
     "expired": "That code expired. Request a new one.",
     "too_many": "Too many tries. Request a new code.",
+    "rate_limited": "That's a lot of codes for one address. Try again in an hour.",
     "undelivered": "I couldn't get that code sent just now. Try again in a moment.",
 }
 
@@ -50,7 +51,13 @@ async def _find_tenant_for_user(user_id: str) -> str | None:
 
 
 async def send_login_code(email: str) -> None:
-    code = await auth_codes.issue_code(email=email)
+    try:
+        code = await auth_codes.issue_code(email=email)
+    except auth_codes.CodeError as exc:
+        # Only ``rate_limited`` reaches here - issuing has no other refusal.
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_COPY[exc.kind]
+        ) from exc
     try:
         await email_service.send_login_code(email=email, code=code)
     except email_service.LoginCodeDeliveryError as exc:

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+    # Presented to GoTrue's Admin API and to Storage. Projects created after
+    # Supabase moved to asymmetric (ES256) session signing have no symmetric JWT
+    # secret to mint a service token from, so the real key is the only way in.
+    supabase_service_role_key: str = ""
 
     # Login-in-chat email delivery (O-2): 'console' (log the code - the local
     # demo path) or 'smtp' (a standard relay). Adding a vendor (e.g. Resend) is
@@ -40,6 +44,11 @@ class Settings(BaseSettings):
     email_smtp_host: str = ""
     email_smtp_port: int = 587
     email_smtp_from: str = ""
+    # Optional, and what selects an authenticated session: Mailpit (the local
+    # inbox) speaks neither STARTTLS nor AUTH and refuses both, while every
+    # hosted relay (Resend, Brevo) requires both. Set them off local.
+    email_smtp_user: str = ""
+    email_smtp_password: str = ""
 
     # Chat LLM provider: 'azure' | 'openai_compat' | 'zai'. 'openai_compat'
     # speaks the OpenAI wire format against any base URL (OpenRouter, Groq,
@@ -133,8 +142,13 @@ class Settings(BaseSettings):
     reranker: str = "local"
     cohere_api_key: str = ""
 
-    # Uploads root (T-007)
+    # Uploads root (T-007). Local filesystem path, used only when
+    # ``uploads_bucket`` is empty - see app/shared/storage.py.
     uploads_dir: str = "var/uploads"
+    # Supabase Storage bucket for raw uploads. Set in any deployment whose disk
+    # does not survive between requests (Vercel container services): the upload
+    # request writes the file and a later save request reads it back to chunk.
+    uploads_bucket: str = ""
 
     # O-4 whole-corpus fast path: the total prompt budget, in tokens, a tenant's
     # corpus is allowed to occupy before retrieval scoring is worth its latency.
@@ -151,9 +165,20 @@ class Settings(BaseSettings):
 
     @property
     def app_database_url(self) -> str:
-        """The same database, but as the un-privileged ``wren_app`` role the API uses."""
+        """The same database, but as the un-privileged ``wren_app`` role the API uses.
+
+        A connection pooler that routes by username needs that routing key kept
+        when the role changes. Supabase's Supavisor encodes the project as a
+        ``{role}.{project_ref}`` username, so rewriting ``postgres.abc123`` to a
+        bare ``wren_app`` loses the ref and the pooler rejects the connection
+        with ENOIDENTIFIER before any password is checked. Carry the suffix
+        across. A plain ``postgres`` username (local compose) has none, so this
+        is a no-op there.
+        """
         parts = urlsplit(self.database_url)
-        netloc = f"wren_app:{quote(self.wren_app_db_password, safe='')}@{parts.hostname}"
+        _, sep, pooler_tenant = (parts.username or "").partition(".")
+        user = f"wren_app.{pooler_tenant}" if sep else "wren_app"
+        netloc = f"{user}:{quote(self.wren_app_db_password, safe='')}@{parts.hostname}"
         if parts.port:
             netloc = f"{netloc}:{parts.port}"
         return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))

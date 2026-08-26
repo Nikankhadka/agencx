@@ -252,6 +252,19 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
+- **The platform console (`/admin`) is out of Phase 1 and does not work on the
+  hosted Supabase project** (founder decision, 2026-08-26). It is not one of the
+  three pillars, so nothing depends on it. It signs in through supabase-js
+  `signInWithPassword`, and the project issues ES256 session tokens while
+  `shared/auth.py::verify_token` only verifies HS256 - so every console request
+  gets a 401. The owner and customer surfaces are unaffected: they use the
+  backend-minted HS256 session (`services/identity.py::mint_session`). Fixing it
+  means verifying ES256 through the project JWKS, which needs `pyjwt[crypto]`
+  and a change at the auth boundary - its own ticket, not a deploy step.
+  The `platform_admin` **database** role is unaffected and stays: it is created
+  in migration 0002, carries live RLS policies, and `tests/test_rls.py` asserts
+  on it.
+
 - **A platform-provisioned tenant is stuck at `provisioning`** (found while
   closing E-5's live/not-live bullet, 2026-08-23). `POST /api/platform/tenants`
   inserts `status='provisioning'` (`features/platform/service.py:66`) pending a
@@ -300,10 +313,22 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to
   upstream 429 rate-limiting; all LLM-touching code paths are proven with
   stubbed providers in CI.
-- **No hosted Supabase project yet**: real email/password login from the browser
-  is blocked until it exists; backend auth is fully tested with locally minted
-  tokens. The login-in-chat (O-2) work also needs an email-sending provider for
-  real delivery.
+- **Login-in-chat needs a relay account provisioned** (O-2). The hosted Supabase
+  project exists and the deployed stack authenticates against it, so browser
+  login is no longer blocked there. The code path is complete as of this branch:
+  `SmtpEmailProvider` now upgrades with STARTTLS and authenticates when
+  `EMAIL_SMTP_USER`/`EMAIL_SMTP_PASSWORD` are set, which is what every hosted
+  relay requires and what Mailpit refuses - found because the deployed preview
+  issued codes nobody could receive. What remains is purely founder setup: a
+  **Brevo** account and those vars set per `deploy.md` step 3. Not Resend, which
+  delivers only to your own account email until you verify a domain you own, and
+  `agencx.app` is unbought (B-2). Until the vars are set, `EMAIL_PROVIDER`
+  defaults to `console`, which logs the code and answers 202, and
+  `/api/auth/dev-login-code` is gated to `ENVIRONMENT=local` - so a deploy left
+  on the default cannot be logged into at all. Issuance is now capped at 5 per
+  address per hour, added alongside the delivery fix: unthrottled, a public
+  route that mails arbitrary addresses on demand would drain a free tier in a
+  minute and get the sender blacklisted.
 - **Business type does not vary the interview (O-1, US-2).** The PRD glossary
   describes a `business_types` row carrying "a profile template and prompt
   fragments"; neither half has a consumer in Phase 1, and none of the seven

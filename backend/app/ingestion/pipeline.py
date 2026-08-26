@@ -12,19 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from starlette.concurrency import run_in_threadpool
-
 from app.ingestion.chunker import Chunk, chunk_catalog_item, chunk_document
 from app.ingestion.embedder import embed_texts
 from app.llm.embedder import Embedder
-from app.shared.config import get_settings
+from app.shared.storage import document_key, get_storage
 
 if TYPE_CHECKING:
     from app.shared.db import AppConnection
-
-
-def _read_file(path: Path) -> bytes:
-    return path.read_bytes()
 
 
 async def _replace_chunks(
@@ -78,8 +72,9 @@ async def process_document(
 
     try:
         ext = extension if extension is not None else Path(row["filename"]).suffix.lower()
-        path = Path(get_settings().uploads_dir) / str(tenant_id) / f"{document_id}{ext}"
-        body = await run_in_threadpool(_read_file, path)
+        body = await get_storage().get(document_key(tenant_id, document_id, ext))
+        if body is None:
+            raise FileNotFoundError(f"no stored file for document {document_id}")  # noqa: TRY301
         chunks = chunk_document(body, ext, source=source or row["filename"])
         if not chunks:
             raise ValueError("no extractable content in this file")  # noqa: TRY301

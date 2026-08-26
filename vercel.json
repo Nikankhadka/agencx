@@ -1,7 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"staging\" ]",
   "services": {
-    "frontend": { "root": "frontend/", "entrypoint": "Dockerfile" },
+    "frontend": {
+      "root": "frontend/",
+      "entrypoint": "Dockerfile",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "backend",
+          "format": "url",
+          "env": "API_INTERNAL_URL"
+        }
+      ]
+    },
     "backend": { "root": "backend/", "entrypoint": "Dockerfile" }
   },
   "rewrites": [
