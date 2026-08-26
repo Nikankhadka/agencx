@@ -58,3 +58,16 @@ jobs:
         run: |
           curl -fsSL --max-time 45 "$BASE_URL/health" \
             || echo "::warning::$BASE_URL/health did not answer within 45s"
+
+      # Both containers scale to zero independently, and /health is rewritten to
+      # the backend alone - so pinging only that left the frontend cold, which is
+      # the one a visitor actually waits on first. /login is the tenant-admin
+      # entry point and renders per request (force-dynamic), so it wakes the
+      # frontend service without being served from a cache.
+      - name: Ping login page
+        if: steps.check.outputs.ready == 'true'
+        env:
+          BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
+        run: |
+          curl -fsSL -o /dev/null --max-time 45 "$BASE_URL/login" \
+            || echo "::warning::$BASE_URL/login did not answer within 45s"

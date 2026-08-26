@@ -176,9 +176,9 @@ open for US-2, the `STATUS_TONE` map.
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Deploy runbook ([deploy.md](deploy.md)) | BUILT | `b3e578d`, rewritten by B-4 for the Vercel topology: one project, two container services, hosted Supabase, and the free LLM, embedding and rerank tiers. The status banner is gone because the procedure it warned about is now the current one. Since D22 the auto URL serves all three surfaces |
+| Deploy runbook ([deploy.md](deploy.md)) | BUILT | `b3e578d`, rewritten by B-4 for the Vercel topology: one project, two container services, hosted Supabase, and the free LLM, embedding and rerank tiers. The status banner is gone because the procedure it warned about is now the current one. Since D22 the auto URL serves all three surfaces. Corrected after the first real deploy (2026-08-26): the `ignoreCommand`-in-`vercel.json` trap (rejects the whole config when `services` is present - three branches failed that way), the Functions region that must match Supabase (`syd1`), the Brevo SMTP vars, and the `SMOKE_TEST_BASE_URL` secret that silently no-op'd both workflows until set - see `fix/staging-deploy-lane` |
 | Terraform AWS backend | BUILT | `d368b03`; superseded by B-4 and dormant. `infra/*.tf` is kept as evidence and still validated by the `infra` job in `ci.yml`, so it cannot rot silently, but nothing deploys through it |
-| Deploy end-to-end (both services on Vercel) | BUILT | B-4: `vercel.json` (two services plus rewrites), `frontend/Dockerfile` with `output: "standalone"`, `backend/Dockerfile` retargeted with a `test` stage, `GoogleEmbedder`, the 4MB upload cap under the platform body limit, and both workflows pointed at branches that exist. The live deploy is still a founder step (Supabase project, Vercel import, keys); `deploy.yml` no-ops with a notice until `SMOKE_TEST_BASE_URL` exists |
+| Deploy end-to-end (both services on Vercel) | BUILT | B-4: `vercel.json` (two services plus rewrites), `frontend/Dockerfile` with `output: "standalone"`, `backend/Dockerfile` retargeted with a `test` stage, `GoogleEmbedder`, the 4MB upload cap under the platform body limit, and both workflows pointed at branches that exist. The live deploy happened 2026-08-26 (`558898b` deployed fine twice; `8c0edf5`, `a869169` and `5b68822` failed - see the runbook row). `SMOKE_TEST_BASE_URL` is set, `deploy.yml` smoke-tests and `keep-warm.yml` pings both services. Founder steps that remain: the dashboard settings (Production Branch, Ignored Build Step, region) and the Brevo SMTP vars |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
 | Eval report | BUILT | evidence in `docs/archive/artifacts/eval-report.md` |
 | Security write-up | BUILT | evidence in `docs/archive/artifacts/security.md` |
@@ -216,7 +216,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
-| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | `21da213` + `54cc0cd` (eval git shell-out); supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); the live deploy stays a founder step |
+| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | `21da213` + `54cc0cd` (eval git shell-out); supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); live deploy happened 2026-08-26, dashboard settings and Brevo vars stay founder steps (`fix/staging-deploy-lane` records the follow-up fixes) |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
