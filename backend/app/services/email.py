@@ -51,12 +51,29 @@ def last_issued_code(email: str) -> str | None:
 
 
 class SmtpEmailProvider(EmailProvider):
-    """Deliver via an SMTP relay (env: EMAIL_SMTP_*)."""
+    """Deliver via an SMTP relay (env: EMAIL_SMTP_*).
 
-    def __init__(self, host: str, port: int, sender: str):
+    Credentials are optional because the two relays in play want opposite
+    things: Mailpit (``make mail``) speaks neither STARTTLS nor AUTH and refuses
+    both, while every hosted relay (Resend, Brevo) requires both. Configuring a
+    user and password is therefore what selects an authenticated session, rather
+    than a second provider class that would differ by six lines.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        sender: str,
+        *,
+        user: str = "",
+        password: str = "",
+    ) -> None:
         self._host = host
         self._port = port
         self._sender = sender
+        self._user = user
+        self._password = password
 
     async def send_login_code(self, *, email: str, code: str) -> None:
         message = EmailMessage()
@@ -67,6 +84,9 @@ class SmtpEmailProvider(EmailProvider):
         # smtplib is synchronous; a login-code send is rare and tiny, so the
         # blocking call is acceptable here (run in a thread for real load).
         with smtplib.SMTP(self._host, self._port, timeout=15) as smtp:
+            if self._user and self._password:
+                smtp.starttls()
+                smtp.login(self._user, self._password)
             smtp.send_message(message)
 
 
@@ -82,6 +102,8 @@ def get_email_provider() -> EmailProvider:
             settings.email_smtp_host,
             settings.email_smtp_port,
             settings.email_smtp_from,
+            user=settings.email_smtp_user,
+            password=settings.email_smtp_password,
         )
     raise RuntimeError(f"unknown EMAIL_PROVIDER {provider!r}; expected console or smtp")
 

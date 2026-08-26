@@ -1,0 +1,60 @@
+name: Keep warm
+
+# Vercel container services scale to zero, so the first request after an idle
+# gap pays the container boot: ~11s observed on 2026-08-26, against ~1.2s once
+# warm. A visitor arriving cold reads that as a broken app.
+#
+# This pings /health on a schedule so that visitor is unlikely to be the one who
+# wakes it. It is deliberately a workaround, not a fix - it trades a small,
+# continuous amount of free-tier usage for a fast first byte, and does not remove
+# the cold start. The actual fixes are a plan that does not scale to zero, or
+# accepting the latency. Delete this workflow if either becomes true.
+#
+# Two GitHub behaviours to know: scheduled runs are delayed under load (the
+# interval is a floor, not a guarantee), and schedules are disabled after 60 days
+# with no repo activity.
+#
+# Uses the same secret and the same no-op-until-set pattern as deploy.yml, so the
+# production origin is spelled in exactly one place. Note that `environment:
+# production` means adding required reviewers there would queue every run for
+# approval - do not gate that environment while this workflow is scheduled.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # The `secrets` context is not available in a job-level `if:`, so
+      # readiness is computed in a step, exactly as deploy.yml does.
+      - id: check
+        env:
+          HAS_BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL != '' }}
+        run: |
+          echo "ready=${HAS_BASE_URL}" >> "$GITHUB_OUTPUT"
+          if [ "${HAS_BASE_URL}" != "true" ]; then
+            echo "::notice::SMOKE_TEST_BASE_URL not set - nothing to keep warm yet"
+          fi
+
+      # Deliberately does not fail the run: a cold container that answers slowly,
+      # or a Supabase project paused after 7 idle days, would otherwise turn this
+      # into a recurring red X that means nothing actionable. The smoke test in
+      # deploy.yml is where a dead origin is supposed to be caught loudly.
+      - name: Ping health
+        if: steps.check.outputs.ready == 'true'
+        env:
+          BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
+        run: |
+          curl -fsSL --max-time 45 "$BASE_URL/health" \
+            || echo "::warning::$BASE_URL/health did not answer within 45s"

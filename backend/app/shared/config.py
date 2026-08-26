@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     email_smtp_host: str = ""
     email_smtp_port: int = 587
     email_smtp_from: str = ""
+    # Optional, and what selects an authenticated session: Mailpit (the local
+    # inbox) speaks neither STARTTLS nor AUTH and refuses both, while every
+    # hosted relay (Resend, Brevo) requires both. Set them off local.
+    email_smtp_user: str = ""
+    email_smtp_password: str = ""
 
     # Chat LLM provider: 'azure' | 'openai_compat' | 'zai'. 'openai_compat'
     # speaks the OpenAI wire format against any base URL (OpenRouter, Groq,

@@ -187,16 +187,26 @@ EMBEDDING_DIM=384
 RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
 UPLOADS_BUCKET=<Storage bucket name from step 1>
-EMAIL_PROVIDER=smtp            # or console
+EMAIL_PROVIDER=smtp            # console logs the code instead of sending it
 EMAIL_SMTP_HOST=<...>          # when smtp
 EMAIL_SMTP_PORT=587
 EMAIL_SMTP_FROM=<...>
+EMAIL_SMTP_USER=<...>          # required by every hosted relay
+EMAIL_SMTP_PASSWORD=<...>
 ENVIRONMENT=production
 ```
 
 `EMBEDDER=local` and `RERANKER=local` are not available in production: the image
 ships without those packages on purpose, and either value fails at first use
 with `ModuleNotFoundError`, by design.
+
+`EMAIL_PROVIDER` deserves the same warning, and it is the default that bites:
+unset, it is `console`, which **logs the login code to the platform's log stream
+instead of sending it**. The request still answers `202`, because the endpoint
+did accept it - so login looks like it works and no code ever arrives. The
+captured-code escape hatch (`/api/auth/dev-login-code`) is gated to
+`ENVIRONMENT=local` on purpose, so on a deploy there is no other way to obtain a
+code: `console` means nobody can log in at all.
 
 `UPLOADS_BUCKET` is not optional here either, and unlike those two it fails
 quietly. Left empty, `app/shared/storage.py` selects `LocalStorage` and the
@@ -289,6 +299,12 @@ The founder steps above are external. The code that makes them work is B-4
   `alter function ... owner to` needs membership in the receiving role, and
   needs that role to hold CREATE on the schema. Both grants now live in
   `0002_roles.sql`.
+- **Container services scale to zero.** The first request after an idle gap pays
+  the container boot - ~11s measured on 2026-08-26, against ~1.2s warm. That is
+  inherent to the plan, not a fault: `.github/workflows/keep-warm.yml` pings
+  `/health` every 10 minutes so a visitor is unlikely to be the one who wakes it,
+  which hides the symptom rather than removing it. Delete that workflow if the
+  project ever moves to a plan that keeps an instance up.
 - **Supabase free tier pauses after 7 days idle** (architecture section 13).
   Fine for a portfolio; keep it warm or move to Pro ($25/month) if it bites.
 - **Free-tier LLM and embedding models train on your inputs** (section 13). No
