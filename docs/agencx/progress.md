@@ -320,10 +320,15 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   `EMAIL_SMTP_USER`/`EMAIL_SMTP_PASSWORD` are set, which is what every hosted
   relay requires and what Mailpit refuses - found because the deployed preview
   issued codes nobody could receive. What remains is purely founder setup: a
-  Resend or Brevo account and those vars set per `deploy.md` step 3. Until they
-  are, `EMAIL_PROVIDER` defaults to `console`, which logs the code and answers
-  202, and `/api/auth/dev-login-code` is gated to `ENVIRONMENT=local` - so a
-  deploy left on the default cannot be logged into at all.
+  **Brevo** account and those vars set per `deploy.md` step 3. Not Resend, which
+  delivers only to your own account email until you verify a domain you own, and
+  `agencx.app` is unbought (B-2). Until the vars are set, `EMAIL_PROVIDER`
+  defaults to `console`, which logs the code and answers 202, and
+  `/api/auth/dev-login-code` is gated to `ENVIRONMENT=local` - so a deploy left
+  on the default cannot be logged into at all. Issuance is now capped at 5 per
+  address per hour, added alongside the delivery fix: unthrottled, a public
+  route that mails arbitrary addresses on demand would drain a free tier in a
+  minute and get the sender blacklisted.
 - **Business type does not vary the interview (O-1, US-2).** The PRD glossary
   describes a `business_types` row carrying "a profile template and prompt
   fragments"; neither half has a consumer in Phase 1, and none of the seven

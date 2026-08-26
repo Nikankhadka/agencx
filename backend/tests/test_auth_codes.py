@@ -108,6 +108,29 @@ async def test_latest_code_wins_on_duplicate_email(pool: None) -> None:
     await auth_codes.verify_code(email=email, code=latest)
 
 
+async def test_issuance_is_capped_per_address(pool: None) -> None:
+    """The route is unauthenticated and, with a relay configured, mails whatever
+    address it is handed. The ceiling is what stops it being an open relay."""
+    email = f"flood-{uuid.uuid4().hex}@example.com"
+    for _ in range(auth_codes.MAX_CODES_PER_WINDOW):
+        await auth_codes.issue_code(email=email)
+
+    with pytest.raises(auth_codes.CodeError) as exc:
+        await auth_codes.issue_code(email=email)
+    assert exc.value.kind == "rate_limited"
+
+
+async def test_the_cap_is_per_address_not_global(pool: None) -> None:
+    """One flooded mailbox must not lock every other owner out of logging in."""
+    flooded = f"flood-{uuid.uuid4().hex}@example.com"
+    for _ in range(auth_codes.MAX_CODES_PER_WINDOW):
+        await auth_codes.issue_code(email=flooded)
+
+    other = f"sam-{uuid.uuid4().hex}@example.com"
+    code = await auth_codes.issue_code(email=other)
+    await auth_codes.verify_code(email=other, code=code)
+
+
 # --- endpoints ----------------------------------------------------------------
 
 
@@ -127,6 +150,19 @@ async def test_login_code_endpoint_answers_unreadable_email_conversationally(
     detail = resp.json()["detail"]
     assert isinstance(detail, str) and detail
     assert "@" not in detail  # the refusal never echoes the address back
+
+
+async def test_login_code_endpoint_answers_429_past_the_cap(client: httpx.AsyncClient) -> None:
+    """Every request up to the ceiling is accepted, so a green assertion here
+    means the cap actually refused rather than the whole route being broken."""
+    email = f"flood-{uuid.uuid4().hex}@example.com"
+    for _ in range(auth_codes.MAX_CODES_PER_WINDOW):
+        accepted = await client.post("/api/auth/login-code", json={"email": email})
+        assert accepted.status_code == 202
+
+    resp = await client.post("/api/auth/login-code", json={"email": email})
+    assert resp.status_code == 429
+    assert resp.json()["detail"] == "That's a lot of codes for one address. Try again in an hour."
 
 
 async def test_login_code_endpoint_rejects_empty_body_field(client: httpx.AsyncClient) -> None:

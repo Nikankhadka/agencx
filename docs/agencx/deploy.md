@@ -18,7 +18,7 @@ replaced by a single Vercel project running two container services.
 | Chat LLM | Google AI Studio + Groq + OpenRouter | $0 |
 | Embeddings | Google `text-embedding-004` | $0 / credits |
 | Reranker | Cohere | $0 free tier |
-| Login-in-chat email | SMTP relay (Resend/Brevo) or `console` | $0 |
+| Login-in-chat email | SMTP relay (Brevo) or `console` | $0 |
 | CI/CD | GitHub Actions (gate) + Vercel Git integration (deploy) | $0 |
 
 Three decisions shape the rest:
@@ -39,29 +39,44 @@ Three decisions shape the rest:
 
 ## Branches
 
+**One branch deploys. Nothing else does.**
+
 | Branch | What it is | What Vercel does | URL |
 |---|---|---|---|
-| `staging` | production (the Production Branch) | production deployment | `<project>.vercel.app`, later `agencx.app` (B-2) |
-| `development` | integration; feature branches PR into it | preview deployment | `<project>-git-development-<scope>.vercel.app` |
-| `feat/*` | in-flight work | preview deployment | one stable alias per branch |
+| `staging` | production - always live | production deployment | `<project>.vercel.app`, later `agencx.app` (B-2) |
+| `development` | integration; work happens here and locally | **nothing** | - |
+| `feat/*` | in-flight work | **nothing** | - |
 
-There is no `main`. `ci.yml` gates pushes to both branches and every PR;
-`deploy.yml` fires after CI goes green on `staging` and smoke-tests the live
-origin.
+There is no `main`. `ci.yml` gates pushes to `staging` and `development` and
+every PR; `deploy.yml` fires after CI goes green on `staging` and smoke-tests
+the live origin.
 
-One Vercel project serves both lanes, and which lane a push lands in is decided
-by exactly one setting - Settings > Git > **Production Branch**, set to
-`staging`. Every other branch produces a preview deployment with its own stable
-alias (`<project>-git-<branch>.vercel.app`). There is no way to get both lanes
-out of a single branch automatically: production versus preview is a property of
-the branch. A preview can be promoted to production by hand from the dashboard,
-which re-uses the build it already has - useful for a hotfix, not a pipeline.
+Two settings produce that table, and both are needed:
 
-The two lanes get **two Supabase projects**, joined to their lane by Vercel's
-per-target environment variables: the same variable name carries a different
-value for Production and for Preview. One shared project would mean preview
-deploys writing into live tenant data, and a migration run from a feature branch
-reaching production the moment it is pushed.
+1. Settings > Git > **Production Branch = `staging`**. This is what makes a push
+   to `staging` a *production* deployment rather than a preview. It cannot be
+   read back over the API, so check it in the dashboard.
+2. `ignoreCommand` in `vercel.json`:
+   `[ "$VERCEL_GIT_COMMIT_REF" != "staging" ]`. Vercel reads exit 0 as "ignore
+   this build" and exit 1 as "build it", so `staging` builds and every other
+   branch is skipped. Without this, pushing `development` would still burn a
+   preview build. It is preferred over `git.deploymentEnabled`, which takes an
+   explicit branch map and would need a new entry for every future branch.
+
+   One consequence worth knowing: a deploy started from the CLI has no git ref,
+   so `VERCEL_GIT_COMMIT_REF` is empty and the build is skipped like any other
+   non-`staging` branch. This project deploys through the Git integration only,
+   so that is the correct behaviour rather than a limitation - but it will look
+   like a hang if you ever reach for `vercel --prod`.
+
+Note that Vercel marks the **first** deployment of a freshly imported project as
+production regardless of which branch it came from. If the dashboard shows one
+old production deployment from an unrelated branch, that is what it is.
+
+There is deliberately **one Supabase project** behind this, shared by nothing
+else because nothing else deploys. The tradeoff is real and accepted while the
+audience is the founder: a bad migration reaches live data immediately, with no
+second environment to catch it in first. Revisit before onboarding a real tenant.
 
 ## What you can see with the auto URL
 
@@ -83,12 +98,12 @@ wildcard certificate nobody had purchased. There is no DNS step left in the way.
 - Free API keys: Google AI Studio, Cohere, optionally Groq + OpenRouter.
 - Push access to the GitHub repo.
 
-## Step 1 - Supabase (two projects)
+## Step 1 - Supabase
 
-Create **two** hosted projects, one per lane - production and preview - and run
-every step below against each. The free tier allows two active projects.
+Create one hosted project. It backs the deployed stack; local dev keeps using
+`docker compose up -d db` and never touches it.
 
-1. Note these values, per project:
+1. Note these values:
    - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project Settings > API).
    - `SUPABASE_SERVICE_ROLE_KEY` (same page). The backend presents it to GoTrue's
      Admin API and to Storage. A project created since Supabase moved to ES256
@@ -132,8 +147,9 @@ every step below against each. The free tier allows two active projects.
    `frontend/`. `vercel.json` at the root is what declares the two services;
    pointing the project at `frontend/` hides it and you get a frontend-only
    deploy that 404s every `/api` call.
-2. Set the **production branch to `staging`** (Settings > Git). `development`
-   then produces preview deployments.
+2. Set the **production branch to `staging`** (Settings > Git). Together with the
+   `ignoreCommand` in `vercel.json`, that makes `staging` the only branch that
+   deploys at all - see Branches above.
 3. Do **not** set `PORT`. Vercel injects it per service (the frontend was
    observed listening on 80) and both images honour it. A project-level `PORT`
    would apply to both services and send one of them to the wrong socket.
@@ -144,21 +160,26 @@ every step below against each. The free tier allows two active projects.
 - Cohere key -> `COHERE_API_KEY` (rerank).
 - Optional: Groq key (`LLM_FALLBACK_API_KEY`) and OpenRouter key
   (`LLM_FAILOVER_API_KEY`) for the two failover legs.
-- Email: create a Resend or Brevo free account and capture the SMTP
-  host/port/user/pass, or leave `EMAIL_PROVIDER=console` to log codes instead of
-  sending (demo-only).
+- Email: **use Brevo**, not Resend, until B-2 buys `agencx.app`. Resend delivers
+  only to your own account email until you verify a domain you own, which makes
+  it useless for showing anyone else. Brevo allows a verified *single sender*
+  with no domain at all: 300/day free, host `smtp-relay.brevo.com`, port 587,
+  username your Brevo login, password a generated SMTP key (not your account
+  password). Capture host/port/user/pass for step 4.
+
+  Port 465 (implicit TLS) is not supported: `SmtpEmailProvider` uses
+  `smtplib.SMTP` plus `starttls()`, which is the 587 shape. Every relay in play
+  offers 587, so this is a documented limit rather than a gap worth code.
+
+  Leaving `EMAIL_PROVIDER=console` is demo-only and has a sharp edge - see the
+  warning under step 4.
 
 ## Step 4 - Environment variables
 
-All of these are Vercel project environment variables, and every one must exist
-for **both** Production and Preview - the lane with the gap boots against
-nothing.
-
-Seven of them identify a Supabase project and therefore differ per target:
-`DATABASE_URL`, `WREN_APP_DB_PASSWORD`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and `UPLOADS_BUCKET`. Set each
-twice, once per lane, pointing at that lane's project from step 1. Everything
-else (LLM keys, Cohere, SMTP) is the same on both.
+All of these are Vercel project environment variables. With one database and one
+deployed branch they hold a single value each - but tick **both Production and
+Preview** anyway. It costs nothing, and it means a preview that ever does run
+(after a changed `ignoreCommand`, or a manual deploy) is not broken by omission.
 
 Backend service:
 
@@ -247,7 +268,8 @@ Until it is set the workflow no-ops with a notice rather than failing.
 The founder steps above are external. The code that makes them work is B-4
 (`docs/agencx/spec/10-deploy.md`, branch `feat/deploy-containers-cicd`):
 
-1. `vercel.json` - the two services and the rewrites that route them.
+1. `vercel.json` - the two services, the rewrites that route them, and the
+   `ignoreCommand` that keeps every branch but `staging` from building.
 2. `frontend/Dockerfile` + `output: "standalone"` in `next.config.ts` - the
    frontend as a self-contained container.
 3. `backend/Dockerfile` - retargeted off ECS, `PORT`-driven, plus a `test` stage
@@ -280,12 +302,17 @@ The founder steps above are external. The code that makes them work is B-4
    docker build -t wren-frontend frontend/
    ```
 
-3. Push a branch -> PR into `development`: `ci.yml` passes.
-4. Merge to `staging`: Vercel builds and deploys both services, then
-   `deploy.yml` smoke-tests `/health`, `/api/public/tenant/bytefix` and
-   `/bytefix` on the live origin.
-5. Open `<project>.vercel.app` -> owner login -> onboarding -> go-live lands on
-   Home. The seeded tenant's page renders at `<project>.vercel.app/bytefix`.
+3. Push a branch -> PR into `development`: `ci.yml` passes, and Vercel builds
+   **nothing**. A deployment appearing here means the `ignoreCommand` is not
+   taking effect.
+4. Merge to `staging`: Vercel builds and deploys both services with
+   `target: "production"`, then `deploy.yml` smoke-tests `/health`,
+   `/api/public/tenant/bytefix` and `/bytefix` on the live origin.
+5. Open `<project>.vercel.app` -> owner login, with the code arriving in a real
+   inbox -> onboarding, attaching a document -> go-live lands on Home. The seeded
+   tenant's page renders at `<project>.vercel.app/bytefix`.
+6. Ask for a sixth login code for one address inside an hour: it answers 429,
+   not a sixth email.
 
 ## Caveats to keep in mind
 
