@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import subprocess
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +44,7 @@ from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
 from app.retrieval.rerank import Reranker, get_reranker
 from app.shared import config, db
+from evals._git import git_sha
 from seeds.seed_injection_probe import SLUG, seed
 
 DATASET_PATH = Path(__file__).parent / "datasets" / "injection_set.jsonl"
@@ -237,21 +237,14 @@ async def run_eval(
 # --- reporting -------------------------------------------------------------------
 
 
-def _git_sha() -> str:
-    result = subprocess.run(  # noqa: S603 - fixed args, no shell, dev-tool only
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
-    )
-    return result.stdout.strip()
-
-
 async def _write_eval_run(conn: Any, tenant_id: UUID, metrics: dict[str, Any]) -> None:
-    git_sha = await run_in_threadpool(_git_sha)
+    sha = await run_in_threadpool(git_sha)
     await conn.execute(
         "insert into eval_runs (tenant_id, run_type, metrics, git_sha) "
         "values ($1, 'injection', $2, $3)",
         tenant_id,
         json.dumps(metrics),
-        git_sha,
+        sha,
     )
 
 

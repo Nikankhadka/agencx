@@ -64,8 +64,9 @@ stack cannot be a make prerequisite.
 ## Logging in
 
 The tenant console uses login-in-chat: type an email, get a 6-digit code. The
-code is issued and sent by **our backend**, not by Supabase - GoTrue only stores
-the identity. Where the code lands depends on `EMAIL_PROVIDER` in `backend/.env`:
+code is issued and sent by **the Agencx backend**, not by Supabase - GoTrue
+only stores the identity. Where the code lands depends on `EMAIL_PROVIDER` in
+`backend/.env`:
 
 - `console` (default) - the code is logged by the backend and served by
   `GET http://localhost:8000/api/auth/dev-login-code?email=...` (local only).

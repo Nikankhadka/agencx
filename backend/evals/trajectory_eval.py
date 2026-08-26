@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import subprocess
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -54,6 +53,7 @@ from app.llm.provider import LLMProvider
 from app.pricing.validation_gate import allowed_cents, extract_monetary_figures, is_hedged
 from app.retrieval.rerank import Reranker, get_reranker
 from app.shared import config, db
+from evals._git import git_sha
 from evals.trajectory_dataset import TrajectoryCase, load_cases, sync_eval_cases
 from seeds.seed_tenant1_phoneshop import SLUG
 
@@ -457,21 +457,14 @@ async def run_eval(
 # --- reporting -------------------------------------------------------------------
 
 
-def _git_sha() -> str:
-    result = subprocess.run(  # noqa: S603 - fixed args, no shell, dev-tool only
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
-    )
-    return result.stdout.strip()
-
-
 async def _write_eval_run(conn: Any, tenant_id: UUID, metrics: dict[str, float]) -> None:
-    git_sha = await run_in_threadpool(_git_sha)
+    sha = await run_in_threadpool(git_sha)
     await conn.execute(
         "insert into eval_runs (tenant_id, run_type, metrics, git_sha) "
         "values ($1, 'trajectory', $2, $3)",
         tenant_id,
         json.dumps(metrics),
-        git_sha,
+        sha,
     )
 
 

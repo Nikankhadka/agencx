@@ -17,7 +17,7 @@ weaken the fence to a known token. So the package caches what is expensive (the
 reads) and each turn builds its own prompt with a fresh spotlight, which is
 string work.
 
-ponytail: the cache is a module-level dict, so each ECS worker keeps its own
+ponytail: the cache is a module-level dict, so each container worker keeps its own
 copy and reassembles independently - at Stage 1 scale that is a few
 milliseconds per worker per knowledge change, not a problem worth a shared
 cache. The upgrade path is a shared store keyed identically

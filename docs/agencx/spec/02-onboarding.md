@@ -356,8 +356,8 @@ already pace the text, and a client-side word queue would fight the stream.
 
 ## O-6: Chips, the contact widget, and the ABN beat
 
-Added during the build (founder walkthrough, 2026-08-23), spec'd here like the
-rest.
+**Amendment** - recorded after the work shipped (founder walkthrough,
+2026-08-23). Shape per `README.md`.
 
 ### Summary
 
@@ -430,6 +430,9 @@ interview did not.
 
 ## O-7: A link that cannot be read says so, and says why
 
+**Amendment** - recorded after the work shipped (founder walkthrough,
+2026-08-23). Shape per `README.md`.
+
 ### Summary
 
 Send browser-like request headers on the ingest fetch, log the reason a scrape
@@ -461,6 +464,9 @@ stack - and the honest product behaviour is to say so.
 
 ## O-8: Go-live lands on Home without a blank screen
 
+**Amendment** - recorded after the work shipped (founder walkthrough,
+2026-08-23). Shape per `README.md`.
+
 ### Summary
 
 Keep the conversation on screen through go-live, prefetch `/home`, and stop the
@@ -488,6 +494,9 @@ only route to this code is an LLM-driven e2e interview. Verified by hand.
 ---
 
 ## O-9: An ABN the owner can read, and correct
+
+**Amendment** - recorded after the work shipped (founder walkthrough,
+2026-08-23). Shape per `README.md`.
 
 ### Summary
 

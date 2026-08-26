@@ -64,6 +64,34 @@ import contracts, typecheck, 78 frontend and 747 backend tests, format-check,
 production build - and the full Playwright suite **71 of 71**, where the
 baseline before the container fix was 56 passing with 8 failing.
 
+**The deploy is B-4** (`spec/10-deploy.md`, 2026-08-24). The whole product
+ships as one Vercel project running two container services - `vercel.json`
+routes `/api/*` and `/health` to the backend and everything else to the
+frontend, so all three surfaces serve from one origin and the browser never
+makes a cross-origin request in production. That supersedes both earlier plans:
+the AWS ECS/Terraform stack (`infra/*.tf`, kept and dormant, still validated by
+CI) and the Google Cloud Run backend `deploy.md` described before. The
+production image stays lean, so the deploy embeds through Google's hosted API
+(`GoogleEmbedder`, truncated to the schema's 384 dims) and reranks through
+Cohere. Two CI/CD breakages were found and fixed in the same ticket: this repo
+has `development` and `staging` and no `main`, so `ci.yml`'s `[main]` push
+filter meant pushes were never gated and `deploy.yml` had never fired once; and
+`deploy.yml` was still deploying the backend to AWS ECS. `staging` is now the
+production branch, `deploy.yml` builds nothing (Vercel's Git integration
+deploys) and smoke-tests the live origin instead, and the backend suite runs
+inside the shipping image's `test` stage so a test that quietly needs
+torch/sentence-transformers fails in CI rather than at deploy.
+
+That `test` stage caught something on its very first run, and `54cc0cd` fixed it:
+every eval that writes an `eval_runs` row died with `FileNotFoundError: 'git'`. The
+lean image carries no git binary and `.dockerignore` keeps `.git/` out of the build
+context, so the shell-out cannot succeed there by construction, and the `check=False`
+already on it does not help - a missing binary fails at exec, before there is a return
+code. The helper had been copy-pasted byte for byte into six eval modules, so the guard
+went into one shared `evals/_git.py::git_sha()` and the six copies went: 60 lines
+deleted, 18 added, two unit tests pinning both ways a SHA can be unknowable. An eval
+run in the image now records an empty SHA instead of crashing.
+
 O-3 pulled the **Settings > Knowledge** slice of S2 forward (D19), the way O-5
 pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 `/chats` and `/chats/[id]` are mounted chrome-free until E-1's tab bar re-homes
@@ -76,7 +104,7 @@ open for US-2, the `STATUS_TONE` map.
 
 ## Feature status matrix
 
-### Foundations & tenancy
+### Foundations and tenancy
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -91,7 +119,7 @@ open for US-2, the `STATUS_TONE` map.
 | URL scrape knowledge ingest path | BUILT | O-3: pasting a link in the onboarding thread scrapes it, ingests it as a `website` document, and reads back what it found; attaching a file works from the command pill's `+`. Images are refused (nothing reads them) |
 | Settings > Knowledge screen | BUILT | O-3 / D19: a source is processed into readable sections the owner corrects, held as a draft until they save it. Mobile-first, built from the prototype's destination screens. Pulled forward from S2; E-1 re-homes it in the two-tab shell |
 
-### Knowledge & retrieval
+### Knowledge and retrieval
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -102,7 +130,7 @@ open for US-2, the `STATUS_TONE` map.
 | `get_business_context` seam | BUILT | O-4 (`app/services/retrieval.py`): whole-corpus fast path under a measured token budget, hybrid pipeline above it, one shape |
 | Knowledge version + context-package cache | BUILT | P-4 derivation (0018 + `services/knowledge_version.py`) + P-3 package cache keyed by `(tenant_id, knowledge_version)` |
 
-### Agents & the money boundary
+### Agents and the money boundary
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -120,7 +148,7 @@ open for US-2, the `STATUS_TONE` map.
 | Cross-tenant leakage test | BUILT | `e7be3d2`; stays an absolute gate |
 | Spotlight delimiter fence | BUILT | `598f3a7`; stays |
 
-### Eval, observability & operations
+### Eval, observability and operations
 
 | Feature | Status | Evidence / change |
 |---|---|---|
@@ -144,19 +172,19 @@ open for US-2, the `STATUS_TONE` map.
 | Marketing pages | BUILT | `b2c46e9`, `27537d7`; superseded - the bare host is login-in-chat now (O-2), so B-1 had no marketing copy left to rename |
 | Copy rules enforced on screen | BUILT | B-1: the product is Agencx everywhere a user can see it, and `e2e/copy-rules.spec.ts` sweeps each surface's rendered text for "AI", "agent", "automated", "assistant" and "Wren". Proven to fail on a planted violation before being trusted green |
 
-### Deployment & portfolio
+### Deployment and portfolio
 
 | Feature | Status | Evidence / change |
 |---|---|---|
-| Deploy runbook (`docs/agencx/deploy.md`) | BUILT | `b3e578d`: the free stack (Vercel + Cloud Run + hosted Supabase + free LLM/embedding/rerank tiers), the founder steps in order, and what the auto URLs serve. Since D22 that is all three surfaces - the wildcard domain it used to wait on is gone. This is the plan of record; the AWS path below is dormant |
-| Terraform AWS backend | BUILT | `d368b03`; live `terraform apply` is a founder step (needs AWS secrets) |
-| Deploy end-to-end (CI image push + Vercel) | BLOCKED | needs founder AWS/Vercel/Supabase credentials; `deploy.yml` no-ops gracefully |
+| Deploy runbook ([deploy.md](deploy.md)) | BUILT | `b3e578d`, rewritten by B-4 for the Vercel topology: one project, two container services, hosted Supabase, and the free LLM, embedding and rerank tiers. The status banner is gone because the procedure it warned about is now the current one. Since D22 the auto URL serves all three surfaces |
+| Terraform AWS backend | BUILT | `d368b03`; superseded by B-4 and dormant. `infra/*.tf` is kept as evidence and still validated by the `infra` job in `ci.yml`, so it cannot rot silently, but nothing deploys through it |
+| Deploy end-to-end (both services on Vercel) | BUILT | B-4: `vercel.json` (two services plus rewrites), `frontend/Dockerfile` with `output: "standalone"`, `backend/Dockerfile` retargeted with a `test` stage, `GoogleEmbedder`, the 4MB upload cap under the platform body limit, and both workflows pointed at branches that exist. The live deploy is still a founder step (Supabase project, Vercel import, keys); `deploy.yml` no-ops with a notice until `SMOKE_TEST_BASE_URL` exists |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
 | Eval report | BUILT | evidence in `docs/archive/artifacts/eval-report.md` |
 | Security write-up | BUILT | evidence in `docs/archive/artifacts/security.md` |
 | Demo walkthrough video | NEW | founder step, unticketed |
 
-## Provider & latency (new Agencx work, all NEW until P-tickets land)
+## Provider and latency (new Agencx work, all NEW until P-tickets land)
 
 | Feature | Status | Ticket |
 |---|---|---|
@@ -177,8 +205,8 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1. D-1/D-3/D-4 and B-2 defer. The E block is four tickets
-since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
+D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3/D-4 and B-2 defer. The E block is four
+tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 (Business hub + Booking page) -> E-2 (hide the advanced screens).
 
 | Ticket | Status | Commit |
@@ -188,6 +216,7 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | B-1 Copy rename to Agencx | done | `99e95c3` |
 | B-2 Point agencx.app at the deployed stack | deferred (founder buys the domain) | rewritten by D22 - one DNS record, no wildcard |
 | B-3 Semantic colour convention + lighter primary | done | US-1 `969bfdd` (O-5), US-2 `97740d4` |
+| B-4 Deploy as two containers behind one Vercel origin ([10-deploy.md](spec/10-deploy.md)) | done | `21da213` + `54cc0cd` (eval git shell-out); supersedes the Cloud Run plan in [deploy.md](deploy.md) and the AWS ECS target in [architecture.md](architecture.md); the live deploy stays a founder step |
 | C-1 Money guardrail: verbatim owner material | done | `bee1775` |
 | C-2 Gate every reply, not just money routes | done | `70a0ea1` |
 | C-3 Prompt rule: state figures exactly as listed | done | `6b043b6` |
@@ -222,6 +251,19 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
 
 ## Known gaps (not ticket failures - waiting on external setup)
+
+- **The platform console (`/admin`) is out of Phase 1 and does not work on the
+  hosted Supabase project** (founder decision, 2026-08-26). It is not one of the
+  three pillars, so nothing depends on it. It signs in through supabase-js
+  `signInWithPassword`, and the project issues ES256 session tokens while
+  `shared/auth.py::verify_token` only verifies HS256 - so every console request
+  gets a 401. The owner and customer surfaces are unaffected: they use the
+  backend-minted HS256 session (`services/identity.py::mint_session`). Fixing it
+  means verifying ES256 through the project JWKS, which needs `pyjwt[crypto]`
+  and a change at the auth boundary - its own ticket, not a deploy step.
+  The `platform_admin` **database** role is unaffected and stays: it is created
+  in migration 0002, carries live RLS policies, and `tests/test_rls.py` asserts
+  on it.
 
 - **A platform-provisioned tenant is stuck at `provisioning`** (found while
   closing E-5's live/not-live bullet, 2026-08-23). `POST /api/platform/tenants`
@@ -271,10 +313,22 @@ since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to
   upstream 429 rate-limiting; all LLM-touching code paths are proven with
   stubbed providers in CI.
-- **No hosted Supabase project yet**: real email/password login from the browser
-  is blocked until it exists; backend auth is fully tested with locally minted
-  tokens. The login-in-chat (O-2) work also needs an email-sending provider for
-  real delivery.
+- **Login-in-chat needs a relay account provisioned** (O-2). The hosted Supabase
+  project exists and the deployed stack authenticates against it, so browser
+  login is no longer blocked there. The code path is complete as of this branch:
+  `SmtpEmailProvider` now upgrades with STARTTLS and authenticates when
+  `EMAIL_SMTP_USER`/`EMAIL_SMTP_PASSWORD` are set, which is what every hosted
+  relay requires and what Mailpit refuses - found because the deployed preview
+  issued codes nobody could receive. What remains is purely founder setup: a
+  **Brevo** account and those vars set per `deploy.md` step 3. Not Resend, which
+  delivers only to your own account email until you verify a domain you own, and
+  `agencx.app` is unbought (B-2). Until the vars are set, `EMAIL_PROVIDER`
+  defaults to `console`, which logs the code and answers 202, and
+  `/api/auth/dev-login-code` is gated to `ENVIRONMENT=local` - so a deploy left
+  on the default cannot be logged into at all. Issuance is now capped at 5 per
+  address per hour, added alongside the delivery fix: unthrottled, a public
+  route that mails arbitrary addresses on demand would drain a free tier in a
+  minute and get the sender blacklisted.
 - **Business type does not vary the interview (O-1, US-2).** The PRD glossary
   describes a `business_types` row carrying "a profile template and prompt
   fragments"; neither half has a consumer in Phase 1, and none of the seven

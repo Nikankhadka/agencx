@@ -30,7 +30,6 @@ import argparse
 import asyncio
 import json
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,6 +48,7 @@ from app.llm.embedder import Embedder, get_embedder
 from app.llm.provider import LLMProvider
 from app.retrieval.rerank import Reranker, get_reranker
 from app.shared import config, db
+from evals._git import git_sha
 from seeds.seed_tenant1_phoneshop import SLUG
 
 DATASET_PATH = Path(__file__).parent / "datasets" / "tenant1_generation.jsonl"
@@ -455,21 +455,14 @@ async def run_eval(
     return metrics, results
 
 
-def _git_sha() -> str:
-    result = subprocess.run(  # noqa: S603 - fixed args, no shell, dev-tool only
-        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
-    )
-    return result.stdout.strip()
-
-
 async def _write_eval_run(conn: Any, tenant_id: UUID, metrics: dict[str, float]) -> None:
-    git_sha = await run_in_threadpool(_git_sha)
+    sha = await run_in_threadpool(git_sha)
     await conn.execute(
         "insert into eval_runs (tenant_id, run_type, metrics, git_sha) "
         "values ($1, 'generation', $2, $3)",
         tenant_id,
         json.dumps(metrics),
-        git_sha,
+        sha,
     )
 
 

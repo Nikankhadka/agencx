@@ -1,4 +1,4 @@
-# Agencx - Spec & User Stories (the tickets)
+# Agencx - Spec and User Stories (the tickets)
 
 The complete ticket set for the Agencx change build, organized by build phase.
 Each ticket is a section inside its phase file with a detailed spec: user
@@ -17,6 +17,25 @@ One ticket = one commit; the commit message starts with the ticket id.
 | Tests | What must be green for the ticket to be done |
 | Files touched | Expected files/modules (discovered precisely at implementation time) |
 | Definition of done | The checklist that closes the ticket |
+
+### Two shapes: ticket and amendment
+
+Files in `spec/` hold two genres, and they are read differently.
+
+- **Ticket** - a forward spec, written before the work. It carries all seven
+  sections above, and its acceptance criteria are unchecked until the work
+  lands. This is the default shape and what a new piece of work gets.
+- **Amendment** - a record written after the work shipped, when a founder
+  walkthrough turns up a fix inside a phase that had already closed. It carries
+  Summary, Why, and User stories with acceptance already checked, plus what was
+  deliberately not done and how the result was verified. It omits Technical
+  spec, Tests, Files touched, and Definition of done, because those describe a
+  plan and there was none - the code is the plan, and `git show` is the record.
+
+An amendment declares itself in a line directly under its heading, naming where
+it came from. The amendments in this set are **O-6, O-7, O-8, O-9, and E-6**.
+Do not backfill the missing sections into them; a retrospective "Technical
+spec" is invented, not recorded.
 
 ## Building UI: the prototype is the source, not a mood board
 
@@ -61,11 +80,14 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | `07-hygiene.md` | F-1 |
 | `08-deferred.md` | B-2, D-1, D-3, D-4 |
 | `09-devex.md` | K-1 |
+| `10-deploy.md` | B-4 |
 
 Tickets added during the build keep the numbering of the phase they belong to
 rather than starting a new file: O-6 to O-9 and E-6 all came out of founder
 walkthroughs after their phase had closed, and K-1 is developer experience
-rather than product, so it sits outside the pillar order below.
+rather than product, so it sits outside the pillar order below. B-4 is the
+deploy - it follows the three pillars rather than sitting inside one, so it gets
+its own phase file even though its id belongs to the B block.
 
 ## Phases and dependencies
 
@@ -76,6 +98,12 @@ Phase 1 ships only: **(1) business onboarding, (2) customer chat query handling,
 leads, quotes, payments, scheduling, or invoicing as default flows). Everything
 else defers to Phase 2 / Stage 2 backlog.
 
+The **platform console (`/admin`) is not a pillar** and is not part of Phase 1.
+It is built and works locally, but its hosted login is broken on an
+asymmetric-signing Supabase project - see Known gaps in
+[progress.md](../progress.md). Treat it as out of scope when judging whether
+Phase 1 is done.
+
 | Order | Phase file | Pillar | Blocked by |
 |---|---|---|---|
 | 1 | `01-foundation.md` | Foundation (docs restructure) - **done** | - |
@@ -85,17 +113,18 @@ else defers to Phase 2 / Stage 2 backlog.
 | 5 | `05-business-page.md` | Business page: Chat + Business tabs, advanced screens hidden | A |
 | 6 | `06-polish.md` | Polish/quality: Agencx copy, colour convention, platform minimal, lean default, CI boundary, eval | C, P |
 | 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
+| 8 | `10-deploy.md` | Deployment: two containers behind one Vercel origin | the three pillars |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
 C-1, C-2, C-3, C-5, C-6, C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1}
--> F-1. C-5 and C-6 precede C-4 so the money matrix is written once, against
-the final escalation/takeover behaviour rather than the terminal one.
+-> F-1 -> B-4. C-5 and C-6 precede C-4 so the money matrix is written once,
+against the final escalation/takeover behaviour rather than the terminal one.
 
 **Deferred (not Phase 1)** - see `08-deferred.md`:
 
 | Ticket | Why deferred |
 |---|---|
-| B-2 | Point `agencx.app` at the deployed stack - founder buys the domain; one DNS record since D22; local dev unaffected |
+| B-2 | Point `agencx.app` at the deployed stack - founder buys the domain; one DNS record since D22; local dev unaffected. Depends on B-4 |
 | D-1, D-3, D-4 | Tool-gating machinery + toggle UI + tests - Phase 2 (merge-plan open question) |
 | D-2 | *Kept in Phase 1*: flips the tenant default to the lean toolset so quoting/pricing stays OFF by accident - one-line migration 0016 |
 | Payments, quoting, scheduling, invoicing, leads, money screens | No tickets; unticketed Stage 2 backlog (`docs/archive/agencx-planning/stage-2-backlog.md`) - not built now |
@@ -176,6 +205,12 @@ the final escalation/takeover behaviour rather than the terminal one.
 | Id | Title |
 |---|---|
 | K-1 | Everything runs in containers |
+
+### Deployment (`10-deploy.md`)
+
+| Id | Title |
+|---|---|
+| B-4 | Deploy as two containers behind one Vercel origin |
 
 ### Deferred (`08-deferred.md`)
 

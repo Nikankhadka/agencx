@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -24,6 +23,7 @@ from app.ingestion.pipeline import ingest_catalog_items, process_document
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
+from app.shared.storage import document_key, get_storage
 
 if TYPE_CHECKING:
     from app.shared.db import AppConnection
@@ -308,8 +308,6 @@ async def _seed_core(tenant_id: UUID) -> None:
 
 
 async def _seed_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
-    uploads_dir = Path(get_settings().uploads_dir) / str(tenant_id)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
 
     docs = [
         ("policy.md", "policy", POLICY_MD),
@@ -319,7 +317,9 @@ async def _seed_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         for filename, doc_type, content in docs:
             document_id = uuid4()
-            (uploads_dir / f"{document_id}.md").write_text(content)
+            await get_storage().put(
+                document_key(tenant_id, document_id, ".md"), content.encode("utf-8")
+            )
             await conn.execute(
                 "insert into documents (id, tenant_id, filename, doc_type, status) "
                 "values ($1, $2, $3, $4, 'pending')",

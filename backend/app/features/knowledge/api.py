@@ -26,7 +26,10 @@ router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 ALLOWED_EXTENSIONS = frozenset({".md", ".txt", ".pdf", ".csv", ".json", ".docx"})
 ALLOWED_DOC_TYPES = frozenset({"policy", "faq", "catalog", "price_list", "other", "website"})
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# B-4: bounded by the deploy target, not by ingestion. Vercel Functions reject
+# request bodies over 4.5MB at the edge, so a limit above that would trade this
+# endpoint's clear 422 for an opaque platform 413 the user cannot act on.
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
 
 class DocumentResponse(BaseModel):

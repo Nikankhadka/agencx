@@ -13,7 +13,7 @@ Agencx is a domain-agnostic, multi-tenant SaaS where any small business (dentist
 Detected from the scaffold (phase 0); pinned by the Architecture Doc:
 
 - **Frontend (all 3 surfaces):** Next.js 16 / React 19 / TypeScript 5, Tailwind v4 (npm) - one app, deployed to Vercel. All visual values live in `frontend/src/styles/theme.css` design tokens (CI-enforced).
-- **Backend (agents, RAG, pricing, eval):** Python 3.12 (pinned via `.python-version`), FastAPI, managed with **uv** - one service on AWS ECS Fargate via Terraform
+- **Backend (agents, RAG, pricing, eval):** Python 3.12 (pinned via `.python-version`), FastAPI, managed with **uv** - one container service on Vercel, beside the frontend and behind the same origin (B-4). The AWS ECS Terraform stack is dormant
 - **Database/Auth:** Supabase (Postgres + pgvector + Auth + RLS); local dev via `docker compose up -d db` (pgvector/pgvector:pg16)
 - **LLM:** Provider abstraction (`backend/app/llm/provider.py`) with `openai_compat` speaking the OpenAI wire format to any endpoint (Google AI Studio free tier primary, Groq fallback, OpenRouter gemma failover - three tiers, env config) and Azure (supported, requires credentials)
 - **Orchestration:** LangGraph (supervisor with tools, one call per turn; onboarding is a plain tool loop)
@@ -73,7 +73,7 @@ Run `make help` for the full list with descriptions.
 - `docs/conventions.md` - binding conventions (root of docs/).
 - `frontend/` - Next.js app (three surfaces via route groups; tokens in `src/styles/theme.css`)
 - `backend/` - FastAPI app (`app/`), tests, and (from phase 1) migrations, seeds, evals
-- `infra/` - Terraform (7-file AWS stack: VPC, ALB, ECR, ECS Fargate, IAM, Secrets Manager)
+- `infra/` - Terraform (7-file AWS stack, dormant since B-4 - still CI-validated, deployed by nothing)
 - `.agents/` - generated file map and session memory
 
 See `.agents/map.md` for the full generated file map.

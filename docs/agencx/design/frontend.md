@@ -1,4 +1,4 @@
-# Agencx - Frontend Design System & Surface Specs
+# Agencx - Frontend Design System and Surface Specs
 
 The implementation truth for UI. The pixel standard of `docs/conventions.md`
 section 6 applies to everything here. Design language: **Material 3 tonal
@@ -551,7 +551,7 @@ stating, because each is a way the continuity could be lost by accident:
 - **No impersonation** - every agent identifies as an assistant acting on behalf
   of Agencx, never as the business owner or as human.
 
-## 10. Accessibility & quality bar
+## 10. Accessibility and quality bar
 
 - WCAG AA contrast on every token pair, plus the runtime brand check (section 5)
 - Full keyboard navigation; `:focus-visible` ring on every interactive element;

@@ -55,7 +55,7 @@
 
 ## Critical Gotchas
 
-### Database & Auth
+### Database and auth
 
 - **Every tenant table needs FORCE ROW LEVEL SECURITY** and the API must connect as `wren_app` role (not `postgres`). `docs/agencx/design/database.md` section 2.
 - **`tenant_context` (app/core/db.py)**: the ONLY place tenant context is set; do NOT nest it (each level acquires another pooled connection, 30s timeout). Tests prove no context leaks.
@@ -93,7 +93,7 @@
 - **PassthroughReranker test doubles** must return `score=1.0` for kept chunks (frozen dataclass, use `dataclasses.replace`). The old `candidates[:top_k]` pattern leaks RRF-fused scores that fail the [0,1] relevance contract.
 - **Two uvicorns bound to the same port**: the plain one shadows the reloader, so code edits appear not to take effect. Check with `lsof -nP -iTCP:8000 -sTCP:LISTEN`.
 
-### Demo & GoTrue
+### Demo and GoTrue
 
 - **GoTrue needs `auth` schema pre-created**: `create schema if not exists auth` before auth starts.
 - **`search_path` collision**: GoTrue connects as `postgres` and queries `users` unqualified -> resolves to `public.users`. Fix: `GOTRUE_DB_DATABASE_URL` carries `?options=-c%20search_path%3Dauth`.
@@ -107,15 +107,58 @@
 - **Compose env precedence is the whole trick**: real env vars beat `.env` values in pydantic-settings, so the compose `environment:` block repoints DATABASE_URL->db, SUPABASE_URL->auth-proxy, EMAIL_SMTP_HOST->mailpit inside containers while host-facing URLs stay localhost.
 - **Server-side vs browser URL split**: NEXT_PUBLIC_* values are inlined into browser bundles, so they must stay resolvable from the user's browser (localhost). Server-only fetches read `API_INTERNAL_URL` instead (see `src/lib/tenant.ts`) - no NEXT_ prefix means it never reaches client code.
 - **Chromium pins `*.localhost` to 127.0.0.1** regardless of /etc/hosts/extra_hosts - no aliasing trick works for e2e browsers. The e2e container therefore mirrors the stack onto its own loopback with three socat forwards (3000/8000/54321), making specs work untouched.
-- **`next dev` briefly holds two copies of a streamed page** (2026-08-23): on some loads of the customer surface the server tree and the client tree are both in the DOM for up to ~half a second, then it settles to one. Anything that addresses an element right after `goto` gets a Playwright strict-mode violation ("resolved to 2 elements"), intermittently and on a different test each run. The tell is that one copy carries React's SSR id (`_r_0_`) and no `autofocus`, the other a client id and the attribute. Fix in the spec, not the app: assert `toHaveCount(1)` before interacting (`e2e/typing-indicator.spec.ts::ask`). Not reproduced against a production build.
+- **`next dev` briefly holds two copies of a streamed page** (2026-08-23): on some loads of the customer surface the server tree and the client tree are both in the DOM for up to ~half a second, then it settles to one. Anything that addresses an element right after `goto` gets a Playwright strict-mode violation ("resolved to 2 elements"), intermittently and on a different test each run. The tell is that one copy carries React's SSR id (`_r_0_`) and no `autofocus`, the other a client id and the attribute. Fix in the spec, not the app - but a one-shot `toHaveCount(1)` before the fill is NOT enough (B-4): the count goes 1 -> 2 -> 1 as hydration lands, so a guard that passed can be stale by the time the next call re-resolves the locator. Wrap the guard and the interaction together in `await expect(async () => {...}).toPass()` (`e2e/typing-indicator.spec.ts::ask`). Not reproduced against a production build.
 - **A new `@theme` token silently does nothing until `/app/.next` is wiped** (2026-08-23): Turbopack's `@theme` scan set lives in the `wren-next-cache` VOLUME, so it survives `docker restart` and survives `rm -rf /app/.next/cache` - the whole directory has to go. `make dev-reset` does exactly that and restarts the frontend; cost about a minute of rebuild. This burned an hour during E-6, with a token rendering at the 16px fallback while the CSS was correct.
 - **torch resolves from the CPU index** (`[tool.uv.sources]` in backend/pyproject.toml, torch declared as a DIRECT local-ml dep - uv routes sources only for direct deps). PyPI linux wheels drag ~5GB of CUDA packages; CPU index ships identical runtime. Regenerate lock via `uv lock` after touching sources.
+- **Node is pinned to 24.19.0 (Krypton), and 26 is deliberately not used**
+  (2026-08-24): v22 Jod went to Maintenance 2025-10-21, so the stack was already
+  off Active LTS. v24 is Active LTS to 2026-10-20 and supported to **2028-04-30**;
+  v26 does not become LTS until 2026-10-28, and production runs LTS only. Node 24
+  goes to Maintenance in Oct 2026 - that is expected and fine, the support window
+  is what was bought, not the label. Pinned in four places that must agree:
+  `frontend/Dockerfile` (3 stages), `frontend/Dockerfile.dev`, `ci.yml`'s
+  `node-version`, and `@types/node`. **Check `nodejs/Release/schedule.json`, not
+  the table on nodejs.org/en/about/previous-releases** - that page renders the
+  v22/v24 statuses inverted.
 - **Dev container PATH must include `/app/.venv/bin`** (backend) - uv installs there but bare `python` otherwise resolves to system python with zero deps. Same class of bug: frontend CMD needs node_modules/.bin on PATH or `next` is "not found".
-- **The e2e runner needs git** (eval `_git_sha()` shells out); installed in Dockerfile.dev since hosts/CI always have it.
+- **Git is optional for the eval gate, not required** (corrected 2026-08-24): `evals/_git.py::git_sha()` stamps `eval_runs.git_sha` and returns `""` when git is missing or the tree is not a repository. Dockerfile.dev still installs git so dev runs record a real SHA - that is a nicety, not a dependency. The old note here claimed "hosts/CI always have it"; see the Deploy (B-4) entry for why that was wrong.
 - **E2E suite has pre-existing order-dependent flakes** (~2-4 specs per run fail differently each time; reproduced identically with a native runner against the same stack - not a containerization regression). Candidate follow-up ticket.
 - **Stale volume `wren_wren-pgdata`** predates the rename to project name `agencx`; safe to delete manually if disk matters, not touched by make targets.
 
-### LLM & Eval
+### Deploy (B-4)
+
+- **`backend/.dockerignore` excluded `tests/`**, which silently made the
+  Dockerfile's `test` stage unable to run a suite: `.dockerignore` filters the
+  build context before any stage can `COPY` from it, so no `COPY tests/` in a
+  later stage can rescue them. Fixed by un-ignoring `tests/` and having the
+  runtime stage `rm -rf /app/tests` instead, which keeps the shipping image free
+  of test code.
+- **This repo has no `main` branch.** `development` is integration, `staging` is
+  production. Both workflows used to filter on `[main]`, so `ci.yml` gated
+  nothing on push and `deploy.yml` never fired once. Check the branch list
+  before trusting a workflow trigger here.
+- **`NEXT_PUBLIC_*` are inlined at BUILD time**, so `frontend/Dockerfile` takes
+  them as build args. `ENV X=$X` with an undefined ARG sets an empty string and
+  *shadows* anything the build environment supplied - unverified against a real
+  Vercel build, so check the deployed bundle actually carries the Supabase URL.
+- **Empty `NEXT_PUBLIC_API_URL` is load bearing**, not an oversight: callers use
+  `?? "http://localhost:8000"`, and `??` only falls back on null/undefined, so
+  `""` survives and every call becomes a same-origin `/api/...`.
+- **The production image cannot embed or rerank locally** (`--no-group
+  local-ml`). `EMBEDDER=local` or `RERANKER=local` there fails at first use with
+  `ModuleNotFoundError`, by design. Every real import of
+  sentence-transformers/torch in `app/` is lazy and inside a function, which is
+  what lets the lean image import the modules at all.
+- **The `test` stage has no git, and that broke every eval that writes a run row**
+  (`54cc0cd`, the fix that followed B-4). The lean production image carries no git
+  binary and `.dockerignore` keeps `.git/` out of the build context, so the shell-out
+  cannot succeed there by construction. `subprocess.run(..., check=False)` does not
+  cover this: a missing binary fails at exec, before there is a return code to check.
+  The helper had been copy-pasted byte-for-byte into six eval modules, so the guard
+  went into one shared `evals/_git.py` and the six copies went away. **The general
+  lesson: `check=False` is not the same as "this cannot raise".**
+
+### LLM and eval
 
 - **LLMProvider `chat_stream()`**: declared `def` returning `AsyncIterator[str]`, not `async def` - correct pattern for abstractmethod whose implementations are async generators.
 - **RAGAS intentionally not used**: eval metrics use this project's own `LLMProvider.extract()` structured-output pattern, never LangChain chat-model wrappers.

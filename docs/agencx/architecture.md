@@ -34,7 +34,7 @@ mechanism, and money as the one thing a model never touches.
 | Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced) |
 | Retrieval | Dense (pgvector HNSW) + sparse (Postgres FTS) + RRF (k=60) + cross-encoder rerank | One `retrieve()` behind `get_business_context`; whole-corpus fast path below the token threshold |
 | Identity | Email + 6-digit code issued and verified inside the chat | Decision 6; zero paid dependencies in Stage 1 |
-| Infra | Backend: AWS ECS via the existing Terraform | Frontend host open (decision 10) |
+| Infra | Both services as containers in one Vercel project, same origin (B-4) | Supersedes AWS ECS, whose Terraform stays as dormant evidence; decision 10's open frontend host is closed by the same move |
 | Model access | Every call through the provider layer (`app/llm/provider.py`) | Providers are env config; free tiers are the default; budget capped |
 
 ## 3. Decision ledger and ADRs
@@ -366,7 +366,7 @@ configuration, watched in the dashboards.
 |---|---|---|
 | Agent framework for onboarding | Onboarding is a plain, bounded tool loop (<=4 tool calls/turn, <=40 turns) - a framework would buy nothing | The onboarding loop grows parallel branching model nodes of its own |
 | Message queue | Nothing at Stage 1 volume needs async durability Postgres cannot provide | Webhook or send volume makes in-request processing unreliable (Stage 2 payments) |
-| Microservices | One deployable, one repo; the module boundaries are enforced by lint, not by network calls | Never, at this scale |
+| Microservices | One repo, one origin; since B-4 two container services, but the module boundaries are enforced by lint, not by network calls | Never, at this scale |
 | Separate voice infra | Voice is out of the Stage 1 slice | Voice returns to scope, post-validation |
 | Two-way calendar sync | Write-only delivery is the value; read-and-reconcile adds conflict resolution for no validated gain | Post-validation, when scheduling lands |
 | Settings tree | Decision 7: the Business tab is the surface for seeing/correcting what the agent knows | If the Business tab fails the trust test in a cohort - logged, not assumed |
@@ -386,4 +386,4 @@ in `spec/` adapt, gate, hide, or extend - they do not rebuild.
 | Money | pricing engine (`app/pricing/engine.py`), `price_gate.py` | Kept; C-1..C-4 loosen the allowed figure set to include verbatim owner material; engine output stays a source only for quote-enabled tenants |
 | Eval | `evals/` (retrieval, generation, trajectory, injection, leakage, run_gate) | Kept; G-1 re-cuts the case set for the lean toolset |
 | Observability | `app/observability/{cost,tracing}.py`, Langfuse | Kept |
-| Infra | `infra/*.tf`, `deploy.yml` | Kept |
+| Infra | `infra/*.tf`, `deploy.yml` | Re-cut by B-4: the Terraform is dormant (still CI-validated, deployed by nothing) and `deploy.yml` is now a smoke test, not an ECS deploy |

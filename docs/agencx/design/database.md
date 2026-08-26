@@ -87,7 +87,7 @@ create policy service_signup_insert on <t>
 every tenant-scoped table must return zero tenant-B rows - including through
 joins, retrieval, and tool paths.
 
-## 3. Tenancy & identity
+## 3. Tenancy and identity
 
 ```sql
 create table tenants (
@@ -180,7 +180,7 @@ by `wren_resolver` (NOLOGIN, BYPASSRLS), SECURITY DEFINER, and returns only
 public columns. Helper functions `resolve_user_tenant(p_user_id)` and
 `resolve_platform_admin(p_user_id)` (migration 0009) back the auth middleware.
 
-## 4. Knowledge & retrieval
+## 4. Knowledge and retrieval
 
 ```sql
 create table documents (
@@ -288,7 +288,7 @@ Agencx these tables exist but are dormant for lean tenants (D-1): the engine
 runs only when quoting is enabled, and the quote tools are absent from the
 enabled set.
 
-## 6. Conversations & operations
+## 6. Conversations and operations
 
 ```sql
 create table conversations (
@@ -356,7 +356,7 @@ create unique index escalations_open_conversation_idx   -- T-020: no duplicate o
 
 All Shape A.
 
-## 7. Eval & cost
+## 7. Eval and cost
 
 ```sql
 create table eval_cases (

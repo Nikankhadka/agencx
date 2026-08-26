@@ -3,13 +3,13 @@
 What building Wren actually taught, per subsystem: what was learned, what
 surprised, and what I would change. Written for a reader deciding whether the
 engineering judgement here is sound - so it favors the honest wrinkle over the
-tidy retrospective. The numbers referenced live in
-[`docs/artifacts/eval-report.md`](docs/artifacts/eval-report.md); the security
-claims in [`docs/artifacts/security.md`](docs/artifacts/security.md).
+tidy retrospective. The numbers referenced live in the
+[eval report](docs/archive/artifacts/eval-report.md); the security claims in the
+[security write-up](docs/archive/artifacts/security.md).
 
 ---
 
-## Tenancy & RLS
+## Tenancy and RLS
 
 **Learned.** Row-level security is only as strong as the role that connects.
 The whole isolation guarantee rests on the app connecting as a *non-owner*

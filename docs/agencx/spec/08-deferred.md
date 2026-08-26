@@ -18,10 +18,11 @@ Tickets in this file:
 
 ### Summary
 
-Buy the domain, point it at the Vercel project and the backend service, and
-narrow CORS to it. No wildcard: since **D22** a tenant is a path
-(`agencx.app/{slug}`), so this is one A/CNAME record and one certificate that
-Vercel issues automatically.
+Buy the domain and point it at the Vercel project. No wildcard: since **D22** a
+tenant is a path (`agencx.app/{slug}`), so this is one A/CNAME record and one
+certificate that Vercel issues automatically. Since **B-4** the frontend and the
+backend are two services behind that one origin, so there is no second hostname
+and no CORS to narrow either.
 
 ### Why
 
@@ -41,18 +42,21 @@ page. What is left is the founder step of owning a domain.
 - [ ] `agencx.app` (apex + `www`) resolves to the Vercel project; `www`
   redirects to the apex so one address is canonical
 - [ ] `agencx.app/{slug}`, `agencx.app/login` and `agencx.app/admin` all serve
-- [ ] The backend has its own hostname and TLS
+- [ ] `agencx.app/api/*` and `agencx.app/health` reach the backend service on
+  the same origin (B-4's rewrites), so the backend needs no hostname of its own
 
 #### US-2 CORS names the real origin
 
-**As** the maintainer,
-**I want** `_ALLOWED_ORIGIN_REGEX` to name the production origin,
-**so that** the deploy stops relying on the auto-URL widening.
+**Void since B-4.** The deploy puts the frontend and the backend behind one
+Vercel origin (`vercel.json` rewrites `/api/*` to the backend service), so the
+browser makes no cross-origin request in production and there is no production
+origin for `_ALLOWED_ORIGIN_REGEX` to name - it covers local dev only, which the
+domain move does not touch. Recorded here rather than ticked, the way E-5's
+live/not-live bullet was.
 
-- [ ] `backend/app/main.py` and `docker/auth-proxy.conf` carry the same origin
-  set (they mirror each other by comment today - keep them in step)
-- [ ] `backend/tests/test_health.py`'s allow/reject matrix covers it
-- [ ] Local dev keeps working on `http://localhost:3000`
+- [x] Nothing left to do: B-4 shrank `_ALLOWED_ORIGIN_REGEX` to `localhost` and
+  moved `wren.app` and `agencx.app` into the reject half of
+  `backend/tests/test_health.py`'s matrix, which a domain move cannot change
 
 #### US-3 Nothing else changes
 
@@ -75,18 +79,17 @@ page. What is left is the founder step of owning a domain.
 
 ### Tests
 
-- Backend CORS test: allow/reject origin matrix
 - E2E unchanged - the specs are relative to `baseURL` and name no host
 
 ### Files touched
 
-- `backend/app/main.py`, `docker/auth-proxy.conf`, `backend/tests/test_health.py`
-- `docs/agencx/deploy.md`, `README.md` (the domain appears in prose)
+- `docs/agencx/deploy.md`, `README.md` (the domain appears in prose). Since B-4
+  the ticket touches no application code at all - it is one DNS record and one
+  Vercel domain binding.
 
 ### Definition of done
 
 - [ ] All three surfaces serve on the real domain
-- [ ] CORS matrix green
 - [ ] Local dev unaffected
 
 ---
