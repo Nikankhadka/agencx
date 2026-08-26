@@ -15,6 +15,8 @@ import logging
 import smtplib
 from email.message import EmailMessage
 
+from starlette.concurrency import run_in_threadpool
+
 from app.shared.config import get_settings
 
 logger = logging.getLogger("app.services.email")
@@ -75,19 +77,24 @@ class SmtpEmailProvider(EmailProvider):
         self._user = user
         self._password = password
 
+    def _send(self, message: EmailMessage) -> None:
+        with smtplib.SMTP(self._host, self._port, timeout=15) as smtp:
+            if self._user and self._password:
+                smtp.starttls()
+                smtp.login(self._user, self._password)
+            smtp.send_message(message)
+
     async def send_login_code(self, *, email: str, code: str) -> None:
         message = EmailMessage()
         message["Subject"] = "Your login code"
         message["From"] = self._sender
         message["To"] = email
         message.set_content(f"Your code is {code}.")
-        # smtplib is synchronous; a login-code send is rare and tiny, so the
-        # blocking call is acceptable here (run in a thread for real load).
-        with smtplib.SMTP(self._host, self._port, timeout=15) as smtp:
-            if self._user and self._password:
-                smtp.starttls()
-                smtp.login(self._user, self._password)
-            smtp.send_message(message)
+        # smtplib is synchronous and a hosted relay is a network call with a
+        # 15s timeout, so it runs in a thread: awaiting it inline would park
+        # the event loop - and with it every other request on this instance -
+        # for as long as the relay takes to answer.
+        await run_in_threadpool(self._send, message)
 
 
 def get_email_provider() -> EmailProvider:
