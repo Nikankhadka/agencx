@@ -260,6 +260,18 @@ look like a missing variable, so check them by name after any project rebuild:
 `RERANKER=cohere` is set and looks fine), `SUPABASE_SERVICE_ROLE_KEY`, and the
 `EMAIL_SMTP_*`/`EMAIL_PROVIDER` pair - see the two warnings below.
 
+`WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
+database role's password. It is created by migration `0002_roles.sql` at first
+migrate, and the deployed backend connects as `wren_app` with whatever value
+Vercel hands it. If the two ever disagree, the app answers 500
+(`password authentication failed for user "wren_app"`) while `migrate` itself
+still works (it connects as the pooler superuser). Re-syncing after the fact is
+the trap: env vars created with Vercel's encryption toggle come back
+`decrypted: false` from the API, so the value cannot be read - reset it in the
+dashboard (or `ALTER ROLE wren_app WITH PASSWORD ...` in SQL and mirror it into
+Vercel), then redeploy, because a running deployment keeps its baked-in value
+until then.
+
 `EMBEDDER=local` and `RERANKER=local` are not available in production: the image
 ships without those packages on purpose, and either value fails at first use
 with `ModuleNotFoundError`, by design.
