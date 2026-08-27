@@ -80,6 +80,19 @@ async def create_tenant(*, user_id: str, slug: str, name: str) -> str:
     return tenant_id
 
 
+async def find_tenant_for_user(user_id: str) -> str | None:
+    """The caller's tenant id via ``resolve_user_tenant`` (0009), or ``None``
+    if they have none yet. Same pre-context resolver pattern ``create_tenant``
+    uses for its own membership check above - the one legitimate way to read
+    this before a ``tenant_context`` exists. Used by the provisioning shape of
+    ``POST /api/tenants`` (login-in-chat) to decide create-vs-return.
+    """
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("select tenant_id from resolve_user_tenant($1)", user_id)
+    return str(row["tenant_id"]) if row is not None else None
+
+
 async def get_tenant(tenant_id: str) -> dict[str, Any] | None:
     """The slug/name/brand triple for the caller's own tenant (Surface-2 header)."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:

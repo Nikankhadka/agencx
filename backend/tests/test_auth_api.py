@@ -3,9 +3,12 @@
 Uses httpx's ``ASGITransport`` against the real app (no lifespan - the app pool is
 created/closed by the ``client`` fixture below, pointed at ``wren_test`` via the
 wren_app-role DSN from ``tests.conftest._app_dsn_for``, matching test_rls.py's
-pattern). JWTs are minted locally with a fixed test secret injected into
+pattern). HS256 JWTs are minted locally with a fixed test secret injected into
 ``Settings`` before any code path can call the lru_cached ``get_settings()`` with
-the real (empty, in ``.env``) one.
+the real (empty, in ``.env``) one. ES256 tokens are minted with a throwaway EC
+keypair and verified against a stubbed JWKS endpoint - see the "ES256 / JWKS"
+section - exercising the path hosted Supabase projects actually use
+(shared/auth.py's ``_decode_claims``).
 """
 
 from __future__ import annotations
@@ -21,11 +24,11 @@ import httpx
 import jwt
 import pytest
 import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric import ec
+from jwt.algorithms import ECAlgorithm
 
-from app.features.auth import controller
 from app.main import app
-from app.services import email as email_service
-from app.shared import db
+from app.shared import auth, db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
 
@@ -77,6 +80,7 @@ def _make_token(
     secret: str = TEST_JWT_SECRET,
     audience: str = "authenticated",
     expires_in: int = 3600,
+    email: str | None = None,
 ) -> str:
     now = int(time.time())
     payload: dict[str, Any] = {
@@ -85,15 +89,23 @@ def _make_token(
         "iat": now,
         "exp": now + expires_in,
     }
+    if email is not None:
+        payload["email"] = email
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
 async def _signup(client: httpx.AsyncClient, *, token: str, slug: str, name: str) -> httpx.Response:
+    """The explicit-body shape: a caller (seed scripts) choosing its own slug/name."""
     return await client.post(
         "/api/tenants",
         json={"slug": slug, "name": name},
         headers={"Authorization": f"Bearer {token}"},
     )
+
+
+async def _provision(client: httpx.AsyncClient, *, token: str) -> httpx.Response:
+    """The empty-body shape: login-in-chat's "give me my tenant" call."""
+    return await client.post("/api/tenants", json={}, headers={"Authorization": f"Bearer {token}"})
 
 
 async def _insert_platform_admin(conn: asyncpg.Connection[Any], user_id: uuid.UUID) -> None:
@@ -105,7 +117,7 @@ async def _insert_platform_admin(conn: asyncpg.Connection[Any], user_id: uuid.UU
         await conn.execute("insert into platform_admins (user_id) values ($1)", user_id)
 
 
-# --- signup -------------------------------------------------------------------
+# --- signup (explicit slug/name) ------------------------------------------------
 
 
 async def test_signup_happy_path_creates_all_three_rows(
@@ -208,6 +220,42 @@ async def test_signup_wrong_audience_token_is_unauthorized(client: httpx.AsyncCl
     assert response.status_code == 401
 
 
+# --- provisioning (login-in-chat's empty-body call) ------------------------------
+
+
+async def test_provisioning_first_call_creates_a_provisional_tenant(
+    client: httpx.AsyncClient,
+) -> None:
+    token = _make_token(uuid.uuid4(), email="sam@example.com")
+
+    response = await _provision(client, token=token)
+    assert response.status_code == 201
+    assert response.json()["slug"].startswith("sam-")
+
+
+async def test_provisioning_second_call_returns_the_same_tenant(
+    client: httpx.AsyncClient,
+) -> None:
+    token = _make_token(uuid.uuid4(), email="pat@example.com")
+
+    first = await _provision(client, token=token)
+    assert first.status_code == 201
+
+    second = await _provision(client, token=token)
+    assert second.status_code == 200
+    assert second.json() == first.json()
+
+
+async def test_provisioning_with_no_email_claim_falls_back(client: httpx.AsyncClient) -> None:
+    """GoTrue always sets `email` for an OTP login - this only guards the token
+    never having one at all, so provisioning still succeeds rather than 500ing."""
+    token = _make_token(uuid.uuid4())  # no email kwarg
+
+    response = await _provision(client, token=token)
+    assert response.status_code == 201
+    assert response.json()["slug"].startswith("biz-")
+
+
 # --- tenant isolation at the API level ------------------------------------------
 
 
@@ -277,56 +325,70 @@ async def test_platform_ping_requires_platform_admin(
     assert ok.json() == {"ok": True}
 
 
-# --- login-code delivery ------------------------------------------------------
+# --- ES256 / JWKS (hosted Supabase's actual signing shape) -----------------------
+
+_JWKS_SUPABASE_URL = "http://jwks-test.invalid"
 
 
-class _DeadRelay(email_service.EmailProvider):
-    """A relay that refuses the connection, the way `smtplib` does when Mailpit
-    is not up (EMAIL_PROVIDER=smtp without `make mail`)."""
-
-    async def send_login_code(self, *, email: str, code: str) -> None:
-        raise ConnectionRefusedError(61, "Connection refused")
+def _es256_token(
+    user_id: uuid.UUID, *, kid: str, expires_in: int = 3600
+) -> tuple[str, dict[str, Any]]:
+    """A token signed with a throwaway EC keypair, plus the JWKS document that
+    verifies it - the shape hosted Supabase actually ships (progress.md's
+    known-gap note: the hosted project signs ES256, and until this module the
+    backend could only verify HS256)."""
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    now = int(time.time())
+    payload = {
+        "sub": str(user_id),
+        "aud": "authenticated",
+        "iat": now,
+        "exp": now + expires_in,
+    }
+    token = jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": kid})
+    jwk = ECAlgorithm.to_jwk(private_key.public_key(), as_dict=True)
+    jwk.update({"kid": kid, "alg": "ES256", "use": "sig"})
+    return token, {"keys": [jwk]}
 
 
 @pytest.fixture
-def dead_relay(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(email_service, "get_email_provider", _DeadRelay)
-
-
-@pytest.fixture
-def environment(monkeypatch: pytest.MonkeyPatch) -> Any:
-    def _set(value: str) -> None:
-        monkeypatch.setenv("ENVIRONMENT", value)
-        get_settings.cache_clear()
-
-    yield _set
+def jwks_supabase_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """Point SUPABASE_URL at a fake host - only ``_jwks_client``'s stubbed
+    ``fetch_data`` (below) ever has to answer for it, nothing makes a real
+    request. Same lru_cache-clearing discipline as the JWT-secret fixture."""
+    monkeypatch.setenv("SUPABASE_URL", _JWKS_SUPABASE_URL)
+    get_settings.cache_clear()
+    yield _JWKS_SUPABASE_URL
     get_settings.cache_clear()
 
 
-async def test_login_code_survives_a_dead_relay_locally(
-    client: httpx.AsyncClient, dead_relay: None, environment: Any
+def _stub_jwks(monkeypatch: pytest.MonkeyPatch, supabase_url: str, jwks: dict[str, Any]) -> None:
+    """Serve ``jwks`` from the JWKS client the app will actually use for
+    ``supabase_url`` (``auth._jwks_client`` is process-lifetime lru_cached, so
+    this is the same instance ``_decode_claims`` calls) without any real
+    network access - ``fetch_data`` is ``PyJWKClient``'s one I/O seam."""
+    monkeypatch.setattr(auth._jwks_client(supabase_url), "fetch_data", lambda: jwks)
+
+
+async def test_es256_token_is_accepted_via_jwks(
+    client: httpx.AsyncClient, jwks_supabase_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Local dev has no inbox to depend on: the code is captured before the send,
-    so a refused SMTP connection must not answer the owner with a 500."""
-    environment("local")
-    email = f"dead-relay-{uuid.uuid4().hex[:8]}@example.com"
+    kid = f"test-{uuid.uuid4().hex[:8]}"
+    token, jwks = _es256_token(uuid.uuid4(), kid=kid)
+    _stub_jwks(monkeypatch, jwks_supabase_url, jwks)
 
-    sent = await client.post("/api/auth/login-code", json={"email": email})
-    assert sent.status_code == 202, sent.text
-
-    captured = await client.get("/api/auth/dev-login-code", params={"email": email})
-    assert captured.status_code == 200
-    assert captured.json()["code"].isdigit()
+    response = await _provision(client, token=token)
+    assert response.status_code == 201
 
 
-async def test_login_code_dead_relay_is_a_502_not_a_500(
-    client: httpx.AsyncClient, dead_relay: None, environment: Any
+async def test_es256_token_with_unknown_kid_is_unauthorized(
+    client: httpx.AsyncClient, jwks_supabase_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Off local there is no captured code to fall back on, so the send really did
-    fail - but it is the relay that is down, and the copy has to say so."""
-    environment("production")
-    email = f"dead-relay-{uuid.uuid4().hex[:8]}@example.com"
+    # Signed with a keypair whose public half never makes it into the stubbed
+    # JWKS - the same shape as a token signed by a key the project has since
+    # rotated away from.
+    token, _real_jwks = _es256_token(uuid.uuid4(), kid=f"real-{uuid.uuid4().hex[:8]}")
+    _stub_jwks(monkeypatch, jwks_supabase_url, {"keys": []})
 
-    sent = await client.post("/api/auth/login-code", json={"email": email})
-    assert sent.status_code == 502, sent.text
-    assert sent.json()["detail"] == controller._COPY["undelivered"]
+    response = await _provision(client, token=token)
+    assert response.status_code == 401

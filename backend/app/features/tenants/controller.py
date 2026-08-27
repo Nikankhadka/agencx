@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import secrets
 from typing import Any
 from uuid import UUID
 
@@ -21,19 +23,87 @@ logger = logging.getLogger(__name__)
 
 _preload_tasks: set[asyncio.Task[None]] = set()
 
+_SLUGIFY_RE = re.compile(r"[^a-z0-9]+")
 
-async def signup(*, user_id: str, slug: str, name: str) -> dict[str, str]:
-    """POST /api/tenants - provision a tenant for an authenticated user.
 
-    The one legitimate caller of ``app.role = 'service'``: the frontend signs a
-    user up with Supabase first, then calls this endpoint with that user's
-    access token. Every call is logged as an audited service action (actor user
-    id + action), per T-004.
+def _slugify(text: str) -> str:
+    slug = _SLUGIFY_RE.sub("-", text.lower()).strip("-")
+    return slug or "biz"
+
+
+def _provisional_slug(email: str | None) -> str:
+    """A first-login tenant's throwaway slug: readable, unique, never
+    real - the onboarding interview (O-1) overwrites it. Named after the
+    owner's email when there is one (there always is one for an OTP login;
+    the fallback only guards a token with no email claim)."""
+    local = (email or "biz").split("@", 1)[0]
+    suffix = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(4))
+    return f"{_slugify(local)[:30]}-{suffix}"
+
+
+def _provisional_name(email: str | None) -> str:
+    return (email or "New business").split("@", 1)[0]
+
+
+async def _existing_tenant_result(tenant_id: str) -> dict[str, Any]:
+    row = await service.get_tenant(tenant_id)
+    if row is None:
+        # Should not happen (FK guarantees the tenant row exists) - fail
+        # closed exactly like `me()` below does for the same case.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
+    return {"tenant_id": tenant_id, "slug": row["slug"], "created": False}
+
+
+async def signup(
+    *, user_id: str, email: str | None, slug: str | None, name: str | None
+) -> dict[str, Any]:
+    """POST /api/tenants - provision a tenant for an authenticated user, or
+    hand back the one they already have.
+
+    Two shapes share this endpoint:
+
+    - Explicit (``slug``/``name`` given): the seed scripts' signup path. 409s
+      if the user already has a tenant or the slug is taken - the same
+      behavior this endpoint always had.
+    - Provisioning (both absent): login-in-chat's call, made on every
+      sign-in. Returns the caller's existing tenant (``created=False``) when
+      they have one; otherwise creates one named after their email
+      (``created=True``) - the onboarding interview (O-1) overwrites the real
+      name/slug later.
+
+    Every create is logged as an audited service action (actor user id +
+    action), per T-004.
     """
+    provisioning = slug is None and name is None
+
+    if provisioning:
+        existing_id = await service.find_tenant_for_user(user_id)
+        if existing_id is not None:
+            return await _existing_tenant_result(existing_id)
+        slug = _provisional_slug(email)
+        name = _provisional_name(email)
+    elif slug is None or name is None:
+        # Neither shape: a body with one of the two fields but not the other.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="slug and name must both be given, or both omitted",
+        )
+
     try:
         tenant_id = await service.create_tenant(user_id=user_id, slug=slug, name=name)
     except service.TenantAlreadyExistsError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        if not provisioning:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        # A concurrent double-login raced the pre-check (users_pkey) - not a
+        # real conflict from this caller's perspective, just "give me my
+        # tenant" arriving twice at once. The row exists now; fetch it.
+        existing_id = await service.find_tenant_for_user(user_id)
+        if existing_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="tenant provisioning failed unexpectedly",
+            ) from exc
+        return await _existing_tenant_result(existing_id)
 
     logger.info(
         "audited service action: tenant_signup",
@@ -45,7 +115,7 @@ async def signup(*, user_id: str, slug: str, name: str) -> dict[str, str]:
             "role": "service",
         },
     )
-    return {"tenant_id": tenant_id, "slug": slug}
+    return {"tenant_id": tenant_id, "slug": slug, "created": True}
 
 
 async def me(*, tenant_id: str) -> dict[str, Any]:

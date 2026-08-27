@@ -29,7 +29,6 @@ EXPECTED_TABLES = {
     "eval_cases",
     "eval_runs",
     "cost_logs",
-    "auth_codes",
 }
 
 
@@ -49,8 +48,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # O-3's draft status + documents.structured, the reviewable knowledge record;
     # 0020 adds C-6's 'human' conversation status + escalations.summary, the
     # takeover state and the owner's one-line note; 0021 adds E-6's
-    # tenant_assets, the Booking page's cover photo.
-    assert len(on_disk) == 21, "expected migrations 0001-0021"
+    # tenant_assets, the Booking page's cover photo; 0022 drops auth_codes -
+    # login-in-chat moved to GoTrue OTP, which owns code issuance now.
+    assert len(on_disk) == 22, "expected migrations 0001-0022"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
