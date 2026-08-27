@@ -82,8 +82,11 @@ jobs:
       # The customer page is the product's actual promise, and it is the surface
       # the rewrite rules are most likely to get wrong: it is served by the
       # frontend service while every path it fetches is served by the backend.
+      # A bare 200 is NOT enough: Next streams the error shell with a 200 when
+      # the RSC segment throws, so assert the seeded tenant's server-rendered
+      # display name actually made it into the HTML.
       - name: Customer page serves
         if: steps.check.outputs.ready == 'true'
         env:
           BASE_URL: ${{ secrets.SMOKE_TEST_BASE_URL }}
-        run: curl -fsSL --max-time 30 "$BASE_URL/bytefix" > /dev/null
+        run: curl -fsSL --max-time 30 "$BASE_URL/bytefix" | grep -q "Bytefix Repairs"

@@ -23,9 +23,12 @@ COPY . .
 # NEXT_PUBLIC_* are inlined into the client bundle at BUILD time, not read at
 # runtime, so they have to be present here rather than set on the running
 # container. Empty NEXT_PUBLIC_API_URL is the deployed default and is load
-# bearing: the callers read `process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`,
-# and `??` only falls back on null/undefined, so "" survives and every call
-# becomes a relative /api/... on the same origin the backend service serves.
+# bearing: browser-side callers read `process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`,
+# and `??` only falls back on null/undefined, so "" survives and every browser
+# call becomes a relative /api/... on the same origin the backend service
+# serves. Server-side fetches never see this empty string: they resolve the
+# request's own origin instead (see src/lib/tenant.ts), because the Vercel
+# service binding is unreachable from this image.
 # Supabase config is NOT inlined here. Vercel builds container services with
 # `buildah build` and passes no --build-arg, so these would resolve to empty
 # strings and ship a browser bundle with no Supabase config. The server sends

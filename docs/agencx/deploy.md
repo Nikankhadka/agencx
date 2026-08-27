@@ -303,10 +303,24 @@ prerendering it would freeze the build-time (empty) config into the HTML.
 
 `NEXT_PUBLIC_API_URL` is deliberately **not set**. The callers read
 `process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`, and the frontend
-image defaults it to an empty string, which `??` preserves - so every API call
-becomes a relative `/api/...` on the same origin the backend service serves.
-Setting it to an absolute URL would reintroduce the cross-origin request the
-whole topology exists to avoid.
+image defaults it to an empty string, which `??` preserves - so every browser
+API call becomes a relative `/api/...` on the same origin the backend service
+serves. Setting it to an absolute URL would reintroduce the cross-origin
+request the whole topology exists to avoid.
+
+Server-side fetches never see that empty string: the RSC tenant lookup in
+`frontend/src/lib/tenant.ts` reads `API_INTERNAL_URL` when set (the compose dev
+stack sets `http://backend:8000`), otherwise it derives the backend base from
+the incoming request's own origin (`x-forwarded-host`/`host` with
+`x-forwarded-proto`) - the same public origin the customer reached, which the
+edge rewrite serves to the backend. **The old `API_INTERNAL_URL` service
+binding in `vercel.json` is gone**: service bindings are unusable from this
+custom image. The injected URL is unreachable from inside the container -
+Vercel's internal CA bundle does not exist in the `node:bookworm-slim` base, so
+TLS to it fails (and the internal hostname may not resolve either), which broke
+the `/bytefix` RSC fetch on every deployment while the smoke test still passed.
+The request-origin fallback is deployment-aware with no binding involved: it
+covers preview, production, and a future custom domain (B-2) the same way.
 
 ## Step 5 - GitHub Actions secret
 
