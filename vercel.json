@@ -3,15 +3,7 @@
   "services": {
     "frontend": {
       "root": "frontend/",
-      "entrypoint": "Dockerfile",
-      "bindings": [
-        {
-          "type": "service",
-          "service": "backend",
-          "format": "url",
-          "env": "API_INTERNAL_URL"
-        }
-      ]
+      "entrypoint": "Dockerfile"
     },
     "backend": { "root": "backend/", "entrypoint": "Dockerfile" }
   },
