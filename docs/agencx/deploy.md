@@ -51,23 +51,44 @@ There is no `main`. `ci.yml` gates pushes to `staging` and `development` and
 every PR; `deploy.yml` fires after CI goes green on `staging` and smoke-tests
 the live origin.
 
-Two settings produce that table, and both are needed:
+Two settings produce that table, and both are needed. **Both are project
+settings in the dashboard. Neither belongs in `vercel.json` - see the warning
+below.**
 
 1. Settings > Git > **Production Branch = `staging`**. This is what makes a push
-   to `staging` a *production* deployment rather than a preview. It cannot be
-   read back over the API, so check it in the dashboard.
-2. `ignoreCommand` in `vercel.json`:
+   to `staging` a *production* deployment rather than a preview. It is the one
+   setting here with no API at all: `PATCH /v9/projects/{id}` rejects
+   `productionBranch` as an unknown property on every API version, and
+   `POST /v9/projects/{id}/link` accepts the field and ignores it, re-deriving
+   the branch from the repo's GitHub default. Set it in the dashboard. It *can*
+   be read back, as `link.productionBranch` on the project object.
+2. Settings > Git > **Ignored Build Step** = Custom, with
    `[ "$VERCEL_GIT_COMMIT_REF" != "staging" ]`. Vercel reads exit 0 as "ignore
    this build" and exit 1 as "build it", so `staging` builds and every other
-   branch is skipped. Without this, pushing `development` would still burn a
-   preview build. It is preferred over `git.deploymentEnabled`, which takes an
-   explicit branch map and would need a new entry for every future branch.
+   branch is skipped before a build starts. Without this, Production Branch
+   alone still burns a preview build on every `development` and `feat/*` push
+   and publishes a preview URL for it. Readable and writable over the API as
+   `commandForIgnoringBuildStep`.
 
    One consequence worth knowing: a deploy started from the CLI has no git ref,
    so `VERCEL_GIT_COMMIT_REF` is empty and the build is skipped like any other
    non-`staging` branch. This project deploys through the Git integration only,
    so that is the correct behaviour rather than a limitation - but it will look
    like a hang if you ever reach for `vercel --prod`.
+
+> **Do not put `ignoreCommand` in `vercel.json`.** It is a documented key, but a
+> `vercel.json` that also declares `services` (this one does - the two container
+> services) is rejected wholesale when it is present. The failure gives you
+> nothing to debug: the GitHub commit status goes to `Vercel - Deployment
+> failed.` within seconds of the push, `target_url` is `null`, and **no
+> deployment record is created at all**, so the dashboard and
+> `GET /v6/deployments` both look as though the push never happened. It cost
+> three branches - `8c0edf5` (feat), `a869169` (development) and `5b68822`
+> (staging) each failed that way on 2026-08-26, while `558898b`, the last commit
+> before the key was added, deployed fine twice. `git.deploymentEnabled` was
+> considered as the replacement and rejected: it takes an explicit branch map
+> and would need a new entry for every future branch, where the Ignored Build
+> Step is one condition that needs no maintenance.
 
 Note that Vercel marks the **first** deployment of a freshly imported project as
 production regardless of which branch it came from. If the dashboard shows one
@@ -147,12 +168,24 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
    `frontend/`. `vercel.json` at the root is what declares the two services;
    pointing the project at `frontend/` hides it and you get a frontend-only
    deploy that 404s every `/api` call.
-2. Set the **production branch to `staging`** (Settings > Git). Together with the
-   `ignoreCommand` in `vercel.json`, that makes `staging` the only branch that
-   deploys at all - see Branches above.
+2. Set the **production branch to `staging`** (Settings > Git). Together with
+   the **Ignored Build Step** (Settings > Git, see Branches above), that makes
+   `staging` the only branch that deploys at all.
 3. Do **not** set `PORT`. Vercel injects it per service (the frontend was
    observed listening on 80) and both images honour it. A project-level `PORT`
    would apply to both services and send one of them to the wrong socket.
+4. Settings > Functions > **Region = the same region as the Supabase project**
+   (`syd1` for `ap-southeast-2`). This one is easy to skip and expensive to
+   leave wrong. A new project defaults to `iad1` (Washington DC); with the
+   database in Sydney, every query crossed the Pacific and came back, and the
+   backend makes several per request - a first login alone does six (count,
+   insert, fetchrow, update, the GoTrue admin call, tenant resolve, tenant
+   create). Measured on 2026-08-26 with the split in place: `/health`, which
+   runs one `select 1`, took ~700ms warm. `x-vercel-id` on any response names
+   the regions it travelled through, so `syd1::iad1::` is the symptom and
+   `syd1::syd1::` is the fix. Writable over the API as
+   `serverlessFunctionRegion`, and it applies from the next build. A non-default
+   region is allowed on the hobby plan.
 
 ## Step 3 - API keys (all free)
 
@@ -179,7 +212,8 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
 All of these are Vercel project environment variables. With one database and one
 deployed branch they hold a single value each - but tick **both Production and
 Preview** anyway. It costs nothing, and it means a preview that ever does run
-(after a changed `ignoreCommand`, or a manual deploy) is not broken by omission.
+(after the Ignored Build Step setting changes, or a manual deploy) is not
+   broken by omission.
 
 Backend service:
 
@@ -209,13 +243,22 @@ RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
 UPLOADS_BUCKET=<Storage bucket name from step 1>
 EMAIL_PROVIDER=smtp            # console logs the code instead of sending it
-EMAIL_SMTP_HOST=<...>          # when smtp
+EMAIL_SMTP_HOST=smtp-relay.brevo.com
 EMAIL_SMTP_PORT=587
-EMAIL_SMTP_FROM=<...>
+EMAIL_SMTP_FROM=<your verified Brevo single sender>
 EMAIL_SMTP_USER=<...>          # required by every hosted relay
-EMAIL_SMTP_PASSWORD=<...>
+EMAIL_SMTP_PASSWORD=<...>      # the generated SMTP key, not the account password
 ENVIRONMENT=production
 ```
+
+`GOOGLE_EMBED_MODEL` is not in the list because `config.py` already defaults it
+to `text-embedding-004`; set it only to move off that model.
+
+Every one of these is load-bearing, but four of them fail in ways that do not
+look like a missing variable, so check them by name after any project rebuild:
+`COHERE_API_KEY` (a 401 from the reranker on every grounded answer, while
+`RERANKER=cohere` is set and looks fine), `SUPABASE_SERVICE_ROLE_KEY`, and the
+`EMAIL_SMTP_*`/`EMAIL_PROVIDER` pair - see the two warnings below.
 
 `EMBEDDER=local` and `RERANKER=local` are not available in production: the image
 ships without those packages on purpose, and either value fails at first use
@@ -255,21 +298,25 @@ whole topology exists to avoid.
 
 ## Step 5 - GitHub Actions secret
 
-For `deploy.yml`'s smoke test:
-
 ```
 SMOKE_TEST_BASE_URL=https://<project>.vercel.app
 ```
 
-Until it is set the workflow no-ops with a notice rather than failing.
+**Set it.** Two workflows read this one secret and both are written to no-op
+with a notice rather than fail while it is unset, which makes "not set" look
+exactly like "passing": `deploy.yml` never verifies the origin, and
+`keep-warm.yml` runs its cron every 10 minutes and pings nothing, so the cold
+start it exists to hide is never actually hidden. It went unset from B-4 until
+2026-08-26 and neither workflow ever went red.
 
 ## What the repo changes deliver
 
 The founder steps above are external. The code that makes them work is B-4
 (`docs/agencx/spec/10-deploy.md`, branch `feat/deploy-containers-cicd`):
 
-1. `vercel.json` - the two services, the rewrites that route them, and the
-   `ignoreCommand` that keeps every branch but `staging` from building.
+1. `vercel.json` - the two services and the rewrites that route them. The
+   branch filter lives in the dashboard as the Ignored Build Step, not here -
+   see the warning under Branches.
 2. `frontend/Dockerfile` + `output: "standalone"` in `next.config.ts` - the
    frontend as a self-contained container.
 3. `backend/Dockerfile` - retargeted off ECS, `PORT`-driven, plus a `test` stage
@@ -303,7 +350,7 @@ The founder steps above are external. The code that makes them work is B-4
    ```
 
 3. Push a branch -> PR into `development`: `ci.yml` passes, and Vercel builds
-   **nothing**. A deployment appearing here means the `ignoreCommand` is not
+   **nothing**. A deployment appearing here means the Ignored Build Step is not
    taking effect.
 4. Merge to `staging`: Vercel builds and deploys both services with
    `target: "production"`, then `deploy.yml` smoke-tests `/health`,
