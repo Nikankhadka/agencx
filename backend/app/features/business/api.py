@@ -1,7 +1,7 @@
 """E-6/M-1/M-4: the Business page - the business as a customer finds it.
 
 One read for the whole screen, a write for the four links, the cover photo in
-and out, the owner's offerings, the storefront's About and reviews, and (O-9)
+and out, the owner's offerings, the storefront's About, and (O-9)
 the two profile fields that stay correctable after go-live.
 
 The money rule is held by construction on every path here: no model runs on
@@ -33,24 +33,8 @@ MAX_COVER_BYTES = 2 * 1024 * 1024
 ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
 
 
-class Review(BaseModel):
-    quote: str = Field(min_length=1, max_length=500)
-    author: str = Field(min_length=1, max_length=120)
-    source: str = Field(default="", max_length=120)
-    rating: int = Field(default=5, ge=1, le=5)
-
-    @field_validator("quote", "author", "source")
-    @classmethod
-    def _trim(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed and value != "":
-            raise ValueError("must not be blank")
-        return trimmed
-
-
 class StorefrontSections(BaseModel):
     about: str = Field(default="", max_length=2000)
-    reviews: list[Review] = Field(default_factory=list, max_length=6)
 
     @field_validator("about")
     @classmethod
@@ -281,7 +265,6 @@ async def put_storefront_sections(
         **await service.write_storefront(
             tenant_id=admin.tenant_id,
             about=body.about,
-            reviews=[review.model_dump() for review in body.reviews],
         )
     )
 

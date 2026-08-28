@@ -17,12 +17,11 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
 test.describe("the public storefront", () => {
-  test("the owner's About and review reach the page a customer reads", async ({
+  test("the owner's About reaches the page a customer reads", async ({
     page,
     request,
   }) => {
     const about = "We fix phones on Smith Street, most repairs same day.";
-    const quote = "Sorted my cracked screen in an hour.";
 
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/page");
@@ -31,21 +30,15 @@ test.describe("the public storefront", () => {
     // loaded the current sections, and `fill` waits for enabled - which is
     // also what stops an owner's first sentence being eaten by that response.
     await page.getByTestId("storefront-about").fill(about);
-    await page.getByTestId("storefront-add-review").click();
-    await page.getByTestId("storefront-review-quote").last().fill(quote);
-    await page.getByTestId("storefront-review-author").last().fill("Mia");
     await page.getByTestId("storefront-save").click();
     await expect(page.getByTestId("storefront-save")).toContainText("Saved");
 
     await page.goto("/bytefix");
     await expect(page.getByRole("main").last()).toContainText(about);
-    await expect(page.getByRole("main").last()).toContainText(quote);
-    await expect(page.getByRole("main").last()).toContainText("Mia");
 
     // Put the shared seeded tenant back as it was found.
     await page.goto("/business/page");
     await page.getByTestId("storefront-about").fill("");
-    await page.getByRole("button", { name: "Remove review" }).last().click();
     await page.getByTestId("storefront-save").click();
     await expect(page.getByTestId("storefront-save")).toContainText("Saved");
   });

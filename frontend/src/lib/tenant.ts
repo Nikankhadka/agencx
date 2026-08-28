@@ -46,20 +46,12 @@ export interface StorefrontOffering {
   price_cents: number | null;
 }
 
-export interface StorefrontReview {
-  quote: string;
-  author: string;
-  source: string;
-  rating: number;
-}
-
 export interface StorefrontData {
   name: string;
   tagline: string | null;
   about: string;
   links: Record<string, string>;
   offerings: StorefrontOffering[];
-  reviews: StorefrontReview[];
   has_cover: boolean;
 }
 

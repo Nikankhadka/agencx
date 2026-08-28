@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.features.business import service
 from app.features.tenants import service as tenant_service
@@ -27,20 +27,12 @@ class PublicOffering(BaseModel):
     price_cents: int | None
 
 
-class PublicReview(BaseModel):
-    quote: str
-    author: str
-    source: str = ""
-    rating: int = Field(ge=1, le=5)
-
-
 class StorefrontResponse(BaseModel):
     name: str
     tagline: str | None
     about: str
     links: dict[str, str]
     offerings: list[PublicOffering]
-    reviews: list[PublicReview]
     has_cover: bool
 
 

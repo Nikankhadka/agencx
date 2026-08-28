@@ -194,9 +194,7 @@ async def delete_cover(*, tenant_id: UUID) -> None:
         )
 
 
-async def write_storefront(
-    *, tenant_id: UUID, about: str | None = None, reviews: list[dict[str, Any]] | None = None
-) -> dict[str, Any]:
+async def write_storefront(*, tenant_id: UUID, about: str | None = None) -> dict[str, Any]:
     """Merge editable storefront sections into the brand configuration.
 
     These are small presentation fields, not knowledge. Keeping them together
@@ -206,8 +204,6 @@ async def write_storefront(
     patch: dict[str, Any] = {}
     if about is not None:
         patch["about"] = about
-    if reviews is not None:
-        patch["reviews"] = reviews
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
             "update tenant_config set brand = jsonb_set(brand, '{storefront}', "
@@ -226,12 +222,10 @@ async def read_storefront_sections(*, tenant_id: UUID) -> dict[str, Any]:
         )
     parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
     if not isinstance(parsed, dict):
-        return {"about": "", "reviews": []}
+        return {"about": ""}
     about = parsed.get("about")
-    reviews = parsed.get("reviews")
     return {
         "about": about.strip() if isinstance(about, str) else "",
-        "reviews": reviews if isinstance(reviews, list) else [],
     }
 
 
@@ -276,8 +270,6 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
     tagline = " · ".join(
         str(value).strip() for value in (services, hours) if str(value or "").strip()
     )
-    raw_reviews = storefront.get("reviews") if isinstance(storefront, dict) else []
-    reviews = raw_reviews if isinstance(raw_reviews, list) else []
     return {
         "name": str(display_name),
         "tagline": tagline or None,
@@ -288,7 +280,6 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             if key in LINK_KEYS and isinstance(value, str) and value
         },
         "offerings": [dict(row) for row in offerings],
-        "reviews": reviews,
         "has_cover": bool(cover),
     }
 

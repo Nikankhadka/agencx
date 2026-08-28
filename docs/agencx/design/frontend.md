@@ -344,7 +344,7 @@ outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 ### S2 - Business (tenant app tab 3) - show-back of profile + knowledge
 
 **Three rows since M-4** (`/business`): **Business page** (`/business/page` -
-cover, name, the share link, the platform tiles, About and reviews, and a
+cover, name, the share link, the platform tiles, About, and a
 preview link out to the storefront), **What you offer** (`/business/offerings` -
 the offerings editor), and **Business details** (`/business/details` - knowledge,
 ABN and tax). `/business/booking` and `/settings` are gone as paths rather than
@@ -406,9 +406,9 @@ E-5 left out now ship, because something stands behind each of them:
   cents to dollars and does no other arithmetic. Catalog chunks stay out of
   general-knowledge fast paths, and recommendations re-fetch the authoritative
   row before stating a price.
-- **About and reviews** (M-4) are written on this screen and live in
-  `tenant_config.brand->storefront`. They are presentation, not knowledge: the
-  assistant never answers from them, and an empty one renders nothing rather
+- **About** (M-4) is written on this screen and lives in
+  `tenant_config.brand->storefront`. It is presentation, not knowledge: the
+  assistant never answers from it, and an empty value renders nothing rather
   than a heading over blank space.
 
 **The QR is gone** (E-6). It was never in the prototype's owner screen - it came
@@ -459,7 +459,7 @@ share link is how a customer gets here (E-6 removed the QR).
 a composer, which meant a customer arriving from a shared link had to know what
 to ask before the page told them anything. The page now leads with the business:
 cover photo, name and tagline, **what we offer** (the owner's `offerings`, each
-with the owner's own price when they published one), About, reviews, and the
+with the owner's own price when they published one), About, and the
 links. The assistant is a tap away in a sheet rather than the whole page -
 from the header, from the closing call to action, or from "Ask about this" on a
 single offering, which seeds the composer with that offering's name.

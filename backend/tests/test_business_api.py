@@ -300,7 +300,6 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
         "/api/business/storefront",
         json={
             "about": "Local repairs and clear advice.",
-            "reviews": [{"quote": "Fast and thoughtful.", "author": "Mia", "rating": 5}],
         },
         headers=headers,
     )
@@ -327,7 +326,7 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
         }
     ]
     assert body["about"] == "Local repairs and clear advice."
-    assert body["reviews"][0]["author"] == "Mia"
+    assert "reviews" not in body
     assert body["links"] == {"website": "https://example.com"}
     assert body["has_cover"] is True
 

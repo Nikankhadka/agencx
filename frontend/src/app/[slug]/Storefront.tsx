@@ -127,24 +127,6 @@ export function Storefront({
         </section>
       ) : null}
 
-      {storefront.reviews.length > 0 ? (
-        <section className="border-t border-hairline px-gutter py-7">
-          <h2 className="text-title-2 font-semibold text-text">What people say</h2>
-          <div className="mt-2 divide-y divide-hairline">
-            {storefront.reviews.map((review, index) => (
-              <figure key={`${review.author}-${index}`} className="py-5">
-                <blockquote className="text-body-lg font-medium text-text">&ldquo;{review.quote}&rdquo;</blockquote>
-                <figcaption className="mt-3 flex items-center gap-2 text-meta uppercase tracking-[0.04em] text-ink-a40">
-                  <span className="text-warning">{"★".repeat(review.rating)}</span>
-                  <span>{review.author}</span>
-                  {review.source ? <span>{review.source}</span> : null}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {Object.keys(storefront.links).length > 0 ? (
         <nav aria-label={`${storefront.name} links`} className="border-t border-hairline px-gutter py-7">
           <h2 className="text-title-2 font-semibold text-text">Find us online</h2>

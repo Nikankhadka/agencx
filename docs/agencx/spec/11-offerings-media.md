@@ -430,9 +430,9 @@ an automatic overwrite.
 ### Summary
 
 Turn `/{slug}` from a bare chat window into a storefront: the offerings `M-1`
-made writable, with the owner's prices, above an About section and reviews the
-owner writes, with the assistant one tap away rather than occupying the whole
-page. Let the owner choose that address at go-live instead of inheriting the
+made writable, with the owner's prices, above an About section, with the
+assistant one tap away rather than occupying the whole page. Let the owner
+choose that address at go-live instead of inheriting the
 provisional one. Re-cut the Business hub around the three jobs this leaves.
 
 ### Why
@@ -452,28 +452,24 @@ it, so the link the owner shares was never the one they would have chosen.
 #### US-1 A customer sees the business before they ask it anything
 
 As someone who followed a shared link, I land on a page that tells me who the
-business is, what it offers, what it costs, and what other people say - and I
+business is, what it offers, and what it costs - and I
 can start a conversation when I want one, not before.
 
 - Offerings render with the owner's own price when they published one, and
   with no price at all when they did not. Nothing rounds, marks up, or invents
   a figure; the page formats integer cents and does no other arithmetic.
-- The assistant opens in a sheet from any of several entry points, including
-  "Ask about this" on a single offering, which seeds the composer.
+- The assistant opens in a sheet from the storefront's single chat entry.
 - A tenant that is suspended still shows its calm unavailable state; one that
   is neither active nor suspended (`provisioning`) falls back to the bare chat
   rather than an empty page.
 
 #### US-2 An owner writes the parts of the page that are not offerings
 
-As an owner, I write an About paragraph and up to six short reviews, and they
-appear on my page.
+As an owner, I write an About paragraph and it appears on my page.
 
-- These are presentation, not knowledge: they live in
-  `tenant_config.brand->storefront`, and the assistant does not answer from
-  them.
-- An empty About or an empty review list renders nothing, rather than an
-  empty heading over blank space.
+- About is presentation, not knowledge: it lives in
+  `tenant_config.brand->storefront`, and the assistant does not answer from it.
+- An empty About renders nothing, rather than an empty heading over blank space.
 
 #### US-3 An owner chooses their public address at go-live
 
@@ -503,7 +499,7 @@ offer, and my business details.
   slug through the existing `resolve_active_tenant` and reading under the
   `customer` role. `catalog_items`' existing `tenant_isolation` policy already
   covers this: `tenant_context` sets `app.tenant_id` whatever the role.
-- **Sections:** `brand->storefront` (`about`, `reviews`), merged with
+- **Sections:** `brand->storefront` (`about`), merged with
   `jsonb_set` so an unrelated brand key is never clobbered.
 - **Slug at confirm:** `POST /api/onboarding/confirm` takes an optional
   `slug`; `suggested_slug()` derives the default and is guaranteed to pass
@@ -521,7 +517,7 @@ offer, and my business details.
   price; retiring an offering drops it from both the owner's list and the
   storefront while the row survives; a suggested slug always passes
   `validate_slug` across reserved, punctuation-only and ordinary names.
-- E2E: `storefront.spec.ts` (About + review round trip, opening the chat
+- E2E: `storefront.spec.ts` (About round trip, opening the chat
   sheet, an unknown slug still 404s) and the offerings round trip in
   `business-hub.spec.ts`, which now asserts the price on the public page.
 - **Not covered by E2E:** choosing the slug at go-live. Reaching confirm means
@@ -542,10 +538,10 @@ offer, and my business details.
 
 ### Definition of done
 
-- [x] `/{slug}` renders offerings with the owner's prices, About, reviews and
+- [x] `/{slug}` renders offerings with the owner's prices and About
       links, with the assistant a tap away
 - [x] An offering with no price shows none
-- [x] The owner writes About and reviews from the Business page screen
+- [x] The owner writes About from the Business page screen
 - [x] The owner chooses their public address at go-live; a taken one is a 409
       and a reserved-derived one cannot 500
 - [x] One route per screen - the aliases are gone

@@ -1370,41 +1370,10 @@ export interface components {
             /** Price Cents */
             price_cents: number | null;
         };
-        /** PublicReview */
-        PublicReview: {
-            /** Quote */
-            quote: string;
-            /** Author */
-            author: string;
-            /**
-             * Source
-             * @default
-             */
-            source: string;
-            /** Rating */
-            rating: number;
-        };
         /** ResolveRequest */
         ResolveRequest: {
             /** Message */
             message?: string | null;
-        };
-        /** Review */
-        Review: {
-            /** Quote */
-            quote: string;
-            /** Author */
-            author: string;
-            /**
-             * Source
-             * @default
-             */
-            source: string;
-            /**
-             * Rating
-             * @default 5
-             */
-            rating: number;
         };
         /** SaveRecordRequest */
         SaveRecordRequest: {
@@ -1447,8 +1416,6 @@ export interface components {
             };
             /** Offerings */
             offerings: components["schemas"]["PublicOffering"][];
-            /** Reviews */
-            reviews: components["schemas"]["PublicReview"][];
             /** Has Cover */
             has_cover: boolean;
         };
@@ -1459,8 +1426,6 @@ export interface components {
              * @default
              */
             about: string;
-            /** Reviews */
-            reviews?: components["schemas"]["Review"][];
         };
         /** TenantMeResponse */
         TenantMeResponse: {
