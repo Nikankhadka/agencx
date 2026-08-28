@@ -1,10 +1,4 @@
 import { getSupabase } from "./supabase";
-import {
-  clearManualSession,
-  getCachedSession,
-  getManualSession,
-  setCachedSession,
-} from "./auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -23,6 +17,11 @@ export class ApiError extends Error {
  * session's access token as a bearer header. FormData sets its own multipart
  * Content-Type (with the boundary the browser generates) - forcing
  * application/json here would break uploads.
+ *
+ * `getSession()` is the one source of truth for the token (no separate
+ * client-side cache to keep in sync with it): it reads the cookie
+ * `getSupabase()` writes and refreshes it when needed, the same session
+ * `src/proxy.ts` rotates server-side on navigation.
  */
 async function getAuthHeaders(init: RequestInit): Promise<Headers> {
   const headers = new Headers(init.headers);
@@ -30,25 +29,9 @@ async function getAuthHeaders(init: RequestInit): Promise<Headers> {
     headers.set("Content-Type", "application/json");
   }
 
-  // The backend mints and verifies its own HS256 session (see
-  // backend/app/services/identity.py), so the manual session is the real
-  // credential. A supabase-js session is only consulted when one already
-  // exists, and only on a project that still signs symmetrically: a hosted
-  // project signing ES256 would hand us a token verify_token cannot check, so
-  // preferring it would turn a working login into an opaque 401.
-  const manual = getManualSession();
-  if (manual) {
-    headers.set("Authorization", `Bearer ${manual.access_token}`);
-    return headers;
-  }
-
-  let session = getCachedSession();
-  if (session === undefined) {
-    const { data } = await getSupabase().auth.getSession();
-    session = data.session;
-  }
-  if (session) {
-    headers.set("Authorization", `Bearer ${session.access_token}`);
+  const { data } = await getSupabase().auth.getSession();
+  if (data.session) {
+    headers.set("Authorization", `Bearer ${data.session.access_token}`);
   }
   return headers;
 }
@@ -58,10 +41,6 @@ async function getAuthHeaders(init: RequestInit): Promise<Headers> {
  * `detail` string so pages can show it verbatim.
  */
 async function throwApiError(res: Response): Promise<never> {
-  if (res.status === 401) {
-    setCachedSession(null);
-    clearManualSession();
-  }
   let detail = res.statusText;
   try {
     const body = (await res.json()) as { detail?: unknown };

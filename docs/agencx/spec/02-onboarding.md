@@ -155,7 +155,7 @@ spine. Email codes are free and universally understood.
 **so that** the chat stays conversational.
 
 - [ ] "That code didn't work. Try again, or resend."
-- [ ] "Didn't get it? Resend" inactive for 30 seconds, then tappable, no
+- [ ] "Didn't get it? Resend" inactive for 60 seconds, then tappable, no
   countdown displayed
 - [ ] "That code expired. Request a new one." / "Too many tries. Request a
   new code."
@@ -305,7 +305,7 @@ Five deviations are deliberate and documented in code:
 
 1. No camera/mic glyphs in the empty composer - Stage 1 has neither feature, and
    a control that does nothing is a worse defect than an absent one
-2. No visible resend countdown - O-2's spec is 30s inactive, no countdown
+2. No visible resend countdown - the GoTrue resend cadence is 60s inactive, no countdown
 3. No `verif` tint on the code cells - O-2's spec is that success silently continues
 4. No "Already with Agencx? Log in" link - O-2 made login and signup one path
 5. Chips keep a 44px touch target (prototype ~29px) - `frontend.md` section 10

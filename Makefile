@@ -17,8 +17,10 @@ E2E := $(DC) --profile e2e run --rm e2e
 # (NEXT_PUBLIC_API_URL=http://localhost:8000, NEXT_PUBLIC_SUPABASE_URL=
 # http://localhost:54321), and inside this container localhost is the container
 # itself - so the e2e runner forwards its own 3000/8000/54321 to the compose
-# services and every spec URL behaves exactly as it does on the host.
-E2E_NET := sh -c 'socat TCP-LISTEN:3000,fork,reuseaddr,bind=127.0.0.1 TCP:frontend:3000 & socat TCP-LISTEN:8000,fork,reuseaddr,bind=127.0.0.1 TCP:backend:8000 & socat TCP-LISTEN:54321,fork,reuseaddr,bind=127.0.0.1 TCP:auth-proxy:80 & exec "$$@"' --
+# services and every spec URL behaves exactly as it does on the host. 8025
+# mirrors Mailpit's web UI - auth-helpers.ts reads the OTP code straight out of
+# its API to log in.
+E2E_NET := sh -c 'socat TCP-LISTEN:3000,fork,reuseaddr,bind=127.0.0.1 TCP:frontend:3000 & socat TCP-LISTEN:8000,fork,reuseaddr,bind=127.0.0.1 TCP:backend:8000 & socat TCP-LISTEN:54321,fork,reuseaddr,bind=127.0.0.1 TCP:auth-proxy:80 & socat TCP-LISTEN:8025,fork,reuseaddr,bind=127.0.0.1 TCP:mailpit:8025 & exec "$$@"' --
 
 .PHONY: help
 help: ## Show this help
@@ -95,9 +97,9 @@ db-full: ## Start db + GoTrue auth + auth-proxy (demo-ready infra)
 	./scripts/up-infra.sh
 
 .PHONY: mail
-mail: ## Start Mailpit inbox for login codes (SMTP :1025, UI :8025)
-	$(DC) --profile mail up -d mailpit
-	@echo "  inbox: http://localhost:8025 (set EMAIL_PROVIDER=smtp in backend/.env - see .env.example)"
+mail: ## Start Mailpit inbox for login-in-chat OTP codes (SMTP :1025, UI :8025)
+	$(DC) up -d mailpit
+	@echo "  inbox: http://localhost:8025 (make dev/demo start this automatically too - GoTrue's auth service depends on it)"
 
 .PHONY: dbui
 dbui: ## Start pgweb DB browser (UI :8081)

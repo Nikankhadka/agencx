@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
+import { DEMO_USERS, getAccessToken, loginAsTenantAdmin } from "./auth-helpers";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -58,12 +58,7 @@ test("pasting a link reads the site and reads it back", async ({
 
   // The site is now a ready `website` document, so the assistant can answer
   // from it - the read-back alone would not prove the ingest ran.
-  const token = await page.evaluate(() => {
-    const raw = localStorage.getItem("agencx.login-session");
-    return raw
-      ? (JSON.parse(raw) as { access_token: string }).access_token
-      : "";
-  });
+  const token = await getAccessToken(page);
   const docs = await request.get(`${BACKEND_URL}/api/knowledge`, {
     headers: { Authorization: `Bearer ${token}` },
   });

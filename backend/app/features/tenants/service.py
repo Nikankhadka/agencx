@@ -26,6 +26,14 @@ class TenantAlreadyExistsError(RuntimeError):
     """The user already belongs to a tenant, or the tenant's slug is taken."""
 
 
+class UserAlreadyHasTenantError(TenantAlreadyExistsError):
+    """The user already belongs to a tenant."""
+
+
+class TenantSlugTakenError(TenantAlreadyExistsError):
+    """The requested tenant slug is already in use."""
+
+
 class TenantNotFoundError(RuntimeError):
     """The slug (or tenant) does not exist."""
 
@@ -52,7 +60,7 @@ async def create_tenant(*, user_id: str, slug: str, name: str) -> str:
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("select tenant_id from resolve_user_tenant($1)", user_id)
     if existing is not None:
-        raise TenantAlreadyExistsError("user already has a tenant")
+        raise UserAlreadyHasTenantError("user already has a tenant")
 
     tenant_id = str(uuid4())
     try:
@@ -72,12 +80,26 @@ async def create_tenant(*, user_id: str, slug: str, name: str) -> str:
     except asyncpg.UniqueViolationError as exc:
         # users_pkey means a same-user double-submit raced past the pre-check;
         # anything else is the tenants slug uniqueness.
-        raise TenantAlreadyExistsError(
-            "user already has a tenant"
+        error = (
+            UserAlreadyHasTenantError("user already has a tenant")
             if exc.constraint_name == "users_pkey"
-            else "slug already taken"
-        ) from exc
+            else TenantSlugTakenError("slug already taken")
+        )
+        raise error from exc
     return tenant_id
+
+
+async def find_tenant_for_user(user_id: str) -> str | None:
+    """The caller's tenant id via ``resolve_user_tenant`` (0009), or ``None``
+    if they have none yet. Same pre-context resolver pattern ``create_tenant``
+    uses for its own membership check above - the one legitimate way to read
+    this before a ``tenant_context`` exists. Used by the provisioning shape of
+    ``POST /api/tenants`` (login-in-chat) to decide create-vs-return.
+    """
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("select tenant_id from resolve_user_tenant($1)", user_id)
+    return str(row["tenant_id"]) if row is not None else None
 
 
 async def get_tenant(tenant_id: str) -> dict[str, Any] | None:

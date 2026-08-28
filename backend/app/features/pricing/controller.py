@@ -28,7 +28,7 @@ async def list_catalog(*, tenant_id: str) -> list[dict[str, Any]]:
 async def update_rule(*, tenant_id: str, rule_id: str, updates: dict[str, Any]) -> dict[str, Any]:
     if not updates:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="no fields to update"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="no fields to update"
         )
     try:
         row = await service.update_rule(tenant_id=tenant_id, rule_id=rule_id, updates=updates)
