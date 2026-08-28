@@ -99,28 +99,28 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="name",
         label="your name",
-        ask="What's your name?",
+        ask="What name would you like me to use?",
         kind="text",
         complete=_complete("name"),
     ),
     Beat(
         key="business_name",
         label="business name",
-        ask="What is your business called?",
+        ask="What does the business go by?",
         kind="text",
         complete=_complete("business_name"),
     ),
     Beat(
         key="business_type",
         label="business type",
-        ask="What kind of business is it?",
+        ask="In a few words, what kind of business is it?",
         kind="text",
         complete=_complete("business_type"),
     ),
     Beat(
         key="headcount",
         label="team size",
-        ask="Is it just you, or do you have a team?",
+        ask="Is it just you, or do you work with a team?",
         kind="text",
         complete=_complete("headcount"),
         chips=(
@@ -131,21 +131,21 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="hours",
         label="opening hours",
-        ask="What are your opening hours?",
+        ask="When are you open?",
         kind="text",
         complete=_complete("hours"),
     ),
     Beat(
         key="services",
         label="what you offer",
-        ask="What do you sell or offer?",
+        ask="What would you like customers to know you offer?",
         kind="text",
         complete=_complete("services"),
     ),
     Beat(
         key="contact",
         label="contact details",
-        ask="What's the best way for customers to reach you?",
+        ask="How should customers reach you?",
         kind="text",
         complete=_complete("contact"),
         # The business contact is often the address the owner logged in with,
@@ -157,7 +157,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="abn",
         label="ABN",
-        ask="Do you have an ABN?",
+        ask="Have you set up an ABN yet? If so, you can enter it below.",
         kind="text",
         complete=_complete("abn"),
         mask="XX XXX XXX XXX",
@@ -170,7 +170,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="gst",
         label="GST registration",
-        ask="And are you registered for GST?",
+        ask="Are you registered for GST?",
         kind="text",
         complete=_gst_complete,
         chips=(

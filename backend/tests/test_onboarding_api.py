@@ -22,7 +22,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.features.onboarding.controller import _find_url
+from app.features.onboarding.controller import _find_url, response_from_record
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
@@ -35,6 +35,11 @@ from tests.fakes import BaseFakeProvider, ZeroEmbedder
 pytestmark = pytest.mark.db
 
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
+
+
+def test_empty_onboarding_state_introduces_the_agencx_setup_assistant() -> None:
+    state = response_from_record({"version": 3})
+    assert state["prompt"].startswith("Hi! I'm your Agencx setup assistant.")
 
 
 # One profile field per turn, in beat order. Each update carries only what the
