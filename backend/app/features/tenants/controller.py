@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 _preload_tasks: set[asyncio.Task[None]] = set()
 
 _SLUGIFY_RE = re.compile(r"[^a-z0-9]+")
+_PROVISIONING_SLUG_ATTEMPTS = 5
 
 
 def _slugify(text: str) -> str:
@@ -80,30 +81,43 @@ async def signup(
         existing_id = await service.find_tenant_for_user(user_id)
         if existing_id is not None:
             return await _existing_tenant_result(existing_id)
-        slug = _provisional_slug(email)
         name = _provisional_name(email)
     elif slug is None or name is None:
         # Neither shape: a body with one of the two fields but not the other.
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="slug and name must both be given, or both omitted",
         )
 
-    try:
-        tenant_id = await service.create_tenant(user_id=user_id, slug=slug, name=name)
-    except service.TenantAlreadyExistsError as exc:
-        if not provisioning:
+    if not provisioning:
+        assert slug is not None and name is not None
+        try:
+            tenant_id = await service.create_tenant(user_id=user_id, slug=slug, name=name)
+        except service.TenantAlreadyExistsError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-        # A concurrent double-login raced the pre-check (users_pkey) - not a
-        # real conflict from this caller's perspective, just "give me my
-        # tenant" arriving twice at once. The row exists now; fetch it.
-        existing_id = await service.find_tenant_for_user(user_id)
-        if existing_id is None:
+    else:
+        for _attempt in range(_PROVISIONING_SLUG_ATTEMPTS):
+            slug = _provisional_slug(email)
+            try:
+                tenant_id = await service.create_tenant(user_id=user_id, slug=slug, name=name)
+                break
+            except service.TenantSlugTakenError:
+                continue
+            except service.UserAlreadyHasTenantError as exc:
+                # A concurrent double-login raced the pre-check. The row now
+                # exists, so this remains an idempotent create-or-return call.
+                existing_id = await service.find_tenant_for_user(user_id)
+                if existing_id is not None:
+                    return await _existing_tenant_result(existing_id)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="tenant provisioning failed unexpectedly",
+                ) from exc
+        else:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="tenant provisioning failed unexpectedly",
-            ) from exc
-        return await _existing_tenant_result(existing_id)
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="tenant provisioning could not allocate a slug",
+            )
 
     logger.info(
         "audited service action: tenant_signup",

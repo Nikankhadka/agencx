@@ -74,7 +74,7 @@ interface MailpitMessage {
  * fetching once because delivery (real SMTP, even to a local relay) is not
  * instant.
  */
-async function fetchOtpCode(request: APIRequestContext, email: string): Promise<string> {
+export async function fetchOtpCode(request: APIRequestContext, email: string): Promise<string> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const resp = await request.get(

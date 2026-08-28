@@ -265,7 +265,7 @@ conversation IS the product.
   to that address; six digit cells replace the input footprint (auto-focus
   first cell, numeric keyboard on mobile), auto-submit on six valid digits. One
   line echoes the destination with a "Wrong email?" affordance; resend is
-  inactive for 30 seconds with no visible countdown; wrong-code/expired/
+  inactive for 60 seconds with no visible countdown; wrong-code/expired/
   max-attempts each get one calm line. Duplicate email sends the code regardless
   (no account-existence leak); success silently continues. No toast, no
   celebration.

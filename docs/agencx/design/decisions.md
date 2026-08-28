@@ -439,6 +439,10 @@ revocation (G2.1) - stored in `localStorage` and guarded only by client-side
 Moving the tenant-owner flow onto the identity store already in the stack
 costs nothing extra and closes both gaps in one ticket instead of two.
 
+The interaction remains email in and a 6-digit code back. The resend control
+now stays inactive for 60 seconds, matching GoTrue's production
+`SMTP_MAX_FREQUENCY`, instead of the previous backend flow's 30 seconds.
+
 **Why not httpOnly cookies.** The gap doc's own G2.2 write-up said "httpOnly
 cookies" as the target shape, and that was wrong - checked against
 `@supabase/ssr`'s source and docs while building this. The package's cookie is
@@ -462,7 +466,7 @@ Bearer check plus RLS, never the proxy alone) - a positive route matcher, and
 
 **Cutover.** Self-minted sessions were 1h TTL and lived under the
 `agencx.login-session` `localStorage` key; the new frontend never reads that
-key again, so a session from before this ships simply ages out within the
+key again, so a session from before this ships expires within the
 hour rather than needing a forced mass logout.
 
 **Boundary:** the backend's Bearer-header contract is unchanged (a route still

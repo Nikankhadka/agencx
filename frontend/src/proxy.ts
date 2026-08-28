@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookieOptions } from "@/lib/auth-cookie";
 import { serverPublicConfig } from "@/lib/public-config";
 
 /**
@@ -41,6 +42,10 @@ const CONSOLE_PREFIXES = [
   "/onboarding",
 ];
 
+// Next requires `config.matcher` to remain statically analyzable, while this
+// runtime list decides whether an authenticated redirect applies. Keep the
+// two positive lists aligned when a console route is added.
+
 function isConsolePath(pathname: string): boolean {
   return CONSOLE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -72,7 +77,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(fetchUrl, supabaseAnonKey, {
-    cookieOptions: { name: cookieName },
+    cookieOptions: { name: cookieName, ...authCookieOptions() },
     cookies: {
       getAll() {
         return request.cookies.getAll();

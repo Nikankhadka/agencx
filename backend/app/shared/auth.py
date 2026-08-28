@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Supabase access tokens always carry this audience; verifying it is part of
 # validating the token, not an optional extra.
 SUPABASE_AUDIENCE = "authenticated"
+SUPABASE_JWT_ALGORITHMS = frozenset({"HS256", "ES256", "RS256"})
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -87,8 +88,11 @@ def _decode_claims(token: str) -> dict[str, object]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token"
         ) from exc
-    if not alg:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token missing alg")
+    if alg not in SUPABASE_JWT_ALGORITHMS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="token uses an unsupported algorithm",
+        )
 
     # ``exp`` is only validated by PyJWT when present; require it so a token
     # minted without one can never be accepted as a forever-valid credential.

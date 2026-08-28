@@ -90,7 +90,7 @@ below.**
 > and would need a new entry for every future branch, where the Ignored Build
 > Step is one condition that needs no maintenance.
 
-Note that Vercel marks the **first** deployment of a freshly imported project as
+Vercel marks the **first** deployment of a freshly imported project as
 production regardless of which branch it came from. If the dashboard shows one
 old production deployment from an unrelated branch, that is what it is.
 
@@ -143,7 +143,7 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
    a document attached during onboarding is gone by the time the owner saves:
    the upload and the chunk-and-embed pass are two different requests, and a
    container host does not promise they land on the same instance. The failure is
-   silent - the document is just marked failed.
+   silent - the document is marked failed.
 3. Apply migrations once, from a machine with this repo checked out:
 
    ```bash
@@ -166,7 +166,7 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
    backend, so this project's Auth settings are the only thing standing between
    a real owner and a working login:
    - **Auth > Emails > Email Templates**, the "Magic Link" template: it has to
-     surface the six-digit code, not just the link. Supabase's default template
+     surface the six-digit code as well as the link. Supabase's default template
      is link-only - mirror `docker/gotrue-templates/magic_link.html` (used
      locally, same fix): put `{{ .Token }}` in the body, prominently, alongside
      or instead of `{{ .ConfirmationURL }}`.
@@ -199,8 +199,8 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
    observed listening on 80) and both images honour it. A project-level `PORT`
    would apply to both services and send one of them to the wrong socket.
 4. Settings > Functions > **Region = the same region as the Supabase project**
-   (`syd1` for `ap-southeast-2`). This one is easy to skip and expensive to
-   leave wrong. A new project defaults to `iad1` (Washington DC); with the
+   (`syd1` for `ap-southeast-2`). Missing this setting creates expensive
+   latency. A new project defaults to `iad1` (Washington DC); with the
    database in Sydney, every query crossed the Pacific and came back, and the
    backend makes several per request - a first login alone does six (count,
    insert, fetchrow, update, the GoTrue admin call, tenant resolve, tenant

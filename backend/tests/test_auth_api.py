@@ -14,6 +14,7 @@ section - exercising the path hosted Supabase projects actually use
 from __future__ import annotations
 
 import os
+import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -256,6 +257,29 @@ async def test_provisioning_with_no_email_claim_falls_back(client: httpx.AsyncCl
     assert response.json()["slug"].startswith("biz-")
 
 
+async def test_provisioning_retries_a_generated_slug_collision(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    collision_slug = "collision-aaaa"
+    occupied = await _signup(
+        client,
+        token=_make_token(uuid.uuid4()),
+        slug=collision_slug,
+        name="Already Here",
+    )
+    assert occupied.status_code == 201
+
+    suffixes = iter("aaaabbbb")
+    monkeypatch.setattr(secrets, "choice", lambda _alphabet: next(suffixes))
+
+    response = await _provision(
+        client,
+        token=_make_token(uuid.uuid4(), email="collision@example.com"),
+    )
+    assert response.status_code == 201
+    assert response.json()["slug"] == "collision-bbbb"
+
+
 # --- tenant isolation at the API level ------------------------------------------
 
 
@@ -351,6 +375,22 @@ def _es256_token(
     return token, {"keys": [jwk]}
 
 
+def _es384_token(user_id: uuid.UUID, *, kid: str) -> tuple[str, dict[str, Any]]:
+    """An otherwise valid token using an algorithm Supabase does not issue."""
+    private_key = ec.generate_private_key(ec.SECP384R1())
+    now = int(time.time())
+    payload = {
+        "sub": str(user_id),
+        "aud": "authenticated",
+        "iat": now,
+        "exp": now + 3600,
+    }
+    token = jwt.encode(payload, private_key, algorithm="ES384", headers={"kid": kid})
+    jwk = ECAlgorithm.to_jwk(private_key.public_key(), as_dict=True)
+    jwk.update({"kid": kid, "alg": "ES384", "use": "sig"})
+    return token, {"keys": [jwk]}
+
+
 @pytest.fixture
 def jwks_supabase_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     """Point SUPABASE_URL at a fake host - only ``_jwks_client``'s stubbed
@@ -389,6 +429,17 @@ async def test_es256_token_with_unknown_kid_is_unauthorized(
     # rotated away from.
     token, _real_jwks = _es256_token(uuid.uuid4(), kid=f"real-{uuid.uuid4().hex[:8]}")
     _stub_jwks(monkeypatch, jwks_supabase_url, {"keys": []})
+
+    response = await _provision(client, token=token)
+    assert response.status_code == 401
+
+
+async def test_token_with_unsupported_algorithm_is_unauthorized(
+    client: httpx.AsyncClient, jwks_supabase_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kid = f"unsupported-{uuid.uuid4().hex[:8]}"
+    token, jwks = _es384_token(uuid.uuid4(), kid=kid)
+    _stub_jwks(monkeypatch, jwks_supabase_url, jwks)
 
     response = await _provision(client, token=token)
     assert response.status_code == 401

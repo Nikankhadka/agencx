@@ -148,7 +148,7 @@ migration (D23, `design/decisions.md`) replaced it with GoTrue's own OTP flow
 (`signInWithOtp`/`verifyOtp`, type `email`) - GoTrue issues, mails and verifies
 the code itself, so there is no code table on our side any more; migration
 0022 drops it. Users still resolve to `auth.users.id` exactly as before -
-login-in-chat is still just the delivery mechanism, only the issuer changed.
+login-in-chat remains the delivery mechanism; only the issuer changed.
 
 ### Slug resolution
 
@@ -441,7 +441,7 @@ this.
   threshold, tax), ~15 catalog_items, ~12 pricing_rules, ~20 mock orders,
   knowledge docs via the real ingestion pipeline.
 - `seed_tenant2_dental.py` - Tenant 2 (generalization proof): created only
-  through the conversational onboarding flow + uploads; holds just raw input
+  through the conversational onboarding flow + uploads; holds raw input
   documents and the interview script, never direct table writes.
 - `seed_leakage_pair.py` - two throwaway tenants with disjoint secret facts for
   the leakage test.

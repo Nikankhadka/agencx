@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { authCookieOptions } from "./auth-cookie";
 import { readPublicConfig } from "./public-config";
 
 let client: SupabaseClient | null = null;
@@ -26,6 +27,8 @@ export function getSupabase(): SupabaseClient {
       "SUPABASE_URL and SUPABASE_ANON_KEY must be set on the server (see .env.example)"
     );
   }
-  client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: authCookieOptions(),
+  });
   return client;
 }

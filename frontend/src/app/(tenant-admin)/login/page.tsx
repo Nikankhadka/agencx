@@ -76,13 +76,14 @@ export default function LoginPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [resendReady, setResendReady] = useState(false);
   const [opened, setOpened] = useState(false);
+  const [loginSubmissionInFlight, setLoginSubmissionInFlight] = useState(false);
   const resendTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!isLoading && session) {
+    if (!isLoading && session && !loginSubmissionInFlight) {
       router.replace("/onboarding");
     }
-  }, [isLoading, session, router]);
+  }, [isLoading, loginSubmissionInFlight, session, router]);
 
   // The opening message is static, so it gets the same typing hold a streamed
   // one would (design/frontend.md section 9).
@@ -127,6 +128,7 @@ export default function LoginPage() {
     setCode(value);
     setStatus(null);
     setBusy(true);
+    setLoginSubmissionInFlight(true);
 
     const { error: verifyError } = await getSupabase().auth.verifyOtp({
       email,
@@ -134,6 +136,7 @@ export default function LoginPage() {
       type: "email",
     });
     if (verifyError) {
+      setLoginSubmissionInFlight(false);
       setStatus(otpErrorMessage(verifyError));
       setCode("");
       setBusy(false);
@@ -147,8 +150,12 @@ export default function LoginPage() {
       router.replace("/onboarding");
     } catch (err) {
       const detail = err instanceof ApiError ? err.detail : "Something went wrong.";
+      await getSupabase().auth.signOut({ scope: "local" });
+      setLoginSubmissionInFlight(false);
       setStatus(detail);
       setCode("");
+      setPhase("email");
+      setDraft(email);
       setBusy(false);
     }
   }
@@ -161,7 +168,7 @@ export default function LoginPage() {
     setStatus(null);
   }
 
-  if (isLoading || session) return null;
+  if (isLoading || (session && !loginSubmissionInFlight)) return null;
 
   // Never let the opening message still be "typing" once the conversation has
   // moved past it - a fast answer would otherwise pop the lede in AFTER the

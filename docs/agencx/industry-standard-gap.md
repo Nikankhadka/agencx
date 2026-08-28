@@ -103,7 +103,7 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 ## 2. Authentication
 
-**Verdict: AT STANDARD** (was GAP; closed 2026-08-28, D23 in `decisions.md`). The login-in-chat UX is unchanged - email in, 6-digit code back - but the mechanics under it moved onto GoTrue end-to-end: G2.1 and G2.2 are closed, and G2.3/G2.4 are moot rather than open (the machinery they were about no longer exists). Only G2.5 (MFA/OAuth/SSO) remains, deliberate and low-priority.
+**Verdict: AT STANDARD** (was GAP; closed 2026-08-28, D23 in `decisions.md`). The login-in-chat interaction remains email in and a 6-digit code back; the resend cooldown changed from 30 to 60 seconds to match GoTrue's production cadence. The mechanics under it moved onto GoTrue end-to-end: G2.1 and G2.2 are closed, and G2.3/G2.4 are moot rather than open (the machinery they were about no longer exists). Only G2.5 (MFA/OAuth/SSO) remains, deliberate and low-priority.
 
 **Current state:**
 
@@ -714,7 +714,7 @@ Check five things before trusting any number here:
 ## Appendix C: glossary
 
 - **RPO / RTO** - recovery point objective (how much data loss is acceptable) / recovery time objective (how fast you must be back). Stage-1 proposal: RPO 24h, RTO 1 day.
-- **PITR** - point-in-time recovery: restore to any second within a retention window, not just the last daily backup.
+- **PITR** - point-in-time recovery: restore to any second within a retention window rather than only the last daily backup.
 - **RRF** - reciprocal rank fusion: merges ranked lists (dense + sparse) into one ranking; k=60 here.
 - **MRU / MAU** - monthly retained user / monthly active user; Clerk bills MRU (users who return after 24h), Supabase bills MAU.
 - **SSRF** - server-side request forgery: the URL-scrape tool fetching internal addresses; blocked by scheme allowlist today, private-IP blocking is the fix.
