@@ -274,10 +274,12 @@ create table offerings (
   description  text not null default '',
   attributes   jsonb not null default '{}',             -- generic: {"category":..., "tags":[...]}
   price_cents  integer check (price_cents is null or price_cents >= 0),  -- null = priced via a rule
-  active       boolean not null default true,
+  active       boolean not null default true,             -- false = retired, never deleted
+  position     integer not null default 0,               -- M-4: the owner's storefront order
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+create index offerings_storefront_order on offerings (tenant_id, active, position, created_at);
 
 create table pricing_rules (
   id                 uuid primary key default gen_random_uuid(),
@@ -460,6 +462,7 @@ applied in order by a plain runner (no heavy framework):
 0021_tenant_assets.sql     tenant_assets (business cover photo, E-6) - see section 3
 0022_drop_auth_codes.sql   drops auth_codes - login-in-chat moved to GoTrue OTP (D23)
 0023_rename_catalog_items_to_offerings.sql  names the M-1 writer's table after the Offering domain noun
+0024_offering_position.sql  offerings.position - the order the owner puts their storefront list in (M-4)
 ```
 
 Planned Agencx migration: `M-2` (`docs/agencx/spec/11-offerings-media.md`,

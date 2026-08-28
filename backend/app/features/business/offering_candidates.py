@@ -1,13 +1,18 @@
-"""E-6: the Booking page's Services list, derived from what the owner published.
+"""Offering candidates read out of the owner's own published material.
 
-The prototype's booking screen lists services with prices ("Shawarma plate,
-$16 · Pickup"). Nothing in Stage 1 holds that as structured data for a
-self-onboarded business: ``catalog_items`` exists but has no writer outside the
-demo seeds, and the interview captures ``services`` as one sentence.
+**Nothing calls this at runtime yet - that is M-3, and this module is waiting
+for it, not dead.** E-6 used it to derive the Booking page's Services list
+because ``offerings`` had no owner-facing writer; M-1 built that writer, so the
+screen now reads real rows and this read-time derivation came out of the path.
+D24 keeps the module because M-3 (import-and-confirm) needs exactly this: an
+uploaded menu or price list, processed by O-3 into readable sections, turned
+into *candidate* offerings the owner confirms once rather than re-typing. It
+was renamed from ``offerings.py`` when M-1 arrived, so the name says candidate
+extractor rather than shadowing the writer in ``service.py``.
 
-What a real owner does have is their own material - a menu, a price list, the
-page they pasted - processed by O-3 into readable sections they corrected and
-saved. This module turns those sections into rows.
+What a real owner has is their own material - a menu, a price list, the page
+they pasted - processed by O-3 into readable sections they corrected and saved.
+This module turns those sections into rows.
 
 **No model runs here, and no figure is ever produced.** A price on this page is
 a verbatim slice of the owner's own line, cut at the position the pricing gate's

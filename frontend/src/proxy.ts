@@ -23,7 +23,7 @@ import { serverPublicConfig } from "@/lib/public-config";
  */
 export const config = {
   matcher: [
-    "/(home|chats|business|conversations|escalations|pricing|knowledge|dashboards|settings|onboarding)/:path*",
+    "/(home|chats|business|conversations|escalations|pricing|knowledge|dashboards|onboarding)/:path*",
     "/login",
     "/admin/:path*",
   ],
@@ -38,7 +38,6 @@ const CONSOLE_PREFIXES = [
   "/pricing",
   "/knowledge",
   "/dashboards",
-  "/settings",
   "/onboarding",
 ];
 

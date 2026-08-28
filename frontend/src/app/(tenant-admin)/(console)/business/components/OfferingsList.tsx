@@ -45,6 +45,10 @@ export function OfferingsList() {
     }
   }
 
+  // Deliberately not `void load()`: react-hooks/set-state-in-effect cannot see
+  // that the setState inside an async function is deferred past an await, and
+  // rejects it. Written as a visible callback, the rule is satisfied and the
+  // behaviour is identical. `load()` stays for the mutation handlers below.
   useEffect(() => {
     apiFetch<Offering[]>("/api/business/offerings")
       .then(setOfferings)

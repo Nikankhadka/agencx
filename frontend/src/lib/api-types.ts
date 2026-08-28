@@ -426,25 +426,25 @@ export interface paths {
         patch: operations["patch_links_api_business_links_patch"];
         trace?: never;
     };
-    "/api/business/offers": {
+    "/api/business/offerings": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Offers */
-        get: operations["get_offers_api_business_offers_get"];
+        /** List Offerings */
+        get: operations["list_offerings_api_business_offerings_get"];
         put?: never;
-        /** Post Offer */
-        post: operations["post_offer_api_business_offers_post"];
+        /** Post Offering */
+        post: operations["post_offering_api_business_offerings_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/business/offers/{offer_id}": {
+    "/api/business/offerings/{offering_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -454,12 +454,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Offer */
-        delete: operations["delete_offer_api_business_offers__offer_id__delete"];
+        /** Remove Offering */
+        delete: operations["remove_offering_api_business_offerings__offering_id__delete"];
         options?: never;
         head?: never;
-        /** Patch Offer */
-        patch: operations["patch_offer_api_business_offers__offer_id__patch"];
+        /** Patch Offering */
+        patch: operations["patch_offering_api_business_offerings__offering_id__patch"];
         trace?: never;
     };
     "/api/business/storefront": {
@@ -852,8 +852,6 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
-            /** Services */
-            services: components["schemas"]["Offering"][];
             /** Links */
             links: {
                 [key: string]: string;
@@ -1176,8 +1174,20 @@ export interface components {
             /** Tool Calls */
             tool_calls: components["schemas"]["ToolCallDetail"][];
         };
-        /** Offer */
-        Offer: {
+        /** OfferingCreate */
+        OfferingCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Price Dollars */
+            price_dollars?: number | string | null;
+        };
+        /** OfferingResponse */
+        OfferingResponse: {
             /**
              * Id
              * Format: uuid
@@ -1187,38 +1197,17 @@ export interface components {
             name: string;
             /** Description */
             description: string;
-            /** Active */
-            active: boolean;
-            /** Position */
-            position: number;
+            /** Price Cents */
+            price_cents: number | null;
         };
-        /** OfferCreate */
-        OfferCreate: {
-            /** Name */
-            name: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-        };
-        /** OfferUpdate */
-        OfferUpdate: {
+        /** OfferingUpdate */
+        OfferingUpdate: {
             /** Name */
             name?: string | null;
             /** Description */
             description?: string | null;
-            /** Active */
-            active?: boolean | null;
-            /** Position */
-            position?: number | null;
-        };
-        /** Offering */
-        Offering: {
-            /** Name */
-            name: string;
-            /** Price */
-            price: string | null;
+            /** Price Dollars */
+            price_dollars?: number | string | null;
         };
         /** OnboardingConfirmRequest */
         OnboardingConfirmRequest: {
@@ -1360,8 +1349,15 @@ export interface components {
              */
             created_at: string;
         };
-        /** PublicOffer */
-        PublicOffer: {
+        /**
+         * PublicOffering
+         * @description One offering as a customer sees it.
+         *
+         *     ``price_cents`` is the owner's own typed figure, passed through untouched -
+         *     the page formats it, nothing computes it. Null means the owner published no
+         *     price, and the page shows none rather than inventing one.
+         */
+        PublicOffering: {
             /**
              * Id
              * Format: uuid
@@ -1371,6 +1367,8 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /** Price Cents */
+            price_cents: number | null;
         };
         /** PublicReview */
         PublicReview: {
@@ -1447,8 +1445,8 @@ export interface components {
             links: {
                 [key: string]: string;
             };
-            /** Offers */
-            offers: components["schemas"]["PublicOffer"][];
+            /** Offerings */
+            offerings: components["schemas"]["PublicOffering"][];
             /** Reviews */
             reviews: components["schemas"]["PublicReview"][];
             /** Has Cover */
@@ -2375,7 +2373,7 @@ export interface operations {
             };
         };
     };
-    get_offers_api_business_offers_get: {
+    list_offerings_api_business_offerings_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2390,12 +2388,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Offer"][];
+                    "application/json": components["schemas"]["OfferingResponse"][];
                 };
             };
         };
     };
-    post_offer_api_business_offers_post: {
+    post_offering_api_business_offerings_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2404,7 +2402,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OfferCreate"];
+                "application/json": components["schemas"]["OfferingCreate"];
             };
         };
         responses: {
@@ -2414,7 +2412,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Offer"];
+                    "application/json": components["schemas"]["OfferingResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2428,12 +2426,12 @@ export interface operations {
             };
         };
     };
-    delete_offer_api_business_offers__offer_id__delete: {
+    remove_offering_api_business_offerings__offering_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                offer_id: string;
+                offering_id: string;
             };
             cookie?: never;
         };
@@ -2457,18 +2455,18 @@ export interface operations {
             };
         };
     };
-    patch_offer_api_business_offers__offer_id__patch: {
+    patch_offering_api_business_offerings__offering_id__patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                offer_id: string;
+                offering_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OfferUpdate"];
+                "application/json": components["schemas"]["OfferingUpdate"];
             };
         };
         responses: {
@@ -2478,7 +2476,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Offer"];
+                    "application/json": components["schemas"]["OfferingResponse"];
                 };
             };
             /** @description Validation Error */

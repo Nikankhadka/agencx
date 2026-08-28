@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { brandStyle } from "@/lib/brand";
-import { customerSurfaceConfig, resolveTenantBySlug } from "@/lib/tenant";
-import { resolveStorefrontBySlug } from "@/lib/tenant";
+import {
+  customerSurfaceConfig,
+  resolveStorefrontBySlug,
+  resolveTenantBySlug,
+} from "@/lib/tenant";
+import { BrandMark } from "@/components/ui/BrandMark";
+import { CustomerChat } from "./CustomerChat";
 import { Storefront } from "./Storefront";
 
 /**
@@ -45,18 +50,38 @@ export default async function CustomerHome({
     );
   }
 
+  // A tenant that is neither active nor suspended (`provisioning`, which a
+  // platform-created tenant sits at until it is claimed) has no storefront to
+  // read, but it does have a working assistant. Fall back to the bare chat
+  // rather than rendering an empty page.
+  if (!storefront) {
+    return (
+      <main className="mx-auto flex h-dvh w-full max-w-[720px] flex-col">
+        {accentOverride ? <style>{accentOverride}</style> : null}
+        <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
+          <BrandMark logoUrl={logoUrl} name={displayName} />
+          <h1 className="text-title-3 font-semibold text-text">{displayName}</h1>
+        </header>
+        <CustomerChat
+          slug={slug}
+          displayName={displayName}
+          greeting={greeting}
+          starterQuestions={starterQuestions}
+        />
+      </main>
+    );
+  }
+
   return (
     <>
       {accentOverride ? <style>{accentOverride}</style> : null}
-      {storefront ? (
-        <Storefront
-          slug={slug}
-          logoUrl={logoUrl}
-          greeting={greeting}
-          starterQuestions={starterQuestions}
-          storefront={storefront}
-        />
-      ) : null}
+      <Storefront
+        slug={slug}
+        logoUrl={logoUrl}
+        greeting={greeting}
+        starterQuestions={starterQuestions}
+        storefront={storefront}
+      />
     </>
   );
 }

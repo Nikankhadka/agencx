@@ -49,7 +49,7 @@ const NAV_ITEMS: TabItem[] = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/chats", label: "Chats", icon: "forum" },
   // Legacy Settings links remain supported and still belong to Business.
-  { href: "/business", label: "Business", icon: "dashboard", owns: ["/settings"] },
+  { href: "/business", label: "Business", icon: "dashboard" },
 ];
 
 interface TenantMe {

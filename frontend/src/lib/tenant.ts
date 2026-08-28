@@ -35,10 +35,15 @@ export interface TenantResolution {
   customer?: Record<string, unknown>;
 }
 
-export interface StorefrontOffer {
+export interface StorefrontOffering {
   id: string;
   name: string;
   description: string;
+  /**
+   * The owner's own typed figure, in integer cents, or null when they
+   * published no price. The page formats it; nothing here computes it.
+   */
+  price_cents: number | null;
 }
 
 export interface StorefrontReview {
@@ -53,7 +58,7 @@ export interface StorefrontData {
   tagline: string | null;
   about: string;
   links: Record<string, string>;
-  offers: StorefrontOffer[];
+  offerings: StorefrontOffering[];
   reviews: StorefrontReview[];
   has_cover: boolean;
 }

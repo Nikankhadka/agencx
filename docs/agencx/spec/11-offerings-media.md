@@ -1,19 +1,27 @@
 # Offerings + Media (D24)
 
-Three forward tickets. None have started - see `docs/agencx/design/decisions.md`
-D24 for the design reasoning (catalog/knowledge split, Cloudinary choice, the
-still-open `catalog_items` rename question) and provenance (a Codex CLI
-session designed this, then hit its usage limit before writing anything down;
-this phase file and D24 are the recovered record, cross-checked against the
-code). Ticket id prefix `M-` (Media), unused elsewhere in the ticket set.
+Four tickets. `M-1` and `M-4` are built; `M-2` and `M-3` are forward. See
+`docs/agencx/design/decisions.md` D24 for the design reasoning (catalog/
+knowledge split, Cloudinary choice, the rename question `M-1` closed) and
+provenance (a Codex CLI session designed this, then hit its usage limit before
+writing anything down; this phase file and D24 are the recovered record,
+cross-checked against the code). Ticket id prefix `M-` (Media), unused
+elsewhere in the ticket set.
 
 Order matters: `M-1` gives Offerings real identity and closes the two
-retrieval-safety gaps that become live the moment `catalog_items` is
+retrieval-safety gaps that become live the moment `offerings` is
 owner-written - shipping it without them would ship a working feature next to
-a real bug. `M-2` (media) only needs an offering to exist for its per-offering
-photo half; its gallery half has no dependency on `M-1` but is sequenced after
-it for one branch, one reviewable diff. `M-3` (import-and-confirm) writes
-through `M-1`'s service, so it must come last.
+a real bug. `M-4` puts what `M-1` made writable in front of a customer, so it
+follows `M-1`. `M-2` (media) only needs an offering to exist for its
+per-offering photo half; its gallery half has no dependency on `M-1` but is
+sequenced after it for one branch, one reviewable diff. `M-3`
+(import-and-confirm) writes through `M-1`'s service, so it must come last.
+
+**`M-4` amends two of `M-1`'s ticked bullets** rather than rewriting them: the
+Business page no longer renders the offerings list at all (the storefront
+does, and the owner reaches it through a preview link), and the add/edit/remove
+E2E moved with the editor onto `/business/offerings`, asserting the round trip
+against the public page instead of the owner's own screen.
 
 ---
 
@@ -412,3 +420,133 @@ an automatic overwrite.
 - [ ] Re-upload diffs against existing offerings instead of overwriting
 - [ ] Money guardrail test matrix extended and green
 - [ ] `make check` green
+
+---
+
+## M-4: The public storefront, and the address the owner chooses
+
+**Status: built.** Depends on `M-1`.
+
+### Summary
+
+Turn `/{slug}` from a bare chat window into a storefront: the offerings `M-1`
+made writable, with the owner's prices, above an About section and reviews the
+owner writes, with the assistant one tap away rather than occupying the whole
+page. Let the owner choose that address at go-live instead of inheriting the
+provisional one. Re-cut the Business hub around the three jobs this leaves.
+
+### Why
+
+`M-1` gave an owner somewhere to put what they sell, and nowhere for a
+customer to see it. `/{slug}` rendered a chat and nothing else, so a customer
+arriving from a shared link had to know what to ask before the page told them
+anything - the business's own offerings, prices, and story were reachable only
+by interrogating an assistant about them.
+
+The address was the second half of the same problem. A self-onboarded tenant
+got a provisional slug (`biz-` plus a fragment of its id) and no way to change
+it, so the link the owner shares was never the one they would have chosen.
+
+### User stories
+
+#### US-1 A customer sees the business before they ask it anything
+
+As someone who followed a shared link, I land on a page that tells me who the
+business is, what it offers, what it costs, and what other people say - and I
+can start a conversation when I want one, not before.
+
+- Offerings render with the owner's own price when they published one, and
+  with no price at all when they did not. Nothing rounds, marks up, or invents
+  a figure; the page formats integer cents and does no other arithmetic.
+- The assistant opens in a sheet from any of several entry points, including
+  "Ask about this" on a single offering, which seeds the composer.
+- A tenant that is suspended still shows its calm unavailable state; one that
+  is neither active nor suspended (`provisioning`) falls back to the bare chat
+  rather than an empty page.
+
+#### US-2 An owner writes the parts of the page that are not offerings
+
+As an owner, I write an About paragraph and up to six short reviews, and they
+appear on my page.
+
+- These are presentation, not knowledge: they live in
+  `tenant_config.brand->storefront`, and the assistant does not answer from
+  them.
+- An empty About or an empty review list renders nothing, rather than an
+  empty heading over blank space.
+
+#### US-3 An owner chooses their public address at go-live
+
+As an owner finishing onboarding, the confirm step offers an address derived
+from my business name, which I can edit before going live.
+
+- The suggestion always passes the slug rule. A business name that would
+  derive a reserved slug ("Settings") gets `-page` appended rather than
+  failing the validator with nothing to fall back on.
+- An address another tenant already holds is refused with a message that says
+  so, not a 500.
+- After go-live the address is fixed - changing it would break every link
+  already shared.
+
+#### US-4 The Business hub is three places, not two plus an editor
+
+As an owner, Business holds one row per job: the page customers see, what I
+offer, and my business details.
+
+- `/settings` and `/business/booking` are gone as paths, not aliased: one
+  route per screen, so the two cannot drift apart.
+
+### Technical spec
+
+- **Public read:** `features/business/public_api.py` -
+  `GET /api/public/tenant/{slug}/storefront` and `.../cover`, resolving the
+  slug through the existing `resolve_active_tenant` and reading under the
+  `customer` role. `catalog_items`' existing `tenant_isolation` policy already
+  covers this: `tenant_context` sets `app.tenant_id` whatever the role.
+- **Sections:** `brand->storefront` (`about`, `reviews`), merged with
+  `jsonb_set` so an unrelated brand key is never clobbered.
+- **Slug at confirm:** `POST /api/onboarding/confirm` takes an optional
+  `slug`; `suggested_slug()` derives the default and is guaranteed to pass
+  `validate_slug`. A unique violation becomes a 409, not a 500, and both the
+  old and new slug are dropped from the resolver cache.
+- **Routes:** `business/booking/` -> `business/page/`, `settings/` ->
+  `business/details/`, `M-1`'s `OfferingsList` mounted at
+  `business/offerings/`. `/settings` leaves `proxy.ts` with the route, and
+  stays in `RESERVED_SLUGS` (that list is a floor, not a mirror).
+
+### Tests
+
+- Backend: the storefront exposes only owner-published content, with
+  `price_cents` passed through; a priceless offering reaches the page with no
+  price; retiring an offering drops it from both the owner's list and the
+  storefront while the row survives; a suggested slug always passes
+  `validate_slug` across reserved, punctuation-only and ordinary names.
+- E2E: `storefront.spec.ts` (About + review round trip, opening the chat
+  sheet, an unknown slug still 404s) and the offerings round trip in
+  `business-hub.spec.ts`, which now asserts the price on the public page.
+- **Not covered by E2E:** choosing the slug at go-live. Reaching confirm means
+  walking the seven-beat interview against a live model, which is slow and
+  flaky; the derivation, the reserved-name fallback and the 409 are covered by
+  backend tests instead.
+
+### Files touched
+
+- `backend/app/features/business/public_api.py` (new), `service.py`, `api.py`,
+  `controller.py`
+- `backend/app/features/onboarding/{api,controller,service}.py`,
+  `backend/app/features/tenants/slug.py`
+- `backend/migrations/0024_offering_position.sql`
+- `frontend/src/app/[slug]/{page.tsx,Storefront.tsx}`, `src/lib/tenant.ts`
+- `frontend/src/app/(tenant-admin)/(console)/business/**`, `layout.tsx`,
+  `src/proxy.ts`
+
+### Definition of done
+
+- [x] `/{slug}` renders offerings with the owner's prices, About, reviews and
+      links, with the assistant a tap away
+- [x] An offering with no price shows none
+- [x] The owner writes About and reviews from the Business page screen
+- [x] The owner chooses their public address at go-live; a taken one is a 409
+      and a reserved-derived one cannot 500
+- [x] One route per screen - the aliases are gone
+- [x] `make check` green; E2E covers the storefront round trip

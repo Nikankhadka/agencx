@@ -23,7 +23,7 @@ import pytest
 import pytest_asyncio
 
 from app.features.onboarding.controller import _find_url
-from app.features.tenants.slug import suggested_slug
+from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
@@ -321,6 +321,14 @@ def test_suggested_slug_is_a_shareable_handle() -> None:
     assert suggested_slug("Café & Co.") == "cafe-co"
 
 
+@pytest.mark.parametrize("business_name", ["Settings", "Admin", "!!!", "Home", "Bytefix Repairs"])
+def test_a_suggested_slug_is_always_one_confirm_can_use(business_name: str) -> None:
+    """Go-live falls back to the suggestion when the owner types no address, so
+    a name that derives a reserved or empty slug must not reach validate_slug
+    with nothing left to fall back to - it used to 500 there."""
+    assert validate_slug(suggested_slug(business_name))
+
+
 async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClient) -> None:
     """US-4: a returning owner picks up where they left off, nothing re-asked."""
     token, _tenant_id = await _signup_tenant_admin(client)
@@ -459,7 +467,6 @@ async def test_full_flow_confirm_writes_profile(
         "abn": "51 824 753 556",
         "gst": "yes",
     }
-    await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
 
 
 async def test_confirm_writes_no_catalog_or_pricing_rows(
@@ -510,17 +517,18 @@ async def test_confirm_refuses_a_taken_business_page_address(
 ) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     await superuser_conn.execute(
-        "insert into tenants (slug, name) values ('bytefix-repairs', 'Existing business')"
+        "insert into tenants (slug, name) values ('taken-page-address', 'Existing business')"
     )
     await _walk_to_confirm(client, token)
 
     response = await client.post(
-        "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
+        "/api/onboarding/confirm",
+        json={"slug": "taken-page-address"},
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 409
     assert response.json()["detail"] == "That page address is already taken. Choose another."
-    await superuser_conn.execute("delete from tenants where slug = 'bytefix-repairs'")
 
 
 async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -> None:

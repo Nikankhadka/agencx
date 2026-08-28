@@ -17,9 +17,7 @@ LINK_KEYS = ("website", "google", "facebook", "instagram")
 COVER_KIND = "cover"
 
 
-async def list_offerings(
-    *, tenant_id: UUID, active_only: bool = False
-) -> list[dict[str, Any]]:
+async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[dict[str, Any]]:
     """The owner's structured offerings, in the order they appear on the page.
 
     ``position`` is the owner's own ordering; ``created_at`` then ``id`` break
@@ -72,11 +70,9 @@ async def update_offering(
 
     ``updates`` keys are column names from the API layer's fixed allowlist, not
     caller-supplied strings - the interpolation below is safe for that reason
-    and for no other.
+    and for no other. It is never empty: the route refuses an empty patch with
+    a 422 before reaching here.
     """
-    if not updates:
-        rows = await list_offerings(tenant_id=tenant_id)
-        return next((row for row in rows if row["id"] == offering_id), None)
     columns = tuple(updates)
     assignments = ", ".join(f"{column} = ${index}" for index, column in enumerate(columns, start=3))
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
@@ -93,9 +89,7 @@ async def update_offering(
     return dict(row) if row is not None else None
 
 
-async def deactivate_offering(
-    *, tenant_id: UUID, offering_id: UUID, embedder: Embedder
-) -> bool:
+async def deactivate_offering(*, tenant_id: UUID, offering_id: UUID, embedder: Embedder) -> bool:
     """Retire an offering by clearing ``active`` rather than deleting the row.
 
     The row is what a past quote or order refers to by id, so deleting it would
@@ -302,8 +296,7 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
 async def read_public_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None:
     async with db.tenant_context(tenant_id, "customer") as conn:
         row = await conn.fetchrow(
-            "select mime, bytes, updated_at from tenant_assets "
-            "where tenant_id = $1 and kind = $2",
+            "select mime, bytes, updated_at from tenant_assets where tenant_id = $1 and kind = $2",
             tenant_id,
             COVER_KIND,
         )

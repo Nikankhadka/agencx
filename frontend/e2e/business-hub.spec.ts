@@ -1,5 +1,5 @@
 /**
- * E2E for the Business hub and its Booking page (E-5 / D21).
+ * E2E for the Business hub and the screens under it (E-5 / D21 / M-1 / M-4).
  *
  * Surface: tenant-admin (http://localhost:3000)
  *
@@ -28,8 +28,9 @@ test.describe("Business hub", () => {
 
     const rows = page.getByRole("main").getByRole("link");
     await expect(rows).toHaveText([
-      "Booking pageWhat customers see, and the link to it",
-      "SettingsWhat your customers are told",
+      "Business pageWhat customers see and how it looks",
+      "What you offerThe services and prices shown on your page",
+      "Business detailsKnowledge, ABN, and tax details",
     ]);
 
     // Absent, not disabled - the prototype carries them, Stage 1 does not.
@@ -38,14 +39,14 @@ test.describe("Business hub", () => {
     }
   });
 
-  test("the booking page shows the business and its public link", async ({
+  test("the business page shows the business and its public link", async ({
     page,
     request,
   }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business");
-    await page.getByRole("link", { name: /Booking page/ }).click();
-    await page.waitForURL("**/business/booking");
+    await page.getByRole("link", { name: /Business page/ }).click();
+    await page.waitForURL("**/business/page");
 
     await expect(page.getByRole("heading", { level: 2 })).toContainText(
       "Bytefix",
@@ -59,9 +60,24 @@ test.describe("Business hub", () => {
     await expect(link).not.toContainText(/\/$/);
   });
 
-  test("an owner adds, edits, and removes an offering", async ({ page, request }) => {
+  test("an owner adds, edits, and removes an offering, and the storefront follows", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business");
+    await page.getByRole("link", { name: /What you offer/ }).click();
+    await page.waitForURL("**/business/offerings");
+
+    // These specs share one seeded tenant, so start from a known state rather
+    // than from whatever a previous run left behind - the same posture the
+    // link-slot test below takes.
+    const leftovers = page.getByRole("button", { name: "Remove M1 test offering" });
+    while ((await leftovers.count()) > 0) {
+      page.once("dialog", (dialog) => dialog.accept());
+      await leftovers.first().click();
+      await expect(leftovers).toHaveCount(0);
+    }
 
     await page.getByTestId("offering-add").click();
     await page.getByTestId("offering-name").fill("M1 test offering");
@@ -70,25 +86,34 @@ test.describe("Business hub", () => {
     await page.getByTestId("offering-save").click();
     await expect(page.getByTestId("offerings-list")).toContainText("M1 test offering");
 
-    await page.goto("/business/booking");
-    await expect(page.getByTestId("booking-services")).toContainText("$89.50");
+    // The price the owner typed, on the page a customer actually reads - and
+    // exactly as typed. This is the assertion the money rule lives or dies by.
+    await page.goto("/bytefix");
+    // `.first()`: `next dev` streams this page, so for a beat the server tree
+    // and the client tree are both in the DOM - the same caveat
+    // typing-indicator.spec.ts documents for the composer.
+    await expect(
+      page.getByRole("heading", { name: "M1 test offering" }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole("main").last()).toContainText("$89.50");
 
-    await page.goto("/business");
+    await page.goto("/business/offerings");
     await page.getByRole("button", { name: "Edit M1 test offering" }).click();
     await page.getByTestId("offering-price").fill("99");
     await page.getByTestId("offering-save").click();
     await expect(page.getByTestId("offerings-list")).toContainText("$99.00");
 
-    await page.goto("/business/booking");
-    await expect(page.getByTestId("booking-services")).toContainText("$99.00");
+    await page.goto("/bytefix");
+    await expect(page.getByRole("main").last()).toContainText("$99.00");
 
-    await page.goto("/business");
+    await page.goto("/business/offerings");
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Remove M1 test offering" }).click();
     await expect(page.getByTestId("offerings-list")).not.toContainText("M1 test offering");
 
-    await page.goto("/business/booking");
-    await expect(page.getByTestId("booking-services")).not.toContainText("M1 test offering");
+    // Retiring it takes it off the storefront too, not just out of the editor.
+    await page.goto("/bytefix");
+    await expect(page.getByRole("main").last()).not.toContainText("M1 test offering");
   });
 
   test("copying puts the full URL, scheme and all, on the clipboard", async ({
@@ -98,7 +123,7 @@ test.describe("Business hub", () => {
   }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await loginAsTenantAdmin(page, request, BYTEFIX);
-    await page.goto("/business/booking");
+    await page.goto("/business/page");
 
     await page.getByTestId("booking-copy").click();
     await expect(page.getByTestId("booking-copy")).toContainText("Copied");
@@ -108,12 +133,12 @@ test.describe("Business hub", () => {
     expect(copied).toMatch(/^https?:\/\/[^/]+\/bytefix$/);
   });
 
-  test("the cover photo, the services list and the link slots", async ({
+  test("the cover photo and the link slots", async ({
     page,
     request,
   }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
-    await page.goto("/business/booking");
+    await page.goto("/business/page");
 
     // E-6: the QR went. It was never in the prototype's owner screen, and the
     // founder does not use it. Pinned so it does not drift back in.
@@ -144,7 +169,7 @@ test.describe("Business hub", () => {
     request,
   }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
-    await page.goto("/business/booking");
+    await page.goto("/business/page");
 
     const tile = page.getByTestId("booking-platform-instagram");
 
@@ -182,12 +207,12 @@ test.describe("Business hub", () => {
     await expect(tile).toContainText("Add");
   });
 
-  test("back from the booking page returns to the hub", async ({
+  test("back from the business page returns to the hub", async ({
     page,
     request,
   }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
-    await page.goto("/business/booking");
+    await page.goto("/business/page");
     await page.getByRole("button", { name: "Back" }).click();
     await page.waitForURL("**/business");
   });

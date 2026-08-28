@@ -62,7 +62,17 @@ def validate_slug(value: str) -> str:
 
 
 def suggested_slug(value: str) -> str:
-    """Turn a business name into the editable suggestion for its public URL."""
+    """Turn a business name into the editable suggestion for its public URL.
+
+    The result always passes ``validate_slug``. That matters because go-live
+    falls back to this when the owner types no address of their own: a business
+    literally called "Settings" or "Admin" would otherwise derive a reserved
+    name and fail the validator with nothing left to fall back to. Such a name
+    gets ``-page`` appended instead, which cannot itself be reserved.
+    """
     normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
-    return slug[:40].rstrip("-") or "business"
+    slug = slug[:40].rstrip("-") or "business"
+    if slug in RESERVED_SLUGS:
+        slug = f"{slug[:35]}-page"
+    return slug

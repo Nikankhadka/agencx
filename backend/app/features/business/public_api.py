@@ -13,10 +13,18 @@ from app.features.tenants import service as tenant_service
 router = APIRouter(prefix="/api/public", tags=["public"])
 
 
-class PublicOffer(BaseModel):
+class PublicOffering(BaseModel):
+    """One offering as a customer sees it.
+
+    ``price_cents`` is the owner's own typed figure, passed through untouched -
+    the page formats it, nothing computes it. Null means the owner published no
+    price, and the page shows none rather than inventing one.
+    """
+
     id: UUID
     name: str
     description: str
+    price_cents: int | None
 
 
 class PublicReview(BaseModel):
@@ -31,14 +39,21 @@ class StorefrontResponse(BaseModel):
     tagline: str | None
     about: str
     links: dict[str, str]
-    offers: list[PublicOffer]
+    offerings: list[PublicOffering]
     reviews: list[PublicReview]
     has_cover: bool
 
 
-async def _tenant_id(slug: str) -> str:
+async def _tenant_id(slug: str) -> UUID:
+    """The active tenant behind a public slug, as a UUID.
+
+    ``resolve_active_tenant`` hands back a string because the chat surface only
+    ever passes it on; the reads below bind it as a query parameter against
+    uuid columns, which asyncpg will not coerce, so it is converted here rather
+    than at each call site.
+    """
     try:
-        return await tenant_service.resolve_active_tenant(slug)
+        return UUID(await tenant_service.resolve_active_tenant(slug))
     except tenant_service.TenantNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="unknown tenant slug"
@@ -64,6 +79,6 @@ async def cover(slug: str) -> Response:
         media_type=mime,
         headers={
             "Cache-Control": "public, max-age=3600",
-            "ETag": f'\"{updated_at.timestamp()}\"',
+            "ETag": f'"{updated_at.timestamp()}"',
         },
     )

@@ -4,7 +4,6 @@ import { RowLink } from "@/components/ui/RowLink";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Icon } from "@/components/ui/Icon";
 import { useAuth } from "@/components/AuthProvider";
-import { OfferingsList } from "./components/OfferingsList";
 
 /**
  * E-1 / D21: Business, the third tab - a hub of places, built from
@@ -33,12 +32,11 @@ export default function BusinessPage() {
           icon="arrow_forward"
           detail="What customers see and how it looks"
         />
-        <OfferingsList />
         <RowLink
-          href="/business/offers"
-          label="What we offer"
+          href="/business/offerings"
+          label="What you offer"
           icon="sell"
-          detail="Services and offers shown on your page"
+          detail="The services and prices shown on your page"
         />
         <RowLink
           href="/business/details"

@@ -2,7 +2,7 @@ import type { ConversationSummary } from "@/lib/api-schemas";
 import {
   sourceLabel,
   type KnowledgeRecord,
-} from "../../settings/knowledge/lib/types";
+} from "../../business/details/knowledge/lib/types";
 
 /**
  * The brief: what wants the owner right now, as the prototype's
@@ -77,7 +77,7 @@ export function buildBrief(
         "it",
         "them",
       )}.`,
-      chips: [{ label: "Review", href: "/settings/knowledge" }],
+      chips: [{ label: "Review", href: "/business/details/knowledge" }],
     });
   }
 

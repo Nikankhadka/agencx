@@ -14,6 +14,15 @@ function linkLabel(key: string) {
   return key === "website" ? "Website" : key.slice(0, 1).toUpperCase() + key.slice(1);
 }
 
+/**
+ * The owner's price, rendered. Integer cents in, one string out - this is
+ * formatting, not arithmetic: nothing here rounds, marks up, or derives an
+ * amount, and an offering with no published price simply shows none.
+ */
+function priceLabel(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 export function Storefront({
   slug,
   logoUrl,
@@ -61,8 +70,7 @@ export function Storefront({
       ) : null}
 
       <section className="px-gutter pb-7 pt-8">
-        <p className="text-eyebrow font-medium uppercase text-accent">Business page</p>
-        <h1 className="mt-2 text-display-sm font-bold tracking-[var(--text-display-sm-tracking)] text-text">
+        <h1 className="text-display-sm font-bold tracking-[var(--text-display-sm-tracking)] text-text">
           {storefront.name}
         </h1>
         {storefront.tagline ? (
@@ -78,19 +86,29 @@ export function Storefront({
         </button>
       </section>
 
-      {storefront.offers.length > 0 ? (
+      {storefront.offerings.length > 0 ? (
         <section className="border-t border-hairline px-gutter py-7">
           <h2 className="text-title-2 font-semibold text-text">What we offer</h2>
           <div className="mt-4 divide-y divide-hairline rounded-card border border-hairline bg-surface">
-            {storefront.offers.map((offer) => (
-              <article key={offer.id} className="p-4">
-                <h3 className="text-card-hl font-medium text-text">{offer.name}</h3>
-                {offer.description ? (
-                  <p className="mt-1.5 text-body-sm text-text-secondary">{offer.description}</p>
+            {storefront.offerings.map((offering) => (
+              <article key={offering.id} className="p-4">
+                <div className="flex items-baseline justify-between gap-4">
+                  <h3 className="text-card-hl font-medium text-text">{offering.name}</h3>
+                  {offering.price_cents !== null ? (
+                    <span
+                      data-testid="offering-price"
+                      className="shrink-0 text-card-hl font-medium text-text tabular-nums"
+                    >
+                      {priceLabel(offering.price_cents)}
+                    </span>
+                  ) : null}
+                </div>
+                {offering.description ? (
+                  <p className="mt-1.5 text-body-sm text-text-secondary">{offering.description}</p>
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => openChat(`I'd like to ask about ${offer.name}.`)}
+                  onClick={() => openChat(`I'd like to ask about ${offering.name}.`)}
                   className="mt-3 flex items-center gap-1 text-chip font-medium text-accent"
                 >
                   Ask about this

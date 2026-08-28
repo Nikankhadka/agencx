@@ -481,8 +481,8 @@ write path the seed scripts depend on.
 
 **Date:** 2026-08-28 (founder, designed in a Codex CLI session; recorded here
 after that session ran out of usage before it could write anything down -
-provenance below). **Status:** `M-1` built; `M-2`/`M-3` not started - see
-`M-1`/`M-2`/`M-3` in `docs/agencx/spec/11-offerings-media.md`.
+provenance below). **Status:** `M-1` and `M-4` built; `M-2`/`M-3` not started
+- see `docs/agencx/spec/11-offerings-media.md`.
 Closes G5.1 in `industry-standard-gap.md`, broadened past that ticket's
 original scope. `FLAG: new external service` (Cloudinary). `FLAG: schema
 change` (`tenant_assets` widens or is replaced).
@@ -582,6 +582,34 @@ migration `0023`: the table's generic existing row shape already was an
 Offering, and retaining a second physical name would keep two terms for one
 concept. The migration preserves RLS policies and grants because they follow
 the table OID. The ticket records the full reasoning.
+
+**One name deliberately not renamed.** Chunk `metadata.kind = "catalog_item"`,
+`metadata.catalog_item_id` and `documents.doc_type = 'catalog'` stay as they
+are. Those name the *search projection* built off the table, not the table:
+the catalog is the projection, offerings are the rows. They are also stored
+data rather than vocabulary - renaming them would leave every existing chunk's
+metadata stale until a full re-ingest, for no reader's benefit. Recorded here
+so the remaining "catalog" spellings read as a boundary rather than a missed
+find-and-replace.
+
+**Prices are owner-typed facts, and they are shown.** Settled by the founder
+during `M-4` (2026-08-28), after that branch had briefly built offerings
+without prices at all on the reasoning that "the page describes, the agent
+quotes". It does not hold: a menu item or a service the owner has priced is
+one whose price a customer expects to read on the page, and hiding it makes
+them ask a question they should not have to ask. So an offering carries an
+optional `price_cents`, the owner types it, the storefront renders it, and
+the assistant may state it.
+
+None of that relaxes the money rule, and the mechanism is why: the value is a
+decimal the owner typed, validated at the API boundary and stored as integer
+cents; the storefront formats cents to dollars and performs no other
+arithmetic; and the assistant reaches the figure the two ways it always could
+- `agent_node.py`'s search-then-re-fetch of the authoritative row, or a
+verbatim quote from owner material. What the founder ruled out is the model
+inventing a figure when none was published, which is exactly what the
+validation gate already refuses. A priced offering makes the honest answer
+available; it does not make a dishonest one possible.
 
 **Boundary:** the money rule is unchanged and unrelaxed by any of this - no
 model produces, edits, or infers a price; a confirmed offering's price is

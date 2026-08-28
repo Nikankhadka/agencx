@@ -343,6 +343,14 @@ outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 
 ### S2 - Business (tenant app tab 3) - show-back of profile + knowledge
 
+**Three rows since M-4** (`/business`): **Business page** (`/business/page` -
+cover, name, the share link, the platform tiles, About and reviews, and a
+preview link out to the storefront), **What you offer** (`/business/offerings` -
+the offerings editor), and **Business details** (`/business/details` - knowledge,
+ABN and tax). `/business/booking` and `/settings` are gone as paths rather than
+aliased: two routes rendering one screen drift, and four E2E specs had already
+been written against the pair.
+
 The Business tab displays the profile and knowledge the owner gave the agent -
 what the assistant believes about the business, and the uploaded material it
 answers from - so the owner can trust and correct it. Editable through the
@@ -387,11 +395,21 @@ E-5 left out now ship, because something stands behind each of them:
   ->links`. Tapping a tile opens a panel - it never navigates on the tap, which
   had left no way back to a link already saved. Schemes are allowlisted server
   side; these render as links a customer clicks.
-- **The Services list** is the owner's structured `offerings` rows, created,
-  edited, and removed from Business. The Booking response formats only the
-  owner-authorized integer-cent value, so it cannot infer or round a price;
-  catalog chunks stay out of general-knowledge fast paths and recommendations
-  re-fetch the authoritative row before stating a price.
+- **Offerings** are the owner's structured `offerings` rows, created, edited
+  and retired from **Business > What you offer** (`/business/offerings`).
+  M-4 moved them off this screen entirely: the customer's storefront renders
+  them and the owner reaches it through the "Preview your business page" link,
+  so the owner's screen carries no second read-only copy to drift. Removing an
+  offering clears `active` rather than deleting the row, so a past quote that
+  refers to it still resolves. A price is the owner's own typed decimal,
+  validated at the API boundary and stored as integer cents; the page formats
+  cents to dollars and does no other arithmetic. Catalog chunks stay out of
+  general-knowledge fast paths, and recommendations re-fetch the authoritative
+  row before stating a price.
+- **About and reviews** (M-4) are written on this screen and live in
+  `tenant_config.brand->storefront`. They are presentation, not knowledge: the
+  assistant never answers from them, and an empty one renders nothing rather
+  than a heading over blank space.
 
 **The QR is gone** (E-6). It was never in the prototype's owner screen - it came
 from the storefront's share sheet - and the founder does not use it. With it
@@ -434,14 +452,26 @@ interview asks, with the control the interview asks it with.
 
 ### S3 - Public page (anonymous, per-tenant slug)
 
-Single screen, centered column (max ~720px), tenant logo + display name header,
-message list, composer pinned bottom. No auth. The share link is how a customer
-gets here (E-6 removed the QR).
+Centered column (max ~720px), tenant logo + display name header. No auth. The
+share link is how a customer gets here (E-6 removed the QR).
+
+**M-4 made this a storefront, not just a chat.** It had been a message list and
+a composer, which meant a customer arriving from a shared link had to know what
+to ask before the page told them anything. The page now leads with the business:
+cover photo, name and tagline, **what we offer** (the owner's `offerings`, each
+with the owner's own price when they published one), About, reviews, and the
+links. The assistant is a tap away in a sheet rather than the whole page -
+from the header, from the closing call to action, or from "Ask about this" on a
+single offering, which seeds the composer with that offering's name.
+
+The address is the owner's own: M-4 lets them choose it at go-live rather than
+keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).
 
 | State | Spec |
 |---|---|
 | Resolving tenant | Full-page centered skeleton; no flash of default branding |
 | Unknown slug | Calm 404: "There's no business here." |
+| Neither active nor suspended | `provisioning` has no storefront to read; falls back to the bare chat rather than an empty page |
 | Suspended tenant | "This page is currently unavailable." caption, composer hidden. Says nothing about why - a customer is not owed the tenant's billing state (PRD 13; the wording also carried "assistant" until B-3's E-3 sweep) |
 | Empty conversation | Tenant-configured greeting as the first assistant bubble; starter chips if configured |
 | Streaming | StreamingText in assistant bubble; TypingIndicator through the failover window (P-5); composer disabled with "answering..." hint; stop button |
@@ -459,8 +489,11 @@ Stage 2 re-lands them. Platform admin stays minimal (E-3): one Tenants page
 (list, provision, suspend/reactivate) plus aggregate metrics.
 
 **Which tab owns which route.** A drill-down does not have to live under its
-tab's URL - Settings hangs off the Business hub but sits at `/settings` - so a
-nav item carries an `owns` list of extra prefixes. `isTabActive()` in
+tab's URL, so a nav item can carry an `owns` list of extra prefixes.
+Settings was the one user of it, hanging off the Business hub at `/settings`;
+M-4 moved that screen to `/business/details` and the list is empty again. The
+mechanism stays, because the next drill-down that lands outside its tab's
+prefix needs it. `isTabActive()` in
 `components/ui/TabBar.tsx` is exported and used by *both* renderings: if the
 sidebar and the bar computed this separately they could disagree, and the wrong
 one is whichever the owner is looking at.
