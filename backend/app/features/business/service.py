@@ -44,19 +44,53 @@ async def create_offering(
 ) -> dict[str, Any]:
     """Create one offering at the end of the list, then rebuild its projection."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        rows = await create_offerings_batch(
+            conn=conn,
+            tenant_id=tenant_id,
+            offerings=[{"name": name, "description": description, "price_cents": price_cents}],
+            embedder=embedder,
+        )
+    if not rows:
+        raise ValueError("offering name already exists")
+    return rows[0]
+
+
+async def create_offerings_batch(
+    *,
+    conn: db.AppConnection,
+    tenant_id: UUID,
+    offerings: list[dict[str, Any]],
+    embedder: Embedder,
+) -> list[dict[str, Any]]:
+    """Insert new active offerings in stable order and rebuild the catalog once."""
+    existing_rows = await conn.fetch("select name from offerings where tenant_id = $1", tenant_id)
+    existing = {str(row["name"]).strip().casefold() for row in existing_rows}
+    position = await conn.fetchval(
+        "select coalesce(max(position) + 1, 0) from offerings where tenant_id = $1", tenant_id
+    )
+    rows: list[dict[str, Any]] = []
+    for item in offerings:
+        name = str(item.get("name", "")).strip()
+        key = name.casefold()
+        if not name or key in existing:
+            continue
         row = await conn.fetchrow(
             "insert into offerings (tenant_id, name, description, price_cents, position) "
-            "values ($1, $2, $3, $4, coalesce((select max(position) + 1 from offerings "
-            "where tenant_id = $1), 0)) "
-            "returning id, name, description, price_cents, active, position",
+            "values ($1, $2, $3, $4, $5) returning id, name, description, price_cents, active, "
+            "position",
             tenant_id,
             name,
-            description,
-            price_cents,
+            str(item.get("description", "")),
+            item.get("price_cents"),
+            position,
         )
-        assert row is not None
+        if row is not None:
+            rows.append(dict(row))
+            existing.add(key)
+            position += 1
+    if rows:
         await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
-    return dict(row)
+    return rows
 
 
 async def update_offering(

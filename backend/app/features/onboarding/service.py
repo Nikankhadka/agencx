@@ -14,7 +14,9 @@ from uuid import UUID
 
 import asyncpg
 
+from app.features.business.service import create_offerings_batch
 from app.features.tenants import service as tenant_service
+from app.llm.embedder import Embedder
 from app.shared import db
 
 _CONFIG_SELECT = "config->'onboarding'"
@@ -58,6 +60,8 @@ async def apply_confirmation(
     slug: str,
     profile: dict[str, Any],
     completed_record: dict[str, Any],
+    offering_candidates: list[str] | None = None,
+    embedder: Embedder | None = None,
 ) -> None:
     """Persist what confirm() computed in one atomic transaction.
 
@@ -88,6 +92,16 @@ async def apply_confirmation(
         except asyncpg.UniqueViolationError as exc:
             raise PublicSlugTakenError from exc
         await set_onboarding_json(conn, tenant_id, completed_record)
+        if offering_candidates and embedder is not None:
+            await create_offerings_batch(
+                conn=conn,
+                tenant_id=tenant_id,
+                offerings=[
+                    {"name": name, "description": "", "price_cents": None}
+                    for name in offering_candidates
+                ],
+                embedder=embedder,
+            )
     if old_slug:
         tenant_service.invalidate_slug_cache(old_slug)
     tenant_service.invalidate_slug_cache(slug)

@@ -317,7 +317,9 @@ async def _stream_url_turn(
     yield {"type": "done"}
 
 
-async def confirm(*, tenant_id: UUID, slug: str | None = None) -> dict[str, Any]:
+async def confirm(
+    *, tenant_id: UUID, slug: str | None = None, embedder: Embedder | None = None
+) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
@@ -354,6 +356,8 @@ async def confirm(*, tenant_id: UUID, slug: str | None = None) -> dict[str, Any]
             slug=public_slug,
             profile=profile.model_dump(),
             completed_record=onboarding.to_jsonb(),
+            offering_candidates=onboarding.offering_candidates,
+            embedder=embedder,
         )
     except service.PublicSlugTakenError as exc:
         raise HTTPException(
