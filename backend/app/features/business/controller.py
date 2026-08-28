@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from app.features.business import offerings, service
-from app.features.knowledge import service as knowledge_service
+from app.features.business import service
 from app.features.onboarding import service as onboarding_service
 from app.features.tenants import service as tenant_service
 
@@ -38,11 +37,19 @@ async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
         "slug": tenant["slug"],
         "name": (
             (brand.get("display_name") if isinstance(brand, dict) else None)
+            or tenant.get("business_name")
             or str(profile.get("business_name", "")).strip()
             or tenant["name"]
         ),
         "tagline": _describe(profile),
-        "services": offerings.derive(await knowledge_service.list_records(tenant_id=tenant_id)),
+        "services": [
+            {"name": offer["name"], "price": None}
+            for offer in await service.list_offers(tenant_id=tenant_id, active_only=True)
+        ],
         "links": await service.read_links(tenant_id=tenant_id),
         "has_cover": await service.has_cover(tenant_id=tenant_id),
     }
+
+
+async def storefront_sections(*, tenant_id: UUID) -> dict[str, Any]:
+    return await service.read_storefront_sections(tenant_id=tenant_id)

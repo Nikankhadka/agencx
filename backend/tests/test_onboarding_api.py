@@ -23,6 +23,7 @@ import pytest
 import pytest_asyncio
 
 from app.features.onboarding.controller import _find_url
+from app.features.tenants.slug import suggested_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
@@ -208,6 +209,10 @@ async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
     await _send(client, {"Authorization": f"Bearer {token}"}, text="skip")
 
 
+def _page_slug(tenant_id: uuid.UUID) -> str:
+    return f"page-{tenant_id.hex[:12]}"
+
+
 async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.get(
@@ -309,6 +314,11 @@ async def test_draft_accumulates_across_turns(client: httpx.AsyncClient) -> None
     body = await _send(client, headers, text="we are Bytefix Repairs")
 
     assert body["draft"] == {"name": "Sam", "business_name": "Bytefix Repairs"}
+
+
+def test_suggested_slug_is_a_shareable_handle() -> None:
+    assert suggested_slug("Bytefix Repairs") == "bytefix-repairs"
+    assert suggested_slug("Café & Co.") == "cafe-co"
 
 
 async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClient) -> None:
@@ -414,7 +424,7 @@ async def test_full_flow_confirm_writes_profile(
 
     confirm = await client.post("/api/onboarding/confirm", headers=headers)
     assert confirm.status_code == 200
-    assert confirm.json() == {"tenant_id": str(tenant_id)}
+    assert confirm.json() == {"tenant_id": str(tenant_id), "slug": "bytefix-repairs"}
 
     config_row = await superuser_conn.fetchrow(
         "select system_prompt, tone, escalation_threshold from tenant_config where tenant_id = $1",
@@ -429,10 +439,11 @@ async def test_full_flow_confirm_writes_profile(
     assert config_row["escalation_threshold"] == pytest.approx(0.5)
 
     tenant_row = await superuser_conn.fetchrow(
-        "select business_name from tenants where id = $1", tenant_id
+        "select business_name, slug from tenants where id = $1", tenant_id
     )
     assert tenant_row is not None
     assert tenant_row["business_name"] == "Bytefix Repairs"
+    assert tenant_row["slug"] == "bytefix-repairs"
 
     profile = await superuser_conn.fetchval(
         "select config->'profile' from tenant_config where tenant_id = $1", tenant_id
@@ -448,6 +459,7 @@ async def test_full_flow_confirm_writes_profile(
         "abn": "51 824 753 556",
         "gst": "yes",
     }
+    await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
 
 
 async def test_confirm_writes_no_catalog_or_pricing_rows(
@@ -456,7 +468,11 @@ async def test_confirm_writes_no_catalog_or_pricing_rows(
     """O-1 captures a profile, not a priced catalog - prices come from uploads."""
     token, tenant_id = await _signup_tenant_admin(client)
     await _walk_to_confirm(client, token)
-    await client.post("/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"})
+    await client.post(
+        "/api/onboarding/confirm",
+        json={"slug": _page_slug(tenant_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
     items = await superuser_conn.fetchval(
         "select count(*) from catalog_items where tenant_id = $1", tenant_id
@@ -477,23 +493,45 @@ async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) ->
 
 
 async def test_double_confirm_is_conflict(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
+    token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     await _walk_to_confirm(client, token)
 
-    first = await client.post("/api/onboarding/confirm", headers=headers)
+    first = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
     assert first.status_code == 200
     second = await client.post("/api/onboarding/confirm", headers=headers)
     assert second.status_code == 409
 
 
-async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -> None:
+async def test_confirm_refuses_a_taken_business_page_address(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
+    await superuser_conn.execute(
+        "insert into tenants (slug, name) values ('bytefix-repairs', 'Existing business')"
+    )
+    await _walk_to_confirm(client, token)
+
+    response = await client.post(
+        "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "That page address is already taken. Choose another."
+    await superuser_conn.execute("delete from tenants where slug = 'bytefix-repairs'")
+
+
+async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     await _walk_to_confirm(client, token)
 
     # Confirm, then try to send another message.
-    await client.post("/api/onboarding/confirm", headers=headers)
+    await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
     response = await client.post(
         "/api/onboarding/message", json={"text": "anything"}, headers=headers
     )

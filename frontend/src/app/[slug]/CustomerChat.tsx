@@ -52,16 +52,18 @@ export function CustomerChat({
   displayName,
   greeting,
   starterQuestions,
+  suggestedMessage,
 }: {
   slug: string;
   displayName: string;
   greeting: string | null;
   starterQuestions: string[];
+  suggestedMessage?: string | null;
 }) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", text: greeting ?? `Hi! How can I help you with ${displayName} today?` },
   ]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(suggestedMessage ?? "");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   // C-5 split one flag in two. `escalated` means a tenant limit ended the

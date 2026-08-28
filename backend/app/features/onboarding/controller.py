@@ -18,6 +18,7 @@ from fastapi import HTTPException, status
 
 from app.features.knowledge import service as knowledge_service
 from app.features.onboarding import service
+from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.agent import (
@@ -91,6 +92,9 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         "completed": record_data.get("completed", False),
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
+        "suggested_slug": suggested_slug(
+            str(record_data.get("draft", {}).get("business_name", ""))
+        ),
     }
 
 
@@ -130,6 +134,7 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "history": onboarding.history,
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
+        "suggested_slug": suggested_slug(str(draft.get("business_name", ""))) or None,
     }
 
 
@@ -309,7 +314,7 @@ async def _stream_url_turn(
     yield {"type": "done"}
 
 
-async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
+async def confirm(*, tenant_id: UUID, slug: str | None = None) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
@@ -327,6 +332,7 @@ async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
     # The gate above guarantees all seven fields; extra keys (a pre-O-1 draft's
     # orphan sections) are ignored rather than rejected.
     profile = ProfileDraft.model_validate(draft)
+    public_slug = validate_slug(slug or suggested_slug(profile.business_name))
     # business_type is the owner's own free text, so it gets its own sentence
     # rather than an apposition - "Bytefix Repairs, phone repair shop" and
     # "Northgate Family Dental, A three-chair practice..." both read badly.
@@ -337,11 +343,18 @@ async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
         "there, say so and offer to have the owner follow up."
     )
     onboarding.completed = True
-    await service.apply_confirmation(
-        tenant_id=tenant_id,
-        system_prompt=system_prompt,
-        business_name=profile.business_name,
-        profile=profile.model_dump(),
-        completed_record=onboarding.to_jsonb(),
-    )
-    return {"tenant_id": tenant_id}
+    try:
+        await service.apply_confirmation(
+            tenant_id=tenant_id,
+            system_prompt=system_prompt,
+            business_name=profile.business_name,
+            slug=public_slug,
+            profile=profile.model_dump(),
+            completed_record=onboarding.to_jsonb(),
+        )
+    except service.PublicSlugTakenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That page address is already taken. Choose another.",
+        ) from exc
+    return {"tenant_id": tenant_id, "slug": public_slug}

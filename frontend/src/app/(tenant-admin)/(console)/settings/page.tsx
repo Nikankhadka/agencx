@@ -10,7 +10,7 @@ import { AbnSheet, type BusinessProfile } from "./components/AbnSheet";
 const EMPTY: BusinessProfile = { abn: "", gst: "" };
 
 /**
- * Settings, built from `renderScreen('business')` in agencx-prototype-v6.html:
+ * Business details, built from `renderScreen('business')` in agencx-prototype-v6.html:
  * a topbar over a list of `.bh-row`s. Some open a screen, some open an edit
  * sheet - the prototype's list does both, and this one does too.
  *
@@ -22,7 +22,7 @@ const EMPTY: BusinessProfile = { abn: "", gst: "" };
  * Stage 2 work that does not exist, and a row that opens onto nothing is worse
  * than an absent one.
  */
-export default function SettingsPage() {
+export default function BusinessDetailsPage() {
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,10 +56,10 @@ export default function SettingsPage() {
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-      <ScreenTopbar title="Settings" backHref="/business" />
+      <ScreenTopbar title="Business details" backHref="/business" />
       <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-20">
         <RowLink
-          href="/settings/knowledge"
+          href="/business/details/knowledge"
           label="Knowledge"
           icon="folder_open"
           detail="Where your customers' answers come from"

@@ -35,6 +35,29 @@ export interface TenantResolution {
   customer?: Record<string, unknown>;
 }
 
+export interface StorefrontOffer {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface StorefrontReview {
+  quote: string;
+  author: string;
+  source: string;
+  rating: number;
+}
+
+export interface StorefrontData {
+  name: string;
+  tagline: string | null;
+  about: string;
+  links: Record<string, string>;
+  offers: StorefrontOffer[];
+  reviews: StorefrontReview[];
+  has_cover: boolean;
+}
+
 /**
  * Typed view over TenantResolution.customer with safe fallbacks. Accepts
  * undefined so a frontend deployed ahead of a pre-T-032 backend (missing the
@@ -70,4 +93,14 @@ export async function resolveTenantBySlug(slug: string): Promise<TenantResolutio
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`tenant resolve failed: ${res.status}`);
   return (await res.json()) as TenantResolution;
+}
+
+/** Public presentation content for a known active tenant. */
+export async function resolveStorefrontBySlug(slug: string): Promise<StorefrontData> {
+  const base = await serverApiBaseUrl();
+  const res = await fetch(`${base}/api/public/tenant/${encodeURIComponent(slug)}/storefront`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`storefront resolve failed: ${res.status}`);
+  return (await res.json()) as StorefrontData;
 }

@@ -190,6 +190,109 @@ async def test_a_second_upload_replaces_the_first(client: httpx.AsyncClient) -> 
     assert got.headers["content-type"].startswith("image/jpeg")
 
 
+async def test_storefront_exposes_only_owner_published_content(client: httpx.AsyncClient) -> None:
+    headers, _tenant_id = await _signup(client)
+    tenant = await client.get("/api/business/page", headers=headers)
+    slug = tenant.json()["slug"]
+    offer = await client.post(
+        "/api/business/offers",
+        json={"name": "Screen repair", "description": "Repairs for common phone screens."},
+        headers=headers,
+    )
+    assert offer.status_code == 201, offer.text
+    await client.patch(
+        "/api/business/links",
+        json={"links": {"website": "https://example.com"}},
+        headers=headers,
+    )
+    sections = await client.put(
+        "/api/business/storefront",
+        json={
+            "about": "Local repairs and clear advice.",
+            "reviews": [{"quote": "Fast and thoughtful.", "author": "Mia", "rating": 5}],
+        },
+        headers=headers,
+    )
+    assert sections.status_code == 200, sections.text
+    assert (
+        await client.put(
+            "/api/business/cover",
+            files={"file": ("cover.png", PNG_1PX, "image/png")},
+            headers=headers,
+        )
+    ).status_code == 204
+    storefront = await client.get(f"/api/public/tenant/{slug}/storefront")
+    assert storefront.status_code == 200, storefront.text
+    body = storefront.json()
+    assert body["name"] == "Business Test Co"
+    assert body["offers"] == [
+        {
+            "id": offer.json()["id"],
+            "name": "Screen repair",
+            "description": "Repairs for common phone screens.",
+        }
+    ]
+    assert body["about"] == "Local repairs and clear advice."
+    assert body["reviews"][0]["author"] == "Mia"
+    assert body["links"] == {"website": "https://example.com"}
+    assert body["has_cover"] is True
+
+    image = await client.get(f"/api/public/tenant/{slug}/cover")
+    assert image.status_code == 200
+    assert image.content == PNG_1PX
+    assert "public" in image.headers["cache-control"]
+
+
+async def test_offers_can_be_edited_and_archived(
+    client: httpx.AsyncClient, superuser_conn: Any
+) -> None:
+    headers, tenant_id = await _signup(client)
+    other_headers, _other_tenant_id = await _signup(client)
+    created = await client.post(
+        "/api/business/offers", json={"name": "Battery replacement"}, headers=headers
+    )
+    assert created.status_code == 201, created.text
+    offer_id = created.json()["id"]
+    catalog_document = await superuser_conn.fetchrow(
+        "select id, status from documents where tenant_id = $1 and doc_type = 'catalog'", tenant_id
+    )
+    assert catalog_document is not None
+    assert catalog_document["status"] == "ready"
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from knowledge_chunks where document_id = $1", catalog_document["id"]
+        )
+    ) == 1
+    updated = await client.patch(
+        f"/api/business/offers/{offer_id}",
+        json={"description": "For compatible devices."},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["description"] == "For compatible devices."
+    forbidden = await client.delete(f"/api/business/offers/{offer_id}", headers=other_headers)
+    assert forbidden.status_code == 404
+    deleted = await client.delete(f"/api/business/offers/{offer_id}", headers=headers)
+    assert deleted.status_code == 204
+    rows = await client.get("/api/business/offers", headers=headers)
+    assert rows.status_code == 200
+    assert rows.json() == [
+        {
+            "id": offer_id,
+            "name": "Battery replacement",
+            "description": "For compatible devices.",
+            "active": False,
+            "position": 0,
+        }
+    ]
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from documents where tenant_id = $1 and doc_type = 'catalog'",
+            tenant_id,
+        )
+    ) == 0
+
+
 async def test_a_non_image_cover_is_refused(client: httpx.AsyncClient) -> None:
     headers, _ = await _signup(client)
     response = await client.put(

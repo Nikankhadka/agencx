@@ -48,9 +48,7 @@ const CHROME_FREE_PREFIXES = ["/onboarding"];
 const NAV_ITEMS: TabItem[] = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/chats", label: "Chats", icon: "forum" },
-  // Settings is reached from the Business hub but lives at its own top-level
-  // path, so Business has to claim it or the nav goes dark while the owner is
-  // inside it. E-5's Booking page will sit under /business and needs no entry.
+  // Legacy Settings links remain supported and still belong to Business.
   { href: "/business", label: "Business", icon: "dashboard", owns: ["/settings"] },
 ];
 

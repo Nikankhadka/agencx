@@ -9,6 +9,7 @@ validator body; they import from here instead.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # Mirrors the DDL check on tenants.slug (database.md section 3) exactly, so a
 # bad slug is rejected at the API layer (422) before it can reach the insert.
@@ -58,3 +59,10 @@ def validate_slug(value: str) -> str:
     if value in RESERVED_SLUGS:
         raise ValueError("that name is reserved; please choose another")
     return value
+
+
+def suggested_slug(value: str) -> str:
+    """Turn a business name into the editable suggestion for its public URL."""
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
+    return slug[:40].rstrip("-") or "business"

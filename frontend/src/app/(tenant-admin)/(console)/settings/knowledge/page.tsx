@@ -162,7 +162,7 @@ export default function KnowledgePage() {
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-      <ScreenTopbar title="Knowledge" backHref="/settings" />
+      <ScreenTopbar title="Knowledge" backHref="/business/details" />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-gutter pb-20 pt-5">
         <div className="mx-auto w-full max-w-thread">

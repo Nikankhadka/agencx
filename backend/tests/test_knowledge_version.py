@@ -118,6 +118,19 @@ async def test_profile_change_bumps_the_version(
     assert await _version(tenant_id) > before
 
 
+async def test_catalog_change_bumps_the_version(
+    pool: None, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    tenant_id = await _seed_tenant(superuser_conn)
+    before = await _version(tenant_id)
+
+    await superuser_conn.execute(
+        "insert into catalog_items (tenant_id, name) values ($1, 'Screen repair')", tenant_id
+    )
+
+    assert await _version(tenant_id) > before
+
+
 async def test_reingest_through_the_pipeline_bumps_the_version(
     pool: None, superuser_conn: asyncpg.Connection[Any]
 ) -> None:

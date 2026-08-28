@@ -20,9 +20,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.features.onboarding import controller
+from app.features.tenants.slug import validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
@@ -44,6 +45,7 @@ class OnboardingStateResponse(BaseModel):
     history: list[dict[str, str]]
     input: InputSpec | None
     can_confirm: bool
+    suggested_slug: str | None
 
 
 class SelectionPayload(BaseModel):
@@ -64,6 +66,16 @@ class OnboardingMessageRequest(BaseModel):
 
 class OnboardingConfirmResponse(BaseModel):
     tenant_id: UUID
+    slug: str
+
+
+class OnboardingConfirmRequest(BaseModel):
+    slug: str | None = Field(default=None, min_length=3, max_length=40)
+
+    @field_validator("slug")
+    @classmethod
+    def _check_slug(cls, value: str | None) -> str | None:
+        return value if value is None else validate_slug(value)
 
 
 @router.get("/state", response_model=OnboardingStateResponse)
@@ -146,6 +158,7 @@ async def post_message_stream(
 @router.post("/confirm", response_model=OnboardingConfirmResponse)
 async def confirm(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    body: OnboardingConfirmRequest | None = None,
 ) -> OnboardingConfirmResponse:
-    result = await controller.confirm(tenant_id=admin.tenant_id)
+    result = await controller.confirm(tenant_id=admin.tenant_id, slug=body.slug if body else None)
     return OnboardingConfirmResponse(**result)

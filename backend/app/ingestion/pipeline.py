@@ -106,14 +106,15 @@ async def ingest_catalog_items(conn: AppConnection, *, tenant_id: UUID, embedder
         "where tenant_id = $1 and active",
         tenant_id,
     )
-    if not items:
-        return
-
     document_id = await conn.fetchval(
         "select id from documents where tenant_id = $1 and doc_type = 'catalog' "
         "order by uploaded_at desc limit 1",
         tenant_id,
     )
+    if not items:
+        if document_id is not None:
+            await conn.execute("delete from documents where id = $1", document_id)
+        return
     if document_id is None:
         document_id = uuid4()
         await conn.execute(

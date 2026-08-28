@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from typing import Annotated
 from urllib.parse import urlparse
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.features.business import controller, service
+from app.llm.dependency import get_embedder_dependency
+from app.llm.embedder import Embedder
 from app.onboarding.beats import NO_ABN
 from app.shared import auth
 
@@ -30,6 +33,69 @@ ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
 class Offering(BaseModel):
     name: str
     price: str | None
+
+
+class Offer(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    active: bool
+    position: int
+
+
+class OfferCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+
+    @field_validator("name", "description")
+    @classmethod
+    def _trim(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed and value != "":
+            raise ValueError("must not be blank")
+        return trimmed
+
+
+class OfferUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    active: bool | None = None
+    position: int | None = Field(default=None, ge=0)
+
+    @field_validator("name", "description")
+    @classmethod
+    def _trim(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed and value != "":
+            raise ValueError("must not be blank")
+        return trimmed
+
+
+class Review(BaseModel):
+    quote: str = Field(min_length=1, max_length=500)
+    author: str = Field(min_length=1, max_length=120)
+    source: str = Field(default="", max_length=120)
+    rating: int = Field(default=5, ge=1, le=5)
+
+    @field_validator("quote", "author", "source")
+    @classmethod
+    def _trim(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed and value != "":
+            raise ValueError("must not be blank")
+        return trimmed
+
+
+class StorefrontSections(BaseModel):
+    about: str = Field(default="", max_length=2000)
+    reviews: list[Review] = Field(default_factory=list, max_length=6)
+
+    @field_validator("about")
+    @classmethod
+    def _trim_about(cls, value: str) -> str:
+        return value.strip()
 
 
 class BookingPageResponse(BaseModel):
@@ -83,6 +149,78 @@ async def patch_links(
     current = await service.read_links(tenant_id=admin.tenant_id)
     current.update(body.links)
     return await service.write_links(tenant_id=admin.tenant_id, links=current)
+
+
+@router.get("/offers", response_model=list[Offer])
+async def get_offers(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> list[Offer]:
+    return [Offer(**row) for row in await service.list_offers(tenant_id=admin.tenant_id)]
+
+
+@router.post("/offers", response_model=Offer, status_code=status.HTTP_201_CREATED)
+async def post_offer(
+    body: OfferCreate,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> Offer:
+    created = Offer(
+        **await service.create_offer(
+            tenant_id=admin.tenant_id, name=body.name, description=body.description
+        )
+    )
+    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
+    return created
+
+
+@router.patch("/offers/{offer_id}", response_model=Offer)
+async def patch_offer(
+    offer_id: UUID,
+    body: OfferUpdate,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> Offer:
+    updates = body.model_dump(exclude_none=True)
+    found = await service.update_offer(
+        tenant_id=admin.tenant_id, offer_id=offer_id, updates=updates
+    )
+    if found is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offer not found")
+    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
+    return Offer(**found)
+
+
+@router.delete("/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_offer(
+    offer_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> Response:
+    if not await service.deactivate_offer(tenant_id=admin.tenant_id, offer_id=offer_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offer not found")
+    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/storefront", response_model=StorefrontSections)
+async def get_storefront_sections(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> StorefrontSections:
+    return StorefrontSections(**await controller.storefront_sections(tenant_id=admin.tenant_id))
+
+
+@router.put("/storefront", response_model=StorefrontSections)
+async def put_storefront_sections(
+    body: StorefrontSections,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> StorefrontSections:
+    return StorefrontSections(
+        **await service.write_storefront(
+            tenant_id=admin.tenant_id,
+            about=body.about,
+            reviews=[review.model_dump() for review in body.reviews],
+        )
+    )
 
 
 class ProfileUpdate(BaseModel):
@@ -159,24 +297,29 @@ async def put_cover(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     file: Annotated[UploadFile, File()],
 ) -> Response:
+    mime, data = await _image_upload(file)
+    await service.write_cover(tenant_id=admin.tenant_id, mime=mime, data=data)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+async def _image_upload(file: UploadFile) -> tuple[str, bytes]:
     data = await file.read()
     mime = (file.content_type or "").split(";")[0].strip().lower()
     if mime not in ALLOWED_COVER_MIME:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="the cover photo must be a JPEG, PNG or WebP image",
+            detail="the image must be a JPEG, PNG or WebP image",
         )
     if len(data) > MAX_COVER_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"the cover photo must be under {MAX_COVER_BYTES // (1024 * 1024)}MB",
+            detail=f"the image must be under {MAX_COVER_BYTES // (1024 * 1024)}MB",
         )
     if not data:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="the file is empty"
         )
-    await service.write_cover(tenant_id=admin.tenant_id, mime=mime, data=data)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return mime, data
 
 
 @router.get("/cover")

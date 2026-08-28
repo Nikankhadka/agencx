@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { brandStyle } from "@/lib/brand";
 import { customerSurfaceConfig, resolveTenantBySlug } from "@/lib/tenant";
-import { BrandMark } from "@/components/ui/BrandMark";
-import { CustomerChat } from "./CustomerChat";
+import { resolveStorefrontBySlug } from "@/lib/tenant";
+import { Storefront } from "./Storefront";
 
 /**
  * T-005/T-011/T-032: the customer surface, at `/{slug}` (D22 - the slug is a
@@ -28,7 +28,8 @@ export default async function CustomerHome({
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) notFound();
 
-  const displayName = (tenant.brand.display_name as string | undefined) ?? tenant.name;
+  const storefront = tenant.status === "active" ? await resolveStorefrontBySlug(slug) : null;
+  const displayName = storefront?.name ?? (tenant.brand.display_name as string | undefined) ?? tenant.name;
   const logoUrl = tenant.brand.logo_url as string | undefined;
   const accentOverride = brandStyle(tenant.brand);
   const { greeting, starterQuestions } = customerSurfaceConfig(tenant.customer);
@@ -45,18 +46,17 @@ export default async function CustomerHome({
   }
 
   return (
-    <main className="mx-auto flex h-dvh w-full max-w-[720px] flex-col">
+    <>
       {accentOverride ? <style>{accentOverride}</style> : null}
-      <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
-        <BrandMark logoUrl={logoUrl} name={displayName} />
-        <h1 className="text-title-3 font-semibold text-text">{displayName}</h1>
-      </header>
-      <CustomerChat
-        slug={slug}
-        displayName={displayName}
-        greeting={greeting}
-        starterQuestions={starterQuestions}
-      />
-    </main>
+      {storefront ? (
+        <Storefront
+          slug={slug}
+          logoUrl={logoUrl}
+          greeting={greeting}
+          starterQuestions={starterQuestions}
+          storefront={storefront}
+        />
+      ) : null}
+    </>
   );
 }
