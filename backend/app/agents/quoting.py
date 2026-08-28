@@ -189,7 +189,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         ]
         items = (
             await conn.fetch(
-                "select id, name, description from catalog_items "
+                "select id, name, description from offerings "
                 "where tenant_id = $1 and id = any($2::uuid[]) and active "
                 "and price_cents is not null",
                 ctx.tenant_id,

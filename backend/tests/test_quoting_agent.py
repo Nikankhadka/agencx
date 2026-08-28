@@ -73,7 +73,7 @@ async def _seed_quoting_tenant(
         tenant_id,
     )
     item_id: uuid.UUID = await conn.fetchval(
-        "insert into catalog_items (tenant_id, name, description, price_cents) "
+        "insert into offerings (tenant_id, name, description, price_cents) "
         "values ($1, 'Tempered glass protector', 'A protective layer', 1500) returning id",
         tenant_id,
     )

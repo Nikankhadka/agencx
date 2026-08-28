@@ -105,7 +105,7 @@ If any ticket's implementation would let a model-authored number reach a custome
 
 Wren is one codebase serving any business vertical - a dentist, a butcher, a phone repair shop, an online store - through per-tenant configuration and uploaded knowledge alone. This holds at three layers:
 
-- **Agent layer**: no agent, prompt template, tool, or routing rule ever branches on a vertical name or business type (no `if vertical == "dentist"` or equivalent, anywhere). Behavior differences come from `tenant_config`, `catalog_items`, `pricing_rules`, and uploaded knowledge, never from code.
+- **Agent layer**: no agent, prompt template, tool, or routing rule ever branches on a vertical name or business type (no `if vertical == "dentist"` or equivalent, anywhere). Behavior differences come from `tenant_config`, `offerings`, `pricing_rules`, and uploaded knowledge, never from code.
 - **Data layer**: schema fields describe generic concepts (services, items, rules, thresholds), never vertical-specific ones. If a field name only makes sense for one vertical, it's modeled wrong - push it into a config/knowledge value instead.
 - **Test layer**: the generalization proof (onboarding a second, structurally different tenant by config alone, per the Sprint Plan) is not a demo trick - it is the test that this invariant actually holds. If Tenant 2 requires a code change, that change is a bug in this invariant, not a normal feature request.
 

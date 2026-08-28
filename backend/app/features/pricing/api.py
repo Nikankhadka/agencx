@@ -1,5 +1,5 @@
 """T-031: Surface 2's Pricing tab - pricing_rules inline editing + a
-read-only catalog_items list.
+read-only offerings list.
 
 Currency conversion happens ONLY at this API boundary (PricingRuleUpdate):
 the client sends a decimal dollar string/number, this module converts it to

@@ -1,14 +1,17 @@
-"""E-6: the Booking page - the business as a customer finds it.
+"""E-6/M-1/M-4: the Business page - the business as a customer finds it.
 
 One read for the whole screen, a write for the four links, the cover photo in
-and out, and (O-9) the two profile fields that stay correctable after go-live.
-The Services rows are derived in ``offerings.py``, where the money rule is held
-by construction: no model runs on this path, and a price is a verbatim slice of
-the owner's own line.
+and out, the owner's offerings, the storefront's About and reviews, and (O-9)
+the two profile fields that stay correctable after go-live.
+
+The money rule is held by construction on every path here: no model runs on
+any of them, and an offering's price is the owner's own typed value, validated
+as a decimal and stored as integer cents - never inferred, rounded or computed.
 """
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Annotated
 from urllib.parse import urlparse
 from uuid import UUID
@@ -28,49 +31,6 @@ router = APIRouter(prefix="/api/business", tags=["business"])
 # should carry, not what an image could be.
 MAX_COVER_BYTES = 2 * 1024 * 1024
 ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
-
-
-class Offering(BaseModel):
-    name: str
-    price: str | None
-
-
-class Offer(BaseModel):
-    id: UUID
-    name: str
-    description: str
-    active: bool
-    position: int
-
-
-class OfferCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=1000)
-
-    @field_validator("name", "description")
-    @classmethod
-    def _trim(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed and value != "":
-            raise ValueError("must not be blank")
-        return trimmed
-
-
-class OfferUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=120)
-    description: str | None = Field(default=None, max_length=1000)
-    active: bool | None = None
-    position: int | None = Field(default=None, ge=0)
-
-    @field_validator("name", "description")
-    @classmethod
-    def _trim(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip()
-        if not trimmed and value != "":
-            raise ValueError("must not be blank")
-        return trimmed
 
 
 class Review(BaseModel):
@@ -102,7 +62,6 @@ class BookingPageResponse(BaseModel):
     slug: str
     name: str
     tagline: str | None
-    services: list[Offering]
     links: dict[str, str]
     has_cover: bool
 
@@ -129,6 +88,100 @@ class LinksUpdate(BaseModel):
         return value
 
 
+_MAX_OFFERING_DOLLARS = Decimal("1000000")
+
+
+def _offering_price(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError("price is not a valid decimal amount") from exc
+    if not amount.is_finite():
+        raise ValueError("price must be finite")
+    if amount < 0:
+        raise ValueError("price must not be negative")
+    if amount > _MAX_OFFERING_DOLLARS:
+        raise ValueError(f"price must not exceed {_MAX_OFFERING_DOLLARS}")
+    if amount != amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP):
+        raise ValueError("price must have at most 2 decimal places")
+    return amount
+
+
+def _price_cents(amount: Decimal | None) -> int | None:
+    if amount is None:
+        return None
+    return int((amount * 100).to_integral_value(rounding=ROUND_HALF_UP))
+
+
+class OfferingResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    price_cents: int | None
+
+
+class OfferingCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str = ""
+    price_dollars: Decimal | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        if not (normalized := value.strip()):
+            raise ValueError("name must not be blank")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("price_dollars", mode="before")
+    @classmethod
+    def _price(cls, value: object) -> Decimal | None:
+        return _offering_price(value)
+
+
+class OfferingUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    description: str | None = None
+    price_dollars: Decimal | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        if value is not None and not (normalized := value.strip()):
+            raise ValueError("name must not be blank")
+        return normalized if value is not None else None
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @field_validator("price_dollars", mode="before")
+    @classmethod
+    def _price(cls, value: object) -> Decimal | None:
+        return _offering_price(value)
+
+    def updates(self) -> dict[str, object]:
+        updates: dict[str, object] = {}
+        if "name" in self.model_fields_set:
+            updates["name"] = self.name
+        if "description" in self.model_fields_set:
+            updates["description"] = self.description
+        if "price_dollars" in self.model_fields_set:
+            updates["price_cents"] = _price_cents(self.price_dollars)
+        return updates
+
+
 @router.get("/page", response_model=BookingPageResponse)
 async def get_booking_page(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
@@ -151,54 +204,64 @@ async def patch_links(
     return await service.write_links(tenant_id=admin.tenant_id, links=current)
 
 
-@router.get("/offers", response_model=list[Offer])
-async def get_offers(
+@router.get("/offerings", response_model=list[OfferingResponse])
+async def list_offerings(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
-) -> list[Offer]:
-    return [Offer(**row) for row in await service.list_offers(tenant_id=admin.tenant_id)]
+) -> list[OfferingResponse]:
+    rows = await service.list_offerings(tenant_id=admin.tenant_id, active_only=True)
+    return [OfferingResponse.model_validate(row) for row in rows]
 
 
-@router.post("/offers", response_model=Offer, status_code=status.HTTP_201_CREATED)
-async def post_offer(
-    body: OfferCreate,
+@router.post("/offerings", response_model=OfferingResponse, status_code=status.HTTP_201_CREATED)
+async def post_offering(
+    body: OfferingCreate,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
-) -> Offer:
-    created = Offer(
-        **await service.create_offer(
-            tenant_id=admin.tenant_id, name=body.name, description=body.description
+) -> OfferingResponse:
+    return OfferingResponse.model_validate(
+        await service.create_offering(
+            tenant_id=admin.tenant_id,
+            name=body.name,
+            description=body.description,
+            price_cents=_price_cents(body.price_dollars),
+            embedder=embedder,
         )
     )
-    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
-    return created
 
 
-@router.patch("/offers/{offer_id}", response_model=Offer)
-async def patch_offer(
-    offer_id: UUID,
-    body: OfferUpdate,
+@router.patch("/offerings/{offering_id}", response_model=OfferingResponse)
+async def patch_offering(
+    offering_id: UUID,
+    body: OfferingUpdate,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
-) -> Offer:
-    updates = body.model_dump(exclude_none=True)
-    found = await service.update_offer(
-        tenant_id=admin.tenant_id, offer_id=offer_id, updates=updates
+) -> OfferingResponse:
+    updates = body.updates()
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="no fields to update"
+        )
+    row = await service.update_offering(
+        tenant_id=admin.tenant_id,
+        offering_id=offering_id,
+        updates=updates,
+        embedder=embedder,
     )
-    if found is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offer not found")
-    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
-    return Offer(**found)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offering not found")
+    return OfferingResponse.model_validate(row)
 
 
-@router.delete("/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_offer(
-    offer_id: UUID,
+@router.delete("/offerings/{offering_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_offering(
+    offering_id: UUID,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> Response:
-    if not await service.deactivate_offer(tenant_id=admin.tenant_id, offer_id=offer_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offer not found")
-    await service.refresh_offers(tenant_id=admin.tenant_id, embedder=embedder)
+    if not await service.deactivate_offering(
+        tenant_id=admin.tenant_id, offering_id=offering_id, embedder=embedder
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offering not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

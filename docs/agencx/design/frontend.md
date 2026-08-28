@@ -387,12 +387,11 @@ E-5 left out now ship, because something stands behind each of them:
   ->links`. Tapping a tile opens a panel - it never navigates on the tap, which
   had left no way back to a link already saved. Schemes are allowlisted server
   side; these render as links a customer clicks.
-- **The Services list** is derived from the owner's saved knowledge (the "What
-  we offer" and "Prices" sections), not from `catalog_items`, which has no
-  writer outside the demo seeds. `features/business/offerings.py` holds the
-  money rule *by construction*: no model runs on the path, and a price is a
-  verbatim slice of the owner's own line cut at the index the pricing gate's
-  extractor reports.
+- **The Services list** is the owner's structured `offerings` rows, created,
+  edited, and removed from Business. The Booking response formats only the
+  owner-authorized integer-cent value, so it cannot infer or round a price;
+  catalog chunks stay out of general-knowledge fast paths and recommendations
+  re-fetch the authoritative row before stating a price.
 
 **The QR is gone** (E-6). It was never in the prototype's owner screen - it came
 from the storefront's share sheet - and the founder does not use it. With it

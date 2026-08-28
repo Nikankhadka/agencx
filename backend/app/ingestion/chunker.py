@@ -7,7 +7,7 @@ Two shapes, per database.md section 4's ``metadata.kind``:
   context on both sides. No tokenizer dependency is added for this - tokens
   are approximated as whitespace-separated words, which is close enough for
   a target chunk size (not a token-accounting hard rule anywhere in scope).
-- Structured (``.csv``/``.json`` rows, and ``catalog_items``): one chunk per
+- Structured (``.csv``/``.json`` rows, and ``offerings``): one chunk per
   record, rendered as a flat "key: value, ..." text form - no LLM formats
   these, it's a deterministic string join.
 """

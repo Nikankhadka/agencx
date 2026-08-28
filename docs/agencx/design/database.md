@@ -251,6 +251,7 @@ No new table. `knowledge_version` is derived:
 ```sql
 select greatest(
   coalesce((select max(updated_at) from documents where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select max(updated_at) from offerings where tenant_id = :tenant_id), 'epoch'::timestamptz),
   coalesce((select updated_at from tenant_config where tenant_id = :tenant_id), 'epoch'::timestamptz)
 )
 ```
@@ -259,16 +260,14 @@ Any upload, re-ingest, status change, or a profile/system-prompt/brand write
 to `tenant_config` bumps it (both tables have carried a touch trigger since
 0003/0018). The context-package cache (architecture section 9) is keyed by
 `(tenant_id, knowledge_version)`; a bumped version invalidates the cache on
-the next lookup. `catalog_items.updated_at` is **not** in this formula -
-D24/`M-1` (`docs/agencx/spec/11-offerings-media.md`) needs to fold it in once
-the table gets a direct owner-facing writer, since today's only path that
-touches `catalog_items` also touches a `documents` row as a side effect
-(`ingest_catalog_items`) and bumps the version transitively.
+the next lookup. `offerings.updated_at` is included because `M-1` lets owners
+write it directly. Deletion also touches `tenant_config.updated_at`, because a
+deleted offering no longer has an `updated_at` value for this formula to read.
 
 ## 5. Commerce (the deterministic-pricing tables; per-tenant optional in Agencx)
 
 ```sql
-create table catalog_items (
+create table offerings (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
   name         text not null,
@@ -422,7 +421,7 @@ latency budget is observable in the dashboards.
 ## 8. Triggers
 
 ```sql
--- updated_at maintenance (tenant_config, catalog_items, pricing_rules, orders)
+-- updated_at maintenance (tenant_config, offerings, pricing_rules, orders)
 create or replace function touch_updated_at() returns trigger language plpgsql as
 $$ begin new.updated_at = now(); return new; end $$;
 
@@ -460,11 +459,11 @@ applied in order by a plain runner (no heavy framework):
 0020_conversation_human_takeover.sql  conversations.status splits 'open'/'human' (human takeover, C-6)
 0021_tenant_assets.sql     tenant_assets (business cover photo, E-6) - see section 3
 0022_drop_auth_codes.sql   drops auth_codes - login-in-chat moved to GoTrue OTP (D23)
+0023_rename_catalog_items_to_offerings.sql  names the M-1 writer's table after the Offering domain noun
 ```
 
-Planned Agencx migrations (in the tickets that own them): `M-1`/`M-2`
-(`docs/agencx/spec/11-offerings-media.md`, D24) - offerings writer + the
-`tenant_assets` widening/replacement, next numbers after 0022.
+Planned Agencx migration: `M-2` (`docs/agencx/spec/11-offerings-media.md`,
+D24) widens or replaces `tenant_assets` for Cloudinary media.
 
 Every table migration ends with its RLS + policies + grants to `wren_app`. A
 table without RLS must never survive a migration - the schema audit enforces
@@ -475,7 +474,7 @@ this.
 `backend/seeds/` (idempotent scripts, runnable per environment):
 
 - `seed_tenant1_phoneshop.py` - Tenant 1 (anchor): slug `bytefix`, config (tone,
-  threshold, tax), ~15 catalog_items, ~12 pricing_rules, ~20 mock orders,
+  threshold, tax), ~15 offerings, ~12 pricing_rules, ~20 mock orders,
   knowledge docs via the real ingestion pipeline.
 - `seed_tenant2_dental.py` - Tenant 2 (generalization proof): created only
   through the conversational onboarding flow + uploads; holds raw input

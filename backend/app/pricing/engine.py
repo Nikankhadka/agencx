@@ -3,7 +3,7 @@
 NO LLM IMPORTS ANYWHERE IN THIS MODULE, full stop. This is the one hard-rule
 enforcement point (docs/conventions.md, the deterministic-pricing hard
 rule): agents select ``rule_code``/``catalog_item_id`` + quantity,
-never a number - this module reads the tenant's pricing_rules/catalog_items
+never a number - this module reads the tenant's pricing_rules/offerings
 fresh from the DB and computes every cent. "Pure function" here means
 deterministic given DB state, not side-effect-free - it still needs a live
 read, since agent-selected data can't be trusted stale.
@@ -110,8 +110,7 @@ async def _price_item(conn: AppConnection, tenant_id: UUID, selection: Selection
         raise SelectionError(f"malformed catalog item id: {selection.code_or_id!r}") from exc
 
     row = await conn.fetchrow(
-        "select id, name, price_cents from catalog_items "
-        "where tenant_id = $1 and id = $2 and active",
+        "select id, name, price_cents from offerings where tenant_id = $1 and id = $2 and active",
         tenant_id,
         item_id,
     )

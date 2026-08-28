@@ -93,17 +93,16 @@ async def process_document(
         )
 
 
-async def ingest_catalog_items(conn: AppConnection, *, tenant_id: UUID, embedder: Embedder) -> None:
-    """Re-derive the tenant's synthetic 'catalog' document from catalog_items.
+async def ingest_offerings(conn: AppConnection, *, tenant_id: UUID, embedder: Embedder) -> None:
+    """Re-derive the tenant's synthetic 'catalog' document from offerings.
 
     Called from onboarding's confirm step (T-006) and safe to call again any
     time the catalog changes - it always replaces the existing catalog
     document's chunks rather than appending. A no-op if the tenant has no
-    active catalog items.
+    active offerings.
     """
     items = await conn.fetch(
-        "select id, name, description, price_cents from catalog_items "
-        "where tenant_id = $1 and active",
+        "select id, name, description, price_cents from offerings where tenant_id = $1 and active",
         tenant_id,
     )
     document_id = await conn.fetchval(
@@ -115,6 +114,7 @@ async def ingest_catalog_items(conn: AppConnection, *, tenant_id: UUID, embedder
         if document_id is not None:
             await conn.execute("delete from documents where id = $1", document_id)
         return
+
     if document_id is None:
         document_id = uuid4()
         await conn.execute(

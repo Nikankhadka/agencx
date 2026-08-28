@@ -80,7 +80,7 @@ async def corpus_chars(conn: AppConnection, tenant_id: UUID) -> int:
         "select sum(length(c.content)) from knowledge_chunks c "
         "join documents d on d.id = c.document_id "
         "where c.tenant_id = $1 and d.status = 'ready' "
-        "and coalesce(c.metadata->>'kind', '') != 'catalog_item'",
+        "and coalesce(c.metadata->>'kind', '') <> 'catalog_item'",
         tenant_id,
     )
     return total or 0
@@ -111,7 +111,7 @@ async def whole_corpus(conn: AppConnection, tenant_id: UUID) -> list[RetrievedCh
         "select c.id, c.content, c.metadata from knowledge_chunks c "
         "join documents d on d.id = c.document_id "
         "where c.tenant_id = $1 and d.status = 'ready' "
-        "and coalesce(c.metadata->>'kind', '') != 'catalog_item' "
+        "and coalesce(c.metadata->>'kind', '') <> 'catalog_item' "
         "order by d.uploaded_at, c.document_id, "
         "  (c.metadata->>'chunk_index')::int nulls last, c.id",
         tenant_id,

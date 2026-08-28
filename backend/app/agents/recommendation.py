@@ -3,7 +3,7 @@
 Extracts generic needs/constraints from the conversation (never vertical-
 specific keys - domain-agnostic hard rule), retrieves scoped to
 ``metadata.kind='catalog_item'`` chunks only, then re-fetches each
-recommended item's authoritative row from ``catalog_items`` so the
+recommended item's authoritative row from ``offerings`` so the
 displayed price always comes from the DB column, never from the model or
 from the chunk's embedded text - that value is what lands in ``selections``
 for Inspection, and is what any future rendering must use verbatim.
@@ -131,7 +131,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         ]
         rows = (
             await conn.fetch(
-                "select id, name, description, price_cents from catalog_items "
+                "select id, name, description, price_cents from offerings "
                 "where tenant_id = $1 and id = any($2::uuid[]) and active",
                 ctx.tenant_id,
                 item_ids,

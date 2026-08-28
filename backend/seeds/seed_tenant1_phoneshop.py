@@ -19,7 +19,7 @@ import json
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from app.ingestion.pipeline import ingest_catalog_items, process_document
+from app.ingestion.pipeline import ingest_offerings, process_document
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 SLUG = "bytefix"
 TENANT_NAME = "Bytefix Repairs"
 
-# --- catalog_items: phones, accessories, tiered repair services (~15) -----------
+# --- offerings: phones, accessories, tiered repair services (~15) -----------
 
 CATALOG_ITEMS: list[tuple[str, str, int | None]] = [
     ("iPhone 11 (Refurbished, 64GB)", "Grade A refurbished, 90-day warranty", 24900),
@@ -268,7 +268,7 @@ async def _seed_core(tenant_id: UUID) -> None:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         for name, description, price_cents in CATALOG_ITEMS:
             await conn.execute(
-                "insert into catalog_items (tenant_id, name, description, price_cents) "
+                "insert into offerings (tenant_id, name, description, price_cents) "
                 "values ($1, $2, $3, $4)",
                 tenant_id,
                 name,
@@ -332,7 +332,7 @@ async def _seed_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
                 conn, tenant_id=tenant_id, document_id=document_id, embedder=embedder
             )
 
-        await ingest_catalog_items(conn, tenant_id=tenant_id, embedder=embedder)
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
 
 
 async def seed(embedder: Embedder | None = None) -> UUID:

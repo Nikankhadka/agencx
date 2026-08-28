@@ -98,8 +98,8 @@ pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 them, and the Wren-era `/conversations` and `/escalations` console pages stay
 mounted for E-2 to hide (E-2's posture, applied early).
 
-**Offerings + media is designed but not started (D24, `11-offerings-media.md`,
-2026-08-28).** A Codex CLI session on `feat/offerings-media-import` set out to
+**Offerings + media is designed (D24, `11-offerings-media.md`, 2026-08-28).**
+A Codex CLI session on `feat/offerings-media-import` set out to
 close G5.1 (the cover photo's Postgres `bytea` storage) and, working through
 the actual product need with the founder, widened it into a real design: the
 Booking page's "Services" list becomes an owner-writable `Offering` (the
@@ -111,8 +111,11 @@ session hit its Codex usage limit at the exact moment it said it would record
 this in the canonical docs - the branch had zero commits and nothing was
 written down. This session recovered the design from the session transcript,
 cross-checked every claim against the current code, and wrote it up as D24
-plus tickets `M-1`/`M-2`/`M-3`. None of the three have started; `M-2` is
-additionally blocked on the founder provisioning Cloudinary credentials.
+plus tickets `M-1`/`M-2`/`M-3`. `M-1` is now built: the physical table is
+`offerings`, the owner edits it from Business, the Booking page reads it, and
+the catalog projection never reaches general-knowledge fast paths. `M-2` is
+additionally blocked on the founder provisioning Cloudinary credentials; `M-3`
+has not started.
 
 O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
@@ -266,6 +269,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-3 Knowledge ingest (URL scrape + upload) | done | `29fd5a5` |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
 | G2.1/G2.2 Auth migration: GoTrue OTP + `@supabase/ssr` cookies | done | `8e78165` (backend), `4a6b59f` (frontend); D23 in `design/decisions.md` |
+| M-1 Offerings become a real, owner-writable structured item | done | `M-1 make offerings owner-writable` |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

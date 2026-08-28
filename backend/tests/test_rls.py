@@ -89,7 +89,7 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         message_id,
     )
     await conn.execute(
-        "insert into catalog_items (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
+        "insert into offerings (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
         tenant_id,
     )
     await conn.execute(
@@ -256,7 +256,7 @@ async def test_cross_tenant_insert_is_rejected_by_rls(
     with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError, match="row-level security"):
         async with db.tenant_context(seeded_tenants.a_id, "tenant_admin", pool=app_pool) as conn:
             await conn.execute(
-                "insert into catalog_items (tenant_id, name) values ($1, 'leaked-in')",
+                "insert into offerings (tenant_id, name) values ($1, 'leaked-in')",
                 seeded_tenants.b_id,
             )
 
@@ -300,7 +300,7 @@ async def test_tenant_context_does_not_leak_across_pool_reuse_after_commit(
     being applied outside the transaction."""
     async with db.tenant_context(seeded_tenants.a_id, "tenant_admin", pool=single_conn_pool) as c:
         pid: int = await c.fetchval("select pg_backend_pid()")
-        assert await c.fetchval("select count(*) from catalog_items") == 1  # context works
+        assert await c.fetchval("select count(*) from offerings") == 1  # context works
     await _assert_connection_carries_no_tenant_context(single_conn_pool, pid, superuser_conn)
 
 

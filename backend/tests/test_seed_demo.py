@@ -125,7 +125,7 @@ async def test_both_tenants_exist_with_data(
 
         assert (
             await superuser_conn.fetchval(
-                "select count(*) from catalog_items where tenant_id = $1", tenant_id
+                "select count(*) from offerings where tenant_id = $1", tenant_id
             )
             == catalog_n
         )
@@ -160,13 +160,13 @@ async def test_lumident_differs_only_in_data(
     bytefix_names = {
         r["name"]
         for r in await superuser_conn.fetch(
-            "select name from catalog_items where tenant_id = $1", seeded["bytefix_id"]
+            "select name from offerings where tenant_id = $1", seeded["bytefix_id"]
         )
     }
     lumident_names = {
         r["name"]
         for r in await superuser_conn.fetch(
-            "select name from catalog_items where tenant_id = $1", seeded["lumident_id"]
+            "select name from offerings where tenant_id = $1", seeded["lumident_id"]
         )
     }
     assert bytefix_names.isdisjoint(lumident_names)  # no overlap - two verticals

@@ -6,7 +6,7 @@ import json
 from typing import Any
 from uuid import UUID
 
-from app.ingestion.pipeline import ingest_catalog_items
+from app.ingestion.pipeline import ingest_offerings
 from app.llm.embedder import Embedder
 from app.shared import db
 
@@ -15,6 +15,105 @@ from app.shared import db
 LINK_KEYS = ("website", "google", "facebook", "instagram")
 
 COVER_KIND = "cover"
+
+
+async def list_offerings(
+    *, tenant_id: UUID, active_only: bool = False
+) -> list[dict[str, Any]]:
+    """The owner's structured offerings, in the order they appear on the page.
+
+    ``position`` is the owner's own ordering; ``created_at`` then ``id`` break
+    ties so a list that has never been reordered still reads oldest-first
+    rather than arbitrarily.
+    """
+    active_filter = "and active" if active_only else ""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        rows = await conn.fetch(
+            "select id, name, description, price_cents, active, position from offerings "
+            f"where tenant_id = $1 {active_filter} order by position, created_at, id",  # noqa: S608
+            tenant_id,
+        )
+    return [dict(row) for row in rows]
+
+
+async def create_offering(
+    *,
+    tenant_id: UUID,
+    name: str,
+    description: str,
+    price_cents: int | None,
+    embedder: Embedder,
+) -> dict[str, Any]:
+    """Create one offering at the end of the list, then rebuild its projection."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            "insert into offerings (tenant_id, name, description, price_cents, position) "
+            "values ($1, $2, $3, $4, coalesce((select max(position) + 1 from offerings "
+            "where tenant_id = $1), 0)) "
+            "returning id, name, description, price_cents, active, position",
+            tenant_id,
+            name,
+            description,
+            price_cents,
+        )
+        assert row is not None
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+    return dict(row)
+
+
+async def update_offering(
+    *,
+    tenant_id: UUID,
+    offering_id: UUID,
+    updates: dict[str, Any],
+    embedder: Embedder,
+) -> dict[str, Any] | None:
+    """Update an offering owned by this tenant and rebuild its projection.
+
+    ``updates`` keys are column names from the API layer's fixed allowlist, not
+    caller-supplied strings - the interpolation below is safe for that reason
+    and for no other.
+    """
+    if not updates:
+        rows = await list_offerings(tenant_id=tenant_id)
+        return next((row for row in rows if row["id"] == offering_id), None)
+    columns = tuple(updates)
+    assignments = ", ".join(f"{column} = ${index}" for index, column in enumerate(columns, start=3))
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
+            "where tenant_id = $1 and id = $2 "
+            "returning id, name, description, price_cents, active, position",
+            tenant_id,
+            offering_id,
+            *(updates[column] for column in columns),
+        )
+        if row is not None:
+            await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+    return dict(row) if row is not None else None
+
+
+async def deactivate_offering(
+    *, tenant_id: UUID, offering_id: UUID, embedder: Embedder
+) -> bool:
+    """Retire an offering by clearing ``active`` rather than deleting the row.
+
+    The row is what a past quote or order refers to by id, so deleting it would
+    strand that history; ``active`` exists on the table for exactly this, and
+    every reader (the projection, the storefront, the booking page) already
+    filters on it. Keeping the row also keeps its ``updated_at``, which is what
+    ``knowledge_version`` reads - a hard delete would leave nothing behind for
+    the cache to notice.
+    """
+    return (
+        await update_offering(
+            tenant_id=tenant_id,
+            offering_id=offering_id,
+            updates={"active": False},
+            embedder=embedder,
+        )
+        is not None
+    )
 
 
 async def read_links(*, tenant_id: UUID) -> dict[str, str]:
@@ -101,71 +200,6 @@ async def delete_cover(*, tenant_id: UUID) -> None:
         )
 
 
-async def list_offers(*, tenant_id: UUID, active_only: bool = False) -> list[dict[str, Any]]:
-    """Return the catalog rows that the business chooses to publish as offers.
-
-    Catalog remains the source of truth because agents and deterministic quotes
-    already use it. The storefront intentionally omits price fields: pricing is
-    an opt-in product concern, while this page describes what the business does.
-    """
-    active_filter = "and active" if active_only else ""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        rows = await conn.fetch(
-            "select id, name, description, active, position from catalog_items "
-            f"where tenant_id = $1 {active_filter} order by position, created_at, id",  # noqa: S608
-            tenant_id,
-        )
-    return [dict(row) for row in rows]
-
-
-async def create_offer(*, tenant_id: UUID, name: str, description: str) -> dict[str, Any]:
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        row = await conn.fetchrow(
-            "insert into catalog_items (tenant_id, name, description, position) "
-            "values ($1, $2, $3, coalesce((select max(position) + 1 from catalog_items "
-            "where tenant_id = $1), 0)) "
-            "returning id, name, description, active, position",
-            tenant_id,
-            name,
-            description,
-        )
-    assert row is not None
-    return dict(row)
-
-
-async def update_offer(
-    *, tenant_id: UUID, offer_id: UUID, updates: dict[str, Any]
-) -> dict[str, Any] | None:
-    if not updates:
-        rows = await list_offers(tenant_id=tenant_id)
-        return next((row for row in rows if row["id"] == offer_id), None)
-    columns = tuple(updates)
-    assignments = ", ".join(f"{column} = ${index}" for index, column in enumerate(columns, start=3))
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        row = await conn.fetchrow(
-            f"update catalog_items set {assignments} "  # noqa: S608 - fixed API whitelist
-            "where tenant_id = $1 and id = $2 "
-            "returning id, name, description, active, position",
-            tenant_id,
-            offer_id,
-            *(updates[column] for column in columns),
-        )
-    return dict(row) if row is not None else None
-
-
-async def deactivate_offer(*, tenant_id: UUID, offer_id: UUID) -> bool:
-    return (
-        await update_offer(tenant_id=tenant_id, offer_id=offer_id, updates={"active": False})
-        is not None
-    )
-
-
-async def refresh_offers(*, tenant_id: UUID, embedder: Embedder) -> None:
-    """Rebuild the catalog projection after an owner changes an offer."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await ingest_catalog_items(conn, tenant_id=tenant_id, embedder=embedder)
-
-
 async def write_storefront(
     *, tenant_id: UUID, about: str | None = None, reviews: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
@@ -215,8 +249,8 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             "from tenants t join tenant_config tc on tc.tenant_id = t.id where t.id = $1",
             tenant_id,
         )
-        offers = await conn.fetch(
-            "select id, name, description from catalog_items "
+        offerings = await conn.fetch(
+            "select id, name, description, price_cents from offerings "
             "where tenant_id = $1 and active order by position, created_at, id",
             tenant_id,
         )
@@ -259,7 +293,7 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             for key, value in (brand.get("links") or {}).items()
             if key in LINK_KEYS and isinstance(value, str) and value
         },
-        "offers": [dict(row) for row in offers],
+        "offerings": [dict(row) for row in offerings],
         "reviews": reviews,
         "has_cover": bool(cover),
     }

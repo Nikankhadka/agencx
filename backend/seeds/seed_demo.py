@@ -47,7 +47,7 @@ from uuid import UUID, uuid4
 
 import httpx
 
-from app.ingestion.pipeline import ingest_catalog_items, process_document
+from app.ingestion.pipeline import ingest_offerings, process_document
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
@@ -284,7 +284,7 @@ async def _seed_lumident_core() -> UUID:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         for name, description, price_cents in LUMIDENT_CATALOG:
             await conn.execute(
-                "insert into catalog_items (tenant_id, name, description, price_cents) "
+                "insert into offerings (tenant_id, name, description, price_cents) "
                 "values ($1, $2, $3, $4)",
                 tenant_id,
                 name,
@@ -336,7 +336,7 @@ async def _seed_lumident_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
             await process_document(
                 conn, tenant_id=tenant_id, document_id=document_id, embedder=embedder
             )
-        await ingest_catalog_items(conn, tenant_id=tenant_id, embedder=embedder)
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
 
 
 # --- Membership: users + platform_admins ---------------------------------------

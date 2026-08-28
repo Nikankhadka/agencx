@@ -59,6 +59,38 @@ test.describe("Business hub", () => {
     await expect(link).not.toContainText(/\/$/);
   });
 
+  test("an owner adds, edits, and removes an offering", async ({ page, request }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business");
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill("M1 test offering");
+    await page.getByTestId("offering-description").fill("Most models");
+    await page.getByTestId("offering-price").fill("89.50");
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByTestId("offerings-list")).toContainText("M1 test offering");
+
+    await page.goto("/business/booking");
+    await expect(page.getByTestId("booking-services")).toContainText("$89.50");
+
+    await page.goto("/business");
+    await page.getByRole("button", { name: "Edit M1 test offering" }).click();
+    await page.getByTestId("offering-price").fill("99");
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByTestId("offerings-list")).toContainText("$99.00");
+
+    await page.goto("/business/booking");
+    await expect(page.getByTestId("booking-services")).toContainText("$99.00");
+
+    await page.goto("/business");
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Remove M1 test offering" }).click();
+    await expect(page.getByTestId("offerings-list")).not.toContainText("M1 test offering");
+
+    await page.goto("/business/booking");
+    await expect(page.getByTestId("booking-services")).not.toContainText("M1 test offering");
+  });
+
   test("copying puts the full URL, scheme and all, on the clipboard", async ({
     page,
     request,
