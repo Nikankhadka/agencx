@@ -140,6 +140,35 @@ create table platform_admins (
 );
 ```
 
+### Business assets (E-6; **NEW**, migration 0021 - undocumented until now)
+
+```sql
+create table tenant_assets (
+  tenant_id   uuid not null references tenants(id) on delete cascade,
+  kind        text not null check (kind in ('cover')),
+  mime        text not null,
+  bytes       bytea not null,
+  updated_at  timestamptz not null default now(),
+  primary key (tenant_id, kind)
+);
+```
+
+Policies: `tenant_isolation` (owner, all ops), `platform_admin_read`, and
+`service_read` - the anonymous public Booking page must be able to serve a
+cover the same way it serves the tenant's name, so the unauthenticated
+service role can select it. Kept out of `tenant_config` deliberately: `brand`/
+`config` sit on the hot path (the public tenant lookup primes the chat's
+context package, P-3), and a base64 image there would be a latency regression.
+
+**`ponytail:`** the image lives in Postgres `bytea`, not object storage - one
+small image per tenant, capped at 2MB by the API and resized client-side
+before upload, fits a row fine and needs no new dependency or credential in
+local dev (there was no object store available to every surface at the time).
+`kind` is hard-CHECK-constrained to `'cover'` only, so this table cannot hold
+a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/agencx/spec/11-offerings-media.md`),
+which moves business media (a capped gallery + per-offering photos) to
+Cloudinary and either widens or replaces this table.
+
 ### Login-in-chat (O-2; **auth_codes table dropped 2026-08-28, D23**)
 
 O-2 shipped this table: a backend-issued, sha-256-hashed 6-digit code with a
@@ -220,14 +249,21 @@ the HNSW/GIN indexes with tenant scoping.
 No new table. `knowledge_version` is derived:
 
 ```sql
-select coalesce(max(uploaded_at), 'epoch'::timestamptz)
-  from documents
- where tenant_id = :tenant_id;
+select greatest(
+  coalesce((select max(updated_at) from documents where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select updated_at from tenant_config where tenant_id = :tenant_id), 'epoch'::timestamptz)
+)
 ```
 
-Any upload, re-ingest, or status change bumps it. The context-package cache
-(architecture section 9) is keyed by `(tenant_id, knowledge_version)`; a bumped
-version invalidates the cache on the next lookup.
+Any upload, re-ingest, status change, or a profile/system-prompt/brand write
+to `tenant_config` bumps it (both tables have carried a touch trigger since
+0003/0018). The context-package cache (architecture section 9) is keyed by
+`(tenant_id, knowledge_version)`; a bumped version invalidates the cache on
+the next lookup. `catalog_items.updated_at` is **not** in this formula -
+D24/`M-1` (`docs/agencx/spec/11-offerings-media.md`) needs to fold it in once
+the table gets a direct owner-facing writer, since today's only path that
+touches `catalog_items` also touches a `documents` row as a side effect
+(`ingest_catalog_items`) and bumps the version transitively.
 
 ## 5. Commerce (the deterministic-pricing tables; per-tenant optional in Agencx)
 
@@ -417,17 +453,18 @@ applied in order by a plain runner (no heavy framework):
 0013_platform_admin_tenant_config_write.sql  platform admin can write tenant_config
 0014_onboarding_business_fields.sql  tenants.business_name, payment_processing_mode, tenant_self_update
 0015_website_doc_type.sql  documents.doc_type 'website'
+0016_enabled_tools_lean_default.sql  lean enabled_tools default + backfill (D-2)
 0017_auth_codes.sql        auth_codes (login-in-chat, O-2) - dropped by 0022
 0018_documents_updated_at.sql  documents.updated_at + touch trigger (P-4)
 0019_documents_structured.sql  documents 'draft' status + structured jsonb (O-3/D19)
+0020_conversation_human_takeover.sql  conversations.status splits 'open'/'human' (human takeover, C-6)
+0021_tenant_assets.sql     tenant_assets (business cover photo, E-6) - see section 3
 0022_drop_auth_codes.sql   drops auth_codes - login-in-chat moved to GoTrue OTP (D23)
 ```
 
-(0016 is reserved for D-2's lean `enabled_tools` default and intentionally
-skipped.)
-
-Planned Agencx migrations (in the tickets that own them): D-2 (lean
-`enabled_tools` default + backfill).
+Planned Agencx migrations (in the tickets that own them): `M-1`/`M-2`
+(`docs/agencx/spec/11-offerings-media.md`, D24) - offerings writer + the
+`tenant_assets` widening/replacement, next numbers after 0022.
 
 Every table migration ends with its RLS + policies + grants to `wren_app`. A
 table without RLS must never survive a migration - the schema audit enforces

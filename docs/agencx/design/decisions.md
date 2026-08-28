@@ -476,3 +476,135 @@ moved. `POST /api/tenants` absorbs first-login provisioning (empty body ->
 create-or-return the caller's tenant) instead of a new endpoint, since it
 already was "authed user -> provision tenant" with the audited service-role
 write path the seed scripts depend on.
+
+## D24: Offerings become owner-writable; reusable business media moves to Cloudinary
+
+**Date:** 2026-08-28 (founder, designed in a Codex CLI session; recorded here
+after that session ran out of usage before it could write anything down -
+provenance below). **Status:** accepted design, **implementation not
+started** - see `M-1`/`M-2`/`M-3` in `docs/agencx/spec/11-offerings-media.md`.
+Closes G5.1 in `industry-standard-gap.md`, broadened past that ticket's
+original scope. `FLAG: new external service` (Cloudinary). `FLAG: schema
+change` (`tenant_assets` widens or is replaced).
+
+**Decision:** Four things, decided together because each one shapes the others.
+
+1. **`Offering` is the one domain noun** for anything a business sells - a
+   tradie service, a dental appointment, a menu item, a retail product, a
+   package. Owner-facing heading is "What you offer"; customer-facing is
+   "What we offer". The existing `catalog_items` table is the implementation
+   underneath that noun, not a second concept next to it.
+2. **The catalog and the knowledge base stay two systems, joined only at
+   answer time.** The catalog (`catalog_items`) is the structured source of
+   truth for name/price/availability; the knowledge base stays prose (policy,
+   FAQs, general info). A generated search projection off the catalog lets the
+   agent *find* candidate items during retrieval, but the agent always
+   re-fetches the authoritative row before stating a price or availability -
+   it never trusts the embedded chunk text. This is not new invention:
+   `_recommend_items_impl` (`backend/app/agents/agent_node.py:195`) already
+   does exactly this search-then-re-fetch pattern for the one live catalog
+   reader that exists today; the decision is to build the writer path the
+   same way, not to invent a different one.
+3. **Cloudinary, not Supabase Storage, for offering and gallery images.**
+   Supabase Storage stays correct for knowledge *documents* (unchanged - it
+   already backs `shared/storage.py`'s `SupabaseStorage`). Media is a
+   different problem: reusable, transformable, CDN-delivered images attached
+   to offerings and a business gallery, not opaque private byte blobs. Google
+   Photos-style client-side downscaling stays (it already exists,
+   `CoverPhoto.tsx:22-48`), but delivery and storage move to a provider built
+   for that job.
+4. **A 5-image business gallery**, and per-offering photos attachable after
+   an offering is confirmed - not required at confirm time. Both deliberately
+   small in scope: no multi-image carousels-of-carousels, no dropdown/variant
+   picker UI, no automatic PDF-image-to-item matching. One business owner
+   wants "a cover image, a popular menu item, five photos, in a formatted
+   way" - not an Uber-Eats storefront. Phase one stays that size on purpose.
+
+**Why the catalog/knowledge split, not one merged store.** The founder's own
+instinct going in was to avoid the owner ever entering the same information
+twice, which is right - but the fix is *one confirmation step*, not *one
+storage system*. Sierra separates knowledge management from tools/dynamic
+data/systems-of-record; Decagon separates knowledge-base retrieval from
+APIs/integrations that hold live structured data; Airbnb runs listing search
+(structured, embeddings + ranking) and support knowledge search (vector
+knowledge base) as genuinely separate retrieval systems behind one API layer.
+Tidio Lyro - the closest product analogue to Agencx's audience (small
+businesses without an existing Shopify/WooCommerce catalog) - presents one
+unified owner-facing "Knowledge" area while keeping products as an internally
+distinct, separately-synced source. Agencx's gap next to Lyro: Lyro still
+expects the owner to choose product sync as a separate step; nothing in its
+public docs detects menu items inside an arbitrary uploaded PDF and proposes
+them as structured products. That gap is the opportunity - see the
+import-and-confirm decision below.
+
+If catalog content were instead folded into ordinary knowledge chunks, a
+price edit would require re-embedding prose, the fast-path retrieval
+(`whole_corpus()`, `backend/app/services/retrieval.py:100`) would hand raw
+catalog text straight to the model with no re-fetch, and a stale PDF price
+could out-rank a corrected one - a direct collision with the standing money
+rule (no model states a figure it didn't get from the owner's material or the
+deterministic engine).
+
+**Why Cloudinary over Supabase Storage.** Scoped narrowly (G5.1: replace the
+`tenant_assets` bytea cover with something in object storage), Supabase
+Storage wins outright - it's already integrated, already used for documents,
+free tier covers a single cover image many times over. That was the first
+answer given, and it was wrong for the actual ask: reusable media across a
+storefront (offering photos, a gallery) benefits from Cloudinary's
+server-signed uploads, CDN delivery and on-the-fly responsive transforms in a
+way a plain object-storage bucket does not replicate without building the
+transform layer separately. Cloudflare R2 + Images was the credible
+cost-first alternative (10GB free storage, 5,000 free unique transforms/mo)
+but needs two separate Cloudflare services stitched together; Cloudinary is
+one provider for the whole job. The quota is a real constraint, not hidden:
+Cloudinary's free plan is 25 credits/month shared across storage, bandwidth
+*and* transformations - workable for a Stage-1 storefront's traffic, not a
+production-scale promise. The trigger to reconsider is ordinary usage
+growth, not a design flaw to fix now.
+
+**Why import-and-confirm, not two separate onboarding steps.** The founder's
+ask was explicit: an owner who already uploads a PDF/URL with hours, policy,
+*and* a menu should not have to re-type the menu a second time into a
+separate catalog screen, but the extraction must never become the source of
+truth on its own. The resolved pattern: ingestion classifies sections as it
+already does (O-3's headed sections), facts/policy save as knowledge exactly
+as today, and any section under `"What we offer"`/`"Prices"` becomes a
+*candidate* offering shown in one lightweight confirm step - reusing the
+existing Settings > Knowledge `ReviewSheet` review pattern rather than a new
+questionnaire. Only what the owner confirms becomes a `catalog_items` row.
+Re-uploading the same or an updated document later proposes a diff against
+what's already confirmed; it never silently overwrites an owner's own edit -
+the owner's live catalog edit always outranks a stale document, matching the
+same "confirmed value wins" rule the money guardrail already lives by.
+
+**The one decision left open, deliberately.** Whether `catalog_items` keeps
+its physical name (with `Offering` staying purely the domain/UI vocabulary
+layered on top) or gets renamed in a migration is *not* decided here - the
+Codex conversation that produced this design flagged it as unresolved and
+this ADR keeps it that way rather than picking one silently. Whoever
+implements `M-1` decides it, and records the reasoning as part of that
+ticket, not as a retroactive edit to this entry.
+
+**Boundary:** the money rule is unchanged and unrelaxed by any of this - no
+model produces, edits, or infers a price; a confirmed offering's price is
+always a verbatim slice of the owner's own text (reusing
+`extract_monetary_figures`, `backend/app/pricing/validation_gate.py:104`,
+exactly as `business/offerings.py`'s read-time derivation already does today)
+or an owner-typed value, never a computed or model-drafted one. This ADR does
+not itself change any code - the concrete implementation gaps it depends on
+closing (no owner-facing `catalog_items` writer today; `tenant_assets` is
+schema-capped to one row per tenant; the fast-path retrieval doesn't filter
+catalog-kind chunks out of general knowledge answers; `knowledge_version`
+doesn't include `catalog_items.updated_at`) are catalogued in
+`11-offerings-media.md`'s tickets, not here.
+
+**Provenance.** This design was reached over a long conversation between the
+founder and a Codex CLI session (branch `feat/offerings-media-import`,
+2026-08-28), starting from the G5.1 gap and widening once the founder pushed
+back on the narrow framing. That session said it would record this exact
+design in the canonical docs and then hit its usage limit mid-sentence,
+before writing anything - the branch had zero commits and no doc mentioned
+any of this when this entry was written. This ADR, and the tickets in
+`11-offerings-media.md`, are that recovery: reconstructed from the session's
+own transcript and independently re-verified against the current code before
+being written down, not taken on faith from either party.

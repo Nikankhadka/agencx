@@ -98,6 +98,22 @@ pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 them, and the Wren-era `/conversations` and `/escalations` console pages stay
 mounted for E-2 to hide (E-2's posture, applied early).
 
+**Offerings + media is designed but not started (D24, `11-offerings-media.md`,
+2026-08-28).** A Codex CLI session on `feat/offerings-media-import` set out to
+close G5.1 (the cover photo's Postgres `bytea` storage) and, working through
+the actual product need with the founder, widened it into a real design: the
+Booking page's "Services" list becomes an owner-writable `Offering` (the
+locked domain noun), reusable business media moves to Cloudinary (a capped
+5-image gallery + optional per-offering photos), and knowledge ingestion gets
+an import-and-confirm step so an uploaded menu/price list can propose
+structured offerings the owner reviews once rather than re-typing. That
+session hit its Codex usage limit at the exact moment it said it would record
+this in the canonical docs - the branch had zero commits and nothing was
+written down. This session recovered the design from the session transcript,
+cross-checked every claim against the current code, and wrote it up as D24
+plus tickets `M-1`/`M-2`/`M-3`. None of the three have started; `M-2` is
+additionally blocked on the founder provisioning Cloudinary credentials.
+
 O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
 open for US-2, the `STATUS_TONE` map.
