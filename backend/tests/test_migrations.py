@@ -51,8 +51,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # tenant_assets, the Booking page's cover photo; 0022 drops auth_codes -
     # login-in-chat moved to GoTrue OTP, which owns code issuance now; 0023
     # renames catalog_items to offerings (D24/M-1), 0006 keeping its original
-    # CREATE TABLE because migrations are append-only.
-    assert len(on_disk) == 23, "expected migrations 0001-0023"
+    # CREATE TABLE because migrations are append-only; 0024 adds M-4's
+    # offerings.position, the order the owner puts their storefront list in.
+    assert len(on_disk) == 24, "expected migrations 0001-0024"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

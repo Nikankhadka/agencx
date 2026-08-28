@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   AgentLine,
   LedeMessage,
@@ -40,6 +41,7 @@ interface StateFields {
   completed: boolean;
   input: InputSpec | null;
   can_confirm: boolean;
+  suggested_slug: string | null;
 }
 
 /**
@@ -110,6 +112,7 @@ export default function OnboardingPage() {
   const [stage, setStage] = useState("");
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
+  const [publicSlug, setPublicSlug] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +126,8 @@ export default function OnboardingPage() {
     setStage(fields.stage);
     setInput(fields.input);
     setCanConfirm(fields.can_confirm);
+    if (fields.can_confirm)
+      setPublicSlug((current) => current || fields.suggested_slug || "business");
   }
 
   useEffect(() => {
@@ -352,7 +357,10 @@ export default function OnboardingPage() {
     setError(null);
     setBusy(true);
     try {
-      await apiFetch("/api/onboarding/confirm", { method: "POST" });
+      await apiFetch("/api/onboarding/confirm", {
+        method: "POST",
+        body: JSON.stringify({ slug: publicSlug }),
+      });
       setCompleted(true);
       setCanConfirm(false);
       setInput(null);
@@ -435,13 +443,26 @@ export default function OnboardingPage() {
       <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
         <div className="mx-auto w-full max-w-thread">
           {!completed && canConfirm ? (
-            <Button
-              onClick={handleConfirm}
-              loading={busy}
-              data-testid="onboarding-confirm"
-            >
-              Confirm and go live
-            </Button>
+            <div className="flex flex-col gap-3">
+              <Input
+                label="Your business page"
+                value={publicSlug}
+                onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
+                help={`Shared as agencx.app/${publicSlug}`}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                disabled={busy}
+                data-testid="onboarding-public-slug"
+              />
+              <Button
+                onClick={handleConfirm}
+                loading={busy}
+                data-testid="onboarding-confirm"
+              >
+                Confirm and go live
+              </Button>
+            </div>
           ) : !completed && input ? (
             <BeatComposer
               key={stage}

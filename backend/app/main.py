@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.features.business.api import router as business_router
+from app.features.business.public_api import router as business_public_router
 from app.features.chat.api import router as chat_router
 from app.features.conversations.api import router as conversations_router
 from app.features.dashboards.api import router as dashboards_router
@@ -104,6 +105,7 @@ app.add_middleware(
 app.include_router(tenants_router)
 app.include_router(platform_router)
 app.include_router(public_router)
+app.include_router(business_public_router)
 app.include_router(onboarding_router)
 app.include_router(knowledge_router)
 app.include_router(business_router)

@@ -6,40 +6,35 @@ import { Icon } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
 import { CoverPhoto } from "./components/CoverPhoto";
 import { PlatformLinks } from "./components/PlatformLinks";
+import { StorefrontSectionsEditor } from "./components/StorefrontSectionsEditor";
 
 /**
- * E-5/E-6: the Booking page - the business as a customer finds it, and the link
- * that takes them there. Built from `renderScreen('booking')` in
+ * E-5/E-6/M-4: the Business page - the business as a customer finds it, and the
+ * link that takes them there. Built from `renderScreen('booking')` in
  * agencx-prototype-v6.html: the cover photo, the name and its one-line
  * description, "How leads come in" with the shareable link and the platform
- * tiles, and the Services list.
+ * tiles, and the About section the storefront renders.
  *
  * Two parts of the prototype's screen do not ship, by founder decision: the
  * "Get a quote" CTA (quoting is a Stage 2 opt-in and this owner will not use
  * it) and the QR code E-5 added, which was never in the prototype's owner
  * screen and was not being used.
  *
- * The page a customer actually lands on is still the bare chat surface at
- * `(customer)/page.tsx`. Building it out of the storefront prototype is the
- * next ticket; until then the headings here say what this is - a preview of
- * what customers see - and claim nothing that is not true.
+ * The offerings list is not here either: M-4 gave it its own screen at
+ * `/business/offerings`, and the owner sees it as a customer does through the
+ * preview link below - which now opens the real storefront at `/{slug}`, so
+ * this screen's "what customers see" headings are literally true.
  */
-
-interface Offering {
-  name: string;
-  price: string | null;
-}
 
 interface BookingPage {
   slug: string;
   name: string;
   tagline: string | null;
-  services: Offering[];
   links: Record<string, string>;
   has_cover: boolean;
 }
 
-export default function BookingPageScreen() {
+export default function BusinessPageScreen() {
   const [page, setPage] = useState<BookingPage | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -91,7 +86,7 @@ export default function BookingPageScreen() {
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-      <ScreenTopbar title="Booking page" backHref="/business" />
+      <ScreenTopbar title="Business page" backHref="/business" />
       <div className="min-h-0 flex-1 overflow-y-auto pb-thread-tail lg:mx-auto lg:w-full lg:max-w-thread">
         <CoverPhoto hasCover={page?.has_cover ?? false} onChanged={load} />
 
@@ -101,11 +96,22 @@ export default function BookingPageScreen() {
           </h2>
           {/* Clamped: the prototype's subtitle is one tight line because Sababa's
               services are, and a real business's list runs to five. Two lines
-              is the gist; the full text lives in Settings > Knowledge. */}
+              is the gist; the full text lives in Business > Details > Knowledge. */}
           {page?.tagline ? (
             <p className="line-clamp-2 text-meta text-ink-a40">
               {page.tagline}
             </p>
+          ) : null}
+          {publicUrl ? (
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-field border border-accent-a28 px-3 py-2 text-chip font-medium text-accent"
+            >
+              Preview your business page
+              <Icon name="open_in_new" size={14} />
+            </a>
           ) : null}
         </div>
 
@@ -150,38 +156,7 @@ export default function BookingPageScreen() {
           />
         </section>
 
-        {/* `SERVICES` - the owner's own words. Absent when they have saved no
-            price list or menu yet; an empty heading over nothing would be the
-            dead surface the PRD forbids. */}
-        {page && page.services.length > 0 ? (
-          <section className="px-gutter pt-4">
-            <h3 className="mb-3 text-eyebrow font-medium uppercase text-ink-a40">
-              Services
-            </h3>
-            <ul data-testid="booking-services">
-              {page.services.map((service) => (
-                <li
-                  key={service.name}
-                  className="flex items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-field bg-accent-a09 text-accent">
-                    <Icon name="sell" size={18} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-card-hl font-medium text-text">
-                      {service.name}
-                    </span>
-                    {service.price ? (
-                      <span className="block text-meta text-ink-a40">
-                        {service.price}
-                      </span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        <StorefrontSectionsEditor />
 
         <div className="px-gutter pt-5">
           <button

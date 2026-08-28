@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.features.business import offerings
+from app.features.business import offering_candidates as offerings
 
 
 def _record(sections: list[dict[str, str]], status: str = "ready") -> dict[str, Any]:

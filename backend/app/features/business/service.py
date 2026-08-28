@@ -17,12 +17,18 @@ LINK_KEYS = ("website", "google", "facebook", "instagram")
 COVER_KIND = "cover"
 
 
-async def list_offerings(*, tenant_id: UUID) -> list[dict[str, object]]:
-    """The owner's structured offerings, ordered for the small editable list."""
+async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[dict[str, Any]]:
+    """The owner's structured offerings, in the order they appear on the page.
+
+    ``position`` is the owner's own ordering; ``created_at`` then ``id`` break
+    ties so a list that has never been reordered still reads oldest-first
+    rather than arbitrarily.
+    """
+    active_filter = "and active" if active_only else ""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
-            "select id, name, description, price_cents from offerings "
-            "where tenant_id = $1 and active order by name, id",
+            "select id, name, description, price_cents, active, position from offerings "
+            f"where tenant_id = $1 {active_filter} order by position, created_at, id",  # noqa: S608
             tenant_id,
         )
     return [dict(row) for row in rows]
@@ -35,13 +41,14 @@ async def create_offering(
     description: str,
     price_cents: int | None,
     embedder: Embedder,
-) -> dict[str, object]:
-    """Create one offering, then rebuild its searchable catalog projection."""
+) -> dict[str, Any]:
+    """Create one offering at the end of the list, then rebuild its projection."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         row = await conn.fetchrow(
-            "insert into offerings (tenant_id, name, description, price_cents) "
-            "values ($1, $2, $3, $4) "
-            "returning id, name, description, price_cents",
+            "insert into offerings (tenant_id, name, description, price_cents, position) "
+            "values ($1, $2, $3, $4, coalesce((select max(position) + 1 from offerings "
+            "where tenant_id = $1), 0)) "
+            "returning id, name, description, price_cents, active, position",
             tenant_id,
             name,
             description,
@@ -56,43 +63,51 @@ async def update_offering(
     *,
     tenant_id: UUID,
     offering_id: UUID,
-    updates: dict[str, object],
+    updates: dict[str, Any],
     embedder: Embedder,
-) -> dict[str, object] | None:
-    """Update an offering owned by this tenant and rebuild its projection."""
-    set_clause = ", ".join(f"{key} = ${index + 3}" for index, key in enumerate(updates))
+) -> dict[str, Any] | None:
+    """Update an offering owned by this tenant and rebuild its projection.
+
+    ``updates`` keys are column names from the API layer's fixed allowlist, not
+    caller-supplied strings - the interpolation below is safe for that reason
+    and for no other. It is never empty: the route refuses an empty patch with
+    a 422 before reaching here.
+    """
+    columns = tuple(updates)
+    assignments = ", ".join(f"{column} = ${index}" for index, column in enumerate(columns, start=3))
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         row = await conn.fetchrow(
-            f"update offerings set {set_clause} "  # noqa: S608 - fixed API whitelist
+            f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
             "where tenant_id = $1 and id = $2 "
-            "returning id, name, description, price_cents",
+            "returning id, name, description, price_cents, active, position",
             tenant_id,
             offering_id,
-            *updates.values(),
+            *(updates[column] for column in columns),
         )
         if row is not None:
             await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
     return dict(row) if row is not None else None
 
 
-async def delete_offering(*, tenant_id: UUID, offering_id: UUID, embedder: Embedder) -> bool:
-    """Delete an offering and its catalog projection if it was the last one."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        deleted = await conn.fetchval(
-            "delete from offerings where tenant_id = $1 and id = $2 returning id",
-            tenant_id,
-            offering_id,
+async def deactivate_offering(*, tenant_id: UUID, offering_id: UUID, embedder: Embedder) -> bool:
+    """Retire an offering by clearing ``active`` rather than deleting the row.
+
+    The row is what a past quote or order refers to by id, so deleting it would
+    strand that history; ``active`` exists on the table for exactly this, and
+    every reader (the projection, the storefront, the booking page) already
+    filters on it. Keeping the row also keeps its ``updated_at``, which is what
+    ``knowledge_version`` reads - a hard delete would leave nothing behind for
+    the cache to notice.
+    """
+    return (
+        await update_offering(
+            tenant_id=tenant_id,
+            offering_id=offering_id,
+            updates={"active": False},
+            embedder=embedder,
         )
-        if deleted is None:
-            return False
-        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
-        # A deleted row has no updated_at left for knowledge_version() to see.
-        # Touching the already-versioned config row makes this removal visible
-        # to every cached context package on its very next lookup.
-        await conn.execute(
-            "update tenant_config set updated_at = now() where tenant_id = $1", tenant_id
-        )
-    return True
+        is not None
+    )
 
 
 async def read_links(*, tenant_id: UUID) -> dict[str, str]:
@@ -127,6 +142,12 @@ async def write_links(*, tenant_id: UUID, links: dict[str, str]) -> dict[str, st
 
 
 async def write_cover(*, tenant_id: UUID, mime: str, data: bytes) -> None:
+    """Store this tenant's cover, replacing any it already has.
+
+    One statement, so two uploads racing (a double-tapped picker, a retried
+    request) resolve to one winner rather than one of them being dropped on the
+    primary key while the owner is told it succeeded.
+    """
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
             "insert into tenant_assets (tenant_id, kind, mime, bytes) values ($1, $2, $3, $4) "
@@ -169,6 +190,146 @@ async def delete_cover(*, tenant_id: UUID) -> None:
             tenant_id,
             COVER_KIND,
         )
+
+
+async def write_storefront(*, tenant_id: UUID, about: str | None = None) -> dict[str, Any]:
+    """Merge editable storefront sections into the brand configuration.
+
+    These are small presentation fields, not knowledge. Keeping them together
+    makes the owner page a direct representation of the public page without a
+    separate page-builder schema or drag-and-drop system.
+    """
+    patch: dict[str, Any] = {}
+    if about is not None:
+        patch["about"] = about
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set brand = jsonb_set(brand, '{storefront}', "
+            "coalesce(brand->'storefront', '{}'::jsonb) || $2::jsonb, true), updated_at = now() "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps(patch),
+        )
+    return await read_storefront_sections(tenant_id=tenant_id)
+
+
+async def read_storefront_sections(*, tenant_id: UUID) -> dict[str, Any]:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select brand -> 'storefront' from tenant_config where tenant_id = $1", tenant_id
+        )
+    parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    if not isinstance(parsed, dict):
+        return {"about": ""}
+    about = parsed.get("about")
+    return {
+        "about": about.strip() if isinstance(about, str) else "",
+    }
+
+
+def resolve_profile(config: dict[str, Any]) -> dict[str, Any]:
+    """The business profile as any presentation surface must read it.
+
+    ``config->profile`` is what confirm writes; ``config->onboarding.draft`` is
+    what an interview still in flight has. One resolution order, in one place,
+    so the owner's preview and the customer's page cannot read different halves
+    of the pair and disagree about the same business.
+    """
+    profile = config.get("profile") or (config.get("onboarding") or {}).get("draft") or {}
+    return profile if isinstance(profile, dict) else {}
+
+
+def profile_tagline(profile: dict[str, Any]) -> str | None:
+    """The prototype's one-line subtitle: what the business does, then when it
+    is open. Either half may be missing - a business that never answered the
+    hours beat gets the shorter sentence rather than a dangling separator."""
+    kept = [part for key in ("services", "hours") if (part := str(profile.get(key, "")).strip())]
+    return " · ".join(kept) if kept else None
+
+
+def display_name(
+    *, brand: dict[str, Any], business_name: Any, profile: dict[str, Any], fallback: Any
+) -> str:
+    """What to call this business, most specific source first: the brand
+    override, the name captured at go-live, the profile, then the tenant's
+    signup name - which always exists, so this always returns something."""
+    return str(
+        (brand.get("display_name") if isinstance(brand, dict) else None)
+        or business_name
+        or str(profile.get("business_name", "")).strip()
+        or fallback
+    )
+
+
+async def read_profile_for_display(*, tenant_id: UUID) -> dict[str, Any]:
+    """``resolve_profile`` against the owner's own tenant_config."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select config from tenant_config where tenant_id = $1", tenant_id
+        )
+    config = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    return resolve_profile(config if isinstance(config, dict) else {})
+
+
+async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
+    """Read only the public presentation fields under the customer context."""
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        tenant = await conn.fetchrow(
+            "select t.name, t.business_name, tc.brand, tc.config "
+            "from tenants t join tenant_config tc on tc.tenant_id = t.id where t.id = $1",
+            tenant_id,
+        )
+        offerings = await conn.fetch(
+            "select id, name, description, price_cents from offerings "
+            "where tenant_id = $1 and active order by position, created_at, id",
+            tenant_id,
+        )
+        cover = await conn.fetchval(
+            "select 1 from tenant_assets where tenant_id = $1 and kind = $2",
+            tenant_id,
+            COVER_KIND,
+        )
+    if tenant is None:
+        raise LookupError("tenant not found")
+    brand_raw = tenant["brand"]
+    config_raw = tenant["config"]
+    brand = json.loads(brand_raw) if isinstance(brand_raw, str) else (brand_raw or {})
+    config = json.loads(config_raw) if isinstance(config_raw, str) else (config_raw or {})
+    if not isinstance(brand, dict):
+        brand = {}
+    if not isinstance(config, dict):
+        config = {}
+    profile = resolve_profile(config)
+    storefront = brand.get("storefront") if isinstance(brand.get("storefront"), dict) else {}
+    return {
+        "name": display_name(
+            brand=brand,
+            business_name=tenant["business_name"],
+            profile=profile,
+            fallback=tenant["name"],
+        ),
+        "tagline": profile_tagline(profile),
+        "about": storefront.get("about", "") if isinstance(storefront, dict) else "",
+        "links": {
+            key: value
+            for key, value in (brand.get("links") or {}).items()
+            if key in LINK_KEYS and isinstance(value, str) and value
+        },
+        "offerings": [dict(row) for row in offerings],
+        "has_cover": bool(cover),
+    }
+
+
+async def read_public_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None:
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        row = await conn.fetchrow(
+            "select mime, bytes, updated_at from tenant_assets where tenant_id = $1 and kind = $2",
+            tenant_id,
+            COVER_KIND,
+        )
+    if row is None:
+        return None
+    return row["mime"], bytes(row["bytes"]), row["updated_at"]
 
 
 # O-9: the slice of the profile an owner can correct after go-live. The rest of

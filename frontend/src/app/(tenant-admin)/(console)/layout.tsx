@@ -48,10 +48,9 @@ const CHROME_FREE_PREFIXES = ["/onboarding"];
 const NAV_ITEMS: TabItem[] = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/chats", label: "Chats", icon: "forum" },
-  // Settings is reached from the Business hub but lives at its own top-level
-  // path, so Business has to claim it or the nav goes dark while the owner is
-  // inside it. E-5's Booking page will sit under /business and needs no entry.
-  { href: "/business", label: "Business", icon: "dashboard", owns: ["/settings"] },
+  // No `owns` entry: M-4 moved every Business drill-down under /business
+  // (page, offerings, details), so the tab claims them by prefix alone.
+  { href: "/business", label: "Business", icon: "dashboard" },
 ];
 
 interface TenantMe {

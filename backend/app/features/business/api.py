@@ -1,10 +1,12 @@
-"""E-6: the Booking page - the business as a customer finds it.
+"""E-6/M-1/M-4: the Business page - the business as a customer finds it.
 
 One read for the whole screen, a write for the four links, the cover photo in
-and out, and (O-9) the two profile fields that stay correctable after go-live.
-The Services rows are derived in ``offerings.py``, where the money rule is held
-by construction: no model runs on this path, and a price is a verbatim slice of
-the owner's own line.
+and out, the owner's offerings, the storefront's About, and (O-9)
+the two profile fields that stay correctable after go-live.
+
+The money rule is held by construction on every path here: no model runs on
+any of them, and an offering's price is the owner's own typed value, validated
+as a decimal and stored as integer cents - never inferred, rounded or computed.
 """
 
 from __future__ import annotations
@@ -31,16 +33,19 @@ MAX_COVER_BYTES = 2 * 1024 * 1024
 ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
 
 
-class BookingOffering(BaseModel):
-    name: str
-    price: str | None
+class StorefrontSections(BaseModel):
+    about: str = Field(default="", max_length=2000)
+
+    @field_validator("about")
+    @classmethod
+    def _trim_about(cls, value: str) -> str:
+        return value.strip()
 
 
 class BookingPageResponse(BaseModel):
     slug: str
     name: str
     tagline: str | None
-    services: list[BookingOffering]
     links: dict[str, str]
     has_cover: bool
 
@@ -127,6 +132,14 @@ class OfferingCreate(BaseModel):
 
 
 class OfferingUpdate(BaseModel):
+    """A partial edit: an absent key means "leave this alone".
+
+    Only ``price_dollars`` reads an explicit null as a value - it clears the
+    published price. ``name`` and ``description`` are ``not null`` columns, so
+    a null for either is a 422 here rather than a constraint violation at the
+    UPDATE; absence, not null, is how a field is left unchanged.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
@@ -135,15 +148,17 @@ class OfferingUpdate(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def _name(cls, value: str | None) -> str | None:
-        if value is not None and not (normalized := value.strip()):
+    def _name(cls, value: str | None) -> str:
+        if value is None or not (normalized := value.strip()):
             raise ValueError("name must not be blank")
-        return normalized if value is not None else None
+        return normalized
 
     @field_validator("description")
     @classmethod
-    def _description(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
+    def _description(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("description must not be null; use an empty string to clear it")
+        return value.strip()
 
     @field_validator("price_dollars", mode="before")
     @classmethod
@@ -187,7 +202,7 @@ async def patch_links(
 async def list_offerings(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> list[OfferingResponse]:
-    rows = await service.list_offerings(tenant_id=admin.tenant_id)
+    rows = await service.list_offerings(tenant_id=admin.tenant_id, active_only=True)
     return [OfferingResponse.model_validate(row) for row in rows]
 
 
@@ -237,11 +252,31 @@ async def remove_offering(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> Response:
-    if not await service.delete_offering(
+    if not await service.deactivate_offering(
         tenant_id=admin.tenant_id, offering_id=offering_id, embedder=embedder
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offering not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/storefront", response_model=StorefrontSections)
+async def get_storefront_sections(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> StorefrontSections:
+    return StorefrontSections(**await controller.storefront_sections(tenant_id=admin.tenant_id))
+
+
+@router.put("/storefront", response_model=StorefrontSections)
+async def put_storefront_sections(
+    body: StorefrontSections,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> StorefrontSections:
+    return StorefrontSections(
+        **await service.write_storefront(
+            tenant_id=admin.tenant_id,
+            about=body.about,
+        )
+    )
 
 
 class ProfileUpdate(BaseModel):
@@ -318,24 +353,29 @@ async def put_cover(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     file: Annotated[UploadFile, File()],
 ) -> Response:
+    mime, data = await _image_upload(file)
+    await service.write_cover(tenant_id=admin.tenant_id, mime=mime, data=data)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+async def _image_upload(file: UploadFile) -> tuple[str, bytes]:
     data = await file.read()
     mime = (file.content_type or "").split(";")[0].strip().lower()
     if mime not in ALLOWED_COVER_MIME:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="the cover photo must be a JPEG, PNG or WebP image",
+            detail="the image must be a JPEG, PNG or WebP image",
         )
     if len(data) > MAX_COVER_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"the cover photo must be under {MAX_COVER_BYTES // (1024 * 1024)}MB",
+            detail=f"the image must be under {MAX_COVER_BYTES // (1024 * 1024)}MB",
         )
     if not data:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="the file is empty"
         )
-    await service.write_cover(tenant_id=admin.tenant_id, mime=mime, data=data)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return mime, data
 
 
 @router.get("/cover")

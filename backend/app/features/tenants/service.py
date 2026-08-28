@@ -106,7 +106,7 @@ async def get_tenant(tenant_id: str) -> dict[str, Any] | None:
     """The slug/name/brand triple for the caller's own tenant (Surface-2 header)."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         row = await conn.fetchrow(
-            "select t.slug, t.name, tc.brand from tenants t"
+            "select t.slug, t.name, t.business_name, tc.brand from tenants t"
             " left join tenant_config tc on tc.tenant_id = t.id where t.id = $1",
             tenant_id,
         )

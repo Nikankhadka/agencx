@@ -140,6 +140,30 @@ async def test_small_corpus_takes_the_fast_path(
     ]
 
 
+async def test_fast_path_excludes_catalog_chunks(
+    pool: None, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    tenant_id = await _seed_corpus(superuser_conn, contents=["We are open weekdays 9-5."])
+    catalog_document = await superuser_conn.fetchval(
+        "insert into documents (tenant_id, filename, doc_type, status) "
+        "values ($1, 'catalog', 'catalog', 'ready') returning id",
+        tenant_id,
+    )
+    await superuser_conn.execute(
+        "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
+        "values ($1, $2, 'Screen repair costs $89.50', $3, $4::jsonb)",
+        tenant_id,
+        catalog_document,
+        [0.0] * EMBEDDING_DIM,
+        '{"kind": "catalog_item"}',
+    )
+
+    context = await _context(tenant_id)
+
+    assert context.fast_path is True
+    assert [chunk.content for chunk in context.chunks] == ["We are open weekdays 9-5."]
+
+
 async def test_large_corpus_takes_the_hybrid_path(
     pool: None, superuser_conn: asyncpg.Connection[Any], tiny_budget: None
 ) -> None:
@@ -190,28 +214,6 @@ async def test_fast_path_skips_documents_that_are_not_ready(
 
     assert context.fast_path is True
     assert context.chunks == []
-
-
-async def test_fast_path_excludes_catalog_chunks(
-    pool: None, superuser_conn: asyncpg.Connection[Any]
-) -> None:
-    tenant_id = await _seed_corpus(superuser_conn, contents=["We are open weekdays 9-5."])
-    document_id = await superuser_conn.fetchval(
-        "insert into documents (tenant_id, filename, doc_type, status) "
-        "values ($1, 'catalog', 'catalog', 'ready') returning id",
-        tenant_id,
-    )
-    await superuser_conn.execute(
-        "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
-        "values ($1, $2, 'Discontinued repair for $1', $3, '{\"kind\": \"catalog_item\"}'::jsonb)",
-        tenant_id,
-        document_id,
-        [0.0] * EMBEDDING_DIM,
-    )
-
-    context = await _context(tenant_id)
-
-    assert [chunk.content for chunk in context.chunks] == ["We are open weekdays 9-5."]
 
 
 async def test_empty_corpus_is_a_fast_path_with_nothing_in_it(

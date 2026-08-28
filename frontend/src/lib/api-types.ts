@@ -139,6 +139,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/tenant/{slug}/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storefront */
+        get: operations["storefront_api_public_tenant__slug__storefront_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/tenant/{slug}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cover */
+        get: operations["cover_api_public_tenant__slug__cover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/state": {
         parameters: {
             query?: never;
@@ -390,6 +424,60 @@ export interface paths {
         head?: never;
         /** Patch Links */
         patch: operations["patch_links_api_business_links_patch"];
+        trace?: never;
+    };
+    "/api/business/offerings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Offerings */
+        get: operations["list_offerings_api_business_offerings_get"];
+        put?: never;
+        /** Post Offering */
+        post: operations["post_offering_api_business_offerings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business/offerings/{offering_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Offering */
+        delete: operations["remove_offering_api_business_offerings__offering_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Offering */
+        patch: operations["patch_offering_api_business_offerings__offering_id__patch"];
+        trace?: never;
+    };
+    "/api/business/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Storefront Sections */
+        get: operations["get_storefront_sections_api_business_storefront_get"];
+        /** Put Storefront Sections */
+        put: operations["put_storefront_sections_api_business_storefront_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/business/profile": {
@@ -764,8 +852,6 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
-            /** Services */
-            services: components["schemas"]["Offering"][];
             /** Links */
             links: {
                 [key: string]: string;
@@ -1088,12 +1174,45 @@ export interface components {
             /** Tool Calls */
             tool_calls: components["schemas"]["ToolCallDetail"][];
         };
-        /** Offering */
-        Offering: {
+        /** OfferingCreate */
+        OfferingCreate: {
             /** Name */
             name: string;
-            /** Price */
-            price: string | null;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Price Dollars */
+            price_dollars?: number | string | null;
+        };
+        /** OfferingResponse */
+        OfferingResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Price Cents */
+            price_cents: number | null;
+        };
+        /** OfferingUpdate */
+        OfferingUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Price Dollars */
+            price_dollars?: number | string | null;
+        };
+        /** OnboardingConfirmRequest */
+        OnboardingConfirmRequest: {
+            /** Slug */
+            slug?: string | null;
         };
         /** OnboardingConfirmResponse */
         OnboardingConfirmResponse: {
@@ -1102,6 +1221,8 @@ export interface components {
              * Format: uuid
              */
             tenant_id: string;
+            /** Slug */
+            slug: string;
         };
         /** OnboardingMessageRequest */
         OnboardingMessageRequest: {
@@ -1128,6 +1249,8 @@ export interface components {
             input: components["schemas"]["InputSpec"] | null;
             /** Can Confirm */
             can_confirm: boolean;
+            /** Suggested Slug */
+            suggested_slug: string | null;
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -1226,6 +1349,27 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * PublicOffering
+         * @description One offering as a customer sees it.
+         *
+         *     ``price_cents`` is the owner's own typed figure, passed through untouched -
+         *     the page formats it, nothing computes it. Null means the owner published no
+         *     price, and the page shows none rather than inventing one.
+         */
+        PublicOffering: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Price Cents */
+            price_cents: number | null;
+        };
         /** ResolveRequest */
         ResolveRequest: {
             /** Message */
@@ -1257,6 +1401,31 @@ export interface components {
         SlugAvailabilityResponse: {
             /** Available */
             available: boolean;
+        };
+        /** StorefrontResponse */
+        StorefrontResponse: {
+            /** Name */
+            name: string;
+            /** Tagline */
+            tagline: string | null;
+            /** About */
+            about: string;
+            /** Links */
+            links: {
+                [key: string]: string;
+            };
+            /** Offerings */
+            offerings: components["schemas"]["PublicOffering"][];
+            /** Has Cover */
+            has_cover: boolean;
+        };
+        /** StorefrontSections */
+        StorefrontSections: {
+            /**
+             * About
+             * @default
+             */
+            about: string;
         };
         /** TenantMeResponse */
         TenantMeResponse: {
@@ -1635,6 +1804,68 @@ export interface operations {
             };
         };
     };
+    storefront_api_public_tenant__slug__storefront_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cover_api_public_tenant__slug__cover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_state_api_onboarding_state_get: {
         parameters: {
             query?: never;
@@ -1728,7 +1959,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OnboardingConfirmRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1737,6 +1972,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingConfirmResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2081,6 +2325,176 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_offerings_api_business_offerings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingResponse"][];
+                };
+            };
+        };
+    };
+    post_offering_api_business_offerings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferingCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_offering_api_business_offerings__offering_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offering_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_offering_api_business_offerings__offering_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offering_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_storefront_sections_api_business_storefront_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontSections"];
+                };
+            };
+        };
+    };
+    put_storefront_sections_api_business_storefront_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorefrontSections"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontSections"];
                 };
             };
             /** @description Validation Error */

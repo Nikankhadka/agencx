@@ -62,7 +62,13 @@ test.describe("copy rules - the customer's side", () => {
 
 test.describe("copy rules - the owner's side", () => {
 
-  for (const path of ["/home", "/business", "/business/booking", "/settings"]) {
+  for (const path of [
+    "/home",
+    "/business",
+    "/business/page",
+    "/business/offerings",
+    "/business/details",
+  ]) {
     test(`${path} is clean`, async ({ page, request }) => {
       await loginAsTenantAdmin(page, request, BYTEFIX);
       await page.goto(path);
