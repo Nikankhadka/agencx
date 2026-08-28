@@ -36,63 +36,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/login-code": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login Code */
-        post: operations["login_code_api_auth_login_code_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/verify-code": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Verify Code */
-        post: operations["verify_code_api_auth_verify_code_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/dev-login-code": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Dev Login Code
-         * @description Local-dev only: return the last issued code for ``email``.
-         *
-         *     Backs the demo's captured-code path and the E2E login-in-chat flow. Gated to
-         *     the local environment so a real deployment can never expose codes.
-         */
-        get: operations["dev_login_code_api_auth_dev_login_code_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/platform/ping": {
         parameters: {
             query?: never;
@@ -415,6 +358,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/business/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Booking Page */
+        get: operations["get_booking_page_api_business_page_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Links */
+        patch: operations["patch_links_api_business_links_patch"];
+        trace?: never;
+    };
+    "/api/business/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile */
+        get: operations["get_profile_api_business_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Profile */
+        patch: operations["patch_profile_api_business_profile_patch"];
+        trace?: never;
+    };
+    "/api/business/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cover */
+        get: operations["get_cover_api_business_cover_get"];
+        /** Put Cover */
+        put: operations["put_cover_api_business_cover_put"];
+        post?: never;
+        /** Delete Cover */
+        delete: operations["delete_cover_api_business_cover_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat": {
         parameters: {
             query?: never;
@@ -730,12 +744,34 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_put_cover_api_business_cover_put */
+        Body_put_cover_api_business_cover_put: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_document_api_knowledge_upload_post */
         Body_upload_document_api_knowledge_upload_post: {
             /** File */
             file: string;
             /** Doc Type */
             doc_type: string;
+        };
+        /** BookingPageResponse */
+        BookingPageResponse: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** Tagline */
+            tagline: string | null;
+            /** Services */
+            services: components["schemas"]["Offering"][];
+            /** Links */
+            links: {
+                [key: string]: string;
+            };
+            /** Has Cover */
+            has_cover: boolean;
         };
         /**
          * BudgetUsage
@@ -789,6 +825,8 @@ export interface components {
              * @default false
              */
             dashed: boolean;
+            /** Widget */
+            widget?: ("text" | "chips" | "masked" | "cta" | "phone") | null;
         };
         /** ConversationDetail */
         ConversationDetail: {
@@ -972,7 +1010,7 @@ export interface components {
              * @default text
              * @enum {string}
              */
-            kind: "text" | "chips" | "masked" | "cta";
+            kind: "text" | "chips" | "masked" | "cta" | "phone";
             /**
              * Placeholder
              * @default
@@ -984,6 +1022,13 @@ export interface components {
             mask?: string | null;
             /** Cta Label */
             cta_label?: string | null;
+            /** Prefix */
+            prefix?: string | null;
+            /**
+             * Suggest Owner Email
+             * @default false
+             */
+            suggest_owner_email: boolean;
         };
         /**
          * KnowledgeRecord
@@ -1007,24 +1052,14 @@ export interface components {
             sections: components["schemas"]["Section"][];
         };
         /**
-         * LoginCodeRequest
-         * @description Raw typed text, not a validated address - see ``_resolve_email``.
+         * LinksUpdate
+         * @description The four link slots. An empty string clears one; an absent key leaves it.
          */
-        LoginCodeRequest: {
-            /** Email */
-            email: string;
-        };
-        /**
-         * LoginCodeResponse
-         * @description The address the code was actually sent to, after normalization.
-         *
-         *     The owner may have typed a sentence, or odd casing; echoing the resolved
-         *     address back is what lets the thread say where to look for the code without
-         *     the client having to re-derive it (and risk disagreeing with the server).
-         */
-        LoginCodeResponse: {
-            /** Email */
-            email: string;
+        LinksUpdate: {
+            /** Links */
+            links?: {
+                [key: string]: string;
+            };
         };
         /** MessageDetail */
         MessageDetail: {
@@ -1052,6 +1087,13 @@ export interface components {
             cost_usd: number | null;
             /** Tool Calls */
             tool_calls: components["schemas"]["ToolCallDetail"][];
+        };
+        /** Offering */
+        Offering: {
+            /** Name */
+            name: string;
+            /** Price */
+            price: string | null;
         };
         /** OnboardingConfirmResponse */
         OnboardingConfirmResponse: {
@@ -1129,6 +1171,20 @@ export interface components {
             unit?: string | null;
             /** Active */
             active?: boolean | null;
+        };
+        /**
+         * ProfileUpdate
+         * @description The ABN and its GST answer - the slice of the profile that stays
+         *     correctable after go-live.
+         *
+         *     Extra keys are refused rather than ignored: the rest of the profile is
+         *     frozen at confirm, and a request that thought otherwise should hear so.
+         */
+        ProfileUpdate: {
+            /** Abn */
+            abn?: string | null;
+            /** Gst */
+            gst?: string | null;
         };
         /** ProvisionTenantRequest */
         ProvisionTenantRequest: {
@@ -1238,12 +1294,16 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** TenantSignupRequest */
+        /**
+         * TenantSignupRequest
+         * @description Both fields absent is the login-in-chat provisioning shape - see the
+         *     module docstring and ``controller.signup``.
+         */
         TenantSignupRequest: {
             /** Slug */
-            slug: string;
+            slug?: string | null;
             /** Name */
-            name: string;
+            name?: string | null;
         };
         /** TenantSignupResponse */
         TenantSignupResponse: {
@@ -1321,22 +1381,6 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
-        /** VerifyCodeRequest */
-        VerifyCodeRequest: {
-            /** Email */
-            email: string;
-            /** Code */
-            code: string;
-        };
-        /** VerifyCodeResponse */
-        VerifyCodeResponse: {
-            /** Access Token */
-            access_token: string;
-            /** User Id */
-            user_id: string;
-            /** Tenant Id */
-            tenant_id: string;
-        };
     };
     responses: never;
     parameters: never;
@@ -1360,7 +1404,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1395,105 +1439,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantMeResponse"];
-                };
-            };
-        };
-    };
-    login_code_api_auth_login_code_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginCodeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginCodeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    verify_code_api_auth_verify_code_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyCodeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyCodeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    dev_login_code_api_auth_dev_login_code_get: {
-        parameters: {
-            query: {
-                email: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2091,6 +2036,187 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_booking_page_api_business_page_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingPageResponse"];
+                };
+            };
+        };
+    };
+    patch_links_api_business_links_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinksUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_api_business_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    patch_profile_api_business_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cover_api_business_cover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    put_cover_api_business_cover_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_put_cover_api_business_cover_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cover_api_business_cover_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

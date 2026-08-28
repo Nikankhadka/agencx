@@ -265,7 +265,7 @@ conversation IS the product.
   to that address; six digit cells replace the input footprint (auto-focus
   first cell, numeric keyboard on mobile), auto-submit on six valid digits. One
   line echoes the destination with a "Wrong email?" affordance; resend is
-  inactive for 30 seconds with no visible countdown; wrong-code/expired/
+  inactive for 60 seconds with no visible countdown; wrong-code/expired/
   max-attempts each get one calm line. Duplicate email sends the code regardless
   (no account-existence leak); success silently continues. No toast, no
   celebration.
@@ -302,14 +302,19 @@ idiom (18px radius, tip at the top) and the onboarding thread's idiom (bare pros
 plus a 20px owner bubble tipped bottom-right) are different designs in the
 prototype. Do not unify them.
 
-**Email in a chat composer (O-5).** The client gate on the login pill is
-*liveness only* - it arms the send circle when the text contains something
-address-shaped, so "it's sam@shop.com" is sendable. The authority is
-`backend/app/services/email_address.py`, which extracts an address from prose,
-normalizes it, and validates syntax; a bad address comes back as a 400 with one
-calm conversational line the thread renders verbatim, and the typed text stays
-put so it can be corrected. Deliverability is not checked - the code itself is
-that test, and "Wrong email?" is already on screen.
+**Email in a chat composer (O-5; extraction moved client-side 2026-08-28, D23).**
+The client gate on the login pill is *liveness only* - it arms the send circle
+when the text contains something address-shaped, so "it's sam@shop.com" is
+sendable. The same regex plus a trailing-punctuation trim (`(tenant-admin)/
+login/page.tsx::extractEmail`) is now also the extraction step: GoTrue is the
+real validator, exactly like every other OTP flow - a bad address either never
+looks address-shaped enough to submit, or gets GoTrue's own rejection, mapped
+to one calm conversational line the thread renders verbatim. The typed text
+stays put so it can be corrected. Deliverability is not checked - the code
+itself is that test, and "Wrong email?" is already on screen. (The old
+authority, `backend/app/services/email_address.py`, is deleted - GoTrue never
+consulted it, so there was no reason to keep porting its stricter RFC checks
+forward.)
 
 | State | Spec |
 |---|---|

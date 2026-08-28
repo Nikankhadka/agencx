@@ -63,20 +63,12 @@ stack cannot be a make prerequisite.
 
 ## Logging in
 
-The tenant console uses login-in-chat: type an email, get a 6-digit code. The
-code is issued and sent by **the Agencx backend**, not by Supabase - GoTrue
-only stores the identity. Where the code lands depends on `EMAIL_PROVIDER` in
-`backend/.env`:
-
-- `console` (default) - the code is logged by the backend and served by
-  `GET http://localhost:8000/api/auth/dev-login-code?email=...` (local only).
-- `smtp` with `EMAIL_SMTP_HOST=localhost` - the code goes to Mailpit, which
-  `make services` / `make dev` start for you when `backend/.env` opts in. Read
-  it at `http://localhost:8025`.
-
-A relay that is down no longer breaks local login: the code is captured before
-the send, so delivery failure is a warning and `dev-login-code` still works.
-Off local, a failed send is a 502 with real copy, never a 500.
+The tenant console uses login-in-chat: type an email, get a 6-digit code.
+GoTrue itself issues, mails and verifies the code (`signInWithOtp`/
+`verifyOtp`) - the backend is not in this path at all. Locally the mail lands
+in **Mailpit**, `make dev`/`make demo` start it automatically (it is a
+dependency of the `auth` service, not an opt-in profile): read the code at
+`http://localhost:8025`.
 
 ## Environment files
 
@@ -84,16 +76,16 @@ Off local, a failed send is a 502 with real copy, never a 500.
 `.env.example` by `scripts/dev.sh`. `frontend/.env.local` holds the three
 `NEXT_PUBLIC_*` keys and is written by the same script. Neither is committed.
 Inside containers, compose overrides the network addresses (`DATABASE_URL`
-points at the `db` service, `SUPABASE_URL` at `auth-proxy`, `EMAIL_SMTP_HOST`
-at `mailpit`) regardless of what the files say - real env vars beat `.env`
-values in pydantic-settings.
+points at the `db` service, `SUPABASE_URL` at `auth-proxy`) regardless of what
+the files say - real env vars beat `.env` values in pydantic-settings.
 
 ## Troubleshooting
 
 **Login returns "Internal Server Error".** Check the backend log for the
 `request failed` record carrying the `X-Request-ID` from the response
-(`docker compose logs backend`). If `verify-code` is the failing call, GoTrue
-is not up - run `make services`.
+(`docker compose logs backend`). If the failure is at the login step itself,
+check `docker compose logs auth` instead - GoTrue owns that call now, not the
+backend; make sure it (and Mailpit) are up with `make services`.
 
 **Port 3000 or 8000 already in use.** A leftover native dev server (or another
 app) holds it. Stop that process; the compose publish then binds cleanly.
