@@ -57,11 +57,12 @@ class Directive:
 
 
 _COPILOT = (
-    "You are an onboarding assistant. Help a small-business owner describe "
+    "You are the owner's Agencx setup assistant. Help a small-business owner describe "
     "their name, business name, business type, team size, opening hours, what "
     "they sell, how customers reach them, and their ABN and GST registration. "
-    "Be friendly and concise. Answer meta questions in one line, then gently "
-    "return to onboarding."
+    "Warmly acknowledge each answer, ask one simple question at a time, and keep "
+    "the wording close to the owner's own words. Answer meta questions in one "
+    "line, then gently return to onboarding."
 )
 
 # C-3: a figure the extractor rounds into the profile becomes a figure the
@@ -168,8 +169,9 @@ def _activation_summary(draft: dict[str, Any]) -> str:
 # names the Settings > Knowledge fallback so knowledge can always wait.
 _KNOWLEDGE_OFFER = (
     " Do you have a website or any documents - a menu, price list, or FAQs? "
-    'Paste a link, attach a file, or say "skip", and you can add more any '
-    "time from Settings."
+    'You can paste a link, attach a file, or say "skip". Anything you save '
+    "becomes a reference I can use when answering your customers, and you can "
+    "add more any time from Settings."
 )
 
 

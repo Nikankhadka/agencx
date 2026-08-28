@@ -15,6 +15,8 @@ import pytest
 from app.llm.provider import ChatMessage, SchemaT
 from app.onboarding import beats
 from app.onboarding.agent import (
+    _COPILOT,
+    _KNOWLEDGE_OFFER,
     Directive,
     OnboardingRecord,
     _echo,
@@ -585,6 +587,19 @@ async def test_prepare_url_turn_reads_back_nothing_when_page_has_no_fields() -> 
 
 
 # --- directive shape -----------------------------------------------------------
+def test_onboarding_voice_is_role_led_and_warm() -> None:
+    assert "Agencx setup assistant" in _COPILOT
+    assert "Warmly acknowledge" in _COPILOT
+    assert "one simple question at a time" in _COPILOT
+    assert "becomes a reference" in _KNOWLEDGE_OFFER
+
+
+def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
+    assert beats.BEATS["business_name"].ask == "What does the business go by?"
+    assert beats.BEATS["hours"].ask == "When are you open?"
+    assert "Have you set up an ABN yet?" in beats.BEATS["abn"].ask
+
+
 def test_directive_as_prompt_with_acknowledged() -> None:
     d = Directive(acknowledged=["business name"], ask_for="opening hours")
     prompt = d.as_prompt()

@@ -125,7 +125,10 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             prompt = msg.get("content", "")
             break
     if not prompt:
-        prompt = "Hi! I'll help you set up your business. To get started, what's your name?"
+        prompt = (
+            "Hi! I'm your Agencx setup assistant. I'll help you get your business "
+            "ready. What's your name?"
+        )
     return {
         "stage": stage,
         "prompt": prompt,
