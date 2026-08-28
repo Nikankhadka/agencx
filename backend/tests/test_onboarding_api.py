@@ -321,12 +321,26 @@ def test_suggested_slug_is_a_shareable_handle() -> None:
     assert suggested_slug("Café & Co.") == "cafe-co"
 
 
-@pytest.mark.parametrize("business_name", ["Settings", "Admin", "!!!", "Home", "Bytefix Repairs"])
+@pytest.mark.parametrize(
+    "business_name", ["Settings", "Admin", "!!!", "Home", "Bo", "K9", "Bytefix Repairs"]
+)
 def test_a_suggested_slug_is_always_one_confirm_can_use(business_name: str) -> None:
     """Go-live falls back to the suggestion when the owner types no address, so
-    a name that derives a reserved or empty slug must not reach validate_slug
-    with nothing left to fall back to - it used to 500 there."""
-    assert validate_slug(suggested_slug(business_name))
+    a name that derives a reserved, empty or too-short slug must not reach
+    validate_slug with nothing left to fall back to - it used to 500 there."""
+    slug = suggested_slug(business_name)
+    assert validate_slug(slug) == slug
+    # The DDL check on tenants.slug is the enforcement point validate_slug
+    # mirrors; a suggestion that passes the validator but not the column would
+    # still 500 at the UPDATE.
+    assert 3 <= len(slug) <= 40
+
+
+def test_validate_slug_mirrors_the_column_length_check() -> None:
+    with pytest.raises(ValueError, match="between 3 and 40"):
+        validate_slug("bo")
+    with pytest.raises(ValueError, match="between 3 and 40"):
+        validate_slug("b" * 41)
 
 
 async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClient) -> None:

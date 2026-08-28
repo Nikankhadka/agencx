@@ -9,21 +9,21 @@ import { PlatformLinks } from "./components/PlatformLinks";
 import { StorefrontSectionsEditor } from "./components/StorefrontSectionsEditor";
 
 /**
- * E-5/E-6: the Business page - the business as a customer finds it, and the link
- * that takes them there. Built from `renderScreen('booking')` in
+ * E-5/E-6/M-4: the Business page - the business as a customer finds it, and the
+ * link that takes them there. Built from `renderScreen('booking')` in
  * agencx-prototype-v6.html: the cover photo, the name and its one-line
  * description, "How leads come in" with the shareable link and the platform
- * tiles, and the Services list.
+ * tiles, and the About section the storefront renders.
  *
  * Two parts of the prototype's screen do not ship, by founder decision: the
  * "Get a quote" CTA (quoting is a Stage 2 opt-in and this owner will not use
  * it) and the QR code E-5 added, which was never in the prototype's owner
  * screen and was not being used.
  *
- * The page a customer actually lands on is still the bare chat surface at
- * `(customer)/page.tsx`. Building it out of the storefront prototype is the
- * next ticket; until then the headings here say what this is - a preview of
- * what customers see - and claim nothing that is not true.
+ * The offerings list is not here either: M-4 gave it its own screen at
+ * `/business/offerings`, and the owner sees it as a customer does through the
+ * preview link below - which now opens the real storefront at `/{slug}`, so
+ * this screen's "what customers see" headings are literally true.
  */
 
 interface BookingPage {
@@ -96,7 +96,7 @@ export default function BusinessPageScreen() {
           </h2>
           {/* Clamped: the prototype's subtitle is one tight line because Sababa's
               services are, and a real business's list runs to five. Two lines
-              is the gist; the full text lives in Settings > Knowledge. */}
+              is the gist; the full text lives in Business > Details > Knowledge. */}
           {page?.tagline ? (
             <p className="line-clamp-2 text-meta text-ink-a40">
               {page.tagline}
@@ -158,9 +158,6 @@ export default function BusinessPageScreen() {
 
         <StorefrontSectionsEditor />
 
-        {/* `SERVICES` - the owner's own words. Absent when they have saved no
-            price list or menu yet; an empty heading over nothing would be the
-            dead surface the PRD forbids. */}
         <div className="px-gutter pt-5">
           <button
             type="button"

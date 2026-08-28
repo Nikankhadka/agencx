@@ -132,6 +132,14 @@ class OfferingCreate(BaseModel):
 
 
 class OfferingUpdate(BaseModel):
+    """A partial edit: an absent key means "leave this alone".
+
+    Only ``price_dollars`` reads an explicit null as a value - it clears the
+    published price. ``name`` and ``description`` are ``not null`` columns, so
+    a null for either is a 422 here rather than a constraint violation at the
+    UPDATE; absence, not null, is how a field is left unchanged.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
@@ -140,15 +148,17 @@ class OfferingUpdate(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def _name(cls, value: str | None) -> str | None:
-        if value is not None and not (normalized := value.strip()):
+    def _name(cls, value: str | None) -> str:
+        if value is None or not (normalized := value.strip()):
             raise ValueError("name must not be blank")
-        return normalized if value is not None else None
+        return normalized
 
     @field_validator("description")
     @classmethod
-    def _description(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
+    def _description(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("description must not be null; use an empty string to clear it")
+        return value.strip()
 
     @field_validator("price_dollars", mode="before")
     @classmethod

@@ -142,24 +142,22 @@ async def write_links(*, tenant_id: UUID, links: dict[str, str]) -> dict[str, st
 
 
 async def write_cover(*, tenant_id: UUID, mime: str, data: bytes) -> None:
+    """Store this tenant's cover, replacing any it already has.
+
+    One statement, so two uploads racing (a double-tapped picker, a retried
+    request) resolve to one winner rather than one of them being dropped on the
+    primary key while the owner is told it succeeded.
+    """
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        updated = await conn.execute(
-            "update tenant_assets set mime = $3, bytes = $4, updated_at = now() "
-            "where tenant_id = $1 and kind = $2",
+        await conn.execute(
+            "insert into tenant_assets (tenant_id, kind, mime, bytes) values ($1, $2, $3, $4) "
+            "on conflict (tenant_id, kind) do update set mime = excluded.mime, "
+            "bytes = excluded.bytes, updated_at = now()",
             tenant_id,
             COVER_KIND,
             mime,
             data,
         )
-        if updated == "UPDATE 0":
-            await conn.execute(
-                "insert into tenant_assets (tenant_id, kind, mime, bytes) values ($1, $2, $3, $4) "
-                "on conflict do nothing",
-                tenant_id,
-                COVER_KIND,
-                mime,
-                data,
-            )
 
 
 async def read_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None:
@@ -229,6 +227,50 @@ async def read_storefront_sections(*, tenant_id: UUID) -> dict[str, Any]:
     }
 
 
+def resolve_profile(config: dict[str, Any]) -> dict[str, Any]:
+    """The business profile as any presentation surface must read it.
+
+    ``config->profile`` is what confirm writes; ``config->onboarding.draft`` is
+    what an interview still in flight has. One resolution order, in one place,
+    so the owner's preview and the customer's page cannot read different halves
+    of the pair and disagree about the same business.
+    """
+    profile = config.get("profile") or (config.get("onboarding") or {}).get("draft") or {}
+    return profile if isinstance(profile, dict) else {}
+
+
+def profile_tagline(profile: dict[str, Any]) -> str | None:
+    """The prototype's one-line subtitle: what the business does, then when it
+    is open. Either half may be missing - a business that never answered the
+    hours beat gets the shorter sentence rather than a dangling separator."""
+    kept = [part for key in ("services", "hours") if (part := str(profile.get(key, "")).strip())]
+    return " · ".join(kept) if kept else None
+
+
+def display_name(
+    *, brand: dict[str, Any], business_name: Any, profile: dict[str, Any], fallback: Any
+) -> str:
+    """What to call this business, most specific source first: the brand
+    override, the name captured at go-live, the profile, then the tenant's
+    signup name - which always exists, so this always returns something."""
+    return str(
+        (brand.get("display_name") if isinstance(brand, dict) else None)
+        or business_name
+        or str(profile.get("business_name", "")).strip()
+        or fallback
+    )
+
+
+async def read_profile_for_display(*, tenant_id: UUID) -> dict[str, Any]:
+    """``resolve_profile`` against the owner's own tenant_config."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select config from tenant_config where tenant_id = $1", tenant_id
+        )
+    config = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    return resolve_profile(config if isinstance(config, dict) else {})
+
+
 async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
     """Read only the public presentation fields under the customer context."""
     async with db.tenant_context(tenant_id, "customer") as conn:
@@ -257,22 +299,16 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
         brand = {}
     if not isinstance(config, dict):
         config = {}
-    profile = config.get("profile") or (config.get("onboarding") or {}).get("draft") or {}
+    profile = resolve_profile(config)
     storefront = brand.get("storefront") if isinstance(brand.get("storefront"), dict) else {}
-    display_name = (
-        brand.get("display_name")
-        or tenant["business_name"]
-        or (profile.get("business_name") if isinstance(profile, dict) else None)
-        or tenant["name"]
-    )
-    services = profile.get("services") if isinstance(profile, dict) else None
-    hours = profile.get("hours") if isinstance(profile, dict) else None
-    tagline = " · ".join(
-        str(value).strip() for value in (services, hours) if str(value or "").strip()
-    )
     return {
-        "name": str(display_name),
-        "tagline": tagline or None,
+        "name": display_name(
+            brand=brand,
+            business_name=tenant["business_name"],
+            profile=profile,
+            fallback=tenant["name"],
+        ),
+        "tagline": profile_tagline(profile),
         "about": storefront.get("about", "") if isinstance(storefront, dict) else "",
         "links": {
             key: value

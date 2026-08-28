@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- storefront cover is a tenant API response. */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
@@ -37,10 +37,12 @@ export function Storefront({
   storefront: StorefrontData;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
-  const [suggestedMessage, setSuggestedMessage] = useState<string | null>(null);
+  // The chat below is mounted for the whole life of this page, so this is
+  // filled long before any of the buttons here can be pressed.
+  const seedComposer = useRef<((text: string) => void) | null>(null);
 
   function openChat(message?: string) {
-    setSuggestedMessage(message ?? null);
+    if (message) seedComposer.current?.(message);
     setChatOpen(true);
   }
 
@@ -161,13 +163,16 @@ export function Storefront({
 
       <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={`Chat with ${storefront.name}`}>
         <div className="flex h-[calc(85dvh-7rem)] min-h-0 flex-col">
+          {/* Deliberately unkeyed: the sheet keeps its children mounted, so a
+              customer who closes it and reopens it from another entry point is
+              back in the thread they were in, talking to the same conversation
+              rather than orphaning it mid-answer. */}
           <CustomerChat
-            key={suggestedMessage ?? "chat"}
             slug={slug}
             displayName={storefront.name}
             greeting={greeting}
             starterQuestions={starterQuestions}
-            suggestedMessage={suggestedMessage}
+            composerRef={seedComposer}
           />
         </div>
       </Sheet>

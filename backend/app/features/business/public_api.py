@@ -70,7 +70,12 @@ async def cover(slug: str) -> Response:
         content=data,
         media_type=mime,
         headers={
-            "Cache-Control": "public, max-age=3600",
+            # Public: the same bytes for every customer on this page. Short
+            # freshness, then a conditional GET against the mtime ETag - an
+            # owner who replaces their cover sees the new one on the next
+            # minute rather than the next hour, and an unchanged cover still
+            # costs a 304 rather than the image.
+            "Cache-Control": "public, max-age=60, must-revalidate",
             "ETag": f'"{updated_at.timestamp()}"',
         },
     )

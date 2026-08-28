@@ -432,8 +432,8 @@ an automatic overwrite.
 Turn `/{slug}` from a bare chat window into a storefront: the offerings `M-1`
 made writable, with the owner's prices, above an About section, with the
 assistant one tap away rather than occupying the whole page. Let the owner
-choose that address at go-live instead of inheriting the
-provisional one. Re-cut the Business hub around the three jobs this leaves.
+choose that address at go-live instead of inheriting the provisional one.
+Re-cut the Business hub around the three jobs this leaves.
 
 ### Why
 
@@ -452,13 +452,16 @@ it, so the link the owner shares was never the one they would have chosen.
 #### US-1 A customer sees the business before they ask it anything
 
 As someone who followed a shared link, I land on a page that tells me who the
-business is, what it offers, and what it costs - and I
-can start a conversation when I want one, not before.
+business is, what it offers, and what it costs - and I can start a
+conversation when I want one, not before.
 
 - Offerings render with the owner's own price when they published one, and
   with no price at all when they did not. Nothing rounds, marks up, or invents
   a figure; the page formats integer cents and does no other arithmetic.
-- The assistant opens in a sheet from the storefront's single chat entry.
+- The assistant opens in a sheet from any of several entry points, including
+  "Ask about this" on a single offering, which seeds the composer. The sheet
+  keeps one conversation across them - a customer who closes it and opens it
+  from somewhere else is back in the thread they were in.
 - A tenant that is suspended still shows its calm unavailable state; one that
   is neither active nor suspended (`provisioning`) falls back to the bare chat
   rather than an empty page.
@@ -538,8 +541,8 @@ offer, and my business details.
 
 ### Definition of done
 
-- [x] `/{slug}` renders offerings with the owner's prices and About
-      links, with the assistant a tap away
+- [x] `/{slug}` renders offerings with the owner's prices, About and links,
+      with the assistant a tap away
 - [x] An offering with no price shows none
 - [x] The owner writes About from the Business page screen
 - [x] The owner chooses their public address at go-live; a taken one is a 409

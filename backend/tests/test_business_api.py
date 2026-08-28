@@ -170,6 +170,31 @@ async def test_offerings_are_tenant_scoped(client: httpx.AsyncClient) -> None:
     assert deleted.status_code == 404
 
 
+@pytest.mark.parametrize("field", ["name", "description"])
+async def test_a_null_offering_field_is_refused_not_a_500(
+    client: httpx.AsyncClient, field: str
+) -> None:
+    """Both columns are `not null`. An explicit null used to reach the UPDATE
+    and raise a constraint violation the owner saw as a 500; absence, not null,
+    is how a field is left unchanged."""
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "description": "Same day"},
+        headers=headers,
+    )
+    offering_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/business/offerings/{offering_id}", json={field: None}, headers=headers
+    )
+    assert response.status_code == 422, response.text
+
+    unchanged = (await client.get("/api/business/offerings", headers=headers)).json()[0]
+    assert unchanged["name"] == "Screen repair"
+    assert unchanged["description"] == "Same day"
+
+
 @pytest.mark.parametrize("price", ["-1", "1.999", "NaN", "1000001"])
 async def test_offering_prices_are_validated(client: httpx.AsyncClient, price: str) -> None:
     headers, _ = await _signup(client)
@@ -333,7 +358,12 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
     image = await client.get(f"/api/public/tenant/{slug}/cover")
     assert image.status_code == 200
     assert image.content == PNG_1PX
-    assert "public" in image.headers["cache-control"]
+    # Shared, but revalidated: an owner who replaces their cover must not be
+    # showing customers the old one for the rest of the hour.
+    cache_control = image.headers["cache-control"]
+    assert "public" in cache_control
+    assert "must-revalidate" in cache_control
+    assert image.headers["etag"]
 
 
 async def test_a_priceless_offering_reaches_the_storefront_with_no_price(

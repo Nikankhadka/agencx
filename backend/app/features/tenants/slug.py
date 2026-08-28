@@ -15,6 +15,8 @@ import unicodedata
 # bad slug is rejected at the API layer (422) before it can reach the insert.
 SLUG_PATTERN = r"^[a-z0-9](-?[a-z0-9])*$"
 _SLUG_RE = re.compile(SLUG_PATTERN)
+SLUG_MIN_LENGTH = 3
+SLUG_MAX_LENGTH = 40
 
 # A tenant is addressed at `/{slug}` (D22), so a slug that matches a route the
 # frontend already serves would be shadowed by it - Next resolves static
@@ -56,6 +58,8 @@ def validate_slug(value: str) -> str:
     """
     if not _SLUG_RE.fullmatch(value):
         raise ValueError(f"slug must match {SLUG_PATTERN}")
+    if not SLUG_MIN_LENGTH <= len(value) <= SLUG_MAX_LENGTH:
+        raise ValueError(f"slug must be between {SLUG_MIN_LENGTH} and {SLUG_MAX_LENGTH} characters")
     if value in RESERVED_SLUGS:
         raise ValueError("that name is reserved; please choose another")
     return value
@@ -67,12 +71,12 @@ def suggested_slug(value: str) -> str:
     The result always passes ``validate_slug``. That matters because go-live
     falls back to this when the owner types no address of their own: a business
     literally called "Settings" or "Admin" would otherwise derive a reserved
-    name and fail the validator with nothing left to fall back to. Such a name
-    gets ``-page`` appended instead, which cannot itself be reserved.
+    name, and one called "Bo" a two-character one the DDL check refuses. Both
+    get ``-page`` appended instead, which is neither reserved nor too short.
     """
     normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
-    slug = slug[:40].rstrip("-") or "business"
-    if slug in RESERVED_SLUGS:
-        slug = f"{slug[:35]}-page"
+    slug = slug[:SLUG_MAX_LENGTH].rstrip("-") or "business"
+    if slug in RESERVED_SLUGS or len(slug) < SLUG_MIN_LENGTH:
+        slug = f"{slug[: SLUG_MAX_LENGTH - 5]}-page"
     return slug

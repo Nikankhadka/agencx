@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ChatBubble, type ChatRole } from "@/components/ui/ChatBubble";
@@ -52,18 +59,23 @@ export function CustomerChat({
   displayName,
   greeting,
   starterQuestions,
-  suggestedMessage,
+  composerRef,
 }: {
   slug: string;
   displayName: string;
   greeting: string | null;
   starterQuestions: string[];
-  suggestedMessage?: string | null;
+  /** Filled with a function that puts text in the composer, for a parent whose
+   * own buttons open this chat with a question already typed. Seeding is an
+   * event, so it is a call rather than a prop: a prop would have to be turned
+   * back into one, and the obvious way to do that - remounting on a new value
+   * - is exactly what throws away the conversation it was opened from. */
+  composerRef?: RefObject<((text: string) => void) | null>;
 }) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", text: greeting ?? `Hi! How can I help you with ${displayName} today?` },
   ]);
-  const [input, setInput] = useState(suggestedMessage ?? "");
+  const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   // C-5 split one flag in two. `escalated` means a tenant limit ended the
@@ -83,6 +95,14 @@ export function CustomerChat({
   // have already fetched. Starts undefined so the first poll fetches the whole
   // tail once, then narrows each tick.
   const pollCursor = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!composerRef) return;
+    composerRef.current = setInput;
+    return () => {
+      composerRef.current = null;
+    };
+  }, [composerRef]);
 
   // T-031/C-5: once a topic has been handed to a human, that human may reply
   // (the escalations resolve flow inserts a human_agent message). No push

@@ -48,7 +48,8 @@ const CHROME_FREE_PREFIXES = ["/onboarding"];
 const NAV_ITEMS: TabItem[] = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/chats", label: "Chats", icon: "forum" },
-  // Legacy Settings links remain supported and still belong to Business.
+  // No `owns` entry: M-4 moved every Business drill-down under /business
+  // (page, offerings, details), so the tab claims them by prefix alone.
   { href: "/business", label: "Business", icon: "dashboard" },
 ];
 

@@ -55,6 +55,35 @@ test.describe("the public storefront", () => {
     await expect(sheet).toContainText("Bytefix");
   });
 
+  test("the conversation survives closing the sheet and reopening it elsewhere", async ({
+    page,
+  }) => {
+    await page.goto("/bytefix");
+
+    // Enter from an offering: its button seeds the composer with the question.
+    await page.getByRole("button", { name: "Ask about this" }).first().click();
+    const sheet = page.getByRole("dialog");
+    const composer = sheet.getByRole("textbox");
+    await expect(composer).toHaveValue(/I'd like to ask about /);
+
+    // Say it, so there is a thread to lose. The answer needs a model this test
+    // does not have; the customer's own message is appended before the request
+    // goes out and is what the thread is being asserted through.
+    const asked = (await composer.inputValue()) + " Is it in stock?";
+    await composer.fill(asked);
+    await composer.press("Enter");
+    await expect(sheet.getByText(asked)).toBeVisible();
+
+    await sheet.getByRole("button", { name: "Close" }).click();
+
+    // Back in through a different entry point. The thread is still there: the
+    // sheet keeps one conversation across every way into it, rather than
+    // starting a new one and orphaning the last.
+    await page.getByRole("button", { name: "Ask a question" }).click();
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText(asked)).toBeVisible();
+  });
+
   test("an unknown slug still gets the calm not-found page", async ({ page }) => {
     await page.goto("/no-such-business");
     // Asserted on what renders, not on the status: Next streams this page, so
