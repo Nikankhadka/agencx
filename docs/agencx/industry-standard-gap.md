@@ -8,14 +8,14 @@
 
 ## Executive summary
 
-For a solo-founder, stage-1, portfolio venture on Vercel + Supabase, Agencx is at or above industry standard on **authorization** (RLS posture is textbook), **evaluation** (real gates, real baselines), **money handling** (deterministic, machine-checked), and **retrieval architecture** (dense + sparse + rerank is the reference design). It has real gaps in **backups** (there are none), **session mechanics** (self-minted tokens, no refresh), **error tracking** (none), **E2E in CI** (suite exists, never runs), and **synchronous ingestion** (uploads block the request). Nothing here is un-defendable; four things are currently un-defended: data loss, silent production breakage, an expired session story, and a Hobby-plan license that does not allow the venture to earn money.
+For a solo-founder, stage-1, portfolio venture on Vercel + Supabase, Agencx is at or above industry standard on **authentication** (GoTrue OTP + `@supabase/ssr` cookies end-to-end, closed 2026-08-28 - see D23 in `decisions.md`), **authorization** (RLS posture is textbook), **evaluation** (real gates, real baselines), **money handling** (deterministic, machine-checked), and **retrieval architecture** (dense + sparse + rerank is the reference design). It has real gaps in **backups** (there are none), **error tracking** (none), **E2E in CI** (suite exists, never runs), and **synchronous ingestion** (uploads block the request). Nothing here is un-defendable; three things are currently un-defended: data loss, silent production breakage, and a Hobby-plan license that does not allow the venture to earn money.
 
 **Verdict table:**
 
 | Area | Verdict | Top gap | Lands in phase |
 |---|---|---|---|
 | 1. Data storage & database | NEAR STANDARD | No backups, no RPO/RTO, no restore path | 1 |
-| 2. Authentication | GAP | Self-minted 1h HS256 token, no refresh/rotation/revocation | 2 |
+| 2. Authentication | AT STANDARD (closed 2026-08-28) | None open - G2.5 (MFA/OAuth) deliberately deferred | done |
 | 3. Authorization | AT STANDARD | Dead `users.role` column, unimplemented tool gate | 1 |
 | 4. Knowledge injection (RAG) | NEAR STANDARD | Synchronous ingestion inside the upload request | 2 |
 | 5. Image/media uploads | GAP | Cover photo bytes in a Postgres `bytea` column | 1 |
@@ -57,8 +57,8 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 | Component | What Agencx runs | Where | Notes |
 |---|---|---|---|
 | Database | Postgres 16 + pgvector on Supabase (prod), pgvector/pgvector docker image (dev) | docker-compose.yml:94-108; deploy.md:134-140 | Raw asyncpg, no ORM. Supavisor session pooler port 5432 |
-| Migrations | 21 forward-only SQL files, custom runner, advisory-locked, transactional per file, no down migrations | backend/app/shared/migrate.py:54-93; test_migrations.py | Applied manually to prod (deploy.md:147-153); 0016 applied out of sequence |
-| Schema | 16 tables; tenants, tenant_config, users, platform_admins, documents, knowledge_chunks, conversations, messages, tool_calls, catalog_items, pricing_rules, quotes, orders, escalations, eval_cases/eval_runs, cost_logs, auth_codes, tenant_assets | backend/migrations/0001-0021 | Integer cents + CHECK constraints, quote immutability trigger, composite-FK denormalization |
+| Migrations | 22 forward-only SQL files, custom runner, advisory-locked, transactional per file, no down migrations | backend/app/shared/migrate.py:54-93; test_migrations.py | Applied manually to prod (deploy.md:147-153); 0016 applied out of sequence; 0022 drops `auth_codes` (D23) |
+| Schema | 16 tables; tenants, tenant_config, users, platform_admins, documents, knowledge_chunks, conversations, messages, tool_calls, catalog_items, pricing_rules, quotes, orders, escalations, eval_cases/eval_runs, cost_logs, tenant_assets | backend/migrations/0001-0022 | Integer cents + CHECK constraints, quote immutability trigger, composite-FK denormalization; `auth_codes` dropped 2026-08-28 (D23) - login-in-chat moved to GoTrue OTP |
 | Vector index | HNSW cosine on `knowledge_chunks.embedding vector(384)` | 0004_knowledge.sql:31; 0010_embedding_dim.sql | Retargeted 1536 -> 384 in 0010 |
 | Caching | In-process dicts: context package (900s TTL), slug (60s), usage/limits | context_package.py:156-181; features/tenants/service.py:120-174; shared/limits.py:141-171 | Per-worker duplication; `ponytail:` comments name shared store as upgrade |
 | Backups | None anywhere; no RPO/RTO, no restore procedure, no verification | (absence confirmed by grep of docs/ and infra/) | Supabase free tier pauses after 1 week idle |
@@ -72,7 +72,7 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 |---|---|---|---|---|---|---|
 | G1.1 No backups, no RPO/RTO, no restore path | **Critical** | Own-bucket weekly `pg_dump` via GH Actions + quarterly restore drill; Supabase Pro daily backups when revenue justifies; PITR only when sub-24h RPO matters | $0 now; $25/mo staged; ~$130/mo PITR later | M | 1 | 1 |
 | G1.2 No staging/preview DB; migrations manual to prod | High | Supabase Database Branching or a second free project + migration smoke in CI | $0-25/mo (branching is ~$10/branch/mo billed hourly) | M | 2 | 2 |
-| G1.3 `auth_codes` never purged; ~10 tables missing `updated_at` | Medium | Retention cleanup job + column hygiene on mutable tables | Trivial | S | 2 | 1 |
+| G1.3 ~10 tables missing `updated_at` (`auth_codes` half moot - table dropped, see G2.3) | Medium | Column hygiene on mutable tables | Trivial | S | 2 | 1 |
 | G1.4 Hardcoded `'english'` FTS config | Low | Per-tenant `ts_config` (config value with english default) | Trivial | S | 3 | 1 |
 | G1.5 Hot-path JSONB `config`/`brand` on `tenant_config` | Low | Keep JSONB (standard for config blobs); measure before moving anything | None | - | note | note |
 | G1.6 In-process per-worker caches | Low | Shared store (Upstash Redis, free tier ~$0) only when multi-worker drift shows | $0 | M | 3 | 3 |
@@ -80,7 +80,7 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 **Migration path:**
 
 - **G1.1 (critical):** (1) pick a bucket you own - Cloudflare R2 ($0.015/GB, 10GB free, zero egress) or Backblaze B2; (2) add a GH Actions workflow: weekly `pg_dump` (plain or custom format) of the Supabase DB to that bucket, retention of N weekly snapshots; `Effort: M`, `Risk: low`. (3) Write the restore runbook (how to restore into a scratch project and point a deployment at it) and execute it once as a drill; quarterly thereafter. (4) When revenue arrives, Supabase Pro for daily managed backups; PITR only when a lost day is unacceptable. `FLAG: none` - additive, no schema change.
-- **G1.3:** one cleanup statement on a schedule (purge `auth_codes` older than TTL window) plus one migration adding `updated_at` to the mutable tables that lack it. `Effort: S`.
+- **G1.3:** one migration adding `updated_at` to the mutable tables that lack it (the `auth_codes` purge half is moot - the table is dropped, see G2.3). `Effort: S`.
 - **G1.4:** config value `fts_config` defaulting to english, used in `to_tsvector`/`websearch_to_tsquery`. `Effort: S`.
 - **G1.2 + G1.5 + G1.6** are Phase 2/3 and each carries its own trigger (traction, measured latency, multi-worker deployment).
 
@@ -103,48 +103,47 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 ## 2. Authentication
 
-**Verdict: GAP.** The login-in-chat UX is a deliberate product choice and is fine; the session mechanics under it (self-minted HS256 tokens, 1h expiry, no refresh, no rotation, no revocation, localStorage storage) are below the standard a competent team would ship.
+**Verdict: AT STANDARD** (was GAP; closed 2026-08-28, D23 in `decisions.md`). The login-in-chat UX is unchanged - email in, 6-digit code back - but the mechanics under it moved onto GoTrue end-to-end: G2.1 and G2.2 are closed, and G2.3/G2.4 are moot rather than open (the machinery they were about no longer exists). Only G2.5 (MFA/OAuth/SSO) remains, deliberate and low-priority.
 
 **Current state:**
 
 | Component | What Agencx runs | Where | Notes |
 |---|---|---|---|
-| Tenant admin login | "Login-in-chat": 6-digit email code issued and verified by the backend | features/auth/api.py:77-108; services/auth_codes.py | sha-256 hash only, 10-min TTL, 5 attempts, 5 codes/hr per email, no per-IP limit |
-| Tenant admin session | Backend-minted HS256 JWT, 1h TTL, no refresh token ever minted | services/identity.py:30-46 | Signed with shared SUPABASE_JWT_SECRET; email verification skipped by design (autoconfirm) |
-| Platform admin | GoTrue email + password, GoTrue-issued token | admin/login/page.tsx:41-70 | Verified with the same shared secret |
-| Customer surface | No auth at all; conversation continuity by UUID knowledge | features/chat/api.py:3-5, 126-131 | Documented design |
-| Token storage | localStorage `agencx.login-session` | lib/auth-session.ts:5,22-24; AuthProvider.tsx | XSS-readable; accepted cost documented in D22 (decisions.md:394-398) |
-| Route protection | Client-side useEffect guards only; no middleware.ts, no cookies | (tenant-admin)/(console)/layout.tsx:69-73 | RSC pages not server-protected |
-| MFA / reset / OAuth / SSO | None | (absence confirmed) | - |
+| Tenant admin login | "Login-in-chat": GoTrue's own OTP (`signInWithOtp`/`verifyOtp`, type `email`) | `(tenant-admin)/login/page.tsx` | GoTrue issues, mails, and verifies the code; the backend is not in this path at all |
+| Tenant admin session | GoTrue-issued: 1h access token + rotating single-use refresh token | - | No backend-minted claims; `POST /api/tenants` (empty body) provisions or fetches the tenant on top of it |
+| Platform admin | GoTrue email + password, GoTrue-issued token | admin/login/page.tsx:41-70 | Same session mechanism as tenant admin now - one identity store for both |
+| Customer surface | No auth at all; conversation continuity by UUID knowledge | features/chat/api.py:3-5, 126-131 | Documented design, unchanged |
+| Token storage | Cookie (`sb-<host>-auth-token`), written by `@supabase/ssr`'s `createBrowserClient` | lib/supabase.ts; AuthProvider.tsx | JS-readable by design (the browser client needs it) - see the "why not httpOnly" note below |
+| Route protection | `frontend/src/proxy.ts` refreshes the session and redirects before render; RLS is the real backstop | src/proxy.ts | Defense in depth per CVE-2025-29927 - proxy for UX, backend Bearer check + RLS for enforcement |
+| Backend verification | HS256 (local GoTrue, shared secret) or ES256/RS256 via the project's JWKS (hosted) | shared/auth.py::_decode_claims | Selected by the token's own `alg` header; also fixes the hosted `/admin` 401 noted in `progress.md`'s prior known gaps |
+| MFA / reset / OAuth / SSO | None | (absence confirmed) | Deliberate - see below |
 
-**Industry standard (2026):** for a Next.js app on Supabase with RLS, the defensible standard is **Supabase Auth (GoTrue) end-to-end**: OTP login is native to GoTrue, refresh tokens rotate automatically, `@supabase/ssr` gives httpOnly cookies and server-side session access, and the backend keeps verifying with the `SUPABASE_JWT_SECRET` it already uses for platform admin. Verification of the 2026 landscape: Clerk is the polished alternative - Hobby is free to 50,000 MRU (raised from 10k MAU on 2026-02-05), Pro $25/mo ($20 annual) with MFA and SSO included; Auth.js v5 is in maintenance-by-Better-Auth mode and fits a FastAPI backend poorly. Because Agencx already runs GoTrue and RLS, moving the tenant-admin flow onto the identity store it already has is the lowest-friction standard path, and it costs nothing extra. Cookie/session hardening note: CVE-2025-29927 proved that middleware-only protection is bypassable - the 2026 posture is defense in depth: middleware for UX, real enforcement server-side, and RLS as the backstop (Agencx already has the backstop, which is a strength to name).
+**Industry standard (2026):** for a Next.js app on Supabase with RLS, the defensible standard is **Supabase Auth (GoTrue) end-to-end**: OTP login is native to GoTrue, refresh tokens rotate automatically, `@supabase/ssr` gives cookie-backed sessions readable on the server, and the backend verifies against the project's JWKS (or the shared secret locally). This is now what Agencx runs. Verification of the 2026 landscape: Clerk is the polished alternative - Hobby is free to 50,000 MRU (raised from 10k MAU on 2026-02-05), Pro $25/mo ($20 annual) with MFA and SSO included; Auth.js v5 is in maintenance-by-Better-Auth mode and fits a FastAPI backend poorly. Cookie/session hardening note: CVE-2025-29927 proved that middleware-only protection is bypassable - the 2026 posture is defense in depth: proxy for UX, real enforcement server-side, and RLS as the backstop (Agencx has the backstop, which is a strength to name). **Correction from the first write-up:** that draft named "httpOnly cookies" as the target shape - checked against `@supabase/ssr`'s actual source and docs while building this, and that was wrong. The package's cookie is deliberately JS-readable (the browser client has to read/write it itself for the OTP flow, background refresh, and sign-out); the real security posture is short-lived access tokens, rotating single-use refresh tokens, PKCE, and `Secure`/`SameSite=Lax` - not opacity to JS. See D23 for the full reasoning.
 
-**Gap table:**
+**Gap table (post-migration):**
 
-| Gap | Severity | Industry-standard target | Cost to adopt | Effort | Priority | Phase |
-|---|---|---|---|---|---|---|
-| G2.1 Self-minted HS256 JWT, 1h, no refresh/rotation/revocation/server-side logout | High | Supabase Auth end-to-end for tenant admin: OTP, rotating refresh tokens, httpOnly cookies | $0 (included in Supabase) | L | 1 | 2 |
-| G2.2 localStorage token + client-side-only route protection | High | httpOnly cookies + edge middleware + server-side enforcement (RLS already the backstop) | $0 | M | 2 | 2 |
-| G2.3 No per-IP rate limit on code issuance | High | Per-IP limit + attempt ledger on verify | Trivial | S | 1 | 1 |
-| G2.4 Static shared HS256 secret, never rotated | Medium | Rotation plan; or moot once G2.1 moves issuance to GoTrue | Small | S | 2 | 1 |
-| G2.5 No MFA / password reset / OAuth / SSO | Low | GoTrue TOTP MFA + OAuth are included; adopt when demanded | $0 when needed | M | 3 | 3 |
+| Gap | Status | Note |
+|---|---|---|
+| G2.1 Self-minted HS256 JWT, 1h, no refresh/rotation/revocation/server-side logout | **Closed** | GoTrue issues the session now; rotation and revocation are GoTrue's, not ours |
+| G2.2 localStorage token + client-side-only route protection | **Closed** | Cookie-backed session (`@supabase/ssr`) + `src/proxy.ts` server-side redirect |
+| G2.3 No per-IP rate limit on code issuance | **Moot** | `auth_codes` (and the endpoint that rate-limited it) is deleted; GoTrue owns its own limits (SMTP send frequency, `/verify` per-IP) |
+| G2.4 Static shared HS256 secret, never rotated | **Moot** | GoTrue mints the session now; the shared secret is only relevant to local GoTrue's own HS256 signing and to the seeds' role keys |
+| G2.5 No MFA / password reset / OAuth / SSO | Low, deliberate | GoTrue TOTP MFA + OAuth are included; adopt when demanded |
 
-**Migration path:**
-
-- **G2.3 (Phase 1, do first):** per-IP issuance cap in `auth_codes.py` alongside the existing per-email cap. `Effort: S`, `Risk: low`.
-- **G2.1 + G2.2 (Phase 2):** replace the backend-minted session with GoTrue's OTP flow (`POST /auth/v1/otp`), move the frontend to `@supabase/ssr` cookies, keep `require_tenant_admin` verifying the shared secret (no backend contract change). `Effort: L`, `Risk: medium - one-time re-login for every owner`. **`FLAG: auth-model change`** - this changes the session authority and token storage; per repo rules it is a founder decision, and the ticket must spec the migration (existing localStorage sessions invalidated, dev/E2E login flow updated).
+**Migration path:** done - see D23 in `docs/agencx/design/decisions.md` for the full shape (GoTrue OTP, `@supabase/ssr` cookies, ES256/JWKS verification, the `frontend/src/proxy.ts` guard) and this ticket's row in `progress.md`.
 
 **Already at standard (quote these):**
 
 - Emails live only in GoTrue; the app never stores customer emails (PII-minimizing by construction).
-- Codes stored as sha-256 hashes only, 10-min TTL, attempt budget, single-use (`0017_auth_codes.sql:14`; `auth_codes.py:89-115`).
-- Deliberate no-account-existence-leak on login-code issuance (`auth/api.py:79-81`).
-- Backend verifies tokens with audience check and explicit `exp` requirement (`shared/auth.py:56-93`).
+- GoTrue owns code issuance, delivery and verification end-to-end - no bespoke code table, no bespoke email seam.
+- Deliberate no-account-existence-leak on login: GoTrue's `signInWithOtp` answers the same way whether or not the account exists.
+- Backend verifies tokens with audience check, explicit `exp` requirement, and the correct signing scheme for the issuer (`shared/auth.py::_decode_claims`).
+- Rotating, single-use refresh tokens and a 1h access-token TTL - both GoTrue defaults, neither hand-rolled.
 - Customers fully anonymous is a deliberate product shape (database.md:297).
 
 **Deliberate deviations:**
 
-- Email verification skipped (`identity.py:124`) - trigger: platform-admin console gains more than one admin.
+- Email verification is no longer skipped: GoTrue's `type: 'email'` OTP verify is itself GoTrue's email-confirmation mechanism, so `email_confirmed_at` is set for real on the first successful login - not bypassed via admin-API autoconfirm the way the old backend-minted flow did.
 - MFA/OAuth deferred - trigger: a real tenant asks, or platform admin handles payment-sensitive data.
 
 ---
@@ -554,8 +553,8 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 | Component | What Agencx runs | Where | Notes |
 |---|---|---|---|
 | Backups | None - no policy, no RPO/RTO, no restore procedure, no verification | (absence confirmed by grep of docs/ and infra/) | Free tier pauses after 1 week idle |
-| Retention | None - `auth_codes` rows never purged; messages/conversations/cost_logs grow unbounded | auth_codes.py:97-105 | No cleanup job exists anywhere |
-| PII | Thin by design: codes hashed, emails only in GoTrue, no customer accounts | 0017_auth_codes.sql:14; database.md:297 | `messages.content` and `tenant_config.config` hold owner/customer text |
+| Retention | None - messages/conversations/cost_logs grow unbounded; no chat-history retention decision made (`auth_codes` itself is gone - GoTrue owns login codes now, D23) | database.md:297 | No cleanup job exists anywhere |
+| PII | Thin by design: login codes are GoTrue's problem now, not ours; emails only in GoTrue, no customer accounts | database.md:297 | `messages.content` and `tenant_config.config` hold owner/customer text |
 | Export/deletion flows | None (no GDPR-style data-subject flows) | (absence confirmed) | - |
 
 **Industry standard (2026):** every production database has a backup policy with defined RPO/RTO, off-site copies, and a periodically exercised restore. Managed platforms provide it (Supabase Pro: daily backups, 7-day retention, $25/mo; PITR $100/mo for 7-day windows, ~$130/mo all-in with Small compute; verified 2026-08-28), and free tiers require you to own the export (Supabase's own docs say exactly this: free-tier projects should regularly `db dump` off-site). Retention policies exist for every table that accumulates; PII lifecycle (export, deletion, masking) is standard whenever the product is consumer-facing or EU-adjacent. Note the honest restore windows on Supabase free tier: in-place restore available ~90 days, downloadable backups ~1 year - an own-bucket backup makes a pause or project loss a non-event.
@@ -566,13 +565,13 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 |---|---|---|---|---|---|---|
 | G12.1 No backup policy, RPO/RTO, restore verification (= G1.1) | **Critical** | RPO 24h / RTO 1 day at stage 1; weekly own-bucket pg_dump; quarterly restore drill; Supabase Pro when revenue justifies | $0 now; $25/mo staged; ~$130/mo PITR later | M | 1 | 1 |
 | G12.2 Free-tier idle-pause risk | Medium | Own-bucket backups make a pause a non-event; keep-warm covers today | $0 | S | 1 | 1 |
-| G12.3 `auth_codes` never purged; no retention decisions for chat history | Medium | Purge job (Phase 1) + a written retention decision for conversations (product call: keeping history forever is defensible if stated) | Small | S | 1/2 | 1/2 |
+| G12.3 No retention decisions for chat history (`auth_codes` purge half moot - table dropped, see G2.3) | Medium | A written retention decision for conversations (product call: keeping history forever is defensible if stated) | Small | S | 2 | 2 |
 | G12.4 No PII export/deletion flows | Low | Consciously deferred compliance item - document "no flow until an enterprise tenant asks" | - | - | 3 | 3 |
 
 **Migration path:**
 
 - **G12.1 = G1.1** (Area 1) - the backup workflow and the drill.
-- **G12.3 (Phase 1):** scheduled purge of expired `auth_codes` (same job as G1.3); Phase 2: the founder writes the retention decision into this doc's gap register (status: decided) with the chosen window.
+- **G12.3 (Phase 2):** the founder writes the retention decision into this doc's gap register (status: decided) with the chosen window - the `auth_codes` purge half of this item is moot now (the table is dropped).
 
 **Already at standard (quote these):**
 
@@ -593,15 +592,15 @@ Status: `open` | `decided` (founder ruled, ticket optional) | `done` | `ticket` 
 |---|---|---|---|---|---|---|
 | G1.1 | 1 | No backups / RPO / RTO / restore path | Critical | M | 1 | open |
 | G1.2 | 1 | No staging DB; migrations manual | High | M | 2 | open |
-| G1.3 | 1 | auth_codes never purged; missing updated_at | Medium | S | 1 | open |
+| G1.3 | 1 | ~10 tables missing updated_at | Medium | S | 1 | open |
 | G1.4 | 1 | Hardcoded english FTS config | Low | S | 1 | open |
 | G1.5 | 1 | Hot-path JSONB config/brand | Low | - | note | open |
 | G1.6 | 1 | In-process per-worker caches | Low | M | 3 | open |
-| G2.1 | 2 | Self-minted tokens, no refresh/rotation | High | L | 2 | open |
-| G2.2 | 2 | localStorage + client-side-only protection | High | M | 2 | open |
-| G2.3 | 2 | No per-IP rate limit on codes | High | S | 1 | open |
-| G2.4 | 2 | Static shared HS256 secret | Medium | S | 1 | open |
-| G2.5 | 2 | No MFA/reset/OAuth/SSO | Low | M | 3 | open |
+| G2.1 | 2 | Self-minted tokens, no refresh/rotation | High | L | 2 | **closed** (2026-08-28, D23) |
+| G2.2 | 2 | localStorage + client-side-only protection | High | M | 2 | **closed** (2026-08-28, D23) |
+| G2.3 | 2 | No per-IP rate limit on codes | High | S | 1 | **moot** (auth_codes dropped) |
+| G2.4 | 2 | Static shared HS256 secret | Medium | S | 1 | **moot** (GoTrue mints the session) |
+| G2.5 | 2 | No MFA/reset/OAuth/SSO | Low | M | 3 | open (deliberate) |
 | G3.1 | 3 | users.role dead column | Medium | S | 1 | open |
 | G3.2 | 3 | enabled_tools gating unimplemented | Medium | S-M | 1 | open |
 | G3.3 | 3 | No tenant claim in JWT | Low | M | 3 | open |
@@ -635,7 +634,7 @@ Status: `open` | `decided` (founder ruled, ticket optional) | `done` | `ticket` 
 | G11.3 | 11 | No scheduled jobs | Low | S | 3 | open |
 | G12.1 | 12 | No backup policy (= G1.1) | Critical | M | 1 | open |
 | G12.2 | 12 | Idle-pause risk | Medium | S | 1 | open |
-| G12.3 | 12 | No retention decisions/purge | Medium | S | 1/2 | open |
+| G12.3 | 12 | No retention decision for chat history | Medium | S | 2 | open |
 | G12.4 | 12 | No PII flows | Low | - | 3 | open |
 
 ---
@@ -646,17 +645,17 @@ Status: `open` | `decided` (founder ruled, ticket optional) | `done` | `ticket` 
 
 **Goal:** no single point of total data loss; every technology choice answerable; invisible defects (E2E, errors, traces) made visible; every lie-in-waiting removed.
 
-Lands here: **G1.1 + G12.1 + G12.2** (backups, RPO 24h/RTO 1 day, restore drill), **G1.3 + G12.3** (purge job + missing timestamps), **G1.4** (FTS config), **G2.3** (per-IP rate limit), **G2.4** (key rotation plan), **G3.1 + G3.2** (dead-column decisions), **G4.3 + G4.4** (SSRF + tokenizer), **G5.1** (cover to Supabase Storage - FLAG data migration), **G6.2** (delete legacy nodes), **G7.1** (Langfuse wiring), **G7.2** (Sentry), **G9.1** (E2E in CI), **G9.2** (Dependabot + audits), **G10.3** (ECS stack decision).
+Lands here: **G1.1 + G12.1 + G12.2** (backups, RPO 24h/RTO 1 day, restore drill), **G1.3** (missing `updated_at` timestamps - the `auth_codes` purge half of this item, and of G12.3, is moot: G2.3 closed by dropping the table), **G1.4** (FTS config), **G3.1 + G3.2** (dead-column decisions), **G4.3 + G4.4** (SSRF + tokenizer), **G5.1** (cover to Supabase Storage - FLAG data migration), **G6.2** (delete legacy nodes), **G7.1** (Langfuse wiring), **G7.2** (Sentry), **G9.1** (E2E in CI), **G9.2** (Dependabot + audits), **G10.3** (ECS stack decision). **G2.1 + G2.2 landed ahead of schedule** (2026-08-28, D23) rather than waiting for Phase 2.
 
-**Ordering rationale:** every Phase 1 item is free, and each prevents a specific bad outcome - data loss (G1.1), undiagnosed breakage (G7.2, G9.1), an indefensible "why" (G3.1, G3.2, G10.3), or a security sharp edge (G2.3, G4.3). Backups and Sentry come first because they are the cheapest insurance; the two dead-column decisions come early because they block future schema work.
+**Ordering rationale:** every Phase 1 item is free, and each prevents a specific bad outcome - data loss (G1.1), undiagnosed breakage (G7.2, G9.1), an indefensible "why" (G3.1, G3.2, G10.3), or a security sharp edge (G4.3). Backups and Sentry come first because they are the cheapest insurance; the two dead-column decisions come early because they block future schema work.
 
 ### Phase 2 - "Standard-shaped platform" (on traction, ~$25-55/month)
 
-**Goal:** sessions, ingestion, environments, and evaluation match the standard shape.
+**Goal:** ingestion, environments, and evaluation match the standard shape. (Sessions/auth - originally this phase's top item - closed early; see Phase 1.)
 
-Lands here: **G1.2 + G10.4** (staging DB + migration smoke; Supabase Pro $25/mo anchors this phase), **G2.1 + G2.2** (Supabase Auth end-to-end - FLAG auth-model change; refresh tokens, httpOnly cookies, middleware), **G4.1 + G11.1** (async ingestion via QStash/Inngest - FLAG new external service), **G4.2** (recency filtering), **G6.1** (prompt versioning on the Langfuse platform), **G8.1** (production-traffic evals + user feedback), **G9.3** (preview deploys). Optional paid tiers if usage demands: Langfuse Core $29/mo, Sentry Team $26/mo.
+Lands here: **G1.2 + G10.4** (staging DB + migration smoke; Supabase Pro $25/mo anchors this phase), **G12.3** (the founder's written retention decision for chat history), **G4.1 + G11.1** (async ingestion via QStash/Inngest - FLAG new external service), **G4.2** (recency filtering), **G6.1** (prompt versioning on the Langfuse platform), **G8.1** (production-traffic evals + user feedback), **G9.3** (preview deploys). Optional paid tiers if usage demands: Langfuse Core $29/mo, Sentry Team $26/mo.
 
-**Ordering rationale:** gated on traction because every item either costs money or changes a user-visible/architectural seam. Auth first within the phase (highest-severity gap left, and it unblocks G3.3); ingestion second (the only job that hurts today); everything else rides platforms already adopted (Langfuse for prompts + evals, Supabase Pro for staging).
+**Ordering rationale:** gated on traction because every item either costs money or changes a user-visible/architectural seam. Ingestion first (the only job that hurts today); everything else rides platforms already adopted (Langfuse for prompts + evals, Supabase Pro for staging). G3.3 (tenant claim in JWT, Phase 3) is unblocked by the auth work that already landed, not by anything in this phase.
 
 ### Phase 3 - "Scale readiness" (trigger-only, $0-150/month)
 

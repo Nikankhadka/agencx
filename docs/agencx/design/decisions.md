@@ -397,6 +397,9 @@ key `agencx.login-session`). The separation the subdomain gave here was real,
 if thin - both are our own first-party code, and the exposure only matters given
 an XSS on the customer page, which would be serious regardless.
 
+*(Resolved by D23: the session moved off `localStorage` onto a cookie, so this
+specific cost no longer applies - see D23 for what replaced it and why.)*
+
 **Boundary:** the resolver is untouched - `resolve_tenant_slug()` is still the
 single audited RLS bypass, the slug DDL and its regex are unchanged, and no
 migration ships with this. The API is unchanged too: the backend never read a
@@ -404,3 +407,68 @@ migration ships with this. The API is unchanged too: the backend never read a
 param exactly as before. **The TLD is not bound by this decision** - `.app`,
 `.com` or anything else is a purchase and a find-and-replace, made when B-2
 ships.
+
+## D23: login-in-chat moves onto GoTrue OTP; sessions move onto @supabase/ssr cookies
+
+**Date:** 2026-08-28 (founder). **Status:** accepted. Closes G2.1 and G2.2 in
+`docs/agencx/industry-standard-gap.md` (`FLAG: auth-model change`).
+
+**Decision:** The backend stops issuing and verifying its own login codes.
+GoTrue's own OTP flow (`signInWithOtp` / `verifyOtp`, type `email`) replaces
+`auth_codes` + `services/{auth_codes,email,email_address,identity}.py` +
+`/api/auth/*` - all deleted rather than kept alongside. GoTrue mints the
+session (1h access token, rotating single-use refresh token) instead of the
+backend signing its own HS256 claims. The frontend stores that session in a
+cookie via `@supabase/ssr`'s `createBrowserClient`/`createServerClient`
+instead of `localStorage`, and a new `frontend/src/proxy.ts` refreshes it and
+redirects a signed-out request before a protected page renders.
+
+`shared/auth.py::verify_token` gains ES256/RS256 verification via the
+project's JWKS (`PyJWKClient`, cached), selected by reading the token's own
+`alg` header; HS256 against the shared secret remains the path for local
+GoTrue. This was already a known gap on its own (`progress.md`'s "known gaps"
+noted the hosted `/admin` surface 401ing because the hosted project signs
+ES256 and `verify_token` only checked HS256) - the OTP migration made fixing
+it unavoidable anyway, since GoTrue-minted sessions are the same tokens
+platform admin already gets, and now the tenant flow gets them too.
+
+**Why.** `auth_codes` was ours: a bespoke 6-digit code table, our own SMTP
+seam, and a backend-minted session with no refresh, no rotation, and no
+revocation (G2.1) - stored in `localStorage` and guarded only by client-side
+`useEffect` checks (G2.2). GoTrue was already running for platform admin.
+Moving the tenant-owner flow onto the identity store already in the stack
+costs nothing extra and closes both gaps in one ticket instead of two.
+
+**Why not httpOnly cookies.** The gap doc's own G2.2 write-up said "httpOnly
+cookies" as the target shape, and that was wrong - checked against
+`@supabase/ssr`'s source and docs while building this. The package's cookie is
+deliberately JS-readable: the browser client has to read and write it itself
+to run `signInWithOtp`/`verifyOtp`, to refresh in the background, and to clear
+it on sign-out - an httpOnly cookie would break the client the package exists
+to support. The security posture is rotation, not secrecy of the cookie: a 1h
+access token, a single-use rotating refresh token, PKCE on the OTP exchange,
+and `Secure`/`SameSite=Lax` on the cookie itself - with the backend's own
+verification and RLS underneath as the real enforcement boundary, unmoved by
+any of this. `industry-standard-gap.md`'s G2.2 entry is corrected to say this.
+
+**`frontend/src/proxy.ts` is a new file, not a revival.** D22 deleted a
+`proxy.ts` that did host-based tenant routing (`resolveHost`, `BASE_HOSTS`,
+the `x-wren-surface` header) - gone for good, paths replaced it. This one does
+something unrelated: refresh the session and redirect before render for a
+signed-out request to a console or `/admin` path. It is UX, not the
+enforcement boundary (CVE-2025-29927 is why that boundary stays the backend's
+Bearer check plus RLS, never the proxy alone) - a positive route matcher, and
+`/[slug]` and `/` are untouched by it, same as D22 left them.
+
+**Cutover.** Self-minted sessions were 1h TTL and lived under the
+`agencx.login-session` `localStorage` key; the new frontend never reads that
+key again, so a session from before this ships simply ages out within the
+hour rather than needing a forced mass logout.
+
+**Boundary:** the backend's Bearer-header contract is unchanged (a route still
+takes `Authorization: Bearer <token>` and verifies it the same way regardless
+of who issued it), and RLS is untouched. Only session issuance and storage
+moved. `POST /api/tenants` absorbs first-login provisioning (empty body ->
+create-or-return the caller's tenant) instead of a new endpoint, since it
+already was "authed user -> provision tenant" with the audited service-role
+write path the seed scripts depend on.

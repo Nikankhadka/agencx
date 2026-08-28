@@ -161,6 +161,30 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
      -e DATABASE_URL='<pooler url>' \
      backend python -m seeds.seed_tenant1_phoneshop
    ```
+5. **Auth dashboard configuration (D23, `design/decisions.md`) - blocking, not
+   optional.** Login-in-chat's OTP is issued by GoTrue itself now, not by the
+   backend, so this project's Auth settings are the only thing standing between
+   a real owner and a working login:
+   - **Auth > Emails > Email Templates**, the "Magic Link" template: it has to
+     surface the six-digit code, not just the link. Supabase's default template
+     is link-only - mirror `docker/gotrue-templates/magic_link.html` (used
+     locally, same fix): put `{{ .Token }}` in the body, prominently, alongside
+     or instead of `{{ .ConfirmationURL }}`.
+   - **Auth > Emails > SMTP Settings**: turn on **Custom SMTP** and point it at
+     Brevo (see Step 3 below). Supabase's built-in mailer sends at most ~2
+     emails/hour and only to addresses that are already project members - with
+     it left off, no real tenant owner can ever receive a code, full stop.
+   - **Auth > Emails**, the OTP expiry: set to 600s (10 minutes) to match the
+     UX `GOTRUE_MAILER_OTP_EXP` gives locally; the default is 24h.
+   - **Auth > Rate Limits**: raise the email-send limit past whatever traffic
+     is expected (GoTrue's own default, ~30/hour project-wide, is fine for a
+     demo but will 429 real usage).
+   - **Confirm the project's signing keys.** `shared/auth.py::verify_token`
+     verifies ES256/RS256 via this project's JWKS (`{SUPABASE_URL}/auth/v1/
+     .well-known/jwks.json`) as well as HS256, so either signing scheme works
+     without a code change - but confirm which one this project actually uses
+     (Auth > Settings > JWT Keys) so a signing-key rotation is not the first
+     time this gets checked.
 
 ## Step 2 - Vercel
 
@@ -198,14 +222,9 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
   it useless for showing anyone else. Brevo allows a verified *single sender*
   with no domain at all: 300/day free, host `smtp-relay.brevo.com`, port 587,
   username your Brevo login, password a generated SMTP key (not your account
-  password). Capture host/port/user/pass for step 4.
-
-  Port 465 (implicit TLS) is not supported: `SmtpEmailProvider` uses
-  `smtplib.SMTP` plus `starttls()`, which is the 587 shape. Every relay in play
-  offers 587, so this is a documented limit rather than a gap worth code.
-
-  Leaving `EMAIL_PROVIDER=console` is demo-only and has a sharp edge - see the
-  warning under step 4.
+  password). These go into the **Supabase dashboard's** Custom SMTP settings
+  (Step 1.5 above), not into any Vercel env var - GoTrue sends this mail now,
+  not the backend.
 
 ## Step 4 - Environment variables
 
@@ -242,23 +261,17 @@ EMBEDDING_DIM=384
 RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
 UPLOADS_BUCKET=<Storage bucket name from step 1>
-EMAIL_PROVIDER=smtp            # console logs the code instead of sending it
-EMAIL_SMTP_HOST=smtp-relay.brevo.com
-EMAIL_SMTP_PORT=587
-EMAIL_SMTP_FROM=<your verified Brevo single sender>
-EMAIL_SMTP_USER=<...>          # required by every hosted relay
-EMAIL_SMTP_PASSWORD=<...>      # the generated SMTP key, not the account password
 ENVIRONMENT=production
 ```
 
 `GOOGLE_EMBED_MODEL` is not in the list because `config.py` already defaults it
 to `text-embedding-004`; set it only to move off that model.
 
-Every one of these is load-bearing, but four of them fail in ways that do not
+Every one of these is load-bearing, but a few of them fail in ways that do not
 look like a missing variable, so check them by name after any project rebuild:
 `COHERE_API_KEY` (a 401 from the reranker on every grounded answer, while
-`RERANKER=cohere` is set and looks fine), `SUPABASE_SERVICE_ROLE_KEY`, and the
-`EMAIL_SMTP_*`/`EMAIL_PROVIDER` pair - see the two warnings below.
+`RERANKER=cohere` is set and looks fine), `SUPABASE_SERVICE_ROLE_KEY`, and
+`WREN_APP_DB_PASSWORD` (below).
 
 `WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
 database role's password. It is created by migration `0002_roles.sql` at first
@@ -276,13 +289,10 @@ until then.
 ships without those packages on purpose, and either value fails at first use
 with `ModuleNotFoundError`, by design.
 
-`EMAIL_PROVIDER` deserves the same warning, and it is the default that bites:
-unset, it is `console`, which **logs the login code to the platform's log stream
-instead of sending it**. The request still answers `202`, because the endpoint
-did accept it - so login looks like it works and no code ever arrives. The
-captured-code escape hatch (`/api/auth/dev-login-code`) is gated to
-`ENVIRONMENT=local` on purpose, so on a deploy there is no other way to obtain a
-code: `console` means nobody can log in at all.
+There is no `EMAIL_PROVIDER` env var to set any more - GoTrue sends
+login-in-chat's mail now (Step 1.5), and skipping that dashboard configuration
+is the equivalent trap: the request still answers fine (the backend was never
+in this path to fail), so login looks like it works and no code ever arrives.
 
 `UPLOADS_BUCKET` is not optional here either, and unlike those two it fails
 quietly. Left empty, `app/shared/storage.py` selects `LocalStorage` and the

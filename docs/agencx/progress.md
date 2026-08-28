@@ -111,11 +111,11 @@ open for US-2, the `STATUS_TONE` map.
 | Monorepo scaffold + Makefile | BUILT | `b910a50` |
 | Full schema + forward-only migrations | BUILT | `3d070d5`; schema documented in `design/database.md` |
 | RLS enforcement + schema audit | BUILT | `c0b798b` (audit teeth), `d1826e4` |
-| Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; **CHANGING** - O-2 adds login-in-chat (email + 6-digit code) on the tenant surface; Supabase stays the identity layer |
+| Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; O-2 added login-in-chat (email + 6-digit code) on the tenant surface; **CHANGED** (2026-08-28) - the auth migration (D23) moved code issuance and session minting onto GoTrue itself (`signInWithOtp`/`verifyOtp` + `@supabase/ssr` cookies), replacing the backend-minted session O-2 shipped |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGED** - D22 moved the slug from a subdomain to a path (`agencx.app/{slug}`); the resolver itself is untouched |
 | Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile`. Unticketed founder follow-up (2026-08-22): after the seven fields the interview offers a skippable website/documents ask (paste a link, attach a file, or "skip"), and confirm lands the owner on `/home` in-session rather than stranding them on the go-live line  **O-6 (founder walkthrough, 2026-08-23) put the prototype's chips back**: a chip sends its label as ordinary text on the same route a typed answer uses, so the one-tool loop is untouched and only `Beat.chips` is new. Two chips instead swap the composer - the contact beat's phone pill (ported `initPhone()`, AU/NZ/US/UK/SG) and the ABN beat's welded `.abn-pill`. `abn` and `gst` are new beats; `gst` is conditional on the answer to `abn`, not on the vertical. O-7 made a link that cannot be read say so and log why; O-8 stopped go-live blanking the thread. **O-9 gives the two new fields a screen**: Settings holds an "ABN & Tax" row reading back `51 824 753 556 · GST registered`, and the prototype's edit sheet behind it corrects both. The rest of the profile stays frozen after go-live - the ticket says so rather than implying it. |
 | Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
-| Login-in-chat email + 6-digit code | BUILT | O-2 (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`, in-chat login UI); O-5 adds `services/email_address.py` - prose extraction + syntax validation, answered as one calm line |
+| Login-in-chat email + 6-digit code | BUILT | O-2 shipped it backend-owned (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`); the UI is unchanged, but the auth migration (2026-08-28, D23) moved issuance and verification onto GoTrue's own OTP (`signInWithOtp`/`verifyOtp`) and deleted that machinery, `auth_codes` (0022) included. O-5's prose-extraction module (`services/email_address.py`) went with it - the login page's existing composer regex plus GoTrue's own rejection cover the same ground client-side |
 | URL scrape knowledge ingest path | BUILT | O-3: pasting a link in the onboarding thread scrapes it, ingests it as a `website` document, and reads back what it found; attaching a file works from the command pill's `+`. Images are refused (nothing reads them) |
 | Settings > Knowledge screen | BUILT | O-3 / D19: a source is processed into readable sections the owner corrects, held as a draft until they save it. Mobile-first, built from the prototype's destination screens. Pulled forward from S2; E-1 re-homes it in the two-tab shell |
 
@@ -249,18 +249,21 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-5 Onboarding UI: prototype thread port | done | `969bfdd` |
 | O-3 Knowledge ingest (URL scrape + upload) | done | `29fd5a5` |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
+| G2.1/G2.2 Auth migration: GoTrue OTP + `@supabase/ssr` cookies | done | `8e78165` (backend), `4a6b59f` (frontend); D23 in `design/decisions.md` |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 
-- **The platform console (`/admin`) is out of Phase 1 and does not work on the
-  hosted Supabase project** (founder decision, 2026-08-26). It is not one of the
-  three pillars, so nothing depends on it. It signs in through supabase-js
-  `signInWithPassword`, and the project issues ES256 session tokens while
-  `shared/auth.py::verify_token` only verifies HS256 - so every console request
-  gets a 401. The owner and customer surfaces are unaffected: they use the
-  backend-minted HS256 session (`services/identity.py::mint_session`). Fixing it
-  means verifying ES256 through the project JWKS, which needs `pyjwt[crypto]`
-  and a change at the auth boundary - its own ticket, not a deploy step.
+- **~~The platform console (`/admin`) does not work on the hosted Supabase
+  project~~ - resolved 2026-08-28 by the auth migration (D23).** This was
+  logged 2026-08-26: the hosted project issues ES256 session tokens while
+  `shared/auth.py::verify_token` only verified HS256, so every hosted console
+  request 401ed. `verify_token` now reads the token's `alg` header and verifies
+  ES256/RS256 via the project's JWKS (`pyjwt[crypto]`, added for exactly this)
+  with HS256 kept for local GoTrue - the fix this entry said would need "its
+  own ticket" landed as part of the OTP migration, since GoTrue-minted sessions
+  are the same tokens platform admin was already getting. Not yet re-verified
+  against a live hosted project (no hosted deploy has run since); flag if the
+  next hosted deploy still 401s.
   The `platform_admin` **database** role is unaffected and stays: it is created
   in migration 0002, carries live RLS policies, and `tests/test_rls.py` asserts
   on it.
@@ -313,22 +316,14 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   Groq fallback in the local env; OpenRouter gemma in CI) and are prone to
   upstream 429 rate-limiting; all LLM-touching code paths are proven with
   stubbed providers in CI.
-- **Login-in-chat needs a relay account provisioned** (O-2). The hosted Supabase
-  project exists and the deployed stack authenticates against it, so browser
-  login is no longer blocked there. The code path is complete as of this branch:
-  `SmtpEmailProvider` now upgrades with STARTTLS and authenticates when
-  `EMAIL_SMTP_USER`/`EMAIL_SMTP_PASSWORD` are set, which is what every hosted
-  relay requires and what Mailpit refuses - found because the deployed preview
-  issued codes nobody could receive. What remains is purely founder setup: a
-  **Brevo** account and those vars set per `deploy.md` step 3. Not Resend, which
-  delivers only to your own account email until you verify a domain you own, and
-  `agencx.app` is unbought (B-2). Until the vars are set, `EMAIL_PROVIDER`
-  defaults to `console`, which logs the code and answers 202, and
-  `/api/auth/dev-login-code` is gated to `ENVIRONMENT=local` - so a deploy left
-  on the default cannot be logged into at all. Issuance is now capped at 5 per
-  address per hour, added alongside the delivery fix: unthrottled, a public
-  route that mails arbitrary addresses on demand would drain a free tier in a
-  minute and get the sender blacklisted.
+- ~~**Login-in-chat needs a relay account provisioned** (O-2), a Brevo account +
+  `EMAIL_SMTP_*` vars.~~ **Superseded 2026-08-28 (D23):** the backend no longer
+  sends this mail at all - GoTrue does, via `signInWithOtp`. The relay setup
+  moved with it: it is now the Supabase dashboard's own SMTP configuration
+  (Auth > SMTP Settings), which the hosted deploy needs regardless of vendor,
+  and Supabase's built-in mailer is not a substitute (it sends only ~2
+  emails/hour, to project members) - see `deploy.md`'s auth section for the
+  required dashboard steps.
 - **Business type does not vary the interview (O-1, US-2).** The PRD glossary
   describes a `business_types` row carrying "a profile template and prompt
   fragments"; neither half has a consumer in Phase 1, and none of the seven

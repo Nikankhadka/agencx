@@ -140,25 +140,15 @@ create table platform_admins (
 );
 ```
 
-### Login-in-chat (**NEW** - O-2)
+### Login-in-chat (O-2; **auth_codes table dropped 2026-08-28, D23**)
 
-```sql
-create table auth_codes (
-  id          uuid primary key default gen_random_uuid(),
-  tenant_id   uuid references tenants(id) on delete cascade,   -- null until a tenant exists
-  email       text not null,
-  code_hash   text not null,                            -- sha-256 of the 6-digit code; never the raw code
-  expires_at  timestamptz not null,
-  attempts    integer not null default 0,               -- attempt budget; exceeding invalidates
-  verified_at timestamptz,                              -- set once
-  created_at  timestamptz not null default now()
-);
-```
-
-The 6-digit code is issued and verified inside the chat by the onboarding
-agent's tools (`send_login_code`, `verify_login_code`). Users still resolve to
-`auth.users.id`; login-in-chat is the delivery mechanism, Supabase remains the
-identity store.
+O-2 shipped this table: a backend-issued, sha-256-hashed 6-digit code with a
+TTL and an attempt budget, verified by `features/auth/controller.py`. The auth
+migration (D23, `design/decisions.md`) replaced it with GoTrue's own OTP flow
+(`signInWithOtp`/`verifyOtp`, type `email`) - GoTrue issues, mails and verifies
+the code itself, so there is no code table on our side any more; migration
+0022 drops it. Users still resolve to `auth.users.id` exactly as before -
+login-in-chat is still just the delivery mechanism, only the issuer changed.
 
 ### Slug resolution
 
@@ -427,9 +417,10 @@ applied in order by a plain runner (no heavy framework):
 0013_platform_admin_tenant_config_write.sql  platform admin can write tenant_config
 0014_onboarding_business_fields.sql  tenants.business_name, payment_processing_mode, tenant_self_update
 0015_website_doc_type.sql  documents.doc_type 'website'
-0017_auth_codes.sql        auth_codes (login-in-chat, O-2)
+0017_auth_codes.sql        auth_codes (login-in-chat, O-2) - dropped by 0022
 0018_documents_updated_at.sql  documents.updated_at + touch trigger (P-4)
 0019_documents_structured.sql  documents 'draft' status + structured jsonb (O-3/D19)
+0022_drop_auth_codes.sql   drops auth_codes - login-in-chat moved to GoTrue OTP (D23)
 ```
 
 (0016 is reserved for D-2's lean `enabled_tools` default and intentionally
