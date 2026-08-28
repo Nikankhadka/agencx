@@ -21,7 +21,7 @@ through `M-1`'s service, so it must come last.
 
 ### Summary
 
-Give `catalog_items` its first owner-facing writer: a service + API + a
+Give `offerings` its first owner-facing writer: a service + API + a
 minimal manual add/edit/remove UI on the Business hub, using the `Offering`
 vocabulary D24 locked in. No images in this ticket - that's `M-2`. Bundles the
 two correctness fixes that only matter once this table is actually written to
@@ -29,7 +29,7 @@ outside seeds, so the ticket ships whole rather than half-safe.
 
 ### Why
 
-Today `catalog_items` is read everywhere that matters (pricing engine,
+Today `offerings` is read everywhere that matters (pricing engine,
 recommendation, quoting, `agent_node.py`) but has zero owner-facing writers -
 only demo seeds insert rows, and the one live endpoint
 (`GET /api/pricing/catalog`) is read-only. The Booking page's "Services" list
@@ -52,7 +52,7 @@ uploaded a document first.
 - Price is either blank (no price shown, matching today's "no price provided"
   case) or a value I typed - never inferred, rounded, or computed.
 - The list is scoped to my tenant; another tenant's offerings are never
-  visible (RLS, unchanged from `catalog_items`'s existing policy).
+  visible (RLS, unchanged from `offerings`'s existing policy).
 
 #### US-2 An owner edits or removes an offering
 
@@ -69,9 +69,8 @@ re-upload, no document edit required.
 As a customer asking what's on offer, I get an answer built from the current
 catalog, not a cached one from before the owner's last edit.
 
-- Editing a `catalog_items` row bumps `knowledge_version` (currently it does
-  not - `catalog_items.updated_at` is absent from `_VERSION_SQL` in
-  `knowledge_version.py:32`), so the context-package cache invalidates.
+- Editing an `offerings` row bumps `knowledge_version`, so the context-package
+  cache invalidates.
 - A recommendation answer never states a price that isn't the current
   `price_cents` value for that row - unchanged behavior, `agent_node.py:195`'s
   re-fetch pattern already guarantees this and this ticket does not touch it.
@@ -110,27 +109,26 @@ whole-corpus fast path.
   `auth.require_tenant_admin`, following the existing cover-endpoint shape in
   `business/api.py:157-208` (validation, 204 on write, `ApiError`-compatible
   error bodies).
-- **Write-time re-index:** every write calls `ingest_catalog_items`
+- **Write-time re-index:** every write calls `ingest_offerings`
   (`backend/app/ingestion/pipeline.py:96-146`) so the searchable catalog
   projection stays in sync - this is already-working code whose only caller
   today is seed scripts.
-- **`knowledge_version.py:32`:** fold `catalog_items.updated_at` into
-  `_VERSION_SQL`'s `greatest(...)` so a direct catalog write invalidates the
+- **`knowledge_version.py:32`:** fold `offerings.updated_at` into
+  `_VERSION_SQL`'s `greatest(...)` so a direct offering write invalidates the
   cache even on a future code path that doesn't go through
-  `ingest_catalog_items`.
+  `ingest_offerings`.
 - **`retrieval.py:100` (`whole_corpus()`):** add a `metadata.kind !=
   'catalog_item'` filter (or equivalent) to the fast-path query.
 - **Migration:** next number after `0022_drop_auth_codes.sql`, i.e.
-  `0023_...sql`. Either widens `catalog_items` (unlikely to need schema
-  changes - the columns already fit `Offering`) or renames it, per the naming
-  decision above.
+  `0023_rename_catalog_items_to_offerings.sql`, which renames the existing
+  physical table because its columns already fit `Offering`.
 - **Frontend:** a minimal add/edit/remove list on the Business hub
   (`frontend/src/app/(tenant-admin)/(console)/business/`), following the
   Settings > Knowledge page's list-with-inline-actions pattern
   (`settings/knowledge/page.tsx:276-336`) rather than inventing new UI
   vocabulary. The Booking page's existing read-only render
   (`business/booking/page.tsx:156-184`) switches its data source from
-  `offerings.py`'s knowledge-derived rows to the real `catalog_items` rows
+  `offerings.py`'s knowledge-derived rows to the real `offerings` rows
   (via `BookingPageResponse.services`, unchanged wire shape - `{name,
   price}` - unless the naming decision above changes it).
 
@@ -139,7 +137,7 @@ whole-corpus fast path.
 - Backend: create/update/delete offering (RLS-scoped, cross-tenant isolation
   proven the same way other tenant-scoped writers are); write bumps
   `knowledge_version`; `whole_corpus()` excludes catalog-kind chunks
-  (regression test seeded with both kinds present); `ingest_catalog_items`
+  (regression test seeded with both kinds present); `ingest_offerings`
   called on write (or its replacement).
 - Frontend: add/edit/remove flow on the Business hub; Booking page reflects a
   new/edited/removed offering; existing Booking-page E2E extended (it
@@ -159,14 +157,17 @@ whole-corpus fast path.
 
 ### Definition of done
 
-- [ ] Naming decision made and recorded (table renamed, or kept with reasoning
-      noted here)
-- [ ] Owner can add/edit/remove an offering from the Business hub
-- [ ] Booking page renders from the real writer, not knowledge-derived text
-- [ ] A catalog edit bumps `knowledge_version`
-- [ ] Catalog-kind chunks excluded from `whole_corpus()`, proven by a
+- [x] Naming decision made and recorded: `catalog_items` is renamed to
+      `offerings`. The existing row shape already fits the generic Offering
+      noun, and a physical name aligned with the owner-facing and API vocabulary
+      prevents two names for one concept. Migration `0023` preserves its RLS
+      policies and grants because they follow the table's OID.
+- [x] Owner can add/edit/remove an offering from the Business hub
+- [x] Booking page renders from the real writer, not knowledge-derived text
+- [x] A catalog edit bumps `knowledge_version`
+- [x] Catalog-kind chunks excluded from `whole_corpus()`, proven by a
       regression test
-- [ ] `make check` green; Booking-page E2E covers add/edit/remove, not just
+- [x] `make check` green; Booking-page E2E covers add/edit/remove, not just
       the empty state
 
 ---
@@ -238,7 +239,7 @@ the backend the way the current private cover endpoint does.
 - **Schema:** replace `tenant_assets` with a `tenant_media` table (or widen
   `tenant_assets` - decide during implementation): `id uuid primary key,
   tenant_id uuid, kind text check (kind in ('cover', 'gallery', 'offering')),
-  offering_id uuid null references catalog_items(id) on delete cascade,
+  offering_id uuid null references offerings(id) on delete cascade,
   cloudinary_public_id text, position integer, created_at, updated_at`. A
   partial unique index or application-level check caps gallery rows at 5 per
   tenant (`kind = 'gallery'` count, including the cover-equivalent slot -
@@ -375,7 +376,7 @@ an automatic overwrite.
   `create_offering`/`update_offering` service functions directly - this
   ticket adds no new persistence path of its own.
 - **Diffing on re-upload:** compare newly-detected candidates against existing
-  `catalog_items` rows by name (case-folded, matching `offerings.py`'s
+  `offerings` rows by name (case-folded, matching `offerings.py`'s
   existing dedupe key); a match with a different price surfaces as a proposed
   change, not an automatic write.
 - **Money rule, explicitly unrelaxed:** the extraction model (if any LLM
@@ -386,7 +387,7 @@ an automatic overwrite.
 ### Tests
 
 - Backend: a document with a `"What we offer"` section produces the expected
-  candidates; confirmation writes real `catalog_items` rows; re-upload with a
+  candidates; confirmation writes real `offerings` rows; re-upload with a
   changed price produces a diff, not a silent write; a document with no
   offering-shaped section produces zero candidates and doesn't interrupt
   normal review.

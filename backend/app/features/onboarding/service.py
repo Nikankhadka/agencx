@@ -54,7 +54,7 @@ async def apply_confirmation(
     """Persist what confirm() computed in one atomic transaction.
 
     O-1 captures a business profile, not a priced catalog: onboarding no longer
-    writes catalog_items or pricing_rules, and the columns it used to set from
+    writes offerings or pricing_rules, and the columns it used to set from
     the interview (tone, escalation_threshold, payment_processing_mode) keep
     their schema defaults until a screen edits them. Priced answers come from
     the owner's uploaded material instead (C-1).

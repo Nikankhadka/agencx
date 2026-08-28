@@ -32,6 +32,7 @@ EPOCH_SQL = "'epoch'::timestamptz"
 _VERSION_SQL = f"""
 select greatest(
   coalesce((select max(updated_at) from documents where tenant_id = $1), {EPOCH_SQL}),
+  coalesce((select max(updated_at) from offerings where tenant_id = $1), {EPOCH_SQL}),
   coalesce((select updated_at from tenant_config where tenant_id = $1), {EPOCH_SQL})
 )
 """

@@ -57,7 +57,7 @@ async def list_catalog(*, tenant_id: str) -> list[dict[str, object]]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
             "select id, name, description, price_cents, active, updated_at "
-            "from catalog_items where tenant_id = $1 order by name",
+            "from offerings where tenant_id = $1 order by name",
             tenant_id,
         )
     return [dict(row) for row in rows]

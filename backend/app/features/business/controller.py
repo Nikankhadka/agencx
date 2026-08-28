@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from app.features.business import offerings, service
-from app.features.knowledge import service as knowledge_service
+from app.features.business import service
 from app.features.onboarding import service as onboarding_service
 from app.features.tenants import service as tenant_service
 
@@ -18,6 +17,13 @@ def _describe(profile: dict[str, Any]) -> str | None:
     parts = [str(profile.get(key, "")).strip() for key in ("services", "hours")]
     kept = [part for part in parts if part]
     return " · ".join(kept) if kept else None
+
+
+def _display_price(price_cents: int | None) -> str | None:
+    if price_cents is None:
+        return None
+    cents = int(price_cents)
+    return f"${cents // 100}.{cents % 100:02d}"
 
 
 async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
@@ -42,7 +48,13 @@ async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
             or tenant["name"]
         ),
         "tagline": _describe(profile),
-        "services": offerings.derive(await knowledge_service.list_records(tenant_id=tenant_id)),
+        "services": [
+            {
+                "name": row["name"],
+                "price": _display_price(cast(int | None, row["price_cents"])),
+            }
+            for row in await service.list_offerings(tenant_id=tenant_id)
+        ],
         "links": await service.read_links(tenant_id=tenant_id),
         "has_cover": await service.has_cover(tenant_id=tenant_id),
     }

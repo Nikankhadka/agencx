@@ -459,7 +459,7 @@ async def test_confirm_writes_no_catalog_or_pricing_rows(
     await client.post("/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"})
 
     items = await superuser_conn.fetchval(
-        "select count(*) from catalog_items where tenant_id = $1", tenant_id
+        "select count(*) from offerings where tenant_id = $1", tenant_id
     )
     rules = await superuser_conn.fetchval(
         "select count(*) from pricing_rules where tenant_id = $1", tenant_id

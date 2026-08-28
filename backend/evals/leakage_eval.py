@@ -197,7 +197,7 @@ async def _check_direct_tables(
 
     checks = (
         ("pricing_rules", "label", victim_secrets["pricing_rule"], own_secrets["pricing_rule"]),
-        ("catalog_items", "name", victim_secrets["catalog_item"], own_secrets["catalog_item"]),
+        ("offerings", "name", victim_secrets["catalog_item"], own_secrets["catalog_item"]),
         ("orders", "details::text", victim_secrets["order_detail"], own_secrets["order_detail"]),
     )
     for table, column, victim_secret, own_secret in checks:

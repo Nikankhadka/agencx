@@ -64,7 +64,7 @@ async def _seed_catalog(
     item_ids = []
     for name, description, price_cents in items:
         item_id: uuid.UUID = await conn.fetchval(
-            "insert into catalog_items (tenant_id, name, description, price_cents) "
+            "insert into offerings (tenant_id, name, description, price_cents) "
             "values ($1, $2, $3, $4) returning id",
             tenant_id,
             name,

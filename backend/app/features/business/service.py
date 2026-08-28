@@ -6,6 +6,8 @@ import json
 from typing import Any
 from uuid import UUID
 
+from app.ingestion.pipeline import ingest_offerings
+from app.llm.embedder import Embedder
 from app.shared import db
 
 # The four places a small business is already found. Fixed, because the
@@ -13,6 +15,84 @@ from app.shared import db
 LINK_KEYS = ("website", "google", "facebook", "instagram")
 
 COVER_KIND = "cover"
+
+
+async def list_offerings(*, tenant_id: UUID) -> list[dict[str, object]]:
+    """The owner's structured offerings, ordered for the small editable list."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        rows = await conn.fetch(
+            "select id, name, description, price_cents from offerings "
+            "where tenant_id = $1 and active order by name, id",
+            tenant_id,
+        )
+    return [dict(row) for row in rows]
+
+
+async def create_offering(
+    *,
+    tenant_id: UUID,
+    name: str,
+    description: str,
+    price_cents: int | None,
+    embedder: Embedder,
+) -> dict[str, object]:
+    """Create one offering, then rebuild its searchable catalog projection."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            "insert into offerings (tenant_id, name, description, price_cents) "
+            "values ($1, $2, $3, $4) "
+            "returning id, name, description, price_cents",
+            tenant_id,
+            name,
+            description,
+            price_cents,
+        )
+        assert row is not None
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+    return dict(row)
+
+
+async def update_offering(
+    *,
+    tenant_id: UUID,
+    offering_id: UUID,
+    updates: dict[str, object],
+    embedder: Embedder,
+) -> dict[str, object] | None:
+    """Update an offering owned by this tenant and rebuild its projection."""
+    set_clause = ", ".join(f"{key} = ${index + 3}" for index, key in enumerate(updates))
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            f"update offerings set {set_clause} "  # noqa: S608 - fixed API whitelist
+            "where tenant_id = $1 and id = $2 "
+            "returning id, name, description, price_cents",
+            tenant_id,
+            offering_id,
+            *updates.values(),
+        )
+        if row is not None:
+            await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+    return dict(row) if row is not None else None
+
+
+async def delete_offering(*, tenant_id: UUID, offering_id: UUID, embedder: Embedder) -> bool:
+    """Delete an offering and its catalog projection if it was the last one."""
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        deleted = await conn.fetchval(
+            "delete from offerings where tenant_id = $1 and id = $2 returning id",
+            tenant_id,
+            offering_id,
+        )
+        if deleted is None:
+            return False
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+        # A deleted row has no updated_at left for knowledge_version() to see.
+        # Touching the already-versioned config row makes this removal visible
+        # to every cached context package on its very next lookup.
+        await conn.execute(
+            "update tenant_config set updated_at = now() where tenant_id = $1", tenant_id
+        )
+    return True
 
 
 async def read_links(*, tenant_id: UUID) -> dict[str, str]:

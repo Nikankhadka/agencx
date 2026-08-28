@@ -83,7 +83,7 @@ async def _seed_tenant(tenant_id: UUID, slug: str, name: str, secrets: dict[str,
         )
 
         item_id = await conn.fetchval(
-            "insert into catalog_items (tenant_id, name, description, price_cents) "
+            "insert into offerings (tenant_id, name, description, price_cents) "
             "values ($1, $2, $3, 4200) returning id",
             tenant_id,
             f"Secret Widget {secrets['catalog_item']}",

@@ -481,8 +481,8 @@ write path the seed scripts depend on.
 
 **Date:** 2026-08-28 (founder, designed in a Codex CLI session; recorded here
 after that session ran out of usage before it could write anything down -
-provenance below). **Status:** accepted design, **implementation not
-started** - see `M-1`/`M-2`/`M-3` in `docs/agencx/spec/11-offerings-media.md`.
+provenance below). **Status:** `M-1` built; `M-2`/`M-3` not started - see
+`M-1`/`M-2`/`M-3` in `docs/agencx/spec/11-offerings-media.md`.
 Closes G5.1 in `industry-standard-gap.md`, broadened past that ticket's
 original scope. `FLAG: new external service` (Cloudinary). `FLAG: schema
 change` (`tenant_assets` widens or is replaced).
@@ -492,10 +492,10 @@ change` (`tenant_assets` widens or is replaced).
 1. **`Offering` is the one domain noun** for anything a business sells - a
    tradie service, a dental appointment, a menu item, a retail product, a
    package. Owner-facing heading is "What you offer"; customer-facing is
-   "What we offer". The existing `catalog_items` table is the implementation
-   underneath that noun, not a second concept next to it.
+   "What we offer". The `offerings` table is the implementation underneath
+   that noun, not a second concept next to it.
 2. **The catalog and the knowledge base stay two systems, joined only at
-   answer time.** The catalog (`catalog_items`) is the structured source of
+   answer time.** The catalog (`offerings`) is the structured source of
    truth for name/price/availability; the knowledge base stays prose (policy,
    FAQs, general info). A generated search projection off the catalog lets the
    agent *find* candidate items during retrieval, but the agent always
@@ -571,19 +571,17 @@ already does (O-3's headed sections), facts/policy save as knowledge exactly
 as today, and any section under `"What we offer"`/`"Prices"` becomes a
 *candidate* offering shown in one lightweight confirm step - reusing the
 existing Settings > Knowledge `ReviewSheet` review pattern rather than a new
-questionnaire. Only what the owner confirms becomes a `catalog_items` row.
+questionnaire. Only what the owner confirms becomes an `offerings` row.
 Re-uploading the same or an updated document later proposes a diff against
 what's already confirmed; it never silently overwrites an owner's own edit -
 the owner's live catalog edit always outranks a stale document, matching the
 same "confirmed value wins" rule the money guardrail already lives by.
 
-**The one decision left open, deliberately.** Whether `catalog_items` keeps
-its physical name (with `Offering` staying purely the domain/UI vocabulary
-layered on top) or gets renamed in a migration is *not* decided here - the
-Codex conversation that produced this design flagged it as unresolved and
-this ADR keeps it that way rather than picking one silently. Whoever
-implements `M-1` decides it, and records the reasoning as part of that
-ticket, not as a retroactive edit to this entry.
+**The naming decision.** `M-1` renamed `catalog_items` to `offerings` in
+migration `0023`: the table's generic existing row shape already was an
+Offering, and retaining a second physical name would keep two terms for one
+concept. The migration preserves RLS policies and grants because they follow
+the table OID. The ticket records the full reasoning.
 
 **Boundary:** the money rule is unchanged and unrelaxed by any of this - no
 model produces, edits, or infers a price; a confirmed offering's price is
@@ -592,10 +590,10 @@ always a verbatim slice of the owner's own text (reusing
 exactly as `business/offerings.py`'s read-time derivation already does today)
 or an owner-typed value, never a computed or model-drafted one. This ADR does
 not itself change any code - the concrete implementation gaps it depends on
-closing (no owner-facing `catalog_items` writer today; `tenant_assets` is
-schema-capped to one row per tenant; the fast-path retrieval doesn't filter
-catalog-kind chunks out of general knowledge answers; `knowledge_version`
-doesn't include `catalog_items.updated_at`) are catalogued in
+closing (the now-built owner-facing `offerings` writer; `tenant_assets` is
+schema-capped to one row per tenant; the fast-path retrieval now filters
+catalog-kind chunks out of general knowledge answers; `knowledge_version` now
+includes `offerings.updated_at`) are catalogued in
 `11-offerings-media.md`'s tickets, not here.
 
 **Provenance.** This design was reached over a long conversation between the

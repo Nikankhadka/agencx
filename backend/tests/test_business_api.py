@@ -14,6 +14,7 @@ import pytest_asyncio
 
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
+from app.services.knowledge_version import knowledge_version
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -92,6 +93,81 @@ async def test_page_reads_as_the_screen_renders(client: httpx.AsyncClient) -> No
     assert body["links"] == {}
     assert body["has_cover"] is False
     assert body["slug"].startswith("biz-")
+
+
+async def test_owner_manages_offerings_and_booking_reads_the_current_rows(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, tenant_id = await _signup(client)
+
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "description": "Most models", "price_dollars": "89.50"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    offering = created.json()
+    assert offering["price_cents"] == 8950
+
+    page = await client.get("/api/business/page", headers=headers)
+    assert page.json()["services"] == [{"name": "Screen repair", "price": "$89.50"}]
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await knowledge_version(conn, tenant_id)
+
+    changed = await client.patch(
+        f"/api/business/offerings/{offering['id']}",
+        json={"name": "Screen replacement", "price_dollars": "99"},
+        headers=headers,
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["price_cents"] == 9900
+    assert (await client.get("/api/business/page", headers=headers)).json()["services"] == [
+        {"name": "Screen replacement", "price": "$99.00"}
+    ]
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after_update = await knowledge_version(conn, tenant_id)
+        assert after_update > before
+
+    deleted = await client.delete(f"/api/business/offerings/{offering['id']}", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+    assert (await client.get("/api/business/page", headers=headers)).json()["services"] == []
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        assert await knowledge_version(conn, tenant_id) > after_update
+
+
+async def test_offerings_are_tenant_scoped(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    other_headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Private service"},
+        headers=headers,
+    )
+    offering_id = created.json()["id"]
+
+    assert (await client.get("/api/business/offerings", headers=other_headers)).json() == []
+    assert (
+        await client.patch(
+            f"/api/business/offerings/{offering_id}",
+            json={"name": "Leaked service"},
+            headers=other_headers,
+        )
+    ).status_code == 404
+    deleted = await client.delete(f"/api/business/offerings/{offering_id}", headers=other_headers)
+    assert deleted.status_code == 404
+
+
+@pytest.mark.parametrize("price", ["-1", "1.999", "NaN", "1000001"])
+async def test_offering_prices_are_validated(client: httpx.AsyncClient, price: str) -> None:
+    headers, _ = await _signup(client)
+    response = await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "price_dollars": price},
+        headers=headers,
+    )
+    assert response.status_code == 422, response.text
 
 
 async def test_links_round_trip_and_merge(client: httpx.AsyncClient) -> None:
