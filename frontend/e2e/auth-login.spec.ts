@@ -5,7 +5,7 @@
  * Entry point: /login (reachable from both hosts)
  *
  * Login is now inside the conversation: email -> 6-digit code -> session. The
- * code is backend-issued and captured (dev-login-code endpoint) for the demo.
+ * code is GoTrue OTP; the helper reads it out of Mailpit (auth-helpers.ts).
  */
 
 import { test, expect } from "@playwright/test";
@@ -69,8 +69,10 @@ test.describe("tenant-admin login-in-chat errors", () => {
       await page.getByLabel(`Digit ${i + 1}`).fill("0");
     }
 
+    // GoTrue's own error (otp_expired) covers both "wrong" and "expired" -
+    // it does not distinguish them the way the old backend-issued codes did.
     await expect(
-      page.getByText("That code didn't work. Try again, or resend."),
+      page.getByText("That code didn't work or expired. Try again, or resend."),
     ).toBeVisible();
   });
 });

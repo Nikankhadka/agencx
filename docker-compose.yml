@@ -189,8 +189,12 @@ services:
       # Dev-only: the E2E suite logs in dozens of times per run, serially,
       # mostly as the same two demo owners - GoTrue's real defaults (1
       # mail/user/minute, 30 mails/hour project-wide) would fail the suite
-      # outright. Hosted keeps the real limits; this override never ships.
-      GOTRUE_SMTP_MAX_FREQUENCY: "1s"
+      # outright. 1s still wasn't short enough - measured: Playwright cycles
+      # through some spec files' setup faster than that, so two logins as the
+      # same demo owner landed inside the same window and the second got
+      # `over_email_send_rate_limit`. Hosted keeps the real limits; this
+      # override never ships.
+      GOTRUE_SMTP_MAX_FREQUENCY: "1ms"
       GOTRUE_RATE_LIMIT_EMAIL_SENT: "100000"
       # GoTrue's own default magic-link template has no six-digit code in it
       # at all - only a magiclink URL (`{{ .ConfirmationURL }}`, built from

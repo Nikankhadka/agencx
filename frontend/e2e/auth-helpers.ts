@@ -39,7 +39,12 @@ export const DEMO_USERS: DemoUser[] = [
 // and the platform lives under `/admin`. Specs use the config baseURL and
 // relative paths; there are no per-surface hosts to reconstruct.
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// GoTrue is the OTP issuer now (auth migration) and mails through Mailpit
+// (docker-compose.yml's `auth` service). No env var to override this: the
+// same Makefile socat mirror that forwards 3000/8000/54321 onto the e2e
+// runner's own loopback (F-3) forwards 8025 too, so this default reaches
+// Mailpit identically from a host run or the containerized runner.
+const MAILPIT_URL = "http://localhost:8025";
 
 // ---------------------------------------------------------------------------
 // Login interaction helpers
@@ -56,9 +61,42 @@ export async function submitLoginForm(
   await page.getByRole("button", { name: "Log in" }).click();
 }
 
+interface MailpitMessage {
+  Created: string;
+  Snippet: string;
+}
+
 /**
- * Log in through the tenant-admin login-in-chat (O-2): enter an email, fetch
- * the code the backend captured (dev-login-code), type the six digits.
+ * Poll Mailpit for the OTP GoTrue just mailed to `email` and return its six
+ * digits. "Newest matching message" is always correct here with no cutoff
+ * needed: the send this helper is waiting on only just happened, so nothing
+ * mailed to this address before it can ever be newer. Polls rather than
+ * fetching once because delivery (real SMTP, even to a local relay) is not
+ * instant.
+ */
+async function fetchOtpCode(request: APIRequestContext, email: string): Promise<string> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const resp = await request.get(
+      `${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`
+    );
+    if (resp.ok()) {
+      const { messages } = (await resp.json()) as { messages: MailpitMessage[] };
+      const newest = messages.reduce<MailpitMessage | null>(
+        (latest, m) => (!latest || m.Created > latest.Created ? m : latest),
+        null
+      );
+      const code = newest?.Snippet.match(/\b(\d{6})\b/)?.[1];
+      if (code) return code;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`no OTP code arrived in Mailpit for ${email} within 10s`);
+}
+
+/**
+ * Log in through the tenant-admin login-in-chat (O-2): enter an email, read
+ * the six-digit code GoTrue mails via Mailpit, type it back.
  */
 export async function loginInChat(
   page: Page,
@@ -69,16 +107,10 @@ export async function loginInChat(
   await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Send" }).click();
 
-  // The code phase must render before the captured code is fetched - the
-  // login-code request has to land first.
+  // The code phase must render before the mail is fetched - the signInWithOtp
+  // call has to land first.
   await page.getByLabel("Digit 1").waitFor({ timeout: 10_000 });
-  const codeResp = await request.get(
-    `${BACKEND_URL}/api/auth/dev-login-code?email=${encodeURIComponent(email)}`
-  );
-  if (!codeResp.ok()) {
-    throw new Error(`dev-login-code failed: ${codeResp.status()}`);
-  }
-  const { code } = (await codeResp.json()) as { code: string };
+  const code = await fetchOtpCode(request, email);
   for (let i = 0; i < 6; i++) {
     await page.getByLabel(`Digit ${i + 1}`).fill(code[i]);
   }
@@ -106,4 +138,40 @@ export async function loginAsPlatformAdmin(page: Page, user: DemoUser): Promise<
   await submitLoginForm(page, user.email, user.password);
   // T-033: on success the page redirects to "/admin", the Tenants page.
   await page.getByRole("heading", { name: "Tenants" }).waitFor({ timeout: 10_000 });
+}
+
+// ---------------------------------------------------------------------------
+// Raw bearer token (for specs that hit the backend directly, bypassing the
+// app's own fetch wrapper)
+// ---------------------------------------------------------------------------
+
+// Matches how src/proxy.ts and supabase-js itself derive the session cookie's
+// name from the Supabase URL - see proxy.ts for the full rationale.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost:54321";
+const SESSION_COOKIE_NAME = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
+
+/**
+ * The signed-in session's access token, read out of the cookie
+ * `@supabase/ssr` writes - the same source `lib/api.ts`'s `getAuthHeaders`
+ * reads via `getSupabase().auth.getSession()`. There is no longer a
+ * localStorage session to read directly (the auth migration moved it to this
+ * cookie), and the cookie is the one place outside the app's own bundled
+ * supabase-js instance that actually holds the token.
+ *
+ * ponytail: assumes one unchunked cookie (`@supabase/ssr` splits a session
+ * across `.0`/`.1`/... cookies past ~3180 bytes) - true for every session
+ * observed in this suite (~2.7KB). A session that grows past the chunking
+ * threshold needs this to reassemble the chunks first.
+ */
+export async function getAccessToken(page: Page): Promise<string> {
+  const cookies = await page.context().cookies();
+  const session = cookies.find((c) => c.name === SESSION_COOKIE_NAME);
+  if (!session) {
+    throw new Error(`no ${SESSION_COOKIE_NAME} cookie found - is this page signed in?`);
+  }
+  const raw = session.value.startsWith("base64-") ? session.value.slice(7) : session.value;
+  const { access_token: accessToken } = JSON.parse(
+    Buffer.from(raw, "base64url").toString("utf8")
+  ) as { access_token: string };
+  return accessToken;
 }

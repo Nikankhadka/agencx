@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { AuthError } from "@supabase/supabase-js";
 import { CodeInput } from "@/components/ui/CodeInput";
 import { CommandPill } from "@/components/ui/CommandPill";
 import {
@@ -13,6 +14,7 @@ import {
   TypingLine,
 } from "@/components/ui/Thread";
 import { apiFetch, ApiError } from "@/lib/api";
+import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 
 /**
@@ -20,25 +22,40 @@ import { useAuth } from "@/components/AuthProvider";
  * than when the whole field is an address. The composer is a chat pill, so
  * "it's sam@shop.com" is a normal answer and must not sit there un-sendable.
  *
- * This is a liveness gate, not the validator: app/services/email_address.py on
- * the backend is the authority, and it answers a bad address with one calm line
- * that this page renders verbatim. Keeping the gate loose and the check
- * server-side is what stops the two from disagreeing.
+ * Also the extraction step below: GoTrue is the only real validator now (a
+ * genuinely broken address just gets no mail, exactly like every other OTP
+ * flow), so this loose gate plus a bit of trailing-punctuation cleanup is all
+ * the client does before handing the address to `signInWithOtp`.
  */
 const LOOKS_LIKE_EMAIL = /[^\s@]*@[^\s@]+\.[^\s@]+/;
+
+/** Sentence punctuation clings to the end of an address typed in prose. */
+function extractEmail(raw: string): string {
+  const candidate = raw.match(LOOKS_LIKE_EMAIL)?.[0] ?? raw.trim();
+  return candidate.replace(/[.,;:!?)'"]+$/, "").toLowerCase();
+}
+
+/** GoTrue's `error.code` -> the thread's one calm line. Falls back to
+ * GoTrue's own message, which is already short and blame-free. */
+const OTP_ERROR_COPY: Record<string, string> = {
+  validation_failed: "That email does not look quite right. Mind checking it?",
+  over_email_send_rate_limit: "That's a lot of codes for one address. Wait a moment and try again.",
+  otp_expired: "That code didn't work or expired. Try again, or resend.",
+};
+
+function otpErrorMessage(error: AuthError): string {
+  return (error.code && OTP_ERROR_COPY[error.code]) || error.message;
+}
 
 /** Matches the onboarding thread's opening pace (prototype `agentMsg()`). */
 const OPENING_PACE_MS = 820;
 
-interface VerifyResponse {
-  access_token: string;
-  user_id: string;
-  tenant_id: string;
-}
-
 /**
  * O-2: login-in-chat. The owner authenticates inside the conversation - type an
  * email, receive a 6-digit code, type it back - instead of a sign-up form.
+ * GoTrue owns issuance and verification (`signInWithOtp`/`verifyOtp`); a
+ * successful verify writes the session cookie `useAuth` reads, and the
+ * `/api/tenants` call right after provisions (or fetches) the caller's tenant.
  *
  * This is the first half of the same conversation the onboarding interview
  * continues, so it renders on the same thread primitives as /onboarding: the
@@ -49,7 +66,7 @@ interface VerifyResponse {
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { session, isLoading, signInWithCode } = useAuth();
+  const { session, isLoading } = useAuth();
 
   const [phase, setPhase] = useState<"email" | "code">("email");
   const [draft, setDraft] = useState("");
@@ -83,30 +100,26 @@ export default function LoginPage() {
   async function submitEmail(value: string) {
     const typed = value.trim();
     if (!typed || busy) return;
+    const resolved = extractEmail(typed);
     setStatus(null);
     setBusy(true);
-    try {
-      // The server normalizes and returns the address it actually used, so the
-      // thread echoes what the code was sent to - not what was typed.
-      const { email: resolved } = await apiFetch<{ email: string }>("/api/auth/login-code", {
-        method: "POST",
-        body: JSON.stringify({ email: typed }),
-      });
-      setEmail(resolved);
-      setDraft("");
-      setPhase("code");
-      setResendReady(false);
-      resendTimer.current = setTimeout(() => setResendReady(true), 30_000);
-    } catch (err) {
-      // A bad address comes back as one calm line from the server - show it
-      // verbatim. No red chrome, and the pill keeps what was typed so it can
-      // be corrected rather than retyped.
-      setStatus(
-        err instanceof ApiError ? err.detail : "Something went wrong - try again.",
-      );
-    } finally {
+
+    const { error } = await getSupabase().auth.signInWithOtp({ email: resolved });
+    if (error) {
+      // No red chrome, and the pill keeps what was typed so it can be
+      // corrected rather than retyped.
+      setStatus(otpErrorMessage(error));
       setBusy(false);
+      return;
     }
+
+    setEmail(resolved);
+    setDraft("");
+    setPhase("code");
+    setResendReady(false);
+    // GoTrue's own per-address resend cadence in production (SMTP_MAX_FREQUENCY).
+    resendTimer.current = setTimeout(() => setResendReady(true), 60_000);
+    setBusy(false);
   }
 
   async function submitCode(value: string) {
@@ -114,16 +127,23 @@ export default function LoginPage() {
     setCode(value);
     setStatus(null);
     setBusy(true);
+
+    const { error: verifyError } = await getSupabase().auth.verifyOtp({
+      email,
+      token: value,
+      type: "email",
+    });
+    if (verifyError) {
+      setStatus(otpErrorMessage(verifyError));
+      setCode("");
+      setBusy(false);
+      return;
+    }
+
     try {
-      const res = await apiFetch<VerifyResponse>("/api/auth/verify-code", {
-        method: "POST",
-        body: JSON.stringify({ email, code: value }),
-      });
-      signInWithCode({
-        access_token: res.access_token,
-        user_id: res.user_id,
-        email,
-      });
+      // Empty body: provisions a tenant on the first sign-in, hands back the
+      // existing one on every sign-in after (features/tenants/controller.py).
+      await apiFetch("/api/tenants", { method: "POST", body: "{}" });
       router.replace("/onboarding");
     } catch (err) {
       const detail = err instanceof ApiError ? err.detail : "Something went wrong.";
@@ -193,7 +213,7 @@ export default function LoginPage() {
                 </button>
               </div>
               <CodeInput value={code} onChange={setCode} onComplete={submitCode} disabled={busy} />
-              {/* `.otp-hint`: inactive for 30s, and deliberately without the
+              {/* `.otp-hint`: inactive for 60s, and deliberately without the
                   prototype's visible countdown (O-2's spec). */}
               <button
                 type="button"
