@@ -288,6 +288,9 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | G2.1/G2.2 Auth migration: GoTrue OTP + `@supabase/ssr` cookies | done | `8e78165` (backend), `4a6b59f` (frontend); D23 in `design/decisions.md` |
 | M-1 Offerings become a real, owner-writable structured item | done | `040e2cf` (merged to `development`) |
 | M-4 The public storefront, and the address the owner chooses | done | see `spec/11-offerings-media.md` |
+| M-5 Single storefront chat entry | done | `aa97ba6` |
+| M-6 Business page summary preview | done | `62a94da` |
+| M-3 Import offerings from reviewed knowledge | done | candidate extraction and confirmation through the existing Knowledge review sheet |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

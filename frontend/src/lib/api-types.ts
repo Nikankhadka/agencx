@@ -925,6 +925,13 @@ export interface components {
             /** Widget */
             widget?: ("text" | "chips" | "masked" | "cta" | "phone") | null;
         };
+        /** ConfirmedOffering */
+        ConfirmedOffering: {
+            /** Name */
+            name: string;
+            /** Price Cents */
+            price_cents?: number | null;
+        };
         /** ConversationDetail */
         ConversationDetail: {
             /**
@@ -1147,6 +1154,13 @@ export interface components {
             error: string | null;
             /** Sections */
             sections: components["schemas"]["Section"][];
+            /**
+             * Offering Candidates
+             * @default []
+             */
+            offering_candidates: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * LinksUpdate
@@ -1398,6 +1412,11 @@ export interface components {
         SaveRecordRequest: {
             /** Sections */
             sections: components["schemas"]["Section"][];
+            /**
+             * Offerings
+             * @default []
+             */
+            offerings: components["schemas"]["ConfirmedOffering"][];
         };
         /**
          * Section

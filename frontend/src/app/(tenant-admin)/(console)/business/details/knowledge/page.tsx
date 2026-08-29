@@ -91,14 +91,17 @@ export default function KnowledgePage() {
     }
   }
 
-  async function save(sections: KnowledgeSection[]) {
+  async function save(
+    sections: KnowledgeSection[],
+    offerings: { name: string; price_cents: number | null }[] = [],
+  ) {
     if (!reviewing) return;
     setError(null);
     setWorking("Saving…");
     try {
       await apiFetch<KnowledgeRecord>(`/api/knowledge/records/${reviewing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ sections }),
+        body: JSON.stringify({ sections, offerings }),
       });
       setReviewing(null);
       await refresh();

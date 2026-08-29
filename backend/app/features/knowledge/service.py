@@ -19,12 +19,15 @@ from uuid import UUID
 
 from starlette.concurrency import run_in_threadpool
 
+from app.features.business.offering_candidates import derive
+from app.features.business.service import create_offerings_batch
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
 from app.ingestion.pipeline import process_document
 from app.ingestion.url import extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.pricing.validation_gate import extract_monetary_figures
 from app.shared import db
 from app.shared.storage import document_key, get_storage
 
@@ -187,6 +190,12 @@ def _record(row: Any) -> dict[str, Any]:
     record = dict(row)
     raw = record.pop("structured", None)
     record["sections"] = json.loads(raw) if isinstance(raw, str) else (raw or [])
+    candidates = []
+    for candidate in derive([{**record, "status": "ready"}]):
+        price = candidate.get("price")
+        figures = extract_monetary_figures(price) if price else []
+        candidates.append({**candidate, "price_cents": figures[0].cents if figures else None})
+    record["offering_candidates"] = candidates
     return record
 
 
@@ -304,6 +313,7 @@ async def save_record(
     tenant_id: UUID,
     document_id: UUID,
     sections: list[dict[str, str]],
+    offerings: list[dict[str, Any]],
     embedder: Embedder,
 ) -> dict[str, Any] | None:
     """Make the owner's reviewed text the knowledge: store the sections, write
@@ -336,6 +346,10 @@ async def save_record(
             extension=".txt",
             source=source,
         )
+        if offerings:
+            await create_offerings_batch(
+                conn=conn, tenant_id=tenant_id, offerings=offerings, embedder=embedder
+            )
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", document_id
         )

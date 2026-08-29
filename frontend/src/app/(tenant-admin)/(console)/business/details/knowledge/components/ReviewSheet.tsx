@@ -10,7 +10,7 @@ export interface ReviewSheetProps {
   record: KnowledgeRecord | null;
   busy: boolean;
   onClose: () => void;
-  onSave: (sections: KnowledgeSection[]) => void;
+  onSave: (sections: KnowledgeSection[], offerings: { name: string; price_cents: number | null }[]) => void;
   onDiscard: () => void;
 }
 
@@ -58,12 +58,13 @@ function SectionEditor({
 }: {
   record: KnowledgeRecord;
   busy: boolean;
-  onSave: (sections: KnowledgeSection[]) => void;
+  onSave: (sections: KnowledgeSection[], offerings: { name: string; price_cents: number | null }[]) => void;
   onDiscard: () => void;
 }) {
   const [sections, setSections] = useState<KnowledgeSection[]>(() =>
     record.sections.map((section) => ({ ...section })),
   );
+  const [selectedOfferings, setSelectedOfferings] = useState(() => record.offering_candidates ?? []);
   const draft = record.status === "draft";
 
   return (
@@ -94,12 +95,29 @@ function SectionEditor({
         />
       ))}
 
+      {record.offering_candidates?.length ? (
+        <fieldset className="rounded-card border border-hairline p-4">
+          <legend className="px-1 text-row-label font-medium text-text">Offerings found</legend>
+          <p className="mb-3 text-meta text-ink-a40">Select the items to add to your customer-facing list.</p>
+          {selectedOfferings.map((offering) => (
+            <label key={offering.name} className="flex items-center gap-2 py-1.5 text-body-sm text-text">
+              <input
+                type="checkbox"
+                checked
+                onChange={() => setSelectedOfferings((prev) => prev.filter((item) => item.name !== offering.name))}
+              />
+              <span>{offering.name}{offering.price ? ` - ${offering.price}` : ""}</span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+
       <div className="flex flex-col gap-2.5">
         <Button
           className="w-full rounded-field py-4"
           loading={busy}
           disabled={sections.length === 0}
-          onClick={() => onSave(sections)}
+          onClick={() => onSave(sections, selectedOfferings.map((item) => ({ name: item.name, price_cents: item.price_cents })))}
           data-testid="knowledge-save"
         >
           {draft ? "Save it" : "Save changes"}
