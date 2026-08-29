@@ -1,9 +1,9 @@
 """T-026: trajectory scorer - drives every T-025 golden case through the
-REAL graph (real supervisor routing, real specialists, real tenant seed)
-and scores what the agent actually did, not just what it said.
+REAL graph (real agent-node tool routing, real tenant seed) and scores what
+the agent actually did, not just what it said.
 
 Per case:
-- **tool/argument correctness** - the supervisor picked an expected route,
+- **tool/argument correctness** - the graph picked the expected route,
   every expected selection (rule code / catalog item name, quantity)
   appears in what the agent actually selected, no forbidden selection
   appears, order lookups hit the expected ref_code/found/status, and the
@@ -13,12 +13,12 @@ Per case:
   reconcile to engine-quote output, DB-sourced selection provenance, or a
   figure present verbatim in a retrieved chunk.
 - **step efficiency** - actual node executions vs the route's known
-  minimum (supervisor + specialist [+ price_gate for money routes]
-  + inspection), as a <=1.0 ratio.
+  minimum (the P-3/C-2 shape: agent [+ draft] + price_gate + inspection,
+  per _MIN_STEPS_BY_ROUTE below), as a <=1.0 ratio.
 - **cost-per-task** - sum of cost_logs for the case's conversation.
   Honest zero until T-030 wires cost accounting; the query is real.
-- **reasoning quality** - an LLM judge grades whether the supervisor's own
-  stated route reason actually justifies the route it picked.
+- **reasoning quality** - an LLM judge grades whether the route's stated
+  reason justifies the route that was picked, when one was recorded.
 
 Trajectories are observed via ``graph.astream(stream_mode="updates")`` -
 one event per node execution, no app instrumentation needed - plus two

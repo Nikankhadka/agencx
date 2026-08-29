@@ -312,7 +312,7 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 | Graph | LangGraph: START -> agent -> (draft) -> price_gate -> inspection -> END/escalation; fast path = exactly 1 LLM call/turn | agents/graph.py:59-91; agent_node.py:681-728 | History window 10 messages |
 | Money rule | Deterministic pricing engine; LLM never produces a monetary amount | app/pricing/engine.py; import-linter (pyproject.toml:101-136) | Machine-checked boundary |
 | Prompts | Python string literals in code; tenant `system_prompt`/`tone` from config | agent_node.py:74-115; draft_node.py; context_package.py:100-107 | No registry, no versioning |
-| Dead code | Legacy nodes (supervisor.py, knowledge.py, quoting.py, ...) unused by the compiled graph | agents/ | Referenced only by tests/evals |
+| Dead code | ~~Legacy nodes (supervisor.py, knowledge.py, quoting.py, ...) unused by the compiled graph~~ **Resolved** (F-1, 2026-08-29): the five superseded specialist nodes are deleted; the compiled graph (agent -> draft -> price_gate -> inspection) is the only topology | agents/ | Deleted; tests re-pointed to the live schemas |
 
 **Industry standard (2026):** the industry standard is OpenAI/Anthropic-class hosted models with a documented provider strategy; for a $0 budget the defensible variant is exactly what this repo has - a documented multi-tier chain with latency budgets and failover, which is present and ADR'd (D15/D16). Standard hygiene around the agent core: versioned prompt management (Langfuse prompt management, free tier, or a local prompts module with explicit version keys), response/query caching (Upstash Redis free tier) at higher traffic, and no dead code. Structured outputs via strict JSON schema and tool calling are table stakes - both present.
 
@@ -321,12 +321,12 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 | Gap | Severity | Industry-standard target | Cost to adopt | Effort | Priority | Phase |
 |---|---|---|---|---|---|---|
 | G6.1 Prompts unversioned string literals | Medium | Langfuse prompt management (free tier) or local prompts module with version keys | $0 | M | 2 | 2 |
-| G6.2 Legacy unused agent nodes | Low | Delete (supervisor.py and friends); rewrite or drop the tests that reference them | Small | S | 1 | 1 |
+| G6.2 Legacy unused agent nodes | **Resolved** (F-1): supervisor.py, knowledge.py, quoting.py, conversation.py, order_status.py and recommendation.py deleted; the money-schema guard test re-pointed at the agent node's live schemas | Delete (supervisor.py and friends); rewrite or drop the tests that reference them | Small | S | 1 | 1 |
 | G6.3 No semantic/response cache | Low | Upstash Redis free tier when repeat queries appear | $0 | M | 3 | 3 |
 
 **Migration path:**
 
-- **G6.2 (Phase 1):** delete the legacy node files; move their unique test assertions into the graph-level tests or drop them. `Effort: S`.
+- **G6.2 (Phase 1):** ~~delete the legacy node files; move their unique test assertions into the graph-level tests or drop them~~ **Done by F-1 (2026-08-29)** - the nodes are deleted; `test_selection_schema_has_no_money_fields` now pins the agent node's live tool schemas. `Effort: S`.
 - **G6.1 (Phase 2):** extract prompts into a versioned module (or Langfuse, riding G7.1's platform). `Effort: M`.
 
 **Already at standard (quote these):**
@@ -653,7 +653,7 @@ Status: `open` | `decided` (founder ruled, ticket optional) | `done` | `ticket` 
 
 **Goal:** no single point of total data loss; every technology choice answerable; invisible defects (E2E, errors, traces) made visible; every lie-in-waiting removed.
 
-Lands here: **G1.1 + G12.1 + G12.2** (backups, RPO 24h/RTO 1 day, restore drill), **G1.3** (missing `updated_at` timestamps - the `auth_codes` purge half of this item, and of G12.3, is moot: G2.3 closed by dropping the table), **G1.4** (FTS config), **G3.1 + G3.2** (dead-column decisions), **G4.3 + G4.4** (SSRF + tokenizer), **G5.1** (cover to Supabase Storage - FLAG data migration), **G6.2** (delete legacy nodes), **G7.1** (Langfuse wiring), **G7.2** (Sentry), **G9.1** (E2E in CI), **G9.2** (Dependabot + audits), **G10.3** (ECS stack decision). **G2.1 + G2.2 landed ahead of schedule** (2026-08-28, D23) rather than waiting for Phase 2.
+Lands here: **G1.1 + G12.1 + G12.2** (backups, RPO 24h/RTO 1 day, restore drill), **G1.3** (missing `updated_at` timestamps - the `auth_codes` purge half of this item, and of G12.3, is moot: G2.3 closed by dropping the table), **G1.4** (FTS config), **G3.1 + G3.2** (dead-column decisions), **G4.3 + G4.4** (SSRF + tokenizer), **G5.1** (cover to Supabase Storage - FLAG data migration), **G7.1** (Langfuse wiring), **G7.2** (Sentry), **G9.1** (E2E in CI), **G9.2** (Dependabot + audits), **G10.3** (ECS stack decision). **G2.1 + G2.2 landed ahead of schedule** (2026-08-28, D23) rather than waiting for Phase 2, and **G6.2 landed with F-1** (2026-08-29).
 
 **Ordering rationale:** every Phase 1 item is free, and each prevents a specific bad outcome - data loss (G1.1), undiagnosed breakage (G7.2, G9.1), an indefensible "why" (G3.1, G3.2, G10.3), or a security sharp edge (G4.3). Backups and Sentry come first because they are the cheapest insurance; the two dead-column decisions come early because they block future schema work.
 

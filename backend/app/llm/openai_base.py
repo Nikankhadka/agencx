@@ -181,7 +181,7 @@ async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
 # When native tool calling is unavailable (free OpenRouter models that don't
 # support function calling), the emulated path uses extract() with a union
 # schema that names the chosen tool (or "no_tool" for a prose response).
-# This is the same pattern RouteDecision and QuoteSelectionResult already use.
+# This is the same pattern the agent node's tool-arg schemas already use.
 
 
 def _build_emulated_schema(tools: list[ToolSpec]) -> type[BaseModel]:
@@ -329,9 +329,8 @@ class OpenAISDKProvider(LLMProvider):
         Literal excludes ``__no_tool__``.
 
         Uses the multi-message history through extract()'s user_input, so the
-        model sees the full conversation. This is the pattern
-        ``supervisor.RouteDecision`` and ``quoting.QuoteSelectionResult``
-        already use - proven code, not a stub.
+        model sees the full conversation. This is the same pattern the agent
+        node's tool-arg schemas use - proven code, not a stub.
         """
         tool_names: list[str] = [t.name for t in tools]
 

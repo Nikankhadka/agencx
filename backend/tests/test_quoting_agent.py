@@ -13,8 +13,8 @@ import asyncpg
 import pytest
 from pydantic import BaseModel
 
+from app.agents.agent_node import GetQuoteInputsArgs, SelectionChoice
 from app.agents.graph import build_graph
-from app.agents.quoting import QuoteSelectionResult, SelectionChoice
 from app.agents.state import AgentState, GraphContext
 from app.ingestion.chunker import chunk_catalog_item
 from app.llm.provider import ToolCall, ToolTurn
@@ -198,7 +198,9 @@ def test_selection_schema_has_no_money_fields() -> None:
             if isinstance(annotation, type) and issubclass(annotation, BaseModel):
                 assert_clean(annotation)
 
-    assert_clean(QuoteSelectionResult)
+    # F-1: the schema moved from the deleted quoting specialist into the agent
+    # node's get_quote_inputs tool; the invariant it pins did not move.
+    assert_clean(GetQuoteInputsArgs)
     assert_clean(SelectionChoice)
     int_fields = [
         name

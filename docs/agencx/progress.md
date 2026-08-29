@@ -44,10 +44,15 @@ long-standing 375px sidebar squeeze, `/chats` and `/settings` render inside the
 shell, Home greets the owner with what needs them, Business is a hub with its
 Booking page and share link, and the Wren-era operator screens are unlinked
 while still serving and still tested. **`06-polish.md` is closed too** - P-5, B-1, B-3,
-E-3, D-2, F-2 and G-1 all landed. What remains for Stage 1 is `07-hygiene.md`
-(F-1), plus the two findings in Known gaps that want tickets of their own: the
-Google tier's `thought_signature` rejection, and the absent everyday owner
-Copilot.
+E-3, D-2, F-2 and G-1 all landed. **F-1 (hygiene) has landed too** (merged
+from `development`, 2026-08-29): the five specialist nodes the
+supervisor-with-tools re-cut left orphaned (`knowledge.py`, `quoting.py`,
+`conversation.py`, `order_status.py`, `recommendation.py`) are deleted, and
+the refusal constant plus the quote-selection schemas live on in
+`draft_node.py` and `agent_node.py`, where the guard tests re-pointed to
+them. What remains for Stage 1 is the two findings in Known gaps that want
+tickets of their own: the Google tier's `thought_signature` rejection, and
+the absent everyday owner Copilot.
 
 **The prototype-parity work is merged** (2026-08-23). `feat/docker-dev-stack`
 went to `main` first so both lines shared one base - K-1's containerized dev
@@ -285,7 +290,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-2 Hide advanced screens, keep code | done | `ac6199a` |
 | E-3 Platform admin stays minimal | done | `ecdaffb` |
 | F-2 Import boundary in CI | done | `1684a42` |
-| F-1 Hygiene | not started | |
+| F-1 Hygiene | done | `c25ce4b` (cherry-picked via the development sync) |
 | F-3 Trim dead schema, dedupe seeds, enforce owner/staff roles | done | `6ece790` + `028982d` + `0fac1f0` + `06c0677` + `9003445` + `11a6ce7` (branch `feat/cloudinary-catalogue`, shared with the M-2 media work; 0025 carries both F-3's drops/policies and the media schema) |
 | G-1 Eval cases for the lean toolset | done | `acd2328` |
 | K-1 Everything runs in containers (`docs/agencx/spec/09-devex.md`) | done | `3453b85` |
