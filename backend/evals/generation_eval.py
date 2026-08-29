@@ -38,10 +38,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from app.agents.draft_node import REFUSAL_MESSAGE
 from app.agents.escalation import HANDOFF_MESSAGE
 from app.agents.graph import build_graph
 from app.agents.inspection import ESCALATION_MESSAGE
-from app.agents.knowledge import REFUSAL_MESSAGE
 from app.agents.state import AgentState, GraphContext
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder, get_embedder

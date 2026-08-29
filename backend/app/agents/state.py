@@ -3,7 +3,7 @@
 ``AgentState`` is the graph's data - plain, serializable, passed between
 nodes. ``GraphContext`` is run-scoped dependencies (DB access info, LLM
 provider, reranker) - never put live connections in state; nodes open their
-own short-lived ``tenant_context`` as needed (see app/agents/knowledge.py),
+own short-lived ``tenant_context`` as needed (see app/agents/draft_node.py),
 matching T-011's rule of never holding a pooled connection for the duration
 of an LLM stream.
 """

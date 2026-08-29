@@ -18,7 +18,7 @@ from uuid import UUID
 import asyncpg
 import pytest
 
-from app.agents.knowledge import REFUSAL_MESSAGE
+from app.agents.draft_node import REFUSAL_MESSAGE
 from app.llm.provider import ChatMessage, SchemaT, ToolSpec, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk

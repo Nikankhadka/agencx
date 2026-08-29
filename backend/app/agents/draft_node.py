@@ -17,7 +17,10 @@ from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ChatMessage
 from app.shared import db
 
-_KNOWLEDGE_REFUSAL = (
+# F-1: the one refusal constant for a knowledge route with nothing to answer
+# from. Public because evals and API tests assert on the exact customer-facing
+# text; this node is where that text is produced.
+REFUSAL_MESSAGE = (
     "I don't have information about that. Please contact the business directly for help."
 )
 _RECOMMENDATION_REFUSAL = (
@@ -163,9 +166,9 @@ async def run(state: AgentState) -> dict[str, Any]:
     if route == "knowledge":
         retrieved_chunks = state.get("retrieved_chunks", [])
         if not retrieved_chunks:
-            writer({"type": "refusal", "text": _KNOWLEDGE_REFUSAL})
+            writer({"type": "refusal", "text": REFUSAL_MESSAGE})
             return {
-                "draft_response": _KNOWLEDGE_REFUSAL,
+                "draft_response": REFUSAL_MESSAGE,
                 "retrieved_chunks": [],
                 "draft_deterministic": True,
             }

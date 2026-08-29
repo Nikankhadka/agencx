@@ -128,14 +128,17 @@ class _RecommendItemsArgs(BaseModel):
     preferences: str = Field(description="What the customer is looking for - needs, constraints")
 
 
-class _SelectionChoice(BaseModel):
+# F-1: the selection schema moved here from the deleted quoting specialist.
+# Public so the deterministic-pricing guard test can pin the no-money-fields
+# invariant on the live schema instead of a copy.
+class SelectionChoice(BaseModel):
     rule_code: str | None = None
     catalog_item_id: str | None = None
     quantity: int = Field(ge=1, le=999)
 
 
-class _GetQuoteInputsArgs(BaseModel):
-    selections: list[_SelectionChoice] = Field(description="Items/services to quote")
+class GetQuoteInputsArgs(BaseModel):
+    selections: list[SelectionChoice] = Field(description="Items/services to quote")
 
 
 class _LookupOrderArgs(BaseModel):
@@ -352,7 +355,7 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
         ToolSpec(
             name="get_quote_inputs",
             description="Produce a price quote for selected items/services",
-            args_schema=_GetQuoteInputsArgs,
+            args_schema=GetQuoteInputsArgs,
         ),
         ToolSpec(
             name="lookup_order_or_ticket",
@@ -501,7 +504,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                             }
                         )
                     elif call.name == "get_quote_inputs":
-                        qi_args = _GetQuoteInputsArgs.model_validate(call.args)
+                        qi_args = GetQuoteInputsArgs.model_validate(call.args)
                         raw_sel = [s.model_dump(exclude_none=True) for s in qi_args.selections]
                         quote = await _get_quote_inputs_impl(conn, ctx.tenant_id, raw_sel)
                         engine_quote = quote

@@ -142,7 +142,7 @@ def _provenance_text(state: AgentState) -> str:
     engine_quote = state["engine_quote"]
     if engine_quote:
         # Quoting's own selections are id/quantity only (no name/description
-        # - see quoting.py's SelectionChoice) - the engine's persisted line
+        # - see the agent node's SelectionChoice) - the engine's persisted line
         # items are the real provenance for what the draft should reference.
         return "\n".join(
             f"- {item['label']} x{item['quantity']}" for item in engine_quote["line_items"]

@@ -21,7 +21,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from app.agents.knowledge import REFUSAL_MESSAGE
+from app.agents.draft_node import REFUSAL_MESSAGE
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT
 from app.main import app
