@@ -9,6 +9,12 @@ export interface KnowledgeSection {
   body: string;
 }
 
+export interface OfferingCandidate {
+  name: string;
+  price: string | null;
+  price_cents: number | null;
+}
+
 export interface KnowledgeRecord {
   id: string;
   filename: string;
@@ -17,6 +23,7 @@ export interface KnowledgeRecord {
   status: string;
   error: string | null;
   sections: KnowledgeSection[];
+  offering_candidates?: OfferingCandidate[];
 }
 
 /** A link is shown by its host; a file by its name. */

@@ -339,7 +339,7 @@ into sections, if any section is headed `"What we offer"` or `"Prices"`, I see
 a compact list of detected candidate offerings alongside the normal
 knowledge-section review - not a second questionnaire.
 
-- Detection reuses `offerings.py`'s existing line-splitting/price-slice logic
+- Detection reuses `offering_candidates.py`'s existing line-splitting/price-slice logic
   (`_split_line`, `extract_monetary_figures`) verbatim - no new extraction
   model, no new money-handling code path.
 - If nothing offering-shaped is detected, review proceeds exactly as today
@@ -373,7 +373,7 @@ an automatic overwrite.
 
 - **Detection point:** after `structure_document()` runs (existing O-3 flow,
   `knowledge/service.py`), before or alongside the section review step -
-  scan structured sections for `OFFERING_HEADINGS` (`offerings.py:27`) and run
+  scan structured sections for `OFFERING_HEADINGS` (`offering_candidates.py:27`) and run
   the existing `_split_line` extraction to produce candidates.
 - **Review UI:** extend `ReviewSheet.tsx` (`settings/knowledge/components/`)
   with a candidates block, following its existing `SectionField` pattern
@@ -407,7 +407,7 @@ an automatic overwrite.
 
 ### Files touched
 
-- `backend/app/features/business/offerings.py` (candidate-extraction reused)
+- `backend/app/features/business/offering_candidates.py` (candidate-extraction reused)
 - `backend/app/features/knowledge/service.py` (detection hook post-structure)
 - `frontend/src/app/(tenant-admin)/(console)/settings/knowledge/components/ReviewSheet.tsx`
 - `frontend/src/app/(tenant-admin)/(console)/settings/knowledge/lib/types.ts`

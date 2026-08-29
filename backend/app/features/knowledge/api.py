@@ -55,10 +55,17 @@ class KnowledgeRecord(DocumentResponse):
     """A document as the knowledge screen reads it - the row plus its sections."""
 
     sections: list[Section]
+    offering_candidates: list[dict[str, object]] = []
+
+
+class ConfirmedOffering(BaseModel):
+    name: str
+    price_cents: int | None = None
 
 
 class SaveRecordRequest(BaseModel):
     sections: list[Section]
+    offerings: list[ConfirmedOffering] = []
 
 
 def _absolute_url(url: str) -> str:
@@ -224,6 +231,7 @@ async def save_record(
         tenant_id=admin.tenant_id,
         document_id=document_id,
         sections=[section.model_dump() for section in payload.sections],
+        offerings=[offering.model_dump() for offering in payload.offerings],
         embedder=embedder,
     )
     return KnowledgeRecord(**row)

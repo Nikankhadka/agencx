@@ -152,10 +152,15 @@ async def save_record(
     tenant_id: UUID,
     document_id: UUID,
     sections: list[dict[str, Any]],
+    offerings: list[dict[str, Any]] | None = None,
     embedder: Embedder,
 ) -> dict[str, Any]:
     row = await service.save_record(
-        tenant_id=tenant_id, document_id=document_id, sections=sections, embedder=embedder
+        tenant_id=tenant_id,
+        document_id=document_id,
+        sections=sections,
+        offerings=offerings or [],
+        embedder=embedder,
     )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
