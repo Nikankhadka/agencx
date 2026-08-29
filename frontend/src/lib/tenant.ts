@@ -6,13 +6,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  * Server-side fetches (the RSC tenant lookup below) resolve the backend
  * through this base URL:
  * 1. `API_INTERNAL_URL` when set - the containerized dev stack uses it
- *    (`http://backend:8000`, F-3: localhost inside that container is itself).
- *    No NEXT_ prefix, so it never gets inlined into browser bundles.
- * 2. The incoming request's own origin otherwise - on Vercel the edge rewrites
- *    `/api/*` to the backend service, so the same public origin the customer
- *    reached works from inside the frontend container too. The old service
- *    binding (`vercel.json`) was dropped because its injected internal URL is
- *    unreachable from the custom image (TLS to Vercel's internal CA fails).
+ *    (`http://backend:8000`, F-3: localhost inside that container is itself),
+ *    and Vercel's service binding supplies the private backend URL in
+ *    production. No NEXT_ prefix, so it never gets inlined into browser
+ *    bundles.
+ * 2. The incoming request's own origin and deployment URL as fallbacks. This
+ *    keeps a stale or unavailable deployment-level value from making a valid
+ *    tenant look missing during a rollout.
  */
 async function serverApiBaseUrls(): Promise<string[]> {
   const h = await headers();
