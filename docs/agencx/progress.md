@@ -120,8 +120,9 @@ prices, links, and the assistant a tap away in a
 sheet rather than the whole page - and the owner chooses that address at
 go-live instead of keeping the provisional `biz-…` slug. `M-2` now has the
 tenant-scoped media schema, signed Cloudinary adapter, cover and offering media
-routes, and category-aware catalogue rendering; live smoke testing remains
-pending rotated credentials. `M-3` then landed
+routes, and category-aware catalogue rendering; live upload/import/delete smoke
+testing passed with configured credentials, and the migration found zero legacy
+covers. `M-3` then landed
 (`ec46858`, `364a944`, `65ea4a1`): knowledge review proposes offering candidates
 with a deterministic fallback, re-upload diffs against what the owner already
 confirmed, changed prices require explicit confirmation, and nothing is ever

@@ -285,9 +285,10 @@ the backend the way the current private cover endpoint does.
 - [x] Owner can replace a Cloudinary-backed cover
 - [x] Owner can attach/remove one visual on a confirmed offering
 - [x] Public Booking page uses the Cloudinary URL when a managed asset exists;
-      live delivery smoke testing requires rotated credentials
-- [ ] Existing cover photo (if any) migrated, not silently dropped
-- [x] Focused media/migration tests and frontend checks pass; live smoke requires rotated credentials
+      live file upload/import/delete smoke testing passed
+- [x] Existing cover photo (if any) migrated, not silently dropped; the verified
+      local source count was zero
+- [x] Focused media/migration tests, frontend checks, and live smoke pass
 
 ---
 
