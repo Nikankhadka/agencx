@@ -288,7 +288,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | E-2 Hide advanced screens, keep code | done | `ac6199a` |
 | E-3 Platform admin stays minimal | done | `ecdaffb` |
 | F-2 Import boundary in CI | done | `1684a42` |
-| F-1 Hygiene | done | `bd4b72b` |
+| F-1 Hygiene | done | `d845145` (cherry-picked from `c25ce4b`) |
 | G-1 Eval cases for the lean toolset | done | `acd2328` |
 | K-1 Everything runs in containers (`docs/agencx/spec/09-devex.md`) | done | `3453b85` |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
