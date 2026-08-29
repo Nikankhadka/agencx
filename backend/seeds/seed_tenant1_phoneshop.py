@@ -27,22 +27,32 @@ TENANT_NAME = "Bytefix Repairs"
 
 # --- offerings: phones, accessories, tiered repair services (~15) -----------
 
-CATALOG_ITEMS: list[tuple[str, str, int | None]] = [
-    ("iPhone 11 (Refurbished, 64GB)", "Grade A refurbished, 90-day warranty", 24900),
-    ("iPhone 12 (Refurbished, 128GB)", "Grade A refurbished, 90-day warranty", 34900),
-    ("Samsung Galaxy S21 (Refurbished)", "Grade A refurbished, 90-day warranty", 29900),
-    ("Google Pixel 6 (Refurbished)", "Grade A refurbished, 90-day warranty", 27900),
-    ("Phone Case - Universal", "Shock-absorbing case, most models", 1500),
-    ("Tempered Glass Screen Protector", "9H hardness, free installation", 1000),
-    ("USB-C Charging Cable", "1 meter braided cable", 1200),
-    ("Wall Charger Adapter", "20W fast-charging USB-C adapter", 1800),
-    ("Screen Repair - Budget/Mid-range Android", "Aftermarket display, same-day", 5900),
-    ("Screen Repair - Flagship (Aftermarket)", "Aftermarket display, same-day", 12900),
-    ("Screen Repair - Flagship (OEM)", "Original display, same-day", 17900),
-    ("Battery Replacement - Standard", "Most phone models, same-day", 4900),
-    ("Battery Replacement - Flagship", "Larger-capacity flagship batteries", 6900),
-    ("Charging Port Repair", "Loose or non-functioning charging port", 4500),
-    ("Water Damage Diagnostic", "Assessment and cleaning, repair quoted separately", 3500),
+CATALOG_ITEMS: list[tuple[str, str, int | None, str | None]] = [
+    ("iPhone 11 (Refurbished, 64GB)", "Grade A refurbished, 90-day warranty", 24900, "Phones"),
+    ("iPhone 12 (Refurbished, 128GB)", "Grade A refurbished, 90-day warranty", 34900, "Phones"),
+    ("Samsung Galaxy S21 (Refurbished)", "Grade A refurbished, 90-day warranty", 29900, "Phones"),
+    ("Google Pixel 6 (Refurbished)", "Grade A refurbished, 90-day warranty", 27900, "Phones"),
+    ("Phone Case - Universal", "Shock-absorbing case, most models", 1500, "Accessories"),
+    ("Tempered Glass Screen Protector", "9H hardness, free installation", 1000, "Accessories"),
+    ("USB-C Charging Cable", "1 meter braided cable", 1200, "Accessories"),
+    ("Wall Charger Adapter", "20W fast-charging USB-C adapter", 1800, "Accessories"),
+    (
+        "Screen Repair - Budget/Mid-range Android",
+        "Aftermarket display, same-day",
+        5900,
+        "Repairs",
+    ),
+    ("Screen Repair - Flagship (Aftermarket)", "Aftermarket display, same-day", 12900, "Repairs"),
+    ("Screen Repair - Flagship (OEM)", "Original display, same-day", 17900, "Repairs"),
+    ("Battery Replacement - Standard", "Most phone models, same-day", 4900, "Repairs"),
+    ("Battery Replacement - Flagship", "Larger-capacity flagship batteries", 6900, "Repairs"),
+    ("Charging Port Repair", "Loose or non-functioning charging port", 4500, "Repairs"),
+    (
+        "Water Damage Diagnostic",
+        "Assessment and cleaning, repair quoted separately",
+        3500,
+        "Repairs",
+    ),
 ]
 
 # --- pricing_rules: agent-selectable rule codes (~12) ----------------------------

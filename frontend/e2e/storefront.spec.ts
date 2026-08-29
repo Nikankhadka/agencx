@@ -27,7 +27,8 @@ test.describe("the public storefront", () => {
 
     await page.goto("/bytefix");
     await expect(page.getByTestId("storefront-about")).toHaveCount(0);
-    await expect(page.getByText("What we offer", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Repairs", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Phones", exact: true })).toBeVisible();
   });
 
   test("a customer can open a conversation from the page", async ({ page }) => {

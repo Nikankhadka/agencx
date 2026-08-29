@@ -518,8 +518,8 @@ this.
 `backend/seeds/` (idempotent scripts, runnable per environment):
 
 - `seed_tenant1_phoneshop.py` - Tenant 1 (anchor): slug `bytefix`, config (tone,
-  tax), ~15 offerings, ~12 pricing_rules, ~20 mock orders, knowledge docs via
-  the real ingestion pipeline.
+  tax), ~15 categorized offerings, ~12 pricing_rules, ~20 mock orders, knowledge
+  docs via the real ingestion pipeline.
 - `seed_tenant2_dental.py` - Tenant 2 (generalization proof): created only
   through the conversational onboarding flow + uploads; holds raw input
   documents and the interview script, and one deliberate direct

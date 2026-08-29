@@ -98,18 +98,21 @@ async def insert_tenant_core(
 
 
 async def insert_offerings(
-    conn: AppConnection, tenant_id: UUID, catalog: list[tuple[str, str, int | None]]
+    conn: AppConnection,
+    tenant_id: UUID,
+    catalog: list[tuple[str, str, int | None, str | None]],
 ) -> None:
-    """(name, description, price_cents) rows, position = list order."""
-    for position, (name, description, price_cents) in enumerate(catalog):
+    """(name, description, price_cents, category) rows, position = list order."""
+    for position, (name, description, price_cents, category) in enumerate(catalog):
         await conn.execute(
-            "insert into offerings (tenant_id, name, description, price_cents, position) "
-            "values ($1, $2, $3, $4, $5)",
+            "insert into offerings (tenant_id, name, description, price_cents, position, category) "
+            "values ($1, $2, $3, $4, $5, $6)",
             tenant_id,
             name,
             description,
             price_cents,
             position,
+            category,
         )
 
 

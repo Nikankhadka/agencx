@@ -62,7 +62,7 @@ test.describe("Business hub", () => {
     const summary = page.getByRole("heading", { name: "What we offer" });
     await expect(summary).toBeVisible();
     await expect(page.getByText("iPhone 11 (Refurbished, 64GB)")).toBeVisible();
-    await expect(page.getByText("$249.00", { exact: true })).toBeVisible();
+    await expect(page.getByText("$249.00")).toBeVisible();
 
     const sectionColors = await page
       .locator('[data-testid="offerings-summary"], [data-testid="booking-links"]')

@@ -68,15 +68,40 @@ DEMO_PASSWORD = "wren-demo"
 LUMIDENT_SLUG = "lumident"
 LUMIDENT_NAME = "Lumident Dental"
 
-LUMIDENT_CATALOG: list[tuple[str, str, int | None]] = [
-    ("New Patient Exam", "Comprehensive exam, oral cancer screening, treatment plan", 9500),
-    ("Standard Cleaning", "Routine professional cleaning and polish", 12000),
-    ("Deep Cleaning (Per Quadrant)", "Scaling and root planing, one quadrant", 35000),
-    ("Tooth-Colored Filling", "Composite resin filling, one surface", 25000),
-    ("In-Office Whitening", "Single-session professional whitening", 45000),
-    ("Dental Crown", "Porcelain-fused-to-metal crown, one tooth", 110000),
-    ("Root Canal", "Endodontic treatment, one tooth", 95000),
-    ("Emergency Visit", "Same-day pain or trauma assessment", 15000),
+LUMIDENT_CATALOG: list[tuple[str, str, int | None, str | None]] = [
+    (
+        "New Patient Exam",
+        "Comprehensive exam, oral cancer screening, treatment plan",
+        9500,
+        "Exams & Cleanings",
+    ),
+    ("Standard Cleaning", "Routine professional cleaning and polish", 12000, "Exams & Cleanings"),
+    (
+        "Deep Cleaning (Per Quadrant)",
+        "Scaling and root planing, one quadrant",
+        35000,
+        "Exams & Cleanings",
+    ),
+    (
+        "Tooth-Colored Filling",
+        "Composite resin filling, one surface",
+        25000,
+        "Restorative",
+    ),
+    ("Dental Crown", "Porcelain-fused-to-metal crown, one tooth", 110000, "Restorative"),
+    ("Root Canal", "Endodontic treatment, one tooth", 95000, "Restorative"),
+    (
+        "In-Office Whitening",
+        "Single-session professional whitening",
+        45000,
+        "Cosmetic & Emergency",
+    ),
+    (
+        "Emergency Visit",
+        "Same-day pain or trauma assessment",
+        15000,
+        "Cosmetic & Emergency",
+    ),
 ]
 
 LUMIDENT_PRICING_RULES: list[tuple[str, str, int, str]] = [
