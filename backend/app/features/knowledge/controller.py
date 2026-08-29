@@ -153,15 +153,20 @@ async def save_record(
     document_id: UUID,
     sections: list[dict[str, Any]],
     offerings: list[dict[str, Any]] | None = None,
+    accept_price_changes: bool = False,
     embedder: Embedder,
 ) -> dict[str, Any]:
-    row = await service.save_record(
-        tenant_id=tenant_id,
-        document_id=document_id,
-        sections=sections,
-        offerings=offerings or [],
-        embedder=embedder,
-    )
+    try:
+        row = await service.save_record(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            sections=sections,
+            offerings=offerings or [],
+            accept_price_changes=accept_price_changes,
+            embedder=embedder,
+        )
+    except service.OfferingPriceConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
     return row

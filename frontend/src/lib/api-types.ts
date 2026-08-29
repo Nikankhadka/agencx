@@ -1417,6 +1417,11 @@ export interface components {
              * @default []
              */
             offerings: components["schemas"]["ConfirmedOffering"][];
+            /**
+             * Accept Price Changes
+             * @default false
+             */
+            accept_price_changes: boolean;
         };
         /**
          * Section

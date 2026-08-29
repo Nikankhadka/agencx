@@ -23,7 +23,7 @@ from app.features.business.offering_candidates import derive
 from app.features.business.service import create_offerings_batch
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
-from app.ingestion.pipeline import process_document
+from app.ingestion.pipeline import ingest_offerings, process_document
 from app.ingestion.url import extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
@@ -33,6 +33,19 @@ from app.shared.storage import document_key, get_storage
 
 _SELECT_COLUMNS = "id, filename, doc_type, status, error"
 _RECORD_COLUMNS = f"{_SELECT_COLUMNS}, structured"
+
+
+class OfferingPriceConflict(ValueError):
+    """A reviewed source proposes changing an existing owner's price."""
+
+    def __init__(self, changes: list[dict[str, Any]]) -> None:
+        self.changes = changes
+        details = ", ".join(
+            f"{change['name']}: {change['current_price_cents']} -> "
+            f"{change['proposed_price_cents']} cents"
+            for change in changes
+        )
+        super().__init__(f"Offering price changes need confirmation: {details}")
 
 
 async def list_documents(*, tenant_id: UUID) -> list[dict[str, Any]]:
@@ -314,6 +327,7 @@ async def save_record(
     document_id: UUID,
     sections: list[dict[str, str]],
     offerings: list[dict[str, Any]],
+    accept_price_changes: bool = False,
     embedder: Embedder,
 ) -> dict[str, Any] | None:
     """Make the owner's reviewed text the knowledge: store the sections, write
@@ -333,6 +347,26 @@ async def save_record(
         )
         if source is None:
             return None
+        existing_rows = await conn.fetch(
+            "select id, name, price_cents from offerings where tenant_id = $1 and active",
+            tenant_id,
+        )
+        existing = {str(row["name"]).strip().casefold(): row for row in existing_rows}
+        changes = []
+        for offering in offerings:
+            name = str(offering.get("name", "")).strip()
+            row = existing.get(name.casefold())
+            proposed = offering.get("price_cents")
+            if row is not None and proposed is not None and proposed != row["price_cents"]:
+                changes.append(
+                    {
+                        "name": name,
+                        "current_price_cents": row["price_cents"],
+                        "proposed_price_cents": proposed,
+                    }
+                )
+        if changes and not accept_price_changes:
+            raise OfferingPriceConflict(changes)
         await conn.execute(
             "update documents set structured = $2 where id = $1",
             document_id,
@@ -346,10 +380,24 @@ async def save_record(
             extension=".txt",
             source=source,
         )
-        if offerings:
+        updated_prices = False
+        for change in changes:
+            await conn.execute(
+                "update offerings set price_cents = $3 where tenant_id = $1 and id = $2",
+                tenant_id,
+                existing[change["name"].casefold()]["id"],
+                change["proposed_price_cents"],
+            )
+            updated_prices = True
+        created = (
             await create_offerings_batch(
                 conn=conn, tenant_id=tenant_id, offerings=offerings, embedder=embedder
             )
+            if offerings
+            else []
+        )
+        if updated_prices and not created:
+            await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", document_id
         )
