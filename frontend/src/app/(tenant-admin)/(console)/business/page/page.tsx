@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Icon } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
+import type { BookingPage } from "@/lib/api-schemas";
 import { CoverPhoto } from "./components/CoverPhoto";
 import { PlatformLinks } from "./components/PlatformLinks";
 import { StorefrontSectionsEditor } from "./components/StorefrontSectionsEditor";
@@ -25,14 +26,6 @@ import { StorefrontSectionsEditor } from "./components/StorefrontSectionsEditor"
  * preview link below - which now opens the real storefront at `/{slug}`, so
  * this screen's "what customers see" headings are literally true.
  */
-
-interface BookingPage {
-  slug: string;
-  name: string;
-  tagline: string | null;
-  links: Record<string, string>;
-  has_cover: boolean;
-}
 
 export default function BusinessPageScreen() {
   const [page, setPage] = useState<BookingPage | null>(null);
@@ -101,6 +94,23 @@ export default function BusinessPageScreen() {
             <p className="line-clamp-2 text-meta text-ink-a40">
               {page.tagline}
             </p>
+          ) : null}
+          {page?.offerings.length ? (
+            <section className="mt-5 rounded-card border border-hairline bg-surface-container p-4">
+              <h3 className="text-row-label font-medium text-text">What we offer</h3>
+              <div className="mt-3 divide-y divide-hairline">
+                {page.offerings.map((offering) => (
+                  <div key={offering.name} className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                    <span className="text-body-sm text-text">{offering.name}</span>
+                    {offering.price_cents !== null ? (
+                      <span className="text-body-sm font-medium text-text tabular-nums">
+                        ${(offering.price_cents / 100).toFixed(2)}
+                      </span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
           ) : null}
           {publicUrl ? (
             <a
