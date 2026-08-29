@@ -66,6 +66,7 @@ class ConfirmedOffering(BaseModel):
 class SaveRecordRequest(BaseModel):
     sections: list[Section]
     offerings: list[ConfirmedOffering] = []
+    accept_price_changes: bool = False
 
 
 def _absolute_url(url: str) -> str:
@@ -232,6 +233,7 @@ async def save_record(
         document_id=document_id,
         sections=[section.model_dump() for section in payload.sections],
         offerings=[offering.model_dump() for offering in payload.offerings],
+        accept_price_changes=payload.accept_price_changes,
         embedder=embedder,
     )
     return KnowledgeRecord(**row)

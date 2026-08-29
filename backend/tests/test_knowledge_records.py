@@ -256,6 +256,40 @@ async def test_saving_moves_the_knowledge_version(
 
 
 @pytest.mark.db
+async def test_offering_price_change_requires_explicit_confirmation(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    headers = await _signup_tenant_admin(client)
+    created = await client.post(
+        "/api/business/offerings",
+        headers=headers,
+        json={"name": "Screen replacement", "price_dollars": "80.00"},
+    )
+    assert created.status_code == 201, created.text
+
+    draft = await _upload_draft(client, headers)
+    sections = [{"heading": "Prices", "body": "Screen replacement $89"}]
+    payload = {
+        "sections": sections,
+        "offerings": [{"name": "Screen replacement", "price_cents": 8900}],
+    }
+    response = await client.put(
+        f"/api/knowledge/records/{draft['id']}", headers=headers, json=payload
+    )
+    assert response.status_code == 409
+    assert "price changes need confirmation" in response.json()["detail"]
+
+    confirmed = await client.put(
+        f"/api/knowledge/records/{draft['id']}",
+        headers=headers,
+        json={**payload, "accept_price_changes": True},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    offerings = await client.get("/api/business/offerings", headers=headers)
+    assert offerings.json()[0]["price_cents"] == 8900
+
+
+@pytest.mark.db
 async def test_records_list_carries_the_sections(
     client: httpx.AsyncClient, uploads_tmp: Path
 ) -> None:

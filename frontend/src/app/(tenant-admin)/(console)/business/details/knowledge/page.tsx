@@ -28,6 +28,7 @@ export default function KnowledgePage() {
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<KnowledgeRecord | null>(null);
+  const [priceConflict, setPriceConflict] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
@@ -59,6 +60,7 @@ export default function KnowledgePage() {
       });
       setUrl("");
       await refresh();
+      setPriceConflict(null);
       setReviewing(draft);
     } catch (err) {
       fail(err, "I couldn't read that page. Check the link, or send me a file instead.");
@@ -83,6 +85,7 @@ export default function KnowledgePage() {
         body: form,
       });
       await refresh();
+      setPriceConflict(null);
       setReviewing(draft);
     } catch (err) {
       fail(err, "I couldn't read that file.");
@@ -94,6 +97,7 @@ export default function KnowledgePage() {
   async function save(
     sections: KnowledgeSection[],
     offerings: { name: string; price_cents: number | null }[] = [],
+    acceptPriceChanges = false,
   ) {
     if (!reviewing) return;
     setError(null);
@@ -101,12 +105,17 @@ export default function KnowledgePage() {
     try {
       await apiFetch<KnowledgeRecord>(`/api/knowledge/records/${reviewing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ sections, offerings }),
+        body: JSON.stringify({ sections, offerings, accept_price_changes: acceptPriceChanges }),
       });
+      setPriceConflict(null);
       setReviewing(null);
       await refresh();
     } catch (err) {
-      fail(err, "I couldn't save that.");
+      if (err instanceof ApiError && err.status === 409) {
+        setPriceConflict(err.detail);
+      } else {
+        fail(err, "I couldn't save that.");
+      }
     } finally {
       setWorking(null);
     }
@@ -146,6 +155,7 @@ export default function KnowledgePage() {
   /** Open one record - fetching it first, so a source ingested before this
    *  screen existed gets processed into sections on the way in. */
   async function open(record: KnowledgeRecord) {
+    setPriceConflict(null);
     if (record.sections.length > 0) {
       setReviewing(record);
       return;
@@ -345,9 +355,18 @@ export default function KnowledgePage() {
       <ReviewSheet
         record={reviewing}
         busy={working !== null}
-        onClose={() => setReviewing(null)}
-        onSave={(sections) => void save(sections)}
-        onDiscard={() => reviewing && void remove(reviewing)}
+        priceConflict={priceConflict}
+        onClose={() => {
+          setPriceConflict(null);
+          setReviewing(null);
+        }}
+        onSave={(sections, offerings, acceptPriceChanges) =>
+          void save(sections, offerings, acceptPriceChanges)
+        }
+        onDiscard={() => {
+          setPriceConflict(null);
+          if (reviewing) void remove(reviewing);
+        }}
       />
     </main>
   );
