@@ -119,8 +119,15 @@ a customer: `/{slug}` is a storefront now - offerings with the owner's own
 prices, an About section, links, and the assistant a tap away in a
 sheet rather than the whole page - and the owner chooses that address at
 go-live instead of keeping the provisional `biz-…` slug. `M-2` is additionally
-blocked on the founder provisioning Cloudinary credentials; `M-3` has not
-started, and now inherits a price-carrying writer.
+blocked on the founder provisioning Cloudinary credentials; `M-3` then landed
+(`ec46858`, `364a944`, `65ea4a1`): knowledge review proposes offering candidates
+with a deterministic fallback, re-upload diffs against what the owner already
+confirmed, changed prices require explicit confirmation, and nothing is ever
+auto-deleted. Three founder amendments closed the onboarding phase on top of
+it: **O-10** gave the interview its voice, **O-11** captures only explicitly
+named offerings at go-live, and **O-12** (a founder regression, 2026-08-29)
+kept fixed chip and masked answers on a server-owned selection path so the
+saved beat, spoken question, and composer advance together.
 
 **Two abandoned attempts sit behind `M-1`/`M-4`, and the record is the point.**
 A Codex session built `M-1` on `feat/offerings-media-import` and renamed
@@ -269,7 +276,9 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-7 URL ingest: browser headers, logged reasons | done | `1534049` |
 | O-8 Go-live transition | done | `39e019f` + `a491f85` (shared with O-6) |
 | O-9 Settings: an ABN the owner can read and correct | done | `f4088af` |
-| O-12 Server-owned onboarding selections | done | this ticket |
+| O-10 Give onboarding a clear assistant voice | done | `e262735` |
+| O-11 Offerings captured at onboarding | done | `e473235` |
+| O-12 Server-owned onboarding selections | done | `2aa8fdd` |
 | E-2 Hide advanced screens, keep code | done | `ac6199a` |
 | E-3 Platform admin stays minimal | done | `ecdaffb` |
 | F-2 Import boundary in CI | done | `1684a42` |

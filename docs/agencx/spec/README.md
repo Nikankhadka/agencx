@@ -33,7 +33,8 @@ Files in `spec/` hold two genres, and they are read differently.
   plan and there was none - the code is the plan, and `git show` is the record.
 
 An amendment declares itself in a line directly under its heading, naming where
-it came from. The amendments in this set are **O-6, O-7, O-8, O-9, and E-6**.
+it came from. The amendments in this set are **O-6, O-7, O-8, O-9, O-10, O-11,
+O-12, and E-6**.
 Do not backfill the missing sections into them; a retrospective "Technical
 spec" is invented, not recorded.
 
@@ -72,7 +73,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | Phase file | Tickets |
 |---|---|
 | `01-foundation.md` | A-1, A-2 |
-| `02-onboarding.md` | O-1, O-2, O-5, O-6, O-7, O-8, O-9 |
+| `02-onboarding.md` | O-1, O-2, O-5, O-6, O-7, O-8, O-9, O-10, O-11, O-12 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
 | `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5, C-6 |
 | `05-business-page.md` | E-1, E-4, E-5, E-2, E-6 |
@@ -158,6 +159,9 @@ additionally blocked on the founder provisioning Cloudinary credentials.
 | O-7 | A link that cannot be read says so, and says why |
 | O-8 | Go-live lands on Home without a blank screen |
 | O-9 | An ABN the owner can read, and correct |
+| O-10 | Give onboarding a clear assistant voice |
+| O-11 | Offerings captured at onboarding |
+| O-12 | Server-owned chip answers stay on the same beat |
 
 ### Chat spine (`03-chat-spine.md`)
 
