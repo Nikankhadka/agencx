@@ -282,14 +282,15 @@ async def _seed_lumident_core() -> UUID:
         )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        for name, description, price_cents in LUMIDENT_CATALOG:
+        for position, (name, description, price_cents) in enumerate(LUMIDENT_CATALOG):
             await conn.execute(
-                "insert into offerings (tenant_id, name, description, price_cents) "
-                "values ($1, $2, $3, $4)",
+                "insert into offerings (tenant_id, name, description, price_cents, position) "
+                "values ($1, $2, $3, $4, $5)",
                 tenant_id,
                 name,
                 description,
                 price_cents,
+                position,
             )
         for code, label, unit_amount_cents, unit in LUMIDENT_PRICING_RULES:
             await conn.execute(

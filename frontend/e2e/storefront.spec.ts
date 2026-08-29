@@ -29,18 +29,30 @@ test.describe("the public storefront", () => {
     // No settle-loop needed: the editor's fields are disabled until it has
     // loaded the current sections, and `fill` waits for enabled - which is
     // also what stops an owner's first sentence being eaten by that response.
-    await page.getByTestId("storefront-about").fill(about);
-    await page.getByTestId("storefront-save").click();
-    await expect(page.getByTestId("storefront-save")).toContainText("Saved");
+    // One more hazard remains, and it is `next dev`'s, not the editor's: the
+    // streamed tree is replaced as the client settles, and a fill that lands
+    // in the swap is thrown away with it - and the loss is delayed, so an
+    // immediate re-check sees the value and lets the swap eat it afterwards.
+    // Fill, wait a beat for any pending swap, re-check, and re-fill until the
+    // value survives the window - so the save can never silently write the
+    // empty draft.
+    const aboutBox = page.getByTestId("storefront-about").last();
+    for (let attempt = 0; attempt < 5 && (await aboutBox.inputValue()) !== about; attempt++) {
+      await aboutBox.fill(about);
+      await page.waitForTimeout(1200);
+    }
+    await expect(aboutBox).toHaveValue(about);
+    await page.getByTestId("storefront-save").last().click();
+    await expect(page.getByTestId("storefront-save").last()).toContainText("Saved");
 
     await page.goto("/bytefix");
     await expect(page.getByRole("main").last()).toContainText(about);
 
     // Put the shared seeded tenant back as it was found.
     await page.goto("/business/page");
-    await page.getByTestId("storefront-about").fill("");
-    await page.getByTestId("storefront-save").click();
-    await expect(page.getByTestId("storefront-save")).toContainText("Saved");
+    await page.getByTestId("storefront-about").last().fill("");
+    await page.getByTestId("storefront-save").last().click();
+    await expect(page.getByTestId("storefront-save").last()).toContainText("Saved");
   });
 
   test("a customer can open a conversation from the page", async ({ page }) => {
