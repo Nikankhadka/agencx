@@ -109,9 +109,15 @@ class Cloudinary:
             if response.is_error:
                 raise MediaUploadError(f"Cloudinary upload failed ({response.status_code})")
             payload = response.json()
-            secure_url = str(payload["secure_url"])
+            if not isinstance(payload, dict):
+                raise MediaUploadError("Cloudinary returned an invalid upload response")
+            secure_url = payload.get("secure_url")
             public_id = payload.get("public_id")
             detected_type = str(payload.get("resource_type") or resource_type)
+            if not isinstance(secure_url, str) or not secure_url:
+                raise MediaUploadError("Cloudinary returned no secure media URL")
+            if not isinstance(public_id, str) or not public_id:
+                raise MediaUploadError("Cloudinary returned no managed asset ID")
             if detected_type not in {"image", "video"}:
                 raise MediaUploadError("Cloudinary accepted an unsupported media type")
         except MediaUploadError:
