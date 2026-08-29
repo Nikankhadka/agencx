@@ -844,6 +844,15 @@ export interface components {
             /** Doc Type */
             doc_type: string;
         };
+        /** BookingPageOffering */
+        BookingPageOffering: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Price Cents */
+            price_cents: number | null;
+        };
         /** BookingPageResponse */
         BookingPageResponse: {
             /** Slug */
@@ -858,6 +867,8 @@ export interface components {
             };
             /** Has Cover */
             has_cover: boolean;
+            /** Offerings */
+            offerings: components["schemas"]["BookingPageOffering"][];
         };
         /**
          * BudgetUsage
@@ -1200,7 +1211,15 @@ export interface components {
             /** Price Cents */
             price_cents: number | null;
         };
-        /** OfferingUpdate */
+        /**
+         * OfferingUpdate
+         * @description A partial edit: an absent key means "leave this alone".
+         *
+         *     Only ``price_dollars`` reads an explicit null as a value - it clears the
+         *     published price. ``name`` and ``description`` are ``not null`` columns, so
+         *     a null for either is a 422 here rather than a constraint violation at the
+         *     UPDATE; absence, not null, is how a field is left unchanged.
+         */
         OfferingUpdate: {
             /** Name */
             name?: string | null;

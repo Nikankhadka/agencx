@@ -42,6 +42,7 @@ async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
         "tagline": service.profile_tagline(profile),
         "links": await service.read_links(tenant_id=tenant_id),
         "has_cover": await service.has_cover(tenant_id=tenant_id),
+        "offerings": (await service.list_offerings(tenant_id=tenant_id, active_only=True))[:3],
     }
 
 

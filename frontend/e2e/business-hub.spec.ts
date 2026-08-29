@@ -58,6 +58,10 @@ test.describe("Business hub", () => {
     await expect(link).toContainText("/bytefix");
     await expect(link).not.toContainText("http");
     await expect(link).not.toContainText(/\/$/);
+
+    const summary = page.getByRole("heading", { name: "What we offer" });
+    await expect(summary).toBeVisible();
+    await expect(page.getByText("iPhone 11 (Refurbished, 64GB)")).toBeVisible();
   });
 
   test("an owner adds, edits, and removes an offering, and the storefront follows", async ({

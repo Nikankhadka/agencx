@@ -20,3 +20,4 @@ export type EscalationResponse = Schemas["EscalationResponse"];
 export type PricingRuleResponse = Schemas["PricingRuleResponse"];
 export type PlatformMetrics = Schemas["PlatformMetrics"];
 export type TenantSummary = Schemas["TenantSummary"];
+export type BookingPage = Schemas["BookingPageResponse"];

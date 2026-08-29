@@ -42,12 +42,19 @@ class StorefrontSections(BaseModel):
         return value.strip()
 
 
+class BookingPageOffering(BaseModel):
+    name: str
+    description: str
+    price_cents: int | None
+
+
 class BookingPageResponse(BaseModel):
     slug: str
     name: str
     tagline: str | None
     links: dict[str, str]
     has_cover: bool
+    offerings: list[BookingPageOffering]
 
 
 class LinksUpdate(BaseModel):
