@@ -73,12 +73,14 @@ _EXTRACT_PROMPT = (
     "You are extracting business information from a small-business owner who is "
     "onboarding their assistant. Read the conversation and update the profile "
     "with anything new the owner stated: name, business_name, business_type, "
-    "headcount, hours, services, contact, abn, gst. Fill only what the owner "
+    "headcount, hours, services, contact, abn, gst. Also list offering_names "
+    "only when the owner explicitly names individual offerings. Fill only what the owner "
     "actually said - never invent a value. Copy any price or other amount "
     "exactly as the owner wrote it: never round it, convert it, tidy it up, or "
     "work one out. Two fields have a fixed vocabulary: set abn to the digits "
     'the owner gave, or to "none" if they said they do not have one yet; set '
-    'gst to "yes" or "no". '
+    'gst to "yes" or "no". Never infer or invent offering names, and never add prices '
+    "or descriptions to offering_names. "
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false and set next_question "
@@ -98,6 +100,7 @@ class OnboardingRecord:
     # owner answers it (paste a link, attach a file, or say "skip"). It never
     # gates go-live - confirm still requires only the seven profile fields.
     knowledge_pending: bool = False
+    offering_candidates: list[str] = field(default_factory=list)
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -117,6 +120,7 @@ class OnboardingRecord:
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
                 knowledge_pending=raw.get("knowledge_pending", False),
+                offering_candidates=raw.get("offering_candidates", []),
             )
         return cls(
             version=3,
@@ -124,6 +128,7 @@ class OnboardingRecord:
             history=[],
             off_topic_count=0,
             completed=raw.get("completed", False),
+            offering_candidates=[],
         )
 
     def to_jsonb(self) -> dict[str, Any]:
@@ -134,6 +139,7 @@ class OnboardingRecord:
             "off_topic_count": self.off_topic_count,
             "completed": self.completed,
             "knowledge_pending": self.knowledge_pending,
+            "offering_candidates": self.offering_candidates,
         }
 
 
@@ -340,6 +346,15 @@ async def prepare_turn(
         for beat in beats.BEAT_ORDER:
             if getattr(update.profile, beat.key):
                 acknowledged.append(beat.label)
+    if update.offering_names is not None:
+        seen: set[str] = set()
+        record.offering_candidates = []
+        for raw_name in update.offering_names:
+            name = raw_name.strip()
+            key = name.casefold()
+            if name and key not in seen:
+                seen.add(key)
+                record.offering_candidates.append(name)
 
     nxt = beats.next_beat(record.draft)
     ask_for = nxt.ask if nxt else ""

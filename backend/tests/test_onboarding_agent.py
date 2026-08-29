@@ -586,6 +586,24 @@ async def test_prepare_url_turn_reads_back_nothing_when_page_has_no_fields() -> 
     assert "couldn't pin down" in plan.summary
 
 
+@pytest.mark.asyncio
+async def test_prepare_turn_keeps_explicit_offering_names_in_order_without_duplicates() -> None:
+    provider = _ExtractFake(
+        updates=[
+            {
+                "profile": {"name": "Ronin"},
+                "offering_names": ["Screen repair", "Battery swap", "screen repair", ""],
+            }
+        ]
+    )
+    plan = await prepare_turn(
+        admin_message="We offer screen repair and battery swap",
+        record=OnboardingRecord(),
+        provider=provider,
+    )
+    assert plan.record.offering_candidates == ["Screen repair", "Battery swap"]
+
+
 # --- directive shape -----------------------------------------------------------
 def test_onboarding_voice_is_role_led_and_warm() -> None:
     assert "Agencx setup assistant" in _COPILOT

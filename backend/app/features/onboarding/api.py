@@ -159,6 +159,9 @@ async def post_message_stream(
 async def confirm(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     body: OnboardingConfirmRequest | None = None,
+    embedder: Annotated[Embedder | None, Depends(get_embedder_dependency)] = None,
 ) -> OnboardingConfirmResponse:
-    result = await controller.confirm(tenant_id=admin.tenant_id, slug=body.slug if body else None)
+    result = await controller.confirm(
+        tenant_id=admin.tenant_id, slug=body.slug if body else None, embedder=embedder
+    )
     return OnboardingConfirmResponse(**result)

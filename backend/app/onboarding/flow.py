@@ -42,3 +42,4 @@ class DraftUpdate(BaseModel):
     profile: ProfileDraft | None = None
     next_question: str | None = None
     meta_reply: str | None = None
+    offering_names: list[str] | None = None
