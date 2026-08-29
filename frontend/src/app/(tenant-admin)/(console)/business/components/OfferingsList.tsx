@@ -20,6 +20,7 @@ interface FormValues {
   category: string;
   mediaUrl: string;
   mediaFile: File | null;
+  mediaChanged: boolean;
   removeMedia: boolean;
 }
 
@@ -30,6 +31,7 @@ const EMPTY_FORM: FormValues = {
   category: "",
   mediaUrl: "",
   mediaFile: null,
+  mediaChanged: false,
   removeMedia: false,
 };
 
@@ -44,6 +46,7 @@ function formFor(offering: Offering): FormValues {
     category: offering.category ?? "",
     mediaUrl: offering.media?.url ?? "",
     mediaFile: null,
+    mediaChanged: false,
     removeMedia: false,
   };
 }
@@ -52,6 +55,7 @@ export function OfferingsList() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +83,15 @@ export function OfferingsList() {
     setError(null);
     setEditing(offering?.id ?? "new");
     setForm(offering ? formFor(offering) : EMPTY_FORM);
+    setDetailsOpen(
+      Boolean(
+        offering &&
+          (offering.category ||
+            offering.description ||
+            offering.price_cents !== null ||
+            offering.media),
+      ),
+    );
   }
 
   function close() {
@@ -105,12 +118,12 @@ export function OfferingsList() {
         await apiFetch(`/api/business/offerings/${saved.id}/media`, {
           method: "DELETE",
         });
-      } else if (form.mediaUrl.trim()) {
+      } else if (form.mediaChanged && form.mediaUrl.trim()) {
         await apiFetch(`/api/business/offerings/${saved.id}/media/url`, {
           method: "PUT",
           body: JSON.stringify({ url: form.mediaUrl.trim() }),
         });
-      } else if (form.mediaFile) {
+      } else if (form.mediaChanged && form.mediaFile) {
         const media = new FormData();
         media.append("file", form.mediaFile);
         await apiFetch(`/api/business/offerings/${saved.id}/media/upload`, {
@@ -229,14 +242,8 @@ export function OfferingsList() {
             />
           </label>
           <details
-            open={Boolean(
-              form.category ||
-                form.description ||
-                form.price ||
-                form.mediaUrl ||
-                form.mediaFile ||
-                form.removeMedia,
-            )}
+            open={detailsOpen}
+            onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
             className="mt-3 rounded-field bg-surface px-3.5 py-2"
           >
             <summary className="cursor-pointer text-field-label font-medium uppercase text-ink-a40">Add details</summary>
@@ -266,11 +273,11 @@ export function OfferingsList() {
             </label>
             <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
               Image or video URL <span className="normal-case">(optional)</span>
-              <input data-testid="offering-media-url" type="url" value={form.mediaUrl} onChange={(event) => setForm((current) => ({ ...current, mediaUrl: event.target.value, removeMedia: false }))} className="mt-1.5 w-full rounded-field border border-transparent bg-surface-container px-3.5 py-3 text-field text-text outline-none focus:border-accent-a35" />
+              <input data-testid="offering-media-url" type="url" value={form.mediaUrl} onChange={(event) => setForm((current) => ({ ...current, mediaUrl: event.target.value, mediaChanged: true, removeMedia: false }))} className="mt-1.5 w-full rounded-field border border-transparent bg-surface-container px-3.5 py-3 text-field text-text outline-none focus:border-accent-a35" />
             </label>
             <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
               Upload media <span className="normal-case">(optional)</span>
-              <input type="file" accept="image/*,video/*" onChange={(event) => setForm((current) => ({ ...current, mediaFile: event.target.files?.[0] ?? null, mediaUrl: "", removeMedia: false }))} className="mt-1.5 block w-full text-meta text-ink-a40" />
+              <input type="file" accept="image/*,video/*" onChange={(event) => setForm((current) => ({ ...current, mediaFile: event.target.files?.[0] ?? null, mediaUrl: "", mediaChanged: true, removeMedia: false }))} className="mt-1.5 block w-full text-meta text-ink-a40" />
             </label>
             {form.removeMedia ? (
               <p className="mt-3 text-meta text-ink-a40">
@@ -279,7 +286,7 @@ export function OfferingsList() {
             ) : form.mediaUrl ? (
               <button
                 type="button"
-                onClick={() => setForm((current) => ({ ...current, removeMedia: true }))}
+                onClick={() => setForm((current) => ({ ...current, mediaChanged: true, removeMedia: true }))}
                 className="mt-3 text-action font-medium text-accent"
               >
                 Remove current media

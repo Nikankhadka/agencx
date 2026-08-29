@@ -23,6 +23,59 @@ function priceLabel(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function videoEmbedUrl(provider: string, rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (provider === "youtube" && (host === "youtube.com" || host === "youtube-nocookie.com" || host === "youtu.be")) {
+      const id = host === "youtu.be"
+        ? parsed.pathname.split("/").filter(Boolean)[0]
+        : parsed.searchParams.get("v") || parsed.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?rel=0` : null;
+    }
+    if (provider === "vimeo" && (host === "vimeo.com" || host === "player.vimeo.com")) {
+      const id = parsed.pathname.match(/\/(?:video\/)?(\d+)(?:\/|$)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}?title=0` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function VideoMedia({ media }: { media: NonNullable<StorefrontData["offerings"][number]["media"]> }) {
+  if (media.provider === "cloudinary") {
+    return (
+      <video
+        controls
+        preload="metadata"
+        poster={media.poster_url ?? undefined}
+        className="max-h-72 w-full rounded-card bg-surface-container object-contain"
+      >
+        <source src={media.url} />
+        Your browser does not support this video.
+      </video>
+    );
+  }
+  const embed = videoEmbedUrl(media.provider, media.url);
+  if (embed) {
+    return (
+      <iframe
+        src={embed}
+        title="Offering video"
+        loading="lazy"
+        allow="fullscreen; picture-in-picture"
+        className="aspect-video w-full rounded-card border-0 bg-surface-container"
+      />
+    );
+  }
+  return (
+    <a href={media.url} target="_blank" rel="noreferrer" className="block rounded-card bg-surface-container p-6 text-center text-action text-accent">
+      Open video
+    </a>
+  );
+}
+
 export function Storefront({
   slug,
   logoUrl,
@@ -192,12 +245,7 @@ export function Storefront({
             {selected.media?.type === "image" ? (
               <img src={selected.media.url} alt="" className="max-h-72 w-full rounded-card object-cover" />
             ) : selected.media?.type === "video" ? (
-              <div className="space-y-3">
-                {selected.media.poster_url ? (
-                  <img src={selected.media.poster_url} alt="" className="max-h-72 w-full rounded-card object-cover" />
-                ) : null}
-                <a href={selected.media.url} target="_blank" rel="noreferrer" className="block rounded-card bg-surface-container p-6 text-center text-action text-accent">Open video</a>
-              </div>
+              <VideoMedia media={selected.media} />
             ) : null}
             {selected.description ? <p className="text-prose text-text-secondary">{selected.description}</p> : null}
             {selected.price_cents !== null ? <p className="text-title-2 font-semibold text-text">{priceLabel(selected.price_cents)}</p> : null}

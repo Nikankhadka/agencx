@@ -109,20 +109,24 @@ class Cloudinary:
             if response.is_error:
                 raise MediaUploadError(f"Cloudinary upload failed ({response.status_code})")
             payload = response.json()
-        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            secure_url = str(payload["secure_url"])
+            public_id = payload.get("public_id")
+            detected_type = str(payload.get("resource_type") or resource_type)
+            if detected_type not in {"image", "video"}:
+                raise MediaUploadError("Cloudinary accepted an unsupported media type")
+        except MediaUploadError:
+            raise
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             raise MediaUploadError("Cloudinary upload failed") from exc
         finally:
             if close:
                 await client.aclose()
-        detected_type = str(payload.get("resource_type") or resource_type)
         return UploadedMedia(
             type="video" if detected_type == "video" else "image",
             provider="cloudinary",
-            url=str(payload["secure_url"]),
-            public_id=str(payload.get("public_id")) if payload.get("public_id") else None,
-            poster_url=(
-                _video_poster_url(str(payload["secure_url"])) if detected_type == "video" else None
-            ),
+            url=secure_url,
+            public_id=str(public_id) if public_id else None,
+            poster_url=(_video_poster_url(secure_url) if detected_type == "video" else None),
         )
 
     async def delete(self, *, public_id: str, resource_type: str) -> None:

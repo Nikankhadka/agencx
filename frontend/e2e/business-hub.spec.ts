@@ -106,7 +106,10 @@ test.describe("Business hub", () => {
     const card = page.getByRole("button", { name: /M1 test offering/ });
     await card.click();
     const details = page.getByRole("dialog", { name: "M1 test offering" });
-    await expect(details).toContainText("Open video");
+    await expect(details.locator("iframe")).toHaveAttribute(
+      "src",
+      /youtube-nocookie\.com\/embed\//,
+    );
     await details.getByRole("button", { name: "Ask about this" }).click();
     const chat = page.getByRole("dialog", { name: /Chat with Bytefix/ });
     await expect(chat.getByRole("textbox")).toHaveValue(
