@@ -83,9 +83,8 @@ _EXTRACT_PROMPT = (
     "or descriptions to offering_names. "
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
-    "answer in meta_reply. Otherwise set off_topic=false and set next_question "
-    "to the single most important question to ask next, given what is still "
-    "missing. Leave the profile null when nothing new was stated."
+    "answer in meta_reply. Otherwise set off_topic=false. Leave the profile null "
+    "when nothing new was stated. The server chooses the next question."
 )
 
 
@@ -194,6 +193,12 @@ def _completion_reply(record: OnboardingRecord) -> str:
         return _activation_summary(record.draft) + _KNOWLEDGE_OFFER
     record.knowledge_pending = False
     return _activation_summary(record.draft)
+
+
+def selection_reply(record: OnboardingRecord) -> str:
+    """A deterministic acknowledgement followed by the authoritative next ask."""
+    nxt = beats.next_beat(record.draft)
+    return f"Got it. {nxt.ask}" if nxt is not None else _completion_reply(record)
 
 
 def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, bool]:
@@ -364,9 +369,9 @@ async def prepare_turn(
         if persist:
             record.off_topic_count += 1
         directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
-        directive.ask_for = update.next_question or ask_for
+        directive.ask_for = ask_for
     else:
-        directive.ask_for = update.next_question or ask_for
+        directive.ask_for = ask_for
 
     state_parts = [
         f"captured={', '.join(sorted(record.draft)) or 'none'}",

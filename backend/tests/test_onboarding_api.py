@@ -2,9 +2,8 @@
 
 Uses an OnboardingFakeProvider that synthesizes extraction updates from canned
 profile data, one field per turn, so the API-level tests never call a real
-model. Onboarding is text-only since O-1: every beat is satisfied by
-extraction, so the walk is seven text turns and a selection payload is
-rejected.
+model. Text answers use extraction; fixed chip and masked values use the O-12
+server selection path.
 """
 
 from __future__ import annotations
@@ -122,7 +121,6 @@ class OffTopicFakeProvider(BaseFakeProvider):
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help you set up your business.",
-                "next_question": "What's your name?",
             }
         )
 
@@ -251,7 +249,7 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     """O-6: the beats the prototype chips are the beats that carry chips here.
 
     Ported from agencx-prototype-v6.html: `otpVerified()` (Just me / Got a team),
-    `handlePricing()` (Yes / No, not yet on the ABN) and `handleAbn()`'s GST
+    `handlePricing()` (Yes / No on the ABN) and `handleAbn()`'s GST
     follow-up.
     """
     token, _tenant_id = await _signup_tenant_admin(client)
@@ -284,7 +282,7 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
 
     body = await _send(client, headers, text=_FULL_WALK[6][1])
     assert body["stage"] == "abn"
-    assert labels(body) == ["Yes", "No, not yet"]
+    assert labels(body) == ["Yes", "No"]
     assert body["input"]["chips"][0]["widget"] == "masked"
     assert body["input"]["mask"] == "XX XXX XXX XXX"
     assert body["input"]["prefix"] == "ABN"
@@ -383,18 +381,86 @@ async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> 
     assert body["stage"] == "name"
 
 
-async def test_selection_payload_is_conflict(client: httpx.AsyncClient) -> None:
-    """O-1 retired the chip path; the payload stays in the contract until E-1."""
+async def test_selection_advances_the_server_beat_without_calling_the_model(
+    client: httpx.AsyncClient,
+) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = await client.post(
+    for text in ("I'm Sam", "we are Bytefix Repairs", "we fix phones"):
+        await _send(client, headers, text=text)
+
+    app.dependency_overrides[get_llm_provider] = BaseFakeProvider
+    try:
+        body = await _send(
+            client,
+            headers,
+            selection={"beat": "headcount", "values": ["got a team"]},
+        )
+    finally:
+        app.dependency_overrides[get_llm_provider] = lambda: OnboardingFakeProvider()
+
+    assert body["stage"] == "hours"
+    assert body["draft"]["headcount"] == "got a team"
+    assert body["history"][-2:] == [
+        {"role": "user", "content": "Got a team"},
+        {"role": "assistant", "content": "Got it. When are you open?"},
+    ]
+
+
+async def test_selection_rejects_stale_and_invalid_values(client: httpx.AsyncClient) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    stale = await client.post(
         "/api/onboarding/message",
-        json={"selection": {"beat": "headcount", "values": ["team"]}},
+        json={"selection": {"beat": "headcount", "values": ["got a team"]}},
         headers=headers,
     )
-    assert response.status_code == 409
-    assert "text-only" in response.json()["detail"]
+    assert stale.status_code == 409
+    assert "current beat is name" in stale.json()["detail"]
+
+    for text in ("I'm Sam", "we are Bytefix Repairs", "we fix phones"):
+        await _send(client, headers, text=text)
+
+    invalid = await client.post(
+        "/api/onboarding/message",
+        json={"selection": {"beat": "headcount", "values": ["sometimes"]}},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+
+
+async def test_abn_selections_validate_the_number_and_skip_gst_for_no(
+    client: httpx.AsyncClient,
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    for text in (step[1] for step in _FULL_WALK[:7]):
+        await _send(client, headers, text=text)
+
+    invalid = await client.post(
+        "/api/onboarding/message",
+        json={"selection": {"beat": "abn", "values": ["123"]}},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+
+    body = await _send(
+        client,
+        headers,
+        selection={"beat": "abn", "values": ["51 824 753 556"]},
+    )
+    assert body["stage"] == "gst"
+    assert body["draft"]["abn"] == "51824753556"
+
+    body = await _send(
+        client,
+        headers,
+        selection={"beat": "gst", "values": ["not yet"]},
+    )
+    assert body["stage"] == "knowledge"
+    assert body["draft"]["gst"] == "no"
 
 
 async def test_message_requires_exactly_one_of_text_or_selection(
@@ -483,7 +549,7 @@ async def test_full_flow_confirm_writes_profile(
         "hours": "Mon-Fri 9-6",
         "services": "screen repairs, battery replacements",
         "contact": "555-0100",
-        "abn": "51 824 753 556",
+        "abn": "51824753556",
         "gst": "yes",
     }
 

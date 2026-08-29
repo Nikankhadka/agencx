@@ -22,6 +22,13 @@ def save_profile(draft: dict[str, Any], args: ProfileDraft) -> dict[str, Any]:
     """Merge any non-empty profile field into the flat draft."""
     for field in _PROFILE_FIELDS:
         value = getattr(args, field)
+        if field == "abn" and value:
+            stated = value.strip().lower()
+            if stated == beats.NO_ABN:
+                value = beats.NO_ABN
+            else:
+                digits = "".join(char for char in value if char.isdigit())
+                value = digits if len(digits) == 11 else ""
         if value:
             draft[field] = value
     return draft

@@ -112,6 +112,18 @@ def test_save_profile_overwrites_a_corrected_field() -> None:
     assert draft["business_name"] == "Bytefix Repairs"
 
 
+def test_save_profile_only_accepts_an_abn_or_an_explicit_no() -> None:
+    draft: dict[str, Any] = {}
+    save_profile(draft, ProfileDraft(abn="yes"))
+    assert "abn" not in draft
+
+    save_profile(draft, ProfileDraft(abn="51 824 753 556"))
+    assert draft["abn"] == "51824753556"
+
+    save_profile(draft, ProfileDraft(abn=beats.NO_ABN))
+    assert draft["abn"] == beats.NO_ABN
+
+
 # --- completeness gate ---------------------------------------------------------
 
 
@@ -344,19 +356,16 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_turn_uses_next_question() -> None:
-    provider = _ExtractFake(
-        updates=[{"next_question": "What do you sell or offer?"}],
-        replies=["What do you sell or offer?"],
-    )
+async def test_run_turn_uses_the_authoritative_next_beat() -> None:
+    provider = _ExtractFake(updates=[{}], replies=["What does the business go by?"])
     record = OnboardingRecord(draft={"name": "Sam"})
     _updated, reply, _persist = await run_turn(
         admin_message="ok go on", record=record, provider=provider
     )
 
-    assert reply == "What do you sell or offer?"
+    assert reply == "What does the business go by?"
     system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
-    assert any("What do you sell or offer?" in p for p in system_prompts)
+    assert any("What does the business go by?" in p for p in system_prompts)
 
 
 @pytest.mark.asyncio
@@ -392,7 +401,6 @@ async def test_run_turn_off_topic_answers_gently() -> None:
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help you set up your business.",
-                "next_question": "What is your business called?",
             },
         ],
         replies=["I'm here to help you set up your business. What is your business called?"],
@@ -418,7 +426,6 @@ async def test_run_turn_off_topic_keeps_prior_history() -> None:
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help.",
-                "next_question": "What is your business called?",
             }
         ],
         replies=["I'm here to help. What is your business called?"],
@@ -615,7 +622,7 @@ def test_onboarding_voice_is_role_led_and_warm() -> None:
 def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
     assert beats.BEATS["business_name"].ask == "What does the business go by?"
     assert beats.BEATS["hours"].ask == "When are you open?"
-    assert "Have you set up an ABN yet?" in beats.BEATS["abn"].ask
+    assert beats.BEATS["abn"].ask == "Do you have an ABN?"
 
 
 def test_directive_as_prompt_with_acknowledged() -> None:

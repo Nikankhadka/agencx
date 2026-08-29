@@ -34,12 +34,11 @@ class DraftUpdate(BaseModel):
     """Per-turn structured extraction result: what the owner stated this turn.
 
     Transient - never persisted. Any non-null ``profile`` field is merged into
-    the accumulated draft by ``save_profile``; ``off_topic`` / ``next_question``
-    / ``meta_reply`` drive the reply directive.
+    the accumulated draft by ``save_profile``; ``off_topic`` / ``meta_reply``
+    drive the reply directive. The server's current beat owns the next question.
     """
 
     off_topic: bool = False
     profile: ProfileDraft | None = None
-    next_question: str | None = None
     meta_reply: str | None = None
     offering_names: list[str] | None = None

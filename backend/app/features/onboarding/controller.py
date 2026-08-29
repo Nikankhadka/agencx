@@ -1,9 +1,9 @@
-"""Onboarding orchestration: turn loop, draft validation, and confirm gating.
+"""Onboarding orchestration: turn loop, selections, and confirm gating.
 
 Moved out of api/onboarding.py. Holds the business order of a confirm (gate,
 then persist) and the state-shaped response builder. The LLM turn loop runs in
-app/onboarding/agent.py. O-1 made onboarding text-only: every beat is
-satisfied by extraction, so there is no deterministic selection path here.
+app/onboarding/agent.py. O-12 keeps fixed values on a deterministic server path
+so extraction cannot desynchronise a beat.
 """
 
 from __future__ import annotations
@@ -21,12 +21,14 @@ from app.features.onboarding import service
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     prepare_turn,
     prepare_url_turn,
     progress,
     run_turn,
+    selection_reply,
     stream_reply,
 )
 from app.onboarding.flow import ProfileDraft
@@ -175,6 +177,37 @@ async def run_message(
     record_data = updated.to_jsonb()
     if persist:
         await service.save_record(tenant_id=tenant_id, record=record_data)
+    return record_data
+
+
+async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) -> dict[str, Any]:
+    """Apply the current beat's fixed answer without an LLM call."""
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    if onboarding.completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="onboarding already confirmed",
+        )
+    current = beats.next_beat(onboarding.draft)
+    if current is None or current.key != beat_key:
+        stage = current.key if current is not None else "confirm"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"stale selection - current beat is {stage}",
+        )
+    try:
+        user_message = beats.apply_selection(onboarding.draft, beat_key, values)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    reply = selection_reply(onboarding)
+    onboarding.history.append({"role": "user", "content": user_message})
+    onboarding.history.append({"role": "assistant", "content": reply})
+    record_data = onboarding.to_jsonb()
+    await service.save_record(tenant_id=tenant_id, record=record_data)
     return record_data
 
 

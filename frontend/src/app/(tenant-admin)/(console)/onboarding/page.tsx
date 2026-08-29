@@ -288,6 +288,41 @@ export default function OnboardingPage() {
     }
   }
 
+  async function sendSelection(values: string[], label: string) {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "customer", text: label },
+      { role: "assistant", text: "", streaming: true },
+    ]);
+    try {
+      const state = await apiFetch<OnboardingState>("/api/onboarding/message", {
+        method: "POST",
+        body: JSON.stringify({ selection: { beat: stage, values } }),
+      });
+      applyStateFields(state);
+      setMessages(historyToMessages(state.history));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        try {
+          const state = await apiFetch<OnboardingState>("/api/onboarding/state");
+          applyStateFields(state);
+          setMessages(historyToMessages(state.history));
+          setError("Setup refreshed. Choose your answer again.");
+        } catch {
+          setError("Setup changed. Refresh the page and try again.");
+        }
+      } else {
+        setMessages((prev) => prev.slice(0, -2));
+        setError(err instanceof ApiError ? err.detail : "Something went wrong");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /**
    * Files attached through the pill's "+". Each file gets its own stamp and its
    * own line, uploaded one at a time so the thread reads in order. Knowledge is
@@ -469,6 +504,7 @@ export default function OnboardingPage() {
               input={input}
               busy={busy}
               onText={(text) => void sendText(text)}
+              onSelection={(values, label) => void sendSelection(values, label)}
               onStop={handleStop}
               ownerEmail={user?.email ?? null}
               onFiles={(files) => void uploadFiles(files)}

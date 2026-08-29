@@ -94,9 +94,12 @@ async def post_message(
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingStateResponse:
     if body.selection is not None:
-        # O-1 made every beat a text beat, so nothing is satisfied by a chip.
-        # The payload stays in the contract until E-1 rebuilds this surface.
-        raise HTTPException(status_code=409, detail="onboarding is text-only")
+        record_data = await controller.run_selection(
+            tenant_id=admin.tenant_id,
+            beat_key=body.selection.beat,
+            values=body.selection.values,
+        )
+        return OnboardingStateResponse(**controller.response_from_record(record_data))
     assert body.text is not None
     record_data = await controller.run_message(
         tenant_id=admin.tenant_id, text=body.text, provider=provider, embedder=embedder
