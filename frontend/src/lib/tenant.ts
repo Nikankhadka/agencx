@@ -14,14 +14,48 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  *    binding (`vercel.json`) was dropped because its injected internal URL is
  *    unreachable from the custom image (TLS to Vercel's internal CA fails).
  */
-async function serverApiBaseUrl(): Promise<string> {
-  const internal = process.env.API_INTERNAL_URL;
-  if (internal) return internal;
+async function serverApiBaseUrls(): Promise<string[]> {
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  if (host) return `${proto}://${host}`;
-  return API_URL;
+  const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+  const forwardedHost = h.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = h.get("host")?.split(",")[0]?.trim();
+  const deploymentUrl = h.get("x-vercel-deployment-url")?.split(",")[0]?.trim();
+
+  return [...new Set([
+    process.env.API_INTERNAL_URL,
+    forwardedHost ? `${proto}://${forwardedHost}` : undefined,
+    host ? `${proto}://${host}` : undefined,
+    deploymentUrl ? `https://${deploymentUrl}` : undefined,
+    API_URL,
+  ].filter((base): base is string => Boolean(base)).map((base) => base.replace(/\/$/, "")))];
+}
+
+/**
+ * Vercel may leave a stale service URL in API_INTERNAL_URL while routing the
+ * public origin correctly. Try every known origin so a bad deployment-level
+ * value cannot turn a valid tenant into the not-found page. All requests are
+ * GETs, so retrying another origin is safe.
+ */
+async function fetchServerApi(path: string): Promise<Response> {
+  let notFound: Response | null = null;
+  let lastError: unknown;
+
+  for (const base of await serverApiBaseUrls()) {
+    try {
+      const res = await fetch(`${base}${path}`, { cache: "no-store" });
+      if (res.ok) return res;
+      if (res.status === 404) {
+        notFound ??= res;
+        continue;
+      }
+      lastError = new Error(`server API request failed: ${res.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (notFound) return notFound;
+  throw lastError instanceof Error ? lastError : new Error("server API request failed");
 }
 
 export interface TenantResolution {
@@ -85,21 +119,14 @@ export function customerSurfaceConfig(customer: Record<string, unknown> | undefi
  * not-found state instead of throwing.
  */
 export async function resolveTenantBySlug(slug: string): Promise<TenantResolution | null> {
-  const base = await serverApiBaseUrl();
-  const res = await fetch(`${base}/api/public/tenant/${encodeURIComponent(slug)}`, {
-    cache: "no-store",
-  });
+  const res = await fetchServerApi(`/api/public/tenant/${encodeURIComponent(slug)}`);
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`tenant resolve failed: ${res.status}`);
   return (await res.json()) as TenantResolution;
 }
 
 /** Public presentation content for a known active tenant. */
 export async function resolveStorefrontBySlug(slug: string): Promise<StorefrontData> {
-  const base = await serverApiBaseUrl();
-  const res = await fetch(`${base}/api/public/tenant/${encodeURIComponent(slug)}/storefront`, {
-    cache: "no-store",
-  });
+  const res = await fetchServerApi(`/api/public/tenant/${encodeURIComponent(slug)}/storefront`);
   if (!res.ok) throw new Error(`storefront resolve failed: ${res.status}`);
   return (await res.json()) as StorefrontData;
 }
