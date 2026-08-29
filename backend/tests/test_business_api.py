@@ -50,6 +50,17 @@ def _supabase_jwt_secret_env() -> Iterator[None]:
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _disable_external_cloudinary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep API tests deterministic even when a developer has live keys set."""
+
+    class UnconfiguredCloudinary:
+        is_configured = False
+
+    monkeypatch.setattr(business_api, "Cloudinary", lambda: UnconfiguredCloudinary())
+    monkeypatch.setattr(business_service, "Cloudinary", lambda: UnconfiguredCloudinary())
+
+
 @pytest_asyncio.fixture
 async def client(migrated_db: str) -> AsyncIterator[httpx.AsyncClient]:
     await db.create_pool(dsn=_app_dsn_for(migrated_db), min_size=1, max_size=4)
