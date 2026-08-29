@@ -326,17 +326,13 @@ request the whole topology exists to avoid.
 
 Server-side fetches never see that empty string: the RSC tenant lookup in
 `frontend/src/lib/tenant.ts` reads `API_INTERNAL_URL` when set (the compose dev
-stack sets `http://backend:8000`), otherwise it derives the backend base from
-the incoming request's own origin (`x-forwarded-host`/`host` with
-`x-forwarded-proto`) - the same public origin the customer reached, which the
-edge rewrite serves to the backend. **The old `API_INTERNAL_URL` service
-binding in `vercel.json` is gone**: service bindings are unusable from this
-custom image. The injected URL is unreachable from inside the container -
-Vercel's internal CA bundle does not exist in the `node:bookworm-slim` base, so
-TLS to it fails (and the internal hostname may not resolve either), which broke
-the `/bytefix` RSC fetch on every deployment while the smoke test still passed.
-The request-origin fallback is deployment-aware with no binding involved: it
-covers preview, production, and a future custom domain (B-2) the same way.
+stack sets `http://backend:8000`), and Vercel's frontend service binding in
+`vercel.json` supplies the private backend URL in production. Request-derived
+origins (`x-forwarded-host`/`host` with `x-forwarded-proto`) and the deployment
+URL remain fallbacks, so a stale binding during a rollout cannot make a valid
+tenant look missing. The binding keeps the normal production request inside
+Vercel's service network; the fallbacks cover preview, production, and a future
+custom domain (B-2) if the binding is temporarily unavailable.
 
 ## Step 5 - GitHub Actions secret
 
