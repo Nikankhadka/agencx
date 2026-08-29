@@ -63,7 +63,9 @@ async def create_offerings_batch(
     embedder: Embedder,
 ) -> list[dict[str, Any]]:
     """Insert new active offerings in stable order and rebuild the catalog once."""
-    existing_rows = await conn.fetch("select name from offerings where tenant_id = $1", tenant_id)
+    existing_rows = await conn.fetch(
+        "select name from offerings where tenant_id = $1 and active", tenant_id
+    )
     existing = {str(row["name"]).strip().casefold() for row in existing_rows}
     position = await conn.fetchval(
         "select coalesce(max(position) + 1, 0) from offerings where tenant_id = $1", tenant_id
