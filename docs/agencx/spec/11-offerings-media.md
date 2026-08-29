@@ -458,10 +458,9 @@ conversation when I want one, not before.
 - Offerings render with the owner's own price when they published one, and
   with no price at all when they did not. Nothing rounds, marks up, or invents
   a figure; the page formats integer cents and does no other arithmetic.
-- The assistant opens in a sheet from any of several entry points, including
-  "Ask about this" on a single offering, which seeds the composer. The sheet
-  keeps one conversation across them - a customer who closes it and opens it
-  from somewhere else is back in the thread they were in.
+- The assistant opens in the existing sheet from the single top-of-page
+  "Ask a question" action. The storefront has no second composer or redundant
+  chat action.
 - A tenant that is suspended still shows its calm unavailable state; one that
   is neither active nor suspended (`provisioning`) falls back to the bare chat
   rather than an empty page.

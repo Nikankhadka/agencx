@@ -460,9 +460,8 @@ a composer, which meant a customer arriving from a shared link had to know what
 to ask before the page told them anything. The page now leads with the business:
 cover photo, name and tagline, **what we offer** (the owner's `offerings`, each
 with the owner's own price when they published one), About, and the
-links. The assistant is a tap away in a sheet rather than the whole page -
-from the header, from the closing call to action, or from "Ask about this" on a
-single offering, which seeds the composer with that offering's name.
+links. The assistant is a tap away in the existing sheet from one header action,
+"Ask a question"; the rest of the storefront remains informational.
 
 The address is the owner's own: M-4 lets them choose it at go-live rather than
 keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).

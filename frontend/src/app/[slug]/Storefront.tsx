@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- storefront cover is a tenant API response. */
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
@@ -37,12 +37,7 @@ export function Storefront({
   storefront: StorefrontData;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
-  // The chat below is mounted for the whole life of this page, so this is
-  // filled long before any of the buttons here can be pressed.
-  const seedComposer = useRef<((text: string) => void) | null>(null);
-
-  function openChat(message?: string) {
-    if (message) seedComposer.current?.(message);
+  function openChat() {
     setChatOpen(true);
   }
 
@@ -78,14 +73,6 @@ export function Storefront({
         {storefront.tagline ? (
           <p className="mt-3 max-w-prose text-prose text-text-secondary">{storefront.tagline}</p>
         ) : null}
-        <button
-          type="button"
-          onClick={() => openChat(`Hi, I'd like to know more about ${storefront.name}.`)}
-          className="mt-5 flex items-center gap-2 rounded-field bg-text px-4 py-3 text-body-sm font-medium text-text-inverse active:opacity-85"
-        >
-          Talk to {storefront.name}
-          <Icon name="arrow_forward" size={16} />
-        </button>
       </section>
 
       {storefront.offerings.length > 0 ? (
@@ -108,14 +95,6 @@ export function Storefront({
                 {offering.description ? (
                   <p className="mt-1.5 text-body-sm text-text-secondary">{offering.description}</p>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => openChat(`I'd like to ask about ${offering.name}.`)}
-                  className="mt-3 flex items-center gap-1 text-chip font-medium text-accent"
-                >
-                  Ask about this
-                  <Icon name="arrow_forward" size={14} />
-                </button>
               </article>
             ))}
           </div>
@@ -149,18 +128,6 @@ export function Storefront({
         </nav>
       ) : null}
 
-      <section className="border-t border-hairline px-gutter pt-8 text-center">
-        <p className="text-title-3 font-semibold text-text">Have a question?</p>
-        <button
-          type="button"
-          onClick={() => openChat()}
-          className="mt-3 inline-flex items-center gap-2 rounded-field bg-accent px-5 py-3 text-body-sm font-medium text-text-inverse active:opacity-85"
-        >
-          Chat with {storefront.name}
-          <Icon name="arrow_forward" size={16} />
-        </button>
-      </section>
-
       <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={`Chat with ${storefront.name}`}>
         <div className="flex h-[calc(85dvh-7rem)] min-h-0 flex-col">
           {/* Deliberately unkeyed: the sheet keeps its children mounted, so a
@@ -172,7 +139,6 @@ export function Storefront({
             displayName={storefront.name}
             greeting={greeting}
             starterQuestions={starterQuestions}
-            composerRef={seedComposer}
           />
         </div>
       </Sheet>
