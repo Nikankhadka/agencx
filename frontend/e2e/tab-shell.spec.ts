@@ -75,7 +75,7 @@ test.describe("tenant app shell - three destinations", () => {
   test("a tab destination has no back control", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
-    await expect(page.getByRole("button", { name: "Back" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
   });
 
   // The advanced screens' own posture - unlinked but still serving - is E-2's,

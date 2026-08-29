@@ -373,7 +373,29 @@ async def test_platform_tenants_table_shows_nonzero_for_both(
 async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connection[Any]) -> None:
     await seed_demo.seed(embedder=ZeroEmbedder(), create_auth_user=_fake_create_auth_user)
     counts1 = await _snapshot_counts(superuser_conn)
+
+    # Simulate a partial prior run that recreated the tenant but left the
+    # existing auth user attached to an unrelated stale tenant. The auth id is
+    # globally unique, so the next seed must relocate that membership rather
+    # than fail on users_pkey.
+    stale_tenant_id = uuid.uuid4()
+    bytefix_owner = uuid.uuid5(_FAKE_NS, seed_demo.BYTEFIX_OWNER_EMAIL)
+    await superuser_conn.execute(
+        "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
+        stale_tenant_id,
+        f"stale-{stale_tenant_id.hex[:8]}",
+        "Stale demo tenant",
+    )
+    await superuser_conn.execute(
+        "update users set tenant_id = $1 where id = $2", stale_tenant_id, bytefix_owner
+    )
+
     await seed_demo.seed(embedder=ZeroEmbedder(), create_auth_user=_fake_create_auth_user)
+    assert (
+        await superuser_conn.fetchval("select tenant_id from users where id = $1", bytefix_owner)
+        != stale_tenant_id
+    )
+    await superuser_conn.execute("delete from tenants where id = $1", stale_tenant_id)
     counts2 = await _snapshot_counts(superuser_conn)
     assert counts1 == counts2
 

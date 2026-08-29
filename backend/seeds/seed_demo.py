@@ -308,6 +308,22 @@ async def _seed_membership(
     lumident_owner: UUID,
     founder: UUID,
 ) -> None:
+    # A tenant wipe cascades its membership rows, but a previous partial seed
+    # may have left the same auth user attached to a different stale tenant.
+    # `users.id` is the auth.users id and is globally unique, so remove that
+    # old membership through the tenant-scoped policy before recreating the
+    # demo ownership rows. This keeps a rerun safe without broad service-role
+    # writes to the users table.
+    user_tenants: dict[UUID, UUID] = {}
+    async with db.tenant_context(None, "platform_admin") as conn:
+        for user_id in (bytefix_owner, lumident_owner):
+            tenant_id = await conn.fetchval("select tenant_id from users where id = $1", user_id)
+            if tenant_id is not None:
+                user_tenants[user_id] = tenant_id
+    for user_id, tenant_id in user_tenants.items():
+        async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+            await conn.execute("delete from users where id = $1", user_id)
+
     async with db.tenant_context(bytefix_id, "tenant_admin") as conn:
         await conn.execute(
             "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",

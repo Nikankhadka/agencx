@@ -344,12 +344,12 @@ outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 ### S2 - Business (tenant app tab 3) - show-back of profile + knowledge
 
 **Three rows since M-4** (`/business`): **Business page** (`/business/page` -
-cover, name, the share link, the platform tiles, About, and a
-preview link out to the storefront), **What you offer** (`/business/offerings` -
-the offerings editor), and **Business details** (`/business/details` - knowledge,
-ABN and tax). `/business/booking` and `/settings` are gone as paths rather than
-aliased: two routes rendering one screen drift, and four E2E specs had already
-been written against the pair.
+cover, name, the share link, platform tiles, the compact offering summary, and
+a preview link out to the storefront), **What you offer**
+(`/business/offerings` - the offerings editor), and **Business details**
+(`/business/details` - knowledge, ABN and tax). `/business/booking` and
+`/settings` are gone as paths rather than aliased: two routes rendering one
+screen drift, and four E2E specs had already been written against the pair.
 
 The Business tab displays the profile and knowledge the owner gave the agent -
 what the assistant believes about the business, and the uploaded material it
@@ -371,7 +371,8 @@ which is already true by the time the owner can open the screen. `tenants.status
 is a platform-admin lifecycle (suspend / reactivate), not an owner-facing one.
 
 **Shipped shape (E-5).** Business is a hub of `.bh-row`s
-(`renderScreen('business')`) holding **Booking page** and **Settings**.
+(`renderScreen('business')`) holding **Business page**, **What you offer**, and
+**Business details**.
 Schedule, Money and Plan are the prototype's Stage 2 rows and are absent, not
 disabled. The Booking page (`renderScreen('booking')`) shows the business name,
 a clamped one-line description built from the O-1 profile's services and hours,
@@ -384,12 +385,11 @@ E-5 left out now ship, because something stands behind each of them:
 
 - **The cover photo.** O-3's refusal of images is about *knowledge* - nothing
   reads an image for text - and a brand asset is not knowledge, so the two
-  rulings do not collide. Migration 0021's `tenant_assets` holds the bytes in
-  Postgres: there is no object store here, Supabase Storage is absent from
-  local dev, and one small image per tenant is well inside what a row carries.
-  Resized client-side on a `<canvas>` before upload; 2MB server cap as the
-  backstop. Served behind the owner's session, so the page fetches it and hands
-  an object URL to the `<img>` - a bearer token cannot ride on `src`.
+  rulings do not collide. New covers use the signed Cloudinary adapter and are
+  delivered from their public CDN URL. Legacy `tenant_assets` bytes remain
+  readable during rollout and are migrated by the count-verified one-off
+  script. Resized client-side on a `<canvas>` before upload; the API cap is the
+  backstop.
 - **The platform tiles** are link slots, not integrations: the owner's own
   Website/Google/Facebook/Instagram addresses, stored in `tenant_config.brand
   ->links`. Tapping a tile opens a panel - it never navigates on the tap, which
@@ -406,10 +406,9 @@ E-5 left out now ship, because something stands behind each of them:
   cents to dollars and does no other arithmetic. Catalog chunks stay out of
   general-knowledge fast paths, and recommendations re-fetch the authoritative
   row before stating a price.
-- **About** (M-4) is written on this screen and lives in
-  `tenant_config.brand->storefront`. It is presentation, not knowledge: the
-  assistant never answers from it, and an empty value renders nothing rather
-  than a heading over blank space.
+- **About** remains in `tenant_config.brand->storefront` for reversibility, but
+  the owner editor and public storefront do not expose or render it. It is
+  presentation, not knowledge, and the assistant never answers from it.
 
 **The QR is gone** (E-6). It was never in the prototype's owner screen - it came
 from the storefront's share sheet - and the founder does not use it. With it
@@ -420,10 +419,10 @@ the owner actually has rather than a hardcoded four-icon row.
 **The "Get a quote" CTA does not ship.** Quoting is a per-tenant opt-in that is
 off by default (D-1/D-2).
 
-**Still true, and worth saying plainly:** the page a customer lands on
-(`(customer)/page.tsx`) is a bare chat surface with none of this. The Booking
-page is the owner's preview of a storefront that has not been built yet; the
-port from `agencx-storefront-customer-v3.html` is the next ticket.
+**Current storefront shape:** the page a customer lands on
+(`(customer)/page.tsx`) is the compact catalogue described below. It leads with
+the business identity, optional cover, categorized offerings, links, and one
+header chat action; the assistant opens in a sheet when requested.
 
 The knowledge half now lives at **Settings > Knowledge** (`/settings/knowledge`,
 O-3 / D19) and is not a document table: a source is processed into fixed readable
@@ -458,10 +457,11 @@ share link is how a customer gets here (E-6 removed the QR).
 **M-4 made this a storefront, not just a chat.** It had been a message list and
 a composer, which meant a customer arriving from a shared link had to know what
 to ask before the page told them anything. The page now leads with the business:
-cover photo, name and tagline, **what we offer** (the owner's `offerings`, each
-with the owner's own price when they published one), About, and the
-links. The assistant is a tap away in the existing sheet from one header action,
-"Ask a question"; the rest of the storefront remains informational.
+optional cover, name and tagline, **what we offer** (the owner's `offerings`,
+with categories, optional media, and the owner's own price when they published
+one), and the links. Legacy About data is preserved but not exposed or rendered.
+The assistant is a tap away in the existing sheet from one header action, "Ask a
+question"; the rest of the storefront remains informational.
 
 The address is the owner's own: M-4 lets them choose it at go-live rather than
 keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).

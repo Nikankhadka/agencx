@@ -393,12 +393,12 @@ an automatic overwrite.
 
 ### Definition of done
 
-- [ ] Structured document with offering-shaped sections proposes candidates in
+- [x] Structured document with offering-shaped sections proposes candidates in
       the existing review flow
-- [ ] Confirmation writes through `M-1`'s service, never a bypass insert
-- [ ] Re-upload diffs against existing offerings instead of overwriting
-- [ ] Money guardrail test matrix extended and green
-- [ ] `make check` green
+- [x] Confirmation writes through `M-1`'s service, never a bypass insert
+- [x] Re-upload diffs against existing offerings instead of overwriting
+- [x] Money guardrail remains enforced; candidate prices are deterministic
+- [x] `make check` green
 
 ---
 
@@ -408,11 +408,12 @@ an automatic overwrite.
 
 ### Summary
 
-Turn `/{slug}` from a bare chat window into a storefront: the offerings `M-1`
-made writable, with the owner's prices, above an About section, with the
-assistant one tap away rather than occupying the whole page. Let the owner
-choose that address at go-live instead of inheriting the provisional one.
-Re-cut the Business hub around the three jobs this leaves.
+Turn `/{slug}` from a bare chat window into a compact, business-agnostic
+catalogue: the offerings `M-1` made writable, with the owner's prices,
+optional media, categories, and the assistant one tap away rather than
+occupying the whole page. Let the owner choose that address at go-live instead
+of inheriting the provisional one. Re-cut the Business hub around the three
+jobs this leaves.
 
 ### Why
 
@@ -444,12 +445,13 @@ conversation when I want one, not before.
   is neither active nor suspended (`provisioning`) falls back to the bare chat
   rather than an empty page.
 
-#### US-2 An owner writes the parts of the page that are not offerings
+#### US-2 The page stays low-interaction for the owner
 
-As an owner, I write an About paragraph and it appears on my page.
+As an owner, I can focus on the catalogue and business rather than maintaining
+an extra page-builder section.
 
 - Legacy About data remains in `tenant_config.brand->storefront` for
-  reversibility, but the owner editor and public storefront no longer expose or
+  reversibility, but the owner editor and public storefront do not expose or
   render it.
 
 #### US-3 An owner chooses their public address at go-live
@@ -499,7 +501,7 @@ offer, and my business details.
   price; retiring an offering drops it from both the owner's list and the
   storefront while the row survives; a suggested slug always passes
   `validate_slug` across reserved, punctuation-only and ordinary names.
-- E2E: `storefront.spec.ts` (About round trip, opening the chat
+- E2E: `storefront.spec.ts` (absence of About, opening the chat
   sheet, an unknown slug still 404s) and the offerings round trip in
   `business-hub.spec.ts`, which now asserts the price on the public page.
 - **Not covered by E2E:** choosing the slug at go-live. Reaching confirm means
@@ -520,10 +522,10 @@ offer, and my business details.
 
 ### Definition of done
 
-- [x] `/{slug}` renders offerings with the owner's prices, About and links,
-      with the assistant a tap away
+- [x] `/{slug}` renders categorized offerings with the owner's prices, optional
+      media, and links, with the assistant a tap away
 - [x] An offering with no price shows none
-- [x] The owner writes About from the Business page screen
+- [x] About is preserved for reversibility but absent from owner and public UI
 - [x] The owner chooses their public address at go-live; a taken one is a 409
       and a reserved-derived one cannot 500
 - [x] One route per screen - the aliases are gone

@@ -504,8 +504,10 @@ applied in order by a plain runner (no heavy framework):
 0025_schema_cleanup.sql   drops dead schema, adds app_role()/staff RLS, offerings.category and tenant_media (F-3/M-2)
 ```
 
-Planned Agencx migration: `M-2` (`docs/agencx/spec/11-offerings-media.md`,
-D24) widens or replaces `tenant_assets` for Cloudinary media.
+Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,
+`docs/agencx/spec/11-offerings-media.md`, D24) adds `tenant_media` for the
+Cloudinary-backed cover and per-offering visuals while retaining legacy
+`tenant_assets` reads during rollout.
 
 Every table migration ends with its RLS + policies + grants to `wren_app`. A
 table without RLS must never survive a migration - the schema audit enforces
