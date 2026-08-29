@@ -1,12 +1,11 @@
 """T-010: golden retrieval eval against Tenant 1's seeded knowledge.
 
-Loads evals/datasets/tenant1_retrieval.jsonl into eval_cases (idempotent -
-wipes and reinserts this tenant's 'retrieval' cases each run), runs
-service.retrieve() per case, computes recall@3, recall@5, MRR, and nDCG@5,
-writes an eval_runs row, and prints a table. Negative (out-of-domain) cases
-are reported separately (mean top-1 rerank score) rather than folded into
-recall/MRR/nDCG, which are only meaningful when there's an actual relevant
-chunk to find.
+Loads evals/datasets/tenant1_retrieval.jsonl, runs service.retrieve() per
+case, computes recall@3, recall@5, MRR, and nDCG@5, writes an eval_runs
+row, and prints a table. Negative (out-of-domain) cases are reported
+separately (mean top-1 rerank score) rather than folded into recall/MRR/
+nDCG, which are only meaningful when there's an actual relevant chunk to
+find.
 
 Usage: ``uv run python -m evals.retrieval_eval [--gate] [--top-k 5]``
 """
@@ -119,20 +118,6 @@ def ndcg_at_k(ranks: list[int | None], k: int) -> float:
 # --- DB-backed evaluation run -----------------------------------------------------
 
 
-async def _sync_eval_cases(conn: Any, tenant_id: UUID, cases: list[EvalCase]) -> None:
-    await conn.execute(
-        "delete from eval_cases where tenant_id = $1 and case_type = 'retrieval'", tenant_id
-    )
-    for case in cases:
-        await conn.execute(
-            "insert into eval_cases (tenant_id, case_type, input, expected) "
-            "values ($1, 'retrieval', $2, $3)",
-            tenant_id,
-            json.dumps({"query": case.query}),
-            json.dumps({"expected_chunks": case.expected_chunks, "negative": case.negative}),
-        )
-
-
 async def run_eval(
     conn: Any,
     *,
@@ -142,8 +127,6 @@ async def run_eval(
     reranker: Reranker,
     top_k: int = 5,
 ) -> dict[str, float]:
-    await _sync_eval_cases(conn, tenant_id, cases)
-
     positive_ranks: list[int | None] = []
     negative_top_scores: list[float] = []
 

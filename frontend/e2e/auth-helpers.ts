@@ -68,13 +68,17 @@ interface MailpitMessage {
 
 /**
  * Poll Mailpit for the OTP GoTrue just mailed to `email` and return its six
- * digits. "Newest matching message" is always correct here with no cutoff
- * needed: the send this helper is waiting on only just happened, so nothing
- * mailed to this address before it can ever be newer. Polls rather than
+ * digits. "Newest matching message" is correct only with a cutoff: the send
+ * this helper is waiting on happened moments ago, but specs share the demo
+ * users, so a *previous* login's mail for the same address can still be the
+ * newest when this poll starts (parallel workers or a repeated spec). Ignore
+ * anything older than the poll's own start (with a small grace for delivery
+ * lag), so the code returned is always this attempt's. Polls rather than
  * fetching once because delivery (real SMTP, even to a local relay) is not
  * instant.
  */
 export async function fetchOtpCode(request: APIRequestContext, email: string): Promise<string> {
+  const startedAt = Date.now() - 2000;
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const resp = await request.get(
@@ -82,10 +86,12 @@ export async function fetchOtpCode(request: APIRequestContext, email: string): P
     );
     if (resp.ok()) {
       const { messages } = (await resp.json()) as { messages: MailpitMessage[] };
-      const newest = messages.reduce<MailpitMessage | null>(
-        (latest, m) => (!latest || m.Created > latest.Created ? m : latest),
-        null
-      );
+      const newest = messages
+        .filter((m) => new Date(m.Created).getTime() >= startedAt)
+        .reduce<MailpitMessage | null>(
+          (latest, m) => (!latest || m.Created > latest.Created ? m : latest),
+          null
+        );
       const code = newest?.Snippet.match(/\b(\d{6})\b/)?.[1];
       if (code) return code;
     }
@@ -97,6 +103,13 @@ export async function fetchOtpCode(request: APIRequestContext, email: string): P
 /**
  * Log in through the tenant-admin login-in-chat (O-2): enter an email, read
  * the six-digit code GoTrue mails via Mailpit, type it back.
+ *
+ * Retries in place on a stale code: the specs share the demo users, so two
+ * workers can be logging in as the same owner at once, and GoTrue keeps only
+ * one OTP per address - a later send invalidates the code this attempt just
+ * fetched. The login page's own "Wrong email?" escape re-arms the email phase
+ * with the address still in the pill, so a retry goes through real UI rather
+ * than reloading (a reload could race the session redirect).
  */
 export async function loginInChat(
   page: Page,
@@ -106,13 +119,21 @@ export async function loginInChat(
   await page.goto("/login");
   await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Send" }).click();
-
-  // The code phase must render before the mail is fetched - the signInWithOtp
-  // call has to land first.
   await page.getByLabel("Digit 1").waitFor({ timeout: 10_000 });
-  const code = await fetchOtpCode(request, email);
-  for (let i = 0; i < 6; i++) {
-    await page.getByLabel(`Digit ${i + 1}`).fill(code[i]);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const code = await fetchOtpCode(request, email);
+    for (let i = 0; i < 6; i++) {
+      await page.getByLabel(`Digit ${i + 1}`).fill(code[i]);
+    }
+    const landed = await page
+      .waitForURL("**/onboarding", { timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (landed) return;
+    await page.getByRole("button", { name: "Wrong email?" }).click();
+    await page.getByRole("button", { name: "Send" }).click();
+    await page.getByLabel("Digit 1").waitFor({ timeout: 10_000 });
   }
   await page.waitForURL("**/onboarding");
 }

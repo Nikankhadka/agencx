@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildBrief } from "./brief";
 import type { ConversationSummary } from "@/lib/api-schemas";
-import type { KnowledgeRecord } from "../../settings/knowledge/lib/types";
+import type { KnowledgeRecord } from "../../business/details/knowledge/lib/types";
 
 function conversation(over: Partial<ConversationSummary> = {}): ConversationSummary {
   return {
@@ -77,7 +77,7 @@ describe("buildBrief", () => {
     expect(items[0]!.kind).toBe("draft");
     expect(items[0]!.headline).toBe("sababa.example is read and waiting for you to check it.");
     expect(items[0]!.note).toContain("until you save it");
-    expect(items[0]!.chips[0]!.href).toBe("/settings/knowledge");
+    expect(items[0]!.chips[0]!.href).toBe("/business/details/knowledge");
   });
 
   it("counts drafts and pluralises the note with them", () => {

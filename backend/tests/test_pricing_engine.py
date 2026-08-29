@@ -1,6 +1,6 @@
 """T-016: the pricing engine's exhaustive unit coverage - this file IS the
 ticket's deliverable proof. Every case reads real seeded pricing_rules/
-catalog_items/tenant_config from Postgres; nothing here mocks the DB layer,
+offerings/tenant_config from Postgres; nothing here mocks the DB layer,
 since the whole point of the engine is that it reads authoritative,
 un-stale data.
 """
@@ -87,7 +87,7 @@ async def _seed_item(
     active: bool = True,
 ) -> uuid.UUID:
     item_id: uuid.UUID = await conn.fetchval(
-        "insert into catalog_items (tenant_id, name, price_cents, active) "
+        "insert into offerings (tenant_id, name, price_cents, active) "
         "values ($1, $2, $3, $4) returning id",
         tenant_id,
         name,

@@ -168,11 +168,25 @@ async def run(state: AgentState) -> dict[str, Any]:
     # placeholder - they are what chat.py persists for the trace viewer.
     if state["escalated"]:
         recorded = state["inspection"] or _PASSTHROUGH_VERDICTS
-        writer({"type": "inspection", "verdicts": recorded, "decision": "ok"})
+        writer(
+            {
+                "type": "inspection",
+                "verdicts": recorded,
+                "decision": "ok",
+                "author_node": state.get("author_node"),
+            }
+        )
         return {"inspection": recorded, "inspection_decision": "ok"}
 
     if state.get("draft_deterministic"):
-        writer({"type": "inspection", "verdicts": _PASSTHROUGH_VERDICTS, "decision": "ok"})
+        writer(
+            {
+                "type": "inspection",
+                "verdicts": _PASSTHROUGH_VERDICTS,
+                "decision": "ok",
+                "author_node": state.get("author_node"),
+            }
+        )
         return {"inspection": _PASSTHROUGH_VERDICTS, "inspection_decision": "ok"}
 
     runtime = get_runtime(GraphContext)
@@ -234,7 +248,14 @@ async def run(state: AgentState) -> dict[str, Any]:
     failed = [(name, v) for name, v in verdicts.items() if not v["passed"]]
 
     if not failed:
-        writer({"type": "inspection", "verdicts": verdicts, "decision": "ok"})
+        writer(
+            {
+                "type": "inspection",
+                "verdicts": verdicts,
+                "decision": "ok",
+                "author_node": state.get("author_node"),
+            }
+        )
         return {"inspection": verdicts, "inspection_decision": "ok"}
 
     logger.info(
@@ -261,11 +282,19 @@ async def run(state: AgentState) -> dict[str, Any]:
     )  # only these ever reach a real (non-deterministic) draft
     first_check, _ = failed[0]
     writer({"type": "refusal", "text": ESCALATION_MESSAGE})
-    writer({"type": "inspection", "verdicts": verdicts, "decision": "escalate"})
+    writer(
+        {
+            "type": "inspection",
+            "verdicts": verdicts,
+            "decision": "escalate",
+            "author_node": "inspection",
+        }
+    )
     return {
         "inspection": verdicts,
         "inspection_decision": "escalate",
         "escalated": True,
         "escalation_reason": f"inspection:{first_check}",
         "draft_response": ESCALATION_MESSAGE,
+        "author_node": "inspection",
     }

@@ -82,6 +82,7 @@ async def list_conversations(
             status_filter=status_filter,
             limit=limit,
             offset=offset,
+            role=admin.role,
         )
     ]
 
@@ -93,7 +94,9 @@ async def get_conversation(
 ) -> ConversationDetail:
     return ConversationDetail(
         **await controller.get_conversation_detail(
-            tenant_id=str(admin.tenant_id), conversation_id=str(conversation_id)
+            tenant_id=str(admin.tenant_id),
+            conversation_id=str(conversation_id),
+            role=admin.role,
         )
     )
 
@@ -109,9 +112,11 @@ class HumanReplyRequest(BaseModel):
         return value.strip()
 
 
-async def _switch_handler(*, tenant_id: UUID, conversation_id: UUID, human: bool) -> None:
+async def _switch_handler(
+    *, tenant_id: UUID, conversation_id: UUID, human: bool, role: str
+) -> None:
     if not await chat_service.set_conversation_handler(
-        tenant_id=tenant_id, conversation_id=conversation_id, human=human
+        tenant_id=tenant_id, conversation_id=conversation_id, human=human, role=role
     ):
         # Either the conversation is not this tenant's, or it is not in the
         # state this transition starts from - an already-taken-over thread, or
@@ -132,7 +137,9 @@ async def take_over_conversation(
     """C-6: the staff member is the voice now; the assistant stays silent until
     handed back. Available on any conversation, not only a flagged one - a
     business steps into its own conversations whenever it wants to."""
-    await _switch_handler(tenant_id=admin.tenant_id, conversation_id=conversation_id, human=True)
+    await _switch_handler(
+        tenant_id=admin.tenant_id, conversation_id=conversation_id, human=True, role=admin.role
+    )
 
 
 @router.post("/{conversation_id}/handback", status_code=status.HTTP_204_NO_CONTENT)
@@ -142,7 +149,9 @@ async def hand_back_conversation(
 ) -> None:
     """C-6: the assistant resumes. The takeover interlude stays in the history,
     so its next turn reads what the human said rather than contradicting it."""
-    await _switch_handler(tenant_id=admin.tenant_id, conversation_id=conversation_id, human=False)
+    await _switch_handler(
+        tenant_id=admin.tenant_id, conversation_id=conversation_id, human=False, role=admin.role
+    )
 
 
 @router.post("/{conversation_id}/reply", status_code=status.HTTP_204_NO_CONTENT)
@@ -159,7 +168,9 @@ async def reply_as_human(
     other mid-turn.
     """
     detail = await controller.get_conversation_detail(
-        tenant_id=str(admin.tenant_id), conversation_id=str(conversation_id)
+        tenant_id=str(admin.tenant_id),
+        conversation_id=str(conversation_id),
+        role=admin.role,
     )
     if detail["status"] != "human":
         raise HTTPException(
@@ -167,5 +178,8 @@ async def reply_as_human(
             detail="take over the conversation before replying",
         )
     await chat_service.post_human_reply(
-        tenant_id=admin.tenant_id, conversation_id=conversation_id, message=body.message
+        tenant_id=admin.tenant_id,
+        conversation_id=conversation_id,
+        message=body.message,
+        role=admin.role,
     )

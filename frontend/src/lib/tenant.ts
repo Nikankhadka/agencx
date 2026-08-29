@@ -35,6 +35,28 @@ export interface TenantResolution {
   customer?: Record<string, unknown>;
 }
 
+export interface StorefrontOffering {
+  id: string;
+  name: string;
+  description: string;
+  /**
+   * The owner's own typed figure, in integer cents, or null when they
+   * published no price. The page formats it; nothing here computes it.
+   */
+  price_cents: number | null;
+  category?: string | null;
+  media?: { type: string; provider: string; url: string; poster_url?: string | null } | null;
+}
+
+export interface StorefrontData {
+  name: string;
+  tagline: string | null;
+  links: Record<string, string>;
+  offerings: StorefrontOffering[];
+  has_cover: boolean;
+  cover_url?: string | null;
+}
+
 /**
  * Typed view over TenantResolution.customer with safe fallbacks. Accepts
  * undefined so a frontend deployed ahead of a pre-T-032 backend (missing the
@@ -70,4 +92,14 @@ export async function resolveTenantBySlug(slug: string): Promise<TenantResolutio
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`tenant resolve failed: ${res.status}`);
   return (await res.json()) as TenantResolution;
+}
+
+/** Public presentation content for a known active tenant. */
+export async function resolveStorefrontBySlug(slug: string): Promise<StorefrontData> {
+  const base = await serverApiBaseUrl();
+  const res = await fetch(`${base}/api/public/tenant/${encodeURIComponent(slug)}/storefront`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`storefront resolve failed: ${res.status}`);
+  return (await res.json()) as StorefrontData;
 }

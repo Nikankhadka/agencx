@@ -12,9 +12,18 @@ import json
 from typing import Any
 from uuid import UUID
 
+import asyncpg
+
+from app.features.business.service import create_offerings_batch
+from app.features.tenants import service as tenant_service
+from app.llm.embedder import Embedder
 from app.shared import db
 
 _CONFIG_SELECT = "config->'onboarding'"
+
+
+class PublicSlugTakenError(RuntimeError):
+    """The requested public page address belongs to another tenant."""
 
 
 async def load_record(*, tenant_id: UUID) -> dict[str, Any]:
@@ -48,18 +57,23 @@ async def apply_confirmation(
     tenant_id: UUID,
     system_prompt: str,
     business_name: str,
+    slug: str,
     profile: dict[str, Any],
     completed_record: dict[str, Any],
+    offering_candidates: list[str] | None = None,
+    embedder: Embedder | None = None,
 ) -> None:
     """Persist what confirm() computed in one atomic transaction.
 
     O-1 captures a business profile, not a priced catalog: onboarding no longer
-    writes catalog_items or pricing_rules, and the columns it used to set from
-    the interview (tone, escalation_threshold, payment_processing_mode) keep
+    writes offerings or pricing_rules, and the columns it used to set from
+    the interview (tone, payment_processing_mode) keep
     their schema defaults until a screen edits them. Priced answers come from
     the owner's uploaded material instead (C-1).
     """
+    old_slug: str | None = None
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        old_slug = await conn.fetchval("select slug from tenants where id = $1", tenant_id)
         await conn.execute(
             "update tenant_config set system_prompt=$2, "
             "config = jsonb_set(config, '{profile}', $3::jsonb, true), "
@@ -68,9 +82,26 @@ async def apply_confirmation(
             system_prompt,
             json.dumps(profile),
         )
-        await conn.execute(
-            "update tenants set business_name=$2 where id=$1",
-            tenant_id,
-            business_name,
-        )
+        try:
+            await conn.execute(
+                "update tenants set business_name=$2, slug=$3 where id=$1",
+                tenant_id,
+                business_name,
+                slug,
+            )
+        except asyncpg.UniqueViolationError as exc:
+            raise PublicSlugTakenError from exc
         await set_onboarding_json(conn, tenant_id, completed_record)
+        if offering_candidates and embedder is not None:
+            await create_offerings_batch(
+                conn=conn,
+                tenant_id=tenant_id,
+                offerings=[
+                    {"name": name, "description": "", "price_cents": None}
+                    for name in offering_candidates
+                ],
+                embedder=embedder,
+            )
+    if old_slug:
+        tenant_service.invalidate_slug_cache(old_slug)
+    tenant_service.invalidate_slug_cache(slug)

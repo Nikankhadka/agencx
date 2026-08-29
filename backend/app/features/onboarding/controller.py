@@ -1,9 +1,9 @@
-"""Onboarding orchestration: turn loop, draft validation, and confirm gating.
+"""Onboarding orchestration: turn loop, selections, and confirm gating.
 
 Moved out of api/onboarding.py. Holds the business order of a confirm (gate,
 then persist) and the state-shaped response builder. The LLM turn loop runs in
-app/onboarding/agent.py. O-1 made onboarding text-only: every beat is
-satisfied by extraction, so there is no deterministic selection path here.
+app/onboarding/agent.py. O-12 keeps fixed values on a deterministic server path
+so extraction cannot desynchronise a beat.
 """
 
 from __future__ import annotations
@@ -18,14 +18,17 @@ from fastapi import HTTPException, status
 
 from app.features.knowledge import service as knowledge_service
 from app.features.onboarding import service
+from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     prepare_turn,
     prepare_url_turn,
     progress,
     run_turn,
+    selection_reply,
     stream_reply,
 )
 from app.onboarding.flow import ProfileDraft
@@ -91,6 +94,9 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         "completed": record_data.get("completed", False),
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
+        "suggested_slug": suggested_slug(
+            str(record_data.get("draft", {}).get("business_name", ""))
+        ),
     }
 
 
@@ -121,7 +127,10 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             prompt = msg.get("content", "")
             break
     if not prompt:
-        prompt = "Hi! I'll help you set up your business. To get started, what's your name?"
+        prompt = (
+            "Hi! I'm your Agencx setup assistant. I'll help you get your business "
+            "ready. What's your name?"
+        )
     return {
         "stage": stage,
         "prompt": prompt,
@@ -130,6 +139,7 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "history": onboarding.history,
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
+        "suggested_slug": suggested_slug(str(draft.get("business_name", ""))) or None,
     }
 
 
@@ -167,6 +177,37 @@ async def run_message(
     record_data = updated.to_jsonb()
     if persist:
         await service.save_record(tenant_id=tenant_id, record=record_data)
+    return record_data
+
+
+async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) -> dict[str, Any]:
+    """Apply the current beat's fixed answer without an LLM call."""
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    if onboarding.completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="onboarding already confirmed",
+        )
+    current = beats.next_beat(onboarding.draft)
+    if current is None or current.key != beat_key:
+        stage = current.key if current is not None else "confirm"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"stale selection - current beat is {stage}",
+        )
+    try:
+        user_message = beats.apply_selection(onboarding.draft, beat_key, values)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    reply = selection_reply(onboarding)
+    onboarding.history.append({"role": "user", "content": user_message})
+    onboarding.history.append({"role": "assistant", "content": reply})
+    record_data = onboarding.to_jsonb()
+    await service.save_record(tenant_id=tenant_id, record=record_data)
     return record_data
 
 
@@ -309,7 +350,9 @@ async def _stream_url_turn(
     yield {"type": "done"}
 
 
-async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
+async def confirm(
+    *, tenant_id: UUID, slug: str | None = None, embedder: Embedder | None = None
+) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
     if onboarding.completed:
@@ -327,6 +370,7 @@ async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
     # The gate above guarantees all seven fields; extra keys (a pre-O-1 draft's
     # orphan sections) are ignored rather than rejected.
     profile = ProfileDraft.model_validate(draft)
+    public_slug = validate_slug(slug or suggested_slug(profile.business_name))
     # business_type is the owner's own free text, so it gets its own sentence
     # rather than an apposition - "Bytefix Repairs, phone repair shop" and
     # "Northgate Family Dental, A three-chair practice..." both read badly.
@@ -337,11 +381,20 @@ async def confirm(*, tenant_id: UUID) -> dict[str, Any]:
         "there, say so and offer to have the owner follow up."
     )
     onboarding.completed = True
-    await service.apply_confirmation(
-        tenant_id=tenant_id,
-        system_prompt=system_prompt,
-        business_name=profile.business_name,
-        profile=profile.model_dump(),
-        completed_record=onboarding.to_jsonb(),
-    )
-    return {"tenant_id": tenant_id}
+    try:
+        await service.apply_confirmation(
+            tenant_id=tenant_id,
+            system_prompt=system_prompt,
+            business_name=profile.business_name,
+            slug=public_slug,
+            profile=profile.model_dump(),
+            completed_record=onboarding.to_jsonb(),
+            offering_candidates=onboarding.offering_candidates,
+            embedder=embedder,
+        )
+    except service.PublicSlugTakenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That page address is already taken. Choose another.",
+        ) from exc
+    return {"tenant_id": tenant_id, "slug": public_slug}

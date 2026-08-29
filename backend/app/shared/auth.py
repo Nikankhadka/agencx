@@ -38,6 +38,10 @@ SUPABASE_JWT_ALGORITHMS = frozenset({"HS256", "ES256", "RS256"})
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
+# users.role -> the RLS context role (database.md section 2.2). One mapping,
+# in one place: the SQL policies never re-derive it.
+_RLS_ROLE = {"owner": "tenant_admin", "staff": "staff"}
+
 
 @lru_cache
 def _jwks_client(supabase_url: str) -> jwt.PyJWKClient:
@@ -61,6 +65,7 @@ class AuthConfigError(RuntimeError):
 class AuthedTenantAdmin:
     user_id: UUID
     tenant_id: UUID
+    role: str
 
 
 @dataclass(frozen=True)
@@ -212,6 +217,11 @@ async def require_tenant_admin(
 
     403 when the token is valid but the user has no ``users`` row (never signed
     up / not a member of any tenant).
+
+    The caller's role is carried on the principal and mapped to the RLS
+    context role (owner -> ``tenant_admin``, staff -> ``staff``); it is what
+    the role-branched policies from 0025 read, so the api layer must pass it
+    down to every ``tenant_context`` on the tenant's behalf.
     """
     pool = db.get_pool()
     async with pool.acquire() as conn:
@@ -220,7 +230,27 @@ async def require_tenant_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="no tenant membership for this user"
         )
-    return AuthedTenantAdmin(user_id=user_id, tenant_id=row["tenant_id"])
+    role = _RLS_ROLE.get(str(row["role"]))
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=f"unexpected user role {row['role']!r}"
+        )
+    return AuthedTenantAdmin(user_id=user_id, tenant_id=row["tenant_id"], role=role)
+
+
+async def require_owner(
+    admin: Annotated[AuthedTenantAdmin, Depends(require_tenant_admin)],
+) -> AuthedTenantAdmin:
+    """The tenant-console admin surfaces only owners reach.
+
+    Staff can take conversations over (C-6) but must not manage knowledge,
+    offerings, pricing, onboarding or tenant settings - the api layer guards
+    those routers with this dependency, and the 0025 policies enforce the
+    same line in the database.
+    """
+    if admin.role != "tenant_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner only")
+    return admin
 
 
 async def require_platform_admin(

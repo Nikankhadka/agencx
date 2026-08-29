@@ -1,16 +1,8 @@
-"""O-1: onboarding beat system - the lean flat profile (single source of truth).
+"""O-1/O-12: lean onboarding beats, the profile's single source of truth.
 
-One :class:`Beat` per lean profile field, in ``BEAT_ORDER``. Every beat is
-still satisfied by LLM extraction via ``save_profile`` - there is no
-deterministic selection path, and the ``selection`` payload stays refused.
-
-**O-6: chips are presentation, not a protocol.** The prototype answers "are you
-running this on your own, or have you got a team?" with tappable ``Just me`` /
-``Got a team`` chips above the composer (``buildCmdPill(placeholder, onSubmit,
-chips)``). Tapping one **submits its label as ordinary text** on the same
-streaming route a typed answer uses, so extraction reads "Just me" exactly as
-if the owner had typed it. That keeps the one-tool loop, the completeness gate
-and the free-tier reliability O-1 bought, and costs the backend one field.
+Free text is satisfied by extraction. Fixed chip and masked values use the
+server-owned selection protocol so the saved beat, spoken question, and
+composer cannot advance independently.
 
 Two chips instead swap the composer to a different widget and submit nothing
 until that widget's own value is sent - ``ChipSpec.widget`` says which. The
@@ -99,28 +91,28 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="name",
         label="your name",
-        ask="What's your name?",
+        ask="What name would you like me to use?",
         kind="text",
         complete=_complete("name"),
     ),
     Beat(
         key="business_name",
         label="business name",
-        ask="What is your business called?",
+        ask="What does the business go by?",
         kind="text",
         complete=_complete("business_name"),
     ),
     Beat(
         key="business_type",
         label="business type",
-        ask="What kind of business is it?",
+        ask="In a few words, what kind of business is it?",
         kind="text",
         complete=_complete("business_type"),
     ),
     Beat(
         key="headcount",
         label="team size",
-        ask="Is it just you, or do you have a team?",
+        ask="Is it just you, or do you work with a team?",
         kind="text",
         complete=_complete("headcount"),
         chips=(
@@ -131,21 +123,21 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="hours",
         label="opening hours",
-        ask="What are your opening hours?",
+        ask="When are you open?",
         kind="text",
         complete=_complete("hours"),
     ),
     Beat(
         key="services",
         label="what you offer",
-        ask="What do you sell or offer?",
+        ask="What would you like customers to know you offer?",
         kind="text",
         complete=_complete("services"),
     ),
     Beat(
         key="contact",
         label="contact details",
-        ask="What's the best way for customers to reach you?",
+        ask="How should customers reach you?",
         kind="text",
         complete=_complete("contact"),
         # The business contact is often the address the owner logged in with,
@@ -164,13 +156,13 @@ BEAT_ORDER: tuple[Beat, ...] = (
         prefix="ABN",
         chips=(
             ChipSpec(label="Yes", value="yes", widget="masked"),
-            ChipSpec(label="No, not yet", value=NO_ABN),
+            ChipSpec(label="No", value=NO_ABN),
         ),
     ),
     Beat(
         key="gst",
         label="GST registration",
-        ask="And are you registered for GST?",
+        ask="Are you registered for GST?",
         kind="text",
         complete=_gst_complete,
         chips=(
@@ -205,6 +197,31 @@ def input_spec(beat: Beat) -> InputSpec:
         prefix=beat.prefix,
         suggest_owner_email=beat.suggest_owner_email,
     )
+
+
+def apply_selection(draft: dict[str, Any], key: str, values: list[str]) -> str:
+    """Validate and store one deterministic answer, returning its user label."""
+    beat = BEATS.get(key)
+    if beat is None or len(values) != 1:
+        raise ValueError("select one valid answer")
+    value = values[0].strip()
+    labels = {chip.value: chip.label for chip in beat.chips if chip.widget is None}
+
+    if key == "headcount" and value in labels:
+        draft[key] = value
+        return labels[value]
+    if key == "abn":
+        if value == NO_ABN:
+            draft[key] = value
+            return labels[value]
+        digits = "".join(char for char in value if char.isdigit())
+        if len(digits) == 11:
+            draft[key] = digits
+            return value
+    if key == "gst" and value in labels:
+        draft[key] = "yes" if value == "yes" else "no"
+        return labels[value]
+    raise ValueError("select one valid answer")
 
 
 # The optional website/documents ask (see agent._completion_reply) is not a

@@ -58,8 +58,8 @@ test.describe("tenant app shell - three destinations", () => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business");
 
-    await page.getByRole("link", { name: /Settings/ }).click();
-    await page.waitForURL("**/settings");
+    await page.getByRole("link", { name: /Business details/ }).click();
+    await page.waitForURL("**/business/details");
 
     // The tab is still marked while a screen under it is open.
     const nav = page.getByRole("navigation", { name: "Console" });

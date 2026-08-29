@@ -128,7 +128,7 @@ wren/
 │   │   ├── 0003_tenancy.sql         - tenants, tenant_config, users, platform_admins + RLS + slug resolver
 │   │   ├── 0004_knowledge.sql       - documents, knowledge_chunks + RLS + HNSW/GIN indexes
 │   │   ├── 0005_conversations.sql   - conversations, messages, tool_calls + RLS
-│   │   ├── 0006_commerce.sql        - catalog_items, pricing_rules, quotes + RLS (integer-cents pricing)
+│   │   ├── 0006_commerce.sql        - offerings (created as catalog_items, renamed by 0023), pricing_rules, quotes + RLS (integer-cents pricing)
 │   │   ├── 0007_operations.sql      - orders, escalations + RLS (domain-agnostic shapes)
 │   │   ├── 0008_eval_cost.sql       - eval_cases, eval_runs, cost_logs + RLS
 │   │   ├── 0009_auth_lookup.sql     - pre-context user/platform-admin lookup resolvers (SECURITY DEFINER)

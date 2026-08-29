@@ -379,26 +379,6 @@ async def score_case(
     )
 
 
-async def _sync_eval_cases(conn: Any, tenant_id: UUID, cases: list[GenerationCase]) -> None:
-    await conn.execute(
-        "delete from eval_cases where tenant_id = $1 and case_type = 'generation'", tenant_id
-    )
-    for case in cases:
-        await conn.execute(
-            "insert into eval_cases (tenant_id, case_type, input, expected) "
-            "values ($1, 'generation', $2, $3)",
-            tenant_id,
-            json.dumps({"question": case.question}),
-            json.dumps(
-                {
-                    "reference_facts": case.reference_facts,
-                    "expected_sources": case.expected_sources,
-                    "negative": case.negative,
-                }
-            ),
-        )
-
-
 async def run_eval(
     *,
     tenant_id: UUID,
@@ -408,7 +388,6 @@ async def run_eval(
     reranker: Reranker,
 ) -> tuple[dict[str, float], list[CaseResult]]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await _sync_eval_cases(conn, tenant_id, cases)
         # escalation.py writes real rows (escalations FKs conversations,
         # flips conversations.status), so every case needs a real
         # conversation row - a placeholder string would crash the whole run

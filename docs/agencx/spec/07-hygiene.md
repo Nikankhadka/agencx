@@ -6,6 +6,7 @@ one topology survives; superseded fixed-specialist routing is deleted.
 Tickets in this file:
 
 - F-1: Delete dead agent code
+- F-3: Trim dead schema, dedupe seeds, enforce owner/staff roles
 
 ---
 
@@ -83,3 +84,95 @@ after the cleanup,
 - [ ] One topology remains
 - [ ] Import graph clean
 - [ ] Safety suites green
+
+---
+
+## F-3: Trim dead schema, dedupe seeds, enforce owner/staff roles
+
+### Summary
+
+A schema audit found the database carrying columns, a table, and role
+semantics nothing exercises. This ticket deletes the dead weight (migration
+0025), makes the one column the app reads but never writes real
+(`messages.agent_node`), enforces the `users.role` owner/staff split that
+existed only on paper (G3.1), and dedupes the seed scripts behind one shared
+helper module.
+
+### Why
+
+Every dead column is a promise the schema makes and the app does not keep:
+`tenant_config.escalation_threshold` had its only reader deleted with the
+old supervisor topology, `offerings.attributes` has zero references
+anywhere, and `eval_cases` was write-only bookkeeping whose real source of
+truth is the JSONL datasets. The trace viewer rendered an author chip that
+was always empty because the app never populated `agent_node`. And staff
+takeover (C-6) ships, but `users.role` was never enforced - any member was
+any member.
+
+### User stories
+
+#### US-1 The schema says what the app does
+
+**As** the maintainer,
+**I want** every table and column backed by a live code path,
+**so that** the schema is a map of the system, not a museum of past plans.
+
+- [x] 0025 drops `tenant_config.escalation_threshold`, `offerings.attributes`,
+  and the `eval_cases` table (and the eval runners' sync path dies with it)
+- [x] `messages.agent_node` is populated by the graph (agent/draft/
+  price_gate/inspection/escalation claim authorship) and the demo seed speaks
+  the real node vocabulary
+- [ ] Deliberate forward-looking columns stay: `enabled_tools` (D-1),
+  `payment_processing_mode` (ADR decision 8), quotes immutability
+
+#### US-2 Staff are staff, owners are owners
+
+**As** a business with more than one person working the console,
+**I want** staff to reach exactly the conversation work surface and nothing
+else,
+**so that** a wrong tap cannot change pricing, knowledge, or settings.
+
+- [x] RLS branches on the context role (0025): staff reads the conversation
+  tables, flips status human<->open, inserts human_agent/system messages,
+  claims/resolves escalations - nothing else, no deletes anywhere
+- [x] `require_owner` guards the settings/knowledge/offerings/pricing/
+  onboarding routers; conversations/escalations/dashboards thread the role
+  into their `tenant_context`
+- [ ] Staff provisioning is still future work (no create-staff API) - the
+  enforcement is proven with directly-inserted rows
+
+#### US-3 Seeds tell their story, not their plumbing
+
+**As** the maintainer,
+**I want** each seed file to carry only its data and its narrative,
+**so that** a new seed is a data file plus three helper calls.
+
+- [x] `seeds/_helpers.py` owns pool/wipe/tenant-core/commerce/knowledge
+  plumbing; behavior is byte-identical (seed tests pin the counts)
+
+### Tests
+
+- `make check`, `make test-backend`, `make seed` x2 (idempotency),
+  `make eval-skip-llm` (the eval gate - eval_cases sync removed)
+- test_rls.py proves the staff boundary at the SQL level; test_auth_api.py
+  at the API level (staff 200s on conversations, 403s on owner surfaces)
+
+### Files touched
+
+- `backend/migrations/0025_schema_cleanup.sql` (drops, `app_role()`, role-
+  branched policies; carries the M-2 media schema in the same file)
+- `backend/app/agents/**` (author_node claims + inspection event),
+  `backend/app/features/chat/**`, `backend/app/shared/auth.py` + `db.py`,
+  `backend/app/features/{knowledge,business,pricing,tenants,onboarding}/
+  api.py` (require_owner), `backend/app/features/{conversations,escalations,
+  dashboards}/**` (role threading)
+- `backend/evals/*` (eval_cases sync removed), `backend/seeds/*` (helpers +
+  dedup), `backend/tests/*`, `docs/agencx/design/database.md`,
+  `docs/agencx/industry-standard-gap.md` (G3.1 resolved), `progress.md`
+
+### Definition of done
+
+- [x] 0025 applied and audited (test_migrations, test_schema_audit green)
+- [x] Staff boundary proven at SQL and API level
+- [x] Seed suites green and idempotent
+- [x] Gap doc G3.1 marked resolved

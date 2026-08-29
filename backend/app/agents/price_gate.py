@@ -85,4 +85,5 @@ async def run(state: AgentState) -> dict[str, Any]:
         "escalated": True,
         "escalation_reason": "price_provenance",
         "draft_response": GATE_ESCALATION_MESSAGE,
+        "author_node": "price_gate",
     }

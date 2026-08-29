@@ -54,7 +54,7 @@ from app.pricing.validation_gate import allowed_cents, extract_monetary_figures,
 from app.retrieval.rerank import Reranker, get_reranker
 from app.shared import config, db
 from evals._git import git_sha
-from evals.trajectory_dataset import TrajectoryCase, load_cases, sync_eval_cases
+from evals.trajectory_dataset import TrajectoryCase, load_cases
 from seeds.seed_tenant1_phoneshop import SLUG
 
 TOOL_CORRECTNESS_GATE = 0.90
@@ -402,7 +402,6 @@ async def run_eval(
     reranker: Reranker,
 ) -> tuple[dict[str, float], list[CaseScore]]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await sync_eval_cases(conn, tenant_id, cases)
         # Real conversation rows, same reason as generation_eval.py: the
         # escalation node UUID()s conversation_id and writes real rows.
         conversation_ids: list[UUID] = [

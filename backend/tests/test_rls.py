@@ -49,6 +49,10 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         "insert into users (id, tenant_id, role) values (gen_random_uuid(), $1, 'owner')",
         tenant_id,
     )
+    await conn.execute(
+        "insert into users (id, tenant_id, role) values (gen_random_uuid(), $1, 'staff')",
+        tenant_id,
+    )
     document_id: uuid.UUID = await conn.fetchval(
         """
         insert into documents (tenant_id, filename, doc_type, status)
@@ -89,7 +93,7 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         message_id,
     )
     await conn.execute(
-        "insert into catalog_items (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
+        "insert into offerings (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
         tenant_id,
     )
     await conn.execute(
@@ -121,13 +125,6 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         conversation_id,
     )
     await conn.execute(
-        """
-        insert into eval_cases (tenant_id, case_type, input, expected)
-        values ($1, 'retrieval', '{}', '{}')
-        """,
-        tenant_id,
-    )
-    await conn.execute(
         "insert into eval_runs (tenant_id, run_type, metrics) values ($1, 'retrieval', '{}')",
         tenant_id,
     )
@@ -141,6 +138,12 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         "values ($1, 'cover', 'image/jpeg', $2)",
         tenant_id,
         b"seed-bytes",
+    )
+    await conn.execute(
+        "insert into tenant_media (tenant_id, role, type, provider, url, public_id) "
+        "values ($1, 'cover', 'image', 'cloudinary', "
+        "'https://example.test/cover.jpg', 'seed-cover')",
+        tenant_id,
     )
     return tenant_id
 
@@ -256,8 +259,148 @@ async def test_cross_tenant_insert_is_rejected_by_rls(
     with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError, match="row-level security"):
         async with db.tenant_context(seeded_tenants.a_id, "tenant_admin", pool=app_pool) as conn:
             await conn.execute(
-                "insert into catalog_items (tenant_id, name) values ($1, 'leaked-in')",
+                "insert into offerings (tenant_id, name) values ($1, 'leaked-in')",
                 seeded_tenants.b_id,
+            )
+
+
+_STAFF_TABLES = {
+    "conversations",
+    "messages",
+    "tool_calls",
+    "escalations",
+    "quotes",
+    "orders",
+    "cost_logs",
+    "eval_runs",
+}
+
+
+async def test_staff_sees_only_the_conversation_tables(
+    superuser_conn: asyncpg.Connection[Any],
+    app_pool: db.AppPool,
+    seeded_tenants: SeedTenants,
+) -> None:
+    """The 0025 role branch: a staff member reads exactly the conversation
+    tables (the C-6 work surface) and nothing on the admin tables."""
+    async with db.tenant_context(seeded_tenants.a_id, "staff", pool=app_pool) as conn:
+        for table, id_col in await _tenant_scoped_tables(superuser_conn):
+            rows = await conn.fetch(f"select {id_col} from {table}")
+            ids = {r[id_col] for r in rows}
+            if table in _STAFF_TABLES:
+                assert ids == {seeded_tenants.a_id}, f"{table}: staff should see A's rows"
+            else:
+                assert not ids, f"{table}: staff must see no rows, got {ids}"
+
+
+async def test_staff_can_insert_only_its_conversation_messages(
+    superuser_conn: asyncpg.Connection[Any],
+    app_pool: db.AppPool,
+    seeded_tenants: SeedTenants,
+) -> None:
+    """Staff's message write surface is exactly human_agent replies and the
+    takeover stamp - a customer-message insert must fail the with-check."""
+    conversation_id = await superuser_conn.fetchval(
+        "select id from conversations where tenant_id = $1 limit 1", seeded_tenants.a_id
+    )
+    async with db.tenant_context(seeded_tenants.a_id, "staff", pool=app_pool) as conn:
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'human_agent', 'on it')",
+            seeded_tenants.a_id,
+            conversation_id,
+        )
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'system', 'You took over this conversation')",
+            seeded_tenants.a_id,
+            conversation_id,
+        )
+        with pytest.raises(
+            asyncpg.exceptions.InsufficientPrivilegeError, match="row-level security"
+        ):
+            await conn.execute(
+                "insert into messages (tenant_id, conversation_id, role, content) "
+                "values ($1, $2, 'customer', 'hello')",
+                seeded_tenants.a_id,
+                conversation_id,
+            )
+
+
+async def test_staff_takeover_only_flips_human_and_open(
+    superuser_conn: asyncpg.Connection[Any],
+    app_pool: db.AppPool,
+    seeded_tenants: SeedTenants,
+) -> None:
+    """C-6's takeover endpoints move a conversation open <-> human; any other
+    status change (escalated, closed) is owner-only."""
+    conversation_id = await superuser_conn.fetchval(
+        "select id from conversations where tenant_id = $1 limit 1", seeded_tenants.a_id
+    )
+    async with db.tenant_context(seeded_tenants.a_id, "staff", pool=app_pool) as conn:
+        updated = await conn.fetchval(
+            "update conversations set status = 'human' "
+            "where tenant_id = $1 and id = $2 and status = 'open' returning id",
+            seeded_tenants.a_id,
+            conversation_id,
+        )
+        assert updated is not None
+        with pytest.raises(
+            asyncpg.exceptions.InsufficientPrivilegeError, match="row-level security"
+        ):
+            await conn.execute(
+                "update conversations set status = 'escalated' where tenant_id = $1 and id = $2",
+                seeded_tenants.a_id,
+                conversation_id,
+            )
+
+
+async def test_staff_claims_and_resolves_escalations(
+    superuser_conn: asyncpg.Connection[Any],
+    app_pool: db.AppPool,
+    seeded_tenants: SeedTenants,
+) -> None:
+    """The escalations queue is staff's core surface: claim, then resolve."""
+    escalation_id = await superuser_conn.fetchval(
+        "select id from escalations where tenant_id = $1 limit 1", seeded_tenants.a_id
+    )
+    async with db.tenant_context(seeded_tenants.a_id, "staff", pool=app_pool) as conn:
+        claimed = await conn.fetchval(
+            "update escalations set status = 'claimed' "
+            "where tenant_id = $1 and id = $2 and status = 'open' returning id",
+            seeded_tenants.a_id,
+            escalation_id,
+        )
+        assert claimed is not None
+        resolved = await conn.fetchval(
+            "update escalations set status = 'resolved' "
+            "where tenant_id = $1 and id = $2 and status = 'claimed' returning id",
+            seeded_tenants.a_id,
+            escalation_id,
+        )
+        assert resolved is not None
+
+
+async def test_staff_cannot_write_or_delete_admin_rows(
+    app_pool: db.AppPool,
+    seeded_tenants: SeedTenants,
+) -> None:
+    """No staff policy grants INSERT on admin tables (with-check fails) or
+    DELETE anywhere (zero rows match - the policies silently filter)."""
+    async with db.tenant_context(seeded_tenants.a_id, "staff", pool=app_pool) as conn:
+        # DELETE matches zero rows (no staff policy grants it) - a silent
+        # filter, so it must run before the INSERT, whose with-check failure
+        # aborts the transaction.
+        deleted = await conn.fetchval(
+            "delete from conversations where tenant_id = $1 returning id", seeded_tenants.a_id
+        )
+        assert deleted is None
+        with pytest.raises(
+            asyncpg.exceptions.InsufficientPrivilegeError, match="row-level security"
+        ):
+            await conn.execute(
+                "insert into offerings (tenant_id, name) values ($1, 'Nope')",
+                seeded_tenants.a_id,
             )
 
 
@@ -300,7 +443,7 @@ async def test_tenant_context_does_not_leak_across_pool_reuse_after_commit(
     being applied outside the transaction."""
     async with db.tenant_context(seeded_tenants.a_id, "tenant_admin", pool=single_conn_pool) as c:
         pid: int = await c.fetchval("select pg_backend_pid()")
-        assert await c.fetchval("select count(*) from catalog_items") == 1  # context works
+        assert await c.fetchval("select count(*) from offerings") == 1  # context works
     await _assert_connection_carries_no_tenant_context(single_conn_pool, pid, superuser_conn)
 
 

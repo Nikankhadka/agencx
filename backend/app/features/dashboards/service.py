@@ -39,7 +39,7 @@ GATE_THRESHOLDS: dict[str, dict[str, float]] = {
 }
 
 
-async def cost_dashboard(*, tenant_id: str) -> dict[str, Any]:
+async def cost_dashboard(*, tenant_id: str, role: str = "tenant_admin") -> dict[str, Any]:
     """Cost + volume aggregates and the last-30-days series for the tenant."""
     now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -48,7 +48,7 @@ async def cost_dashboard(*, tenant_id: str) -> dict[str, Any]:
     prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
     series_start = today_start - timedelta(days=_DAILY_SERIES_DAYS - 1)
 
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         cost_row = await conn.fetchrow(
             "select "
             "  coalesce(sum(cost_usd) filter (where created_at >= $2), 0) as cost_today, "
@@ -138,9 +138,9 @@ def budget_usage(spent_usd: float, budget_usd: float) -> dict[str, Any]:
     }
 
 
-async def eval_runs(*, tenant_id: str) -> list[dict[str, Any]]:
+async def eval_runs(*, tenant_id: str, role: str = "tenant_admin") -> list[dict[str, Any]]:
     """The latest eval_runs row per configured run_type."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         rows = await conn.fetch(
             "select distinct on (run_type) run_type, metrics, git_sha, created_at "
             "from eval_runs where tenant_id = $1 "

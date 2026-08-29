@@ -116,8 +116,9 @@ async def record_limit_escalation(
                 tenant_id,
             )
         await conn.execute(
-            "insert into messages (tenant_id, conversation_id, role, content, metadata) "
-            "values ($1, $2, 'assistant', $3, $4)",
+            "insert into messages (tenant_id, conversation_id, role, content, "
+            "agent_node, metadata) "
+            "values ($1, $2, 'assistant', $3, 'limit_escalation', $4)",
             tenant_id,
             conversation_id,
             message,
@@ -129,7 +130,9 @@ TAKEOVER_STAMP = "You took over this conversation"
 HANDBACK_STAMP = "Handed back to Agencx"
 
 
-async def set_conversation_handler(*, tenant_id: UUID, conversation_id: UUID, human: bool) -> bool:
+async def set_conversation_handler(
+    *, tenant_id: UUID, conversation_id: UUID, human: bool, role: str = "tenant_admin"
+) -> bool:
     """C-6: switch a conversation between the assistant and a staff member.
 
     Returns False when the conversation does not exist, or when a tenant limit
@@ -143,7 +146,7 @@ async def set_conversation_handler(*, tenant_id: UUID, conversation_id: UUID, hu
     """
     target = "human" if human else "open"
     previous = "open" if human else "human"
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         updated = await conn.fetchval(
             "update conversations set status = $3 "
             "where id = $1 and tenant_id = $2 and status = $4 returning id",
@@ -164,10 +167,12 @@ async def set_conversation_handler(*, tenant_id: UUID, conversation_id: UUID, hu
     return True
 
 
-async def post_human_reply(*, tenant_id: UUID, conversation_id: UUID, message: str) -> None:
+async def post_human_reply(
+    *, tenant_id: UUID, conversation_id: UUID, message: str, role: str = "tenant_admin"
+) -> None:
     """A staff member's own words, into an open conversation. The customer's
     client picks it up on the poll C-5 left running."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         await conn.execute(
             "insert into messages (tenant_id, conversation_id, role, content) "
             "values ($1, $2, 'human_agent', $3)",
@@ -192,16 +197,24 @@ async def persist_assistant_turn(
     verdicts: dict[str, object],
     tool_calls: list[dict[str, object]],
     usages: list[TokenUsage],
+    author_node: str | None = None,
 ) -> None:
     """Persist the approved assistant message, its tool-call trace rows, and
-    per-turn token costs in one transaction."""
+    per-turn token costs in one transaction.
+
+    ``author_node`` names the graph node that produced the message (F-3) and
+    lands on the ``agent_node`` column the Surface-2 trace viewer renders;
+    None when no graph ran (the limit-escalation paths write their own rows).
+    """
     async with db.tenant_context(tenant_id, "customer") as conn:
         message_id = await conn.fetchval(
-            "insert into messages (tenant_id, conversation_id, role, content, metadata) "
-            "values ($1, $2, 'assistant', $3, $4) returning id",
+            "insert into messages (tenant_id, conversation_id, role, content, "
+            "agent_node, metadata) "
+            "values ($1, $2, 'assistant', $3, $4, $5) returning id",
             tenant_id,
             conversation_id,
             full_text,
+            author_node,
             json.dumps({"inspection": verdicts} if verdicts else {}),
         )
         # T-030: tool_calls rows (the Surface-2 TraceTree) and cost_logs rows

@@ -1,4 +1,4 @@
-"""T-031: pricing_rules inline editing + catalog_items list, the tenant-admin
+"""T-031: pricing_rules inline editing + offerings list, the tenant-admin
 Pricing tab. Same JWT pattern as test_escalations_api.py.
 """
 
@@ -253,11 +253,11 @@ async def test_list_catalog_items_returns_only_this_tenants_rows(
     token, tenant_id = await _signup_tenant_admin(client)
     other_token, other_tenant_id = await _signup_tenant_admin(client)
     await superuser_conn.execute(
-        "insert into catalog_items (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
+        "insert into offerings (tenant_id, name, price_cents) values ($1, 'Widget', 500)",
         tenant_id,
     )
     await superuser_conn.execute(
-        "insert into catalog_items (tenant_id, name, price_cents) values ($1, 'Other', 500)",
+        "insert into offerings (tenant_id, name, price_cents) values ($1, 'Other', 500)",
         other_tenant_id,
     )
 

@@ -1,48 +1,47 @@
-"""E-6: the Booking page's read model - one call for everything on the screen."""
+"""E-6: the Business page's read model - one call for everything on the screen."""
 
 from __future__ import annotations
 
 from typing import Any
 from uuid import UUID
 
-from app.features.business import offerings, service
-from app.features.knowledge import service as knowledge_service
-from app.features.onboarding import service as onboarding_service
+from app.features.business import service
 from app.features.tenants import service as tenant_service
 
 
-def _describe(profile: dict[str, Any]) -> str | None:
-    """The prototype's one-line subtitle: what the business does, then when it
-    is open. Either half may be missing - a business that never answered the
-    hours beat gets the shorter sentence rather than a dangling separator."""
-    parts = [str(profile.get(key, "")).strip() for key in ("services", "hours")]
-    kept = [part for part in parts if part]
-    return " · ".join(kept) if kept else None
-
-
 async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
-    """Everything the Booking page renders, in one read.
+    """Everything the Business page renders, in one read.
 
     Replaces the two ad-hoc calls the screen used to make (`/api/tenants/me`
     plus `/api/onboarding/state`, the second of which returns an interview
     transcript to render a business name). The shape here is the page.
+
+    Offerings are deliberately absent: M-4 gave them their own screen
+    (`/business/offerings`) and the owner sees them as a customer does through
+    the storefront preview link, so carrying a second read-only copy here would
+    be a list nothing renders.
+
+    Name and tagline come from the same helpers the public storefront uses, off
+    the same resolved profile: this screen calls itself a preview of what
+    customers see, and two derivations would eventually make it a lie.
     """
     tenant = await tenant_service.get_tenant(str(tenant_id))
     if tenant is None:
         raise LookupError("tenant not found")
-    record = await onboarding_service.load_record(tenant_id=tenant_id)
-    profile: dict[str, Any] = (record or {}).get("draft") or {}
+    profile = await service.read_profile_for_display(tenant_id=tenant_id)
     brand = tenant.get("brand") or {}
 
     return {
         "slug": tenant["slug"],
-        "name": (
-            (brand.get("display_name") if isinstance(brand, dict) else None)
-            or str(profile.get("business_name", "")).strip()
-            or tenant["name"]
+        "name": service.display_name(
+            brand=brand,
+            business_name=tenant.get("business_name"),
+            profile=profile,
+            fallback=tenant["name"],
         ),
-        "tagline": _describe(profile),
-        "services": offerings.derive(await knowledge_service.list_records(tenant_id=tenant_id)),
+        "tagline": service.profile_tagline(profile),
         "links": await service.read_links(tenant_id=tenant_id),
         "has_cover": await service.has_cover(tenant_id=tenant_id),
+        "cover_url": await service.read_cover_url(tenant_id=tenant_id, role=service.COVER_KIND),
+        "offerings": (await service.list_offerings(tenant_id=tenant_id, active_only=True))[:3],
     }

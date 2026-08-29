@@ -14,15 +14,15 @@ from typing import Any
 from app.features.dashboards import service
 
 
-async def cost_dashboard(*, tenant_id: str) -> dict[str, Any]:
-    return await service.cost_dashboard(tenant_id=tenant_id)
+async def cost_dashboard(*, tenant_id: str, role: str = "tenant_admin") -> dict[str, Any]:
+    return await service.cost_dashboard(tenant_id=tenant_id, role=role)
 
 
-async def eval_dashboard(*, tenant_id: str) -> dict[str, Any]:
+async def eval_dashboard(*, tenant_id: str, role: str = "tenant_admin") -> dict[str, Any]:
     """Rehydrate the latest eval runs against GATE_THRESHOLDS into the
     run/check shape consumed by the frontend."""
     runs: list[dict[str, Any]] = []
-    for row in await service.eval_runs(tenant_id=tenant_id):
+    for row in await service.eval_runs(tenant_id=tenant_id, role=role):
         run_type = row["run_type"]
         metrics = json.loads(row["metrics"])
         checks: list[dict[str, Any]] = []

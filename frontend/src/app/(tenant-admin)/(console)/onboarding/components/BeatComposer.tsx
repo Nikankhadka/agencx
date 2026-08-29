@@ -17,6 +17,7 @@ export interface BeatComposerProps {
   input: InputSpec;
   busy: boolean;
   onText: (text: string) => void;
+  onSelection: (values: string[], label: string) => void;
   onStop: () => void;
   /** Files picked through the pill's "+" (O-3); omitted, the affordance is inert. */
   onFiles?: (files: File[]) => void;
@@ -37,10 +38,9 @@ export interface BeatComposerProps {
  * there. Chips are an accelerator, never a gate - "or type…" is the
  * placeholder, and typing past them always works.
  *
- * O-6: tapping a chip **sends its label as ordinary text**, down the same
- * streaming route a typed answer uses. There is no deterministic selection
- * path: extraction reads "Just me" exactly as if the owner had typed it, which
- * is what keeps `save_profile` the single way anything reaches the draft.
+ * O-12: fixed server chips submit their declared value through the selection
+ * protocol. The server advances the draft and question together, so the
+ * composer cannot remain on an older beat.
  *
  * A chip carrying `widget` is the exception - it swaps the composer to that
  * widget and sends nothing until that widget's own value is submitted. That is
@@ -55,6 +55,7 @@ export function BeatComposer({
   input,
   busy,
   onText,
+  onSelection,
   onStop,
   onFiles,
   ownerEmail,
@@ -77,9 +78,17 @@ export function BeatComposer({
 
   const chips = [
     ...(input.suggest_owner_email && ownerEmail
-      ? [{ label: ownerEmail, value: ownerEmail, dashed: false, widget: null }]
+      ? [
+          {
+            label: ownerEmail,
+            value: ownerEmail,
+            dashed: false,
+            widget: null,
+            serverOwned: false,
+          },
+        ]
       : []),
-    ...input.chips,
+    ...input.chips.map((chip) => ({ ...chip, serverOwned: true })),
   ];
 
   return (
@@ -103,7 +112,10 @@ export function BeatComposer({
               disabled={busy}
               data-testid={`onboarding-chip-${chip.value}`}
               onClick={() => {
-                if (!chip.widget) submitText(chip.label);
+                if (!chip.widget) {
+                  if (chip.serverOwned) onSelection([chip.value], chip.label);
+                  else submitText(chip.label);
+                }
                 else
                   setSwapped((prev) =>
                     prev === chip.widget ? null : (chip.widget ?? null),
@@ -120,7 +132,7 @@ export function BeatComposer({
         <FieldPill
           value={masked}
           onChange={(value) => setMasked(formatAbn(value))}
-          onSubmit={(value) => submitText(value)}
+          onSubmit={(value) => onSelection([value], value)}
           placeholder={input.mask ?? ""}
           disabled={busy}
           canSubmit={masked.replace(/\D/g, "").length === 11}

@@ -45,16 +45,21 @@ middleware):
 
 ```sql
 select set_config('app.tenant_id', :tenant_id, true);  -- '' when none resolved
-select set_config('app.role', :role, true);            -- 'customer' | 'tenant_admin' | 'platform_admin' | 'service'
+select set_config('app.role', :role, true);            -- 'customer' | 'tenant_admin' | 'staff' | 'platform_admin' | 'service'
 ```
 
 `'service'` is the backend acting for itself in exactly one flow: the signup
 transaction. Its powers are the Shape C policies below and nothing else.
+`'staff'` is the member role the 0025 policies branch on (F-3, G3.1): staff
+reaches the conversation work surface only - see section 2.3's staff shapes.
+The owner-to-`tenant_admin` / staff-to-`staff` mapping lives in exactly one
+place, `shared/auth.py` (`_RLS_ROLE`); the SQL never re-derives it.
 
 Helper functions every policy uses (`app_tenant_id()`, `app_is_platform_admin()`,
-`app_is_service()`) are defined in migration `0001_extensions.sql`.
+`app_is_service()`, and 0025's `app_role()`) are defined in migrations
+`0001_extensions.sql` and `0025_schema_cleanup.sql`.
 
-### 2.3 The three standard policy shapes
+### 2.3 The standard policy shapes
 
 ```sql
 -- Shape A: tenant-scoped table (the default for everything below)
@@ -73,6 +78,48 @@ create policy platform_admin_read on <t>
 
 Platform-admin access is read-only through policies plus explicit writes on
 `tenants`/`platform_admins` only.
+
+**Shape A since 0025 (F-3):** the `tenant_isolation` policies branch on role.
+Admin tables (`tenant_config`, `documents`, `knowledge_chunks`, `offerings`,
+`pricing_rules`, `tenant_assets`, `users`, `tenant_media`) keep the tenant's
+read for `tenant_admin` and `customer` (chat, retrieval and the storefront
+read them under the customer context) but require `tenant_admin` to write -
+the with-check no longer permits customer writes. `tenants` is special-cased
+(the `id` column is the tenant identifier) with the same branch.
+
+```sql
+-- Shape D (0025): staff's narrow slice on the conversation tables.
+-- RLS evaluates policies per command with OR semantics, so per-command
+-- policies coexist with Shape A's for-all and the platform/service shapes.
+
+-- conversations: staff reads; staff flips status human <-> open only.
+create policy staff_read on conversations for select
+  using (tenant_id = app_tenant_id() and app_role() = 'staff');
+create policy staff_takeover on conversations for update
+  using (tenant_id = app_tenant_id() and app_role() = 'staff')
+  with check (tenant_id = app_tenant_id() and app_role() = 'staff'
+              and status in ('human', 'open'));
+
+-- messages: staff reads; staff inserts only human_agent replies and the
+-- takeover/system stamp (never customer or assistant rows).
+create policy staff_conversation_write on messages for insert
+  with check (tenant_id = app_tenant_id() and app_role() = 'staff'
+              and role in ('human_agent', 'system'));
+
+-- escalations: staff reads; staff claims and resolves.
+create policy staff_claim on escalations for update
+  using (tenant_id = app_tenant_id() and app_role() = 'staff')
+  with check (tenant_id = app_tenant_id() and app_role() = 'staff'
+              and status in ('claimed', 'resolved'));
+
+-- tool_calls, quotes, orders, cost_logs, eval_runs: staff_read (select) only.
+```
+
+Staff gets no DELETE anywhere - no staff policy grants it, so a staff DELETE
+matches zero rows. The endpoint layer mirrors the same line:
+`require_owner` guards the settings/knowledge/offerings/pricing/onboarding
+routers; conversations/escalations/dashboards pass the caller's role into
+their `tenant_context` (shared/auth.py `require_owner`, F-3).
 
 ```sql
 -- Shape B: platform-global table (no tenant_id): platform_admins; tenants is special-cased
@@ -111,7 +158,6 @@ create table tenant_config (
   system_prompt         text not null default '',
   tone                  text not null default 'friendly',
   enabled_tools         jsonb not null default '[...]',   -- the per-tenant tool set (D-1)
-  escalation_threshold  real not null default 0.5 check (escalation_threshold between 0 and 1),
   brand                 jsonb not null default '{}',   -- {"accent":"#RRGGBB","logo_url":...,"display_name":...}
   config                jsonb not null default '{}',   -- onboarding business/hours/services/tax fields (written by the confirm flow)
   updated_at            timestamptz not null default now()
@@ -139,6 +185,35 @@ create table platform_admins (
   created_at  timestamptz not null default now()
 );
 ```
+
+### Business assets (E-6; **NEW**, migration 0021 - undocumented until now)
+
+```sql
+create table tenant_assets (
+  tenant_id   uuid not null references tenants(id) on delete cascade,
+  kind        text not null check (kind in ('cover')),
+  mime        text not null,
+  bytes       bytea not null,
+  updated_at  timestamptz not null default now(),
+  primary key (tenant_id, kind)
+);
+```
+
+Policies: `tenant_isolation` (owner, all ops), `platform_admin_read`, and
+`service_read` - the anonymous public Booking page must be able to serve a
+cover the same way it serves the tenant's name, so the unauthenticated
+service role can select it. Kept out of `tenant_config` deliberately: `brand`/
+`config` sit on the hot path (the public tenant lookup primes the chat's
+context package, P-3), and a base64 image there would be a latency regression.
+
+**`ponytail:`** the image lives in Postgres `bytea`, not object storage - one
+small image per tenant, capped at 2MB by the API and resized client-side
+before upload, fits a row fine and needs no new dependency or credential in
+local dev (there was no object store available to every surface at the time).
+`kind` is hard-CHECK-constrained to `'cover'` only, so this table cannot hold
+a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/agencx/spec/11-offerings-media.md`),
+which moves business media (a capped gallery + per-offering photos) to
+Cloudinary and either widens or replaces this table.
 
 ### Login-in-chat (O-2; **auth_codes table dropped 2026-08-28, D23**)
 
@@ -220,29 +295,36 @@ the HNSW/GIN indexes with tenant scoping.
 No new table. `knowledge_version` is derived:
 
 ```sql
-select coalesce(max(uploaded_at), 'epoch'::timestamptz)
-  from documents
- where tenant_id = :tenant_id;
+select greatest(
+  coalesce((select max(updated_at) from documents where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select max(updated_at) from offerings where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select updated_at from tenant_config where tenant_id = :tenant_id), 'epoch'::timestamptz)
+)
 ```
 
-Any upload, re-ingest, or status change bumps it. The context-package cache
-(architecture section 9) is keyed by `(tenant_id, knowledge_version)`; a bumped
-version invalidates the cache on the next lookup.
+Any upload, re-ingest, status change, or a profile/system-prompt/brand write
+to `tenant_config` bumps it (both tables have carried a touch trigger since
+0003/0018). The context-package cache (architecture section 9) is keyed by
+`(tenant_id, knowledge_version)`; a bumped version invalidates the cache on
+the next lookup. `offerings.updated_at` is included because `M-1` lets owners
+write it directly. Deletion also touches `tenant_config.updated_at`, because a
+deleted offering no longer has an `updated_at` value for this formula to read.
 
 ## 5. Commerce (the deterministic-pricing tables; per-tenant optional in Agencx)
 
 ```sql
-create table catalog_items (
+create table offerings (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
   name         text not null,
   description  text not null default '',
-  attributes   jsonb not null default '{}',             -- generic: {"category":..., "tags":[...]}
   price_cents  integer check (price_cents is null or price_cents >= 0),  -- null = priced via a rule
-  active       boolean not null default true,
+  active       boolean not null default true,             -- false = retired, never deleted
+  position     integer not null default 0,               -- M-4: the owner's storefront order
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
+create index offerings_storefront_order on offerings (tenant_id, active, position, created_at);
 
 create table pricing_rules (
   id                 uuid primary key default gen_random_uuid(),
@@ -349,15 +431,6 @@ All Shape A.
 ## 7. Eval and cost
 
 ```sql
-create table eval_cases (
-  id          uuid primary key default gen_random_uuid(),
-  tenant_id   uuid not null references tenants(id) on delete cascade,
-  case_type   text not null check (case_type in ('retrieval', 'generation', 'trajectory', 'injection', 'leakage')),
-  input       jsonb not null,          -- {"query":...} or {"messages":[...],"persona":...}
-  expected    jsonb not null,          -- {"relevant_chunk_ids":[...]} or {"tools":[...],"must_not_contain":[...]}
-  created_at  timestamptz not null default now()
-);
-
 create table eval_runs (
   id          uuid primary key default gen_random_uuid(),
   tenant_id   uuid not null references tenants(id) on delete cascade,
@@ -381,12 +454,14 @@ create table cost_logs (
 
 All Shape A. **CHANGING (P-2):** cost/tracing gains per-provider TTFT and
 failover-event attributes (scalar-only; no cross-tenant content), so the
-latency budget is observable in the dashboards.
+latency budget is observable in the dashboards. `eval_cases` was dropped by
+0025 (F-3) - the eval runners' case source is the JSONL datasets and nothing
+ever read the table back; `eval_runs` and `cost_logs` remain.
 
 ## 8. Triggers
 
 ```sql
--- updated_at maintenance (tenant_config, catalog_items, pricing_rules, orders)
+-- updated_at maintenance (tenant_config, offerings, pricing_rules, orders)
 create or replace function touch_updated_at() returns trigger language plpgsql as
 $$ begin new.updated_at = now(); return new; end $$;
 
@@ -409,7 +484,7 @@ applied in order by a plain runner (no heavy framework):
 0005_conversations.sql     conversations, messages, tool_calls (+ RLS)
 0006_commerce.sql          catalog_items, pricing_rules, quotes (+ RLS, quotes_immutable)
 0007_operations.sql        orders, escalations (+ RLS)
-0008_eval_cost.sql         eval_cases, eval_runs, cost_logs (+ RLS)
+0008_eval_cost.sql         eval_runs, cost_logs (+ RLS); eval_cases dropped by 0025
 0009_auth_lookup.sql       resolve_user_tenant, resolve_platform_admin
 0010_embedding_dim.sql     embedding retarget to vector(384)
 0011_escalations_dedupe.sql  unique open-escalation index
@@ -417,17 +492,20 @@ applied in order by a plain runner (no heavy framework):
 0013_platform_admin_tenant_config_write.sql  platform admin can write tenant_config
 0014_onboarding_business_fields.sql  tenants.business_name, payment_processing_mode, tenant_self_update
 0015_website_doc_type.sql  documents.doc_type 'website'
+0016_enabled_tools_lean_default.sql  lean enabled_tools default + backfill (D-2)
 0017_auth_codes.sql        auth_codes (login-in-chat, O-2) - dropped by 0022
 0018_documents_updated_at.sql  documents.updated_at + touch trigger (P-4)
 0019_documents_structured.sql  documents 'draft' status + structured jsonb (O-3/D19)
+0020_conversation_human_takeover.sql  conversations.status splits 'open'/'human' (human takeover, C-6)
+0021_tenant_assets.sql     tenant_assets (business cover photo, E-6) - see section 3
 0022_drop_auth_codes.sql   drops auth_codes - login-in-chat moved to GoTrue OTP (D23)
+0023_rename_catalog_items_to_offerings.sql  names the M-1 writer's table after the Offering domain noun
+0024_offering_position.sql  offerings.position - the order the owner puts their storefront list in (M-4)
+0025_schema_cleanup.sql   drops dead schema, adds app_role()/staff RLS, offerings.category and tenant_media (F-3/M-2)
 ```
 
-(0016 is reserved for D-2's lean `enabled_tools` default and intentionally
-skipped.)
-
-Planned Agencx migrations (in the tickets that own them): D-2 (lean
-`enabled_tools` default + backfill).
+Planned Agencx migration: `M-2` (`docs/agencx/spec/11-offerings-media.md`,
+D24) widens or replaces `tenant_assets` for Cloudinary media.
 
 Every table migration ends with its RLS + policies + grants to `wren_app`. A
 table without RLS must never survive a migration - the schema audit enforces
@@ -438,14 +516,21 @@ this.
 `backend/seeds/` (idempotent scripts, runnable per environment):
 
 - `seed_tenant1_phoneshop.py` - Tenant 1 (anchor): slug `bytefix`, config (tone,
-  threshold, tax), ~15 catalog_items, ~12 pricing_rules, ~20 mock orders,
-  knowledge docs via the real ingestion pipeline.
+  tax), ~15 offerings, ~12 pricing_rules, ~20 mock orders, knowledge docs via
+  the real ingestion pipeline.
 - `seed_tenant2_dental.py` - Tenant 2 (generalization proof): created only
   through the conversational onboarding flow + uploads; holds raw input
-  documents and the interview script, never direct table writes.
+  documents and the interview script, and one deliberate direct
+  `tenant_config` update (the v3 onboarding draft, per the 2026-07-30 ADR).
 - `seed_leakage_pair.py` - two throwaway tenants with disjoint secret facts for
   the leakage test.
-- `seed_platform_admin.py` - the founder's auth user id into `platform_admins`.
+- `seed_injection_probe.py` - one throwaway tenant with poisoned knowledge for
+  the injection eval.
+- `seed_demo.py` - the demo world: both anchor tenants, GoTrue auth users,
+  membership (`users` owners + the founder's `platform_admins` row), and
+  conversations/tool calls/cost logs/escalations.
+- `_helpers.py` - shared pool/wipe/tenant-core/commerce/knowledge helpers the
+  direct-DB seeds use (F-3).
 
 Agencx adds the Sababa anchor seed in O-3/O-4 work (menu + catering-rate + FAQ
 documents through the real upload + ingestion path), aligned with the reference

@@ -98,6 +98,51 @@ pulled B-3 US-1 forward; C-6 has now done the same for the **Chats** screens -
 them, and the Wren-era `/conversations` and `/escalations` console pages stay
 mounted for E-2 to hide (E-2's posture, applied early).
 
+**Offerings + media is designed (D24, `11-offerings-media.md`, 2026-08-28).**
+A Codex CLI session on `feat/offerings-media-import` set out to
+close G5.1 (the cover photo's Postgres `bytea` storage) and, working through
+the actual product need with the founder, widened it into a real design: the
+Booking page's "Services" list becomes an owner-writable `Offering` (the
+locked domain noun), reusable business media moves to Cloudinary (one cover
+and optional per-offering visuals), and knowledge ingestion gets
+an import-and-confirm step so an uploaded menu/price list can propose
+structured offerings the owner reviews once rather than re-typing. That
+session hit its Codex usage limit at the exact moment it said it would record
+this in the canonical docs - the branch had zero commits and nothing was
+written down. This session recovered the design from the session transcript,
+cross-checked every claim against the current code, and wrote it up as D24
+plus tickets `M-1`/`M-2`/`M-3`. `M-1` is built: the physical table is
+`offerings`, the owner edits it from Business, and the catalog projection never
+reaches general-knowledge fast paths. **`M-4` followed it** (added during the
+build, founder request 2026-08-28) and put what `M-1` made writable in front of
+a customer: `/{slug}` is a storefront now - offerings with the owner's own
+prices, links, and the assistant a tap away in a
+sheet rather than the whole page - and the owner chooses that address at
+go-live instead of keeping the provisional `biz-…` slug. `M-2` now has the
+tenant-scoped media schema, signed Cloudinary adapter, cover and offering media
+routes, and category-aware catalogue rendering; live smoke testing remains
+pending rotated credentials. `M-3` then landed
+(`ec46858`, `364a944`, `65ea4a1`): knowledge review proposes offering candidates
+with a deterministic fallback, re-upload diffs against what the owner already
+confirmed, changed prices require explicit confirmation, and nothing is ever
+auto-deleted. Three founder amendments closed the onboarding phase on top of
+it: **O-10** gave the interview its voice, **O-11** captures only explicitly
+named offerings at go-live, and **O-12** (a founder regression, 2026-08-29)
+kept fixed chip and masked answers on a server-owned selection path so the
+saved beat, spoken question, and composer advance together.
+
+**Two abandoned attempts sit behind `M-1`/`M-4`, and the record is the point.**
+A Codex session built `M-1` on `feat/offerings-media-import` and renamed
+`catalog_items` to `offerings`; a second, on `feat/business-storefront`, built
+the storefront but kept `catalog_items`, reversed the rename in its own
+migration, and dropped prices from offerings entirely. The founder ruled on
+both open questions - the rename stands, and prices are owner-typed facts that
+belong on the page (D24) - so the first branch merged to `development` as
+`M-1` and the second was rebuilt on top of it as `M-4`. Nothing was thrown
+away except the reversal migration. The dev database carried both experiments
+plus a `0023_storefront_gallery.sql` that exists in no branch, so it was reset
+from schema zero to prove `0001`-`0024` apply in order.
+
 O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
 open for US-2, the `STATUS_TONE` map.
@@ -113,7 +158,7 @@ open for US-2, the `STATUS_TONE` map.
 | RLS enforcement + schema audit | BUILT | `c0b798b` (audit teeth), `d1826e4` |
 | Auth + tenant provisioning (Supabase) | BUILT | `d1826e4`; O-2 added login-in-chat (email + 6-digit code) on the tenant surface; **CHANGED** (2026-08-28) - the auth migration (D23) moved code issuance and session minting onto GoTrue itself (`signInWithOtp`/`verifyOtp` + `@supabase/ssr` cookies), replacing the backend-minted session O-2 shipped |
 | Tenant resolution by slug | BUILT | `075e17a`; **CHANGED** - D22 moved the slug from a subdomain to a path (`agencx.app/{slug}`); the resolver itself is untouched |
-| Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile`. Unticketed founder follow-up (2026-08-22): after the seven fields the interview offers a skippable website/documents ask (paste a link, attach a file, or "skip"), and confirm lands the owner on `/home` in-session rather than stranding them on the go-live line  **O-6 (founder walkthrough, 2026-08-23) put the prototype's chips back**: a chip sends its label as ordinary text on the same route a typed answer uses, so the one-tool loop is untouched and only `Beat.chips` is new. Two chips instead swap the composer - the contact beat's phone pill (ported `initPhone()`, AU/NZ/US/UK/SG) and the ABN beat's welded `.abn-pill`. `abn` and `gst` are new beats; `gst` is conditional on the answer to `abn`, not on the vertical. O-7 made a link that cannot be read say so and log why; O-8 stopped go-live blanking the thread. **O-9 gives the two new fields a screen**: Settings holds an "ABN & Tax" row reading back `51 824 753 556 · GST registered`, and the prototype's edit sheet behind it corrects both. The rest of the profile stays frozen after go-live - the ticket says so rather than implying it. |
+| Onboarding conversation (LLM extract + confirm) | BUILT | `d92ca24`, `0aba966`, `e72de5f`, extraction-robustness fix; re-cut by O-1 to one `save_profile` tool + an LLM turn loop (extract -> save -> ask missing -> deflect). Seven text beats, no chips; confirm writes `tenant_config.config->profile`. Unticketed founder follow-up (2026-08-22): after the seven fields the interview offers a skippable website/documents ask (paste a link, attach a file, or "skip"), and confirm lands the owner on `/home` in-session rather than stranding them on the go-live line  **O-6 (founder walkthrough, 2026-08-23) put the prototype's chips back**: a chip sends its label as ordinary text on the same route a typed answer uses, so the one-tool loop is untouched and only `Beat.chips` is new. Two chips instead swap the composer - the contact beat's phone pill (ported `initPhone()`, AU/NZ/US/UK/SG) and the ABN beat's welded `.abn-pill`. `abn` and `gst` are new beats; `gst` is conditional on the answer to `abn`, not on the vertical. O-7 made a link that cannot be read say so and log why; O-8 stopped go-live blanking the thread. O-9 gives the two new fields a screen. O-10 gives the interview a clear voice: it introduces the owner-facing “Agencx setup assistant”, acknowledges answers warmly, asks one simple question at a time, and explains that saved links and documents become customer-answer references. **O-11 captures only explicitly named offerings during onboarding and creates deduplicated active catalog rows with blank prices at go-live, rebuilding the catalog once. O-12 restores server-owned fixed selections and removes model-owned next questions, so the saved beat, spoken question, and composer advance together.** The rest of the profile stays frozen after go-live. |
 | Onboarding UI (the prototype thread) | BUILT | O-5: `/login` + `/onboarding` ported from `agencx-prototype-v6.html`'s ONBOARDING screen onto shared `components/ui/Thread.tsx` primitives. Chrome-free, no title, no progress surface; every prototype value a `theme.css` token |
 | Login-in-chat email + 6-digit code | BUILT | O-2 shipped it backend-owned (`auth_codes` table 0017, `services/auth_codes.py` + email seam + session mint, `/api/auth/login-code` + `/verify-code`); the interaction remains the same, except the resend control now follows GoTrue's 60-second production cadence. The auth migration (2026-08-28, D23) moved issuance and verification onto GoTrue's own OTP (`signInWithOtp`/`verifyOtp`) and deleted that machinery, `auth_codes` (0022) included. O-5's prose-extraction module (`services/email_address.py`) went with it - the login page's existing composer regex plus GoTrue's own rejection cover the same ground client-side |
 | URL scrape knowledge ingest path | BUILT | O-3: pasting a link in the onboarding thread scrapes it, ingests it as a `website` document, and reads back what it found; attaching a file works from the command pill's `+`. Images are refused (nothing reads them) |
@@ -160,13 +205,13 @@ open for US-2, the `STATUS_TONE` map.
 | CI regression gate | BUILT | `46c3be4`; F-2 added the import boundary - three import-linter contracts (pricing never reaches a model, services never ask one for words, the provider seam is a leaf) plus the frontend's presentational-UI rule. The ADR claiming this had been enforced "from the very first commit" was corrected: nothing enforced it until F-2 |
 | Tracing + cost accounting | BUILT | `e2f5034`; P-2 adds `ttft_ms` / `leg` / `failover_engaged` / `skip_reason` to the turn record |
 | "Live" for a self-onboarded tenant | n/a | It is `config->onboarding.completed`, not `tenants.status`. `status` defaults to `active` and self-signup inserts `active`, so it is never anything else for a tenant that onboarded itself - it is a platform-admin lifecycle (suspend/reactivate), read only by the customer page. E-5's "live / not-live state is legible" bullet is void for that reason, recorded in the ticket rather than ticked |
-| Business hub + Booking page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. **E-6 finished the screen** against the prototype: cover photo (migration 0021 `tenant_assets`, bytes in Postgres, resized client-side), platform tiles as link slots in `brand->links`, and a Services list derived from the owner's saved knowledge with the money rule held by construction. The QR and the `qrcode-generator` dependency are **gone** - never in the prototype's owner screen, and unused; sharing is `navigator.share()` with a clipboard fallback |
+| Business hub + Business page | BUILT | E-5: the `.bh-row` hub (Booking page, Settings - Stage 2's Schedule/Money/Plan absent, not disabled) and the booking screen: profile show-back plus the public link, derived from the host via `surfaceUrl()`. **E-6 finished the screen** against the prototype: cover photo, platform tiles as link slots in `brand->links`, and customer-facing About. **M-4 re-cut the hub into three rows** - Business page (`/business/page`), What you offer (`/business/offerings`), Business details (`/business/details`) - and moved the offerings list off the Business page onto its own screen. **M-6 adds the small first-three offering summary before Preview, while keeping links, About editing, and Share at the end.** `/business/booking` and `/settings` are gone as paths rather than aliased |
 | Home: the greeting and the brief | BUILT | E-4: the prototype's `showMorningBrief()` / `addCard()` ported, carrying only kinds backed by real Stage 1 state (customers waiting, knowledge drafts unsaved, the share nudge). Composed client-side from `/api/conversations` + `/api/knowledge/records`; `BriefItem` is the contract a Stage 2 `/api/brief` inherits |
 | Advanced screens hidden, not deleted | BUILT | E-2: `/conversations`, `/escalations`, `/pricing` and `/knowledge` are absent from `NAV_ITEMS` and from nothing else - each still serves when typed, renders inside the shell, and is pinned by `e2e/hidden-screens.spec.ts`, which also holds the platform surface unchanged |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; unlinked from the nav (E-2). **E-3 removed the `/dashboards` redirect**: it was the one hidden screen that had stopped serving, and it holds the eval pass/fail view the keep/pivot/stop signals live in |
 | Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; E-3 verified it against its job and added nothing: `e2e/platform-surface.spec.ts` pins the six columns, the aggregate, the slug-collision refusal, and suspension's effect on the customer's page (the one control whose consequence lands on another surface) |
-| Customer chat surface (final polish) | BUILT | `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
+| Customer storefront + chat | BUILT | **M-4 made `/{slug}` a storefront**: offerings with the owner's own prices, About and links, with the chat in a sheet a tap away instead of occupying the page. **M-5 keeps one prototype-aligned `Ask a question` entry at the top.** `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1) |
 | Semantic status colours | BUILT | B-3 US-2: `STATUS_TONE` covers the schema's whole vocabulary plus the tenant-defined order/repair statuses, `pending` moved from neutral to amber, `shipped` stays amber because it is not `delivered`, and `toneForStatus` normalises spelling so one entry answers `in_progress` / `in-progress` / "In Progress". The Chats list's crimson "being handled" dot is documented as the single deliberate exception |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
 | Marketing pages | BUILT | `b2c46e9`, `27537d7`; superseded - the bare host is login-in-chat now (O-2), so B-1 had no marketing copy left to rename |
@@ -233,10 +278,14 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-7 URL ingest: browser headers, logged reasons | done | `1534049` |
 | O-8 Go-live transition | done | `39e019f` + `a491f85` (shared with O-6) |
 | O-9 Settings: an ABN the owner can read and correct | done | `f4088af` |
+| O-10 Give onboarding a clear assistant voice | done | `e262735` |
+| O-11 Offerings captured at onboarding | done | `e473235` |
+| O-12 Server-owned onboarding selections | done | `2aa8fdd` |
 | E-2 Hide advanced screens, keep code | done | `ac6199a` |
 | E-3 Platform admin stays minimal | done | `ecdaffb` |
 | F-2 Import boundary in CI | done | `1684a42` |
 | F-1 Hygiene | not started | |
+| F-3 Trim dead schema, dedupe seeds, enforce owner/staff roles | done | `6ece790` + `028982d` + `0fac1f0` + `06c0677` + `9003445` + `11a6ce7` (branch `feat/cloudinary-catalogue`, shared with the M-2 media work; 0025 carries both F-3's drops/policies and the media schema) |
 | G-1 Eval cases for the lean toolset | done | `acd2328` |
 | K-1 Everything runs in containers (`docs/agencx/spec/09-devex.md`) | done | `3453b85` |
 | P-4 knowledge_version + invalidation | done | `9960a9d` |
@@ -250,6 +299,11 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | O-3 Knowledge ingest (URL scrape + upload) | done | `29fd5a5` |
 | O-4 Whole-corpus fast path + threshold | done (pulled into the chat spine, before P-3) | `2d48fa6` |
 | G2.1/G2.2 Auth migration: GoTrue OTP + `@supabase/ssr` cookies | done | `8e78165` (backend), `4a6b59f` (frontend); D23 in `design/decisions.md` |
+| M-1 Offerings become a real, owner-writable structured item | done | `040e2cf` (merged to `development`) |
+| M-4 The public storefront, and the address the owner chooses | done | see `spec/11-offerings-media.md` |
+| M-5 Single storefront chat entry | done | `aa97ba6` |
+| M-6 Business page summary preview | done | `62a94da` |
+| M-3 Import offerings from reviewed knowledge | done | deterministic candidates and editable confirmation through the existing Knowledge review sheet; changed prices require explicit confirmation and never auto-delete |
 
 ## Known gaps (not ticket failures - waiting on external setup)
 

@@ -1,5 +1,5 @@
 """T-031: Surface 2's Pricing tab - pricing_rules inline editing + a
-read-only catalog_items list.
+read-only offerings list.
 
 Currency conversion happens ONLY at this API boundary (PricingRuleUpdate):
 the client sends a decimal dollar string/number, this module converts it to
@@ -87,7 +87,7 @@ class PricingRuleUpdate(BaseModel):
 
 @router.get("/rules", response_model=list[PricingRuleResponse])
 async def list_pricing_rules(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> list[PricingRuleResponse]:
     return [
         PricingRuleResponse(**row)
@@ -99,7 +99,7 @@ async def list_pricing_rules(
 async def update_pricing_rule(
     rule_id: UUID,
     body: PricingRuleUpdate,
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> PricingRuleResponse:
     whitelist = {
         "code": body.code,
@@ -118,7 +118,7 @@ async def update_pricing_rule(
 
 @router.get("/catalog", response_model=list[CatalogItemResponse])
 async def list_catalog_items(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> list[CatalogItemResponse]:
     return [
         CatalogItemResponse(**row)

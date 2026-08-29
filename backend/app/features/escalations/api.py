@@ -57,7 +57,7 @@ async def list_escalations(
     return [
         EscalationResponse(**row)
         for row in await controller.list_escalations(
-            tenant_id=str(admin.tenant_id), limit=limit, offset=offset
+            tenant_id=str(admin.tenant_id), limit=limit, offset=offset, role=admin.role
         )
     ]
 
@@ -68,7 +68,9 @@ async def claim_escalation(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> EscalationResponse:
     return EscalationResponse(
-        **await controller.claim(tenant_id=str(admin.tenant_id), escalation_id=str(escalation_id))
+        **await controller.claim(
+            tenant_id=str(admin.tenant_id), escalation_id=str(escalation_id), role=admin.role
+        )
     )
 
 
@@ -80,6 +82,9 @@ async def resolve_escalation(
 ) -> EscalationResponse:
     return EscalationResponse(
         **await controller.resolve(
-            tenant_id=str(admin.tenant_id), escalation_id=str(escalation_id), message=body.message
+            tenant_id=str(admin.tenant_id),
+            escalation_id=str(escalation_id),
+            message=body.message,
+            role=admin.role,
         )
     )

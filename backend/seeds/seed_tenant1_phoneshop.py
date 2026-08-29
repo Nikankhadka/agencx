@@ -15,23 +15,17 @@ Usage: ``uv run python -m seeds.seed_tenant1_phoneshop``
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from app.ingestion.pipeline import ingest_catalog_items, process_document
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
-from app.shared.storage import document_key, get_storage
-
-if TYPE_CHECKING:
-    from app.shared.db import AppConnection
+from seeds import _helpers
 
 SLUG = "bytefix"
 TENANT_NAME = "Bytefix Repairs"
 
-# --- catalog_items: phones, accessories, tiered repair services (~15) -----------
+# --- offerings: phones, accessories, tiered repair services (~15) -----------
 
 CATALOG_ITEMS: list[tuple[str, str, int | None]] = [
     ("iPhone 11 (Refurbished, 64GB)", "Grade A refurbished, 90-day warranty", 24900),
@@ -209,144 +203,93 @@ wall adapters are 18 dollars.
 """
 
 
-async def _wipe_existing(conn: AppConnection, slug: str) -> None:
-    existing_id = await conn.fetchval("select id from tenants where slug = $1", slug)
-    if existing_id is not None:
-        await conn.execute("delete from tenants where id = $1", existing_id)
-
-
 async def _seed_core(tenant_id: UUID) -> None:
-    async with db.tenant_context(None, "service") as conn:
-        await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
-            tenant_id,
-            SLUG,
-            TENANT_NAME,
-        )
-        await conn.execute(
-            # D-2: stated, not inherited. Reference tenant 1 is where the
-            # commerce tools get demonstrated, so it opts into all of them -
-            # the lean column default (search + escalate) would leave the
-            # quoting and order-lookup demo with nothing to run. Tenant 2 takes
-            # the default and stays lean, which is the I8 proof: two verticals,
-            # one codebase, different config.
-            "insert into tenant_config "
-            "(tenant_id, tone, escalation_threshold, brand, config, enabled_tools) "
-            "values ($1, 'friendly', 0.5, $2, $3, $4)",
-            tenant_id,
-            json.dumps({"display_name": TENANT_NAME, "accent": "#D97757"}),
-            # config->'customer' is the T-032 customer-surface block: the
-            # greeting shown as the first assistant bubble and the suggested
-            # starter chips on an empty conversation (frontend.md 7.1).
-            json.dumps(
-                {
-                    "customer": {
-                        "greeting": (
-                            "Hi! Welcome to ByteFix Repairs. I can quote a repair, "
-                            "check on an existing ticket, or answer questions about "
-                            "our services - what can I do for you?"
-                        ),
-                        "starter_questions": [
-                            "How much is a screen replacement?",
-                            "What's the status of my repair?",
-                            "How long do repairs usually take?",
-                        ],
-                    }
-                }
-            ),
-            json.dumps(
-                [
-                    "search_knowledge",
-                    "recommend_items",
-                    "get_quote_inputs",
-                    "lookup_order_or_ticket",
-                    "create_escalation",
-                ]
-            ),
-        )
+    await _helpers.insert_tenant_core(
+        tenant_id=tenant_id,
+        slug=SLUG,
+        name=TENANT_NAME,
+        tone="friendly",
+        # D-2: stated, not inherited. Reference tenant 1 is where the
+        # commerce tools get demonstrated, so it opts into all of them -
+        # the lean column default (search + escalate) would leave the
+        # quoting and order-lookup demo with nothing to run. Tenant 2 takes
+        # the default and stays lean, which is the I8 proof: two verticals,
+        # one codebase, different config.
+        brand={"display_name": TENANT_NAME, "accent": "#D97757"},
+        # config->'customer' is the T-032 customer-surface block: the
+        # greeting shown as the first assistant bubble and the suggested
+        # starter chips on an empty conversation (frontend.md 7.1).
+        config={
+            "customer": {
+                "greeting": (
+                    "Hi! Welcome to ByteFix Repairs. I can quote a repair, "
+                    "check on an existing ticket, or answer questions about "
+                    "our services - what can I do for you?"
+                ),
+                "starter_questions": [
+                    "How much is a screen replacement?",
+                    "What's the status of my repair?",
+                    "How long do repairs usually take?",
+                ],
+            }
+        },
+        enabled_tools=[
+            "search_knowledge",
+            "recommend_items",
+            "get_quote_inputs",
+            "lookup_order_or_ticket",
+            "create_escalation",
+        ],
+    )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        for name, description, price_cents in CATALOG_ITEMS:
-            await conn.execute(
-                "insert into catalog_items (tenant_id, name, description, price_cents) "
-                "values ($1, $2, $3, $4)",
-                tenant_id,
-                name,
-                description,
-                price_cents,
-            )
-        for code, label, unit_amount_cents, unit in PRICING_RULES:
-            await conn.execute(
-                "insert into pricing_rules (tenant_id, code, label, unit_amount_cents, unit) "
-                "values ($1, $2, $3, $4, $5)",
-                tenant_id,
-                code,
-                label,
-                unit_amount_cents,
-                unit,
-            )
-        for i in range(15):
-            await conn.execute(
-                "insert into orders (tenant_id, ref_code, kind, customer_ref, status, details) "
-                "values ($1, $2, 'repair', $3, $4, $5)",
-                tenant_id,
-                f"R-{1001 + i}",
-                f"customer-{i + 1}",
-                REPAIR_STATUSES[i % len(REPAIR_STATUSES)],
-                json.dumps({"device": "phone", "issue": "repair"}),
-            )
-        for i in range(5):
-            await conn.execute(
-                "insert into orders (tenant_id, ref_code, kind, customer_ref, status, details) "
-                "values ($1, $2, 'order', $3, $4, $5)",
-                tenant_id,
-                f"ORD-{2001 + i}",
-                f"customer-{i + 1}",
-                ORDER_STATUSES[i % len(ORDER_STATUSES)],
-                json.dumps({"items": ["accessory"]}),
-            )
+        await _helpers.insert_offerings(conn, tenant_id, CATALOG_ITEMS)
+        await _helpers.insert_pricing_rules(conn, tenant_id, PRICING_RULES)
+        await _helpers.insert_orders(
+            conn,
+            tenant_id,
+            [
+                (
+                    f"R-{1001 + i}",
+                    "repair",
+                    f"customer-{i + 1}",
+                    REPAIR_STATUSES[i % len(REPAIR_STATUSES)],
+                    {"device": "phone", "issue": "repair"},
+                )
+                for i in range(15)
+            ]
+            + [
+                (
+                    f"ORD-{2001 + i}",
+                    "order",
+                    f"customer-{i + 1}",
+                    ORDER_STATUSES[i % len(ORDER_STATUSES)],
+                    {"items": ["accessory"]},
+                )
+                for i in range(5)
+            ],
+        )
 
 
 async def _seed_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
-
-    docs = [
-        ("policy.md", "policy", POLICY_MD),
-        ("faq.md", "faq", FAQ_MD),
-        ("price_list.md", "price_list", PRICE_LIST_MD),
-    ]
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        for filename, doc_type, content in docs:
-            document_id = uuid4()
-            await get_storage().put(
-                document_key(tenant_id, document_id, ".md"), content.encode("utf-8")
-            )
-            await conn.execute(
-                "insert into documents (id, tenant_id, filename, doc_type, status) "
-                "values ($1, $2, $3, $4, 'pending')",
-                document_id,
-                tenant_id,
-                filename,
-                doc_type,
-            )
-            await process_document(
-                conn, tenant_id=tenant_id, document_id=document_id, embedder=embedder
-            )
-
-        await ingest_catalog_items(conn, tenant_id=tenant_id, embedder=embedder)
+        await _helpers.ingest_documents(
+            conn,
+            tenant_id,
+            [
+                ("policy.md", "policy", POLICY_MD),
+                ("faq.md", "faq", FAQ_MD),
+                ("price_list.md", "price_list", PRICE_LIST_MD),
+            ],
+            embedder,
+        )
 
 
 async def seed(embedder: Embedder | None = None) -> UUID:
     """Seed (or re-seed) Tenant 1. Returns the tenant id."""
-    created_pool = False
-    try:
-        db.get_pool()
-    except RuntimeError:
-        await db.create_pool()
-        created_pool = True
-
-    try:
+    async with _helpers.seed_pool():
         async with db.tenant_context(None, "platform_admin") as conn:
-            await _wipe_existing(conn, SLUG)
+            await _helpers.wipe_tenant(conn, SLUG)
 
         tenant_id = uuid4()
         await _seed_core(tenant_id)
@@ -357,9 +300,6 @@ async def seed(embedder: Embedder | None = None) -> UUID:
         print("ingested knowledge documents and catalog items")
 
         return tenant_id
-    finally:
-        if created_pool:
-            await db.close_pool()
 
 
 def main() -> None:

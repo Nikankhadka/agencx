@@ -586,3 +586,41 @@ one boolean. Recorded with O-5's list above.
 - [x] The sheet corrects it, and the correction survives a reload
 - [x] Both jsonb copies move together
 - [x] `make check` green, the new e2e green
+
+---
+
+## O-12: Server-owned chip answers stay on the same beat
+
+**Amendment** - founder regression report, 2026-08-29.
+
+### Summary
+
+Restore the deterministic selection path for fixed onboarding answers and make
+the server's first missing beat the only source of the next question.
+
+### Why
+
+O-6 sent chip labels through model extraction. The extractor could miss `Got a
+team` while independently returning a business-hours question, leaving the
+authoritative draft on `headcount`. The result was the exact split the owner
+saw: the assistant asked for hours while the team chips remained on screen.
+
+### User stories
+
+- [x] `Just me`, `Got a team`, ABN `No`, a masked ABN, and GST answers are
+  validated and saved by the server without a model call
+- [x] A stale selection returns 409 and the client reloads the current state
+- [x] The extractor no longer supplies `next_question`; `next_beat()` owns both
+  the question and composer
+- [x] The ABN question is `Do you have an ABN?` with `Yes` and `No` choices
+- [x] A typed `yes` is not accepted as an ABN; only eleven digits or an explicit
+  no completes the beat
+- [x] The Playwright regression clicks `Got a team`, sees the hours question,
+  and proves the team chips are gone
+
+### Deliberately unchanged
+
+Free-text answers, the dynamic owner-email suggestion, the phone widget, URL
+ingestion, and the optional knowledge ask continue through their existing
+paths. The selection protocol is only for server-declared fixed or masked
+values.

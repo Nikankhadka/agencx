@@ -55,10 +55,18 @@ class KnowledgeRecord(DocumentResponse):
     """A document as the knowledge screen reads it - the row plus its sections."""
 
     sections: list[Section]
+    offering_candidates: list[dict[str, object]] = []
+
+
+class ConfirmedOffering(BaseModel):
+    name: str
+    price_cents: int | None = None
 
 
 class SaveRecordRequest(BaseModel):
     sections: list[Section]
+    offerings: list[ConfirmedOffering] = []
+    accept_price_changes: bool = False
 
 
 def _absolute_url(url: str) -> str:
@@ -72,7 +80,7 @@ def _absolute_url(url: str) -> str:
 
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> list[DocumentResponse]:
     rows = await controller.list_documents(tenant_id=admin.tenant_id)
     return [DocumentResponse(**row) for row in rows]
@@ -105,7 +113,7 @@ def _reject_upload(file: UploadFile, body: bytes, doc_type: str) -> str:
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
     file: Annotated[UploadFile, File()],
     doc_type: Annotated[str, Form()],
@@ -131,7 +139,7 @@ async def upload_document(
 @router.post("/{document_id}/reprocess", response_model=DocumentResponse)
 async def reprocess_document(
     document_id: UUID,
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> DocumentResponse:
     row = await controller.reprocess_document(
@@ -142,7 +150,7 @@ async def reprocess_document(
 
 @router.post("/urls", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_url(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
     payload: UrlIngestRequest,
 ) -> DocumentResponse:
@@ -156,7 +164,7 @@ async def ingest_url(
 
 @router.get("/records", response_model=list[KnowledgeRecord])
 async def list_records(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> list[KnowledgeRecord]:
     """Everything the assistant knows, as readable sections."""
     rows = await controller.list_records(tenant_id=admin.tenant_id)
@@ -165,7 +173,7 @@ async def list_records(
 
 @router.post("/drafts/upload", response_model=KnowledgeRecord, status_code=status.HTTP_201_CREATED)
 async def draft_from_upload(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     file: Annotated[UploadFile, File()],
 ) -> KnowledgeRecord:
@@ -186,7 +194,7 @@ async def draft_from_upload(
 
 @router.post("/drafts/url", response_model=KnowledgeRecord, status_code=status.HTTP_201_CREATED)
 async def draft_from_url(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     payload: UrlIngestRequest,
 ) -> KnowledgeRecord:
@@ -203,7 +211,7 @@ async def draft_from_url(
 @router.get("/records/{document_id}", response_model=KnowledgeRecord)
 async def get_record(
     document_id: UUID,
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
 ) -> KnowledgeRecord:
     row = await controller.get_record(
@@ -215,7 +223,7 @@ async def get_record(
 @router.put("/records/{document_id}", response_model=KnowledgeRecord)
 async def save_record(
     document_id: UUID,
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
     payload: SaveRecordRequest,
 ) -> KnowledgeRecord:
@@ -224,6 +232,8 @@ async def save_record(
         tenant_id=admin.tenant_id,
         document_id=document_id,
         sections=[section.model_dump() for section in payload.sections],
+        offerings=[offering.model_dump() for offering in payload.offerings],
+        accept_price_changes=payload.accept_price_changes,
         embedder=embedder,
     )
     return KnowledgeRecord(**row)
@@ -232,6 +242,6 @@ async def save_record(
 @router.delete("/records/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_record(
     document_id: UUID,
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> None:
     await controller.delete_record(tenant_id=admin.tenant_id, document_id=document_id)

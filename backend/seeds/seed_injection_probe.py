@@ -31,6 +31,7 @@ from uuid import UUID, uuid4
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
+from seeds import _helpers
 
 SLUG = "injection-probe"
 TENANT_NAME = "Probe Repairs"
@@ -108,27 +109,13 @@ _CLEAN_CHUNKS: list[tuple[str, str]] = [
 ]
 
 
-async def _wipe_existing(slug: str) -> None:
-    async with db.tenant_context(None, "platform_admin") as conn:
-        existing_id = await conn.fetchval("select id from tenants where slug = $1", slug)
-    if existing_id is not None:
-        async with db.tenant_context(None, "platform_admin") as conn:
-            await conn.execute("delete from tenants where id = $1", existing_id)
-
-
 async def _seed(tenant_id: UUID, embedder: Embedder) -> None:
-    async with db.tenant_context(None, "service") as conn:
-        await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
-            tenant_id,
-            SLUG,
-            TENANT_NAME,
-        )
-        await conn.execute(
-            "insert into tenant_config (tenant_id, system_prompt) values ($1, $2)",
-            tenant_id,
-            SYSTEM_PROMPT,
-        )
+    await _helpers.insert_tenant_core(
+        tenant_id=tenant_id,
+        slug=SLUG,
+        name=TENANT_NAME,
+        system_prompt=SYSTEM_PROMPT,
+    )
 
     poisoned = [(source, f"{legit}\n\n{attack}") for source, legit, attack in _POISONED_CHUNKS]
     all_chunks = poisoned + _CLEAN_CHUNKS
@@ -171,21 +158,13 @@ async def _seed(tenant_id: UUID, embedder: Embedder) -> None:
 
 
 async def seed() -> UUID:
-    created_pool = False
-    try:
-        db.get_pool()
-    except RuntimeError:
-        await db.create_pool()
-        created_pool = True
-    try:
-        await _wipe_existing(SLUG)
+    async with _helpers.seed_pool():
+        async with db.tenant_context(None, "platform_admin") as conn:
+            await _helpers.wipe_tenant(conn, SLUG)
         tenant_id = uuid4()
         await _seed(tenant_id, get_embedder(get_settings()))
         print(f"seeded injection probe tenant: {tenant_id} ({SLUG})")
         return tenant_id
-    finally:
-        if created_pool:
-            await db.close_pool()
 
 
 if __name__ == "__main__":

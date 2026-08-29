@@ -17,15 +17,28 @@ from app.features.conversations import service
 
 
 async def list_conversations(
-    *, tenant_id: str, status_filter: str | None, limit: int, offset: int
+    *,
+    tenant_id: str,
+    status_filter: str | None,
+    limit: int,
+    offset: int,
+    role: str = "tenant_admin",
 ) -> list[dict[str, Any]]:
     return await service.list_conversations(
-        tenant_id=tenant_id, status_filter=status_filter, limit=limit, offset=offset
+        tenant_id=tenant_id,
+        status_filter=status_filter,
+        limit=limit,
+        offset=offset,
+        role=role,
     )
 
 
-async def get_conversation_detail(*, tenant_id: str, conversation_id: str) -> dict[str, Any]:
-    rows = await service.get_conversation(tenant_id=tenant_id, conversation_id=conversation_id)
+async def get_conversation_detail(
+    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
+) -> dict[str, Any]:
+    rows = await service.get_conversation(
+        tenant_id=tenant_id, conversation_id=conversation_id, role=role
+    )
     if rows is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="conversation not found")
 

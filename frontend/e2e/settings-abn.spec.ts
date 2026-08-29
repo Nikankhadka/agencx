@@ -16,7 +16,7 @@ test("the ABN row reads back what is saved, and edits it", async ({
 
   // Relative, like every other spec: since D22 there is one origin, so the
   // session the login helper established is simply still here.
-  await page.goto("/settings");
+  await page.goto("/business/details");
   const row = page.getByRole("button", { name: /ABN & Tax/ });
   await row.click();
 
@@ -54,7 +54,7 @@ test("an ABN that is not eleven digits is refused, in the owner's words", async 
   request,
 }) => {
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
-  await page.goto("/settings");
+  await page.goto("/business/details");
   await page.getByRole("button", { name: /ABN & Tax/ }).click();
 
   await page.getByTestId("abn-input").fill("5182475");

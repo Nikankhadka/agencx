@@ -179,6 +179,35 @@ async def test_forced_route_runs_agent_draft_inspection(
         assert order == ["agent", "draft", "price_gate", "inspection"]
 
 
+@pytest.mark.parametrize(
+    ("route", "expected_author"),
+    [
+        ("conversation", "agent"),
+        ("recommendation", "draft"),
+        ("quoting", "draft"),
+        ("order_status", "draft"),
+        ("escalation", "escalation"),
+    ],
+)
+async def test_author_node_names_the_producing_node(
+    route: str, expected_author: str, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """F-3: every path lands a real node name on the trace's author field -
+    the agent fast path, draft-node prose/refusals, and the escalation
+    handoff."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_provider_for_route(route, tenant_id=tenant_id),
+        embedder=ZeroEmbedder(),
+        reranker=FakeReranker(),
+    )
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    final_state = await graph.ainvoke(initial_state, context=context)
+    assert final_state["author_node"] == expected_author
+
+
 # --- C-2: the money gate covers the answer path, not just the money routes ---
 
 
@@ -270,6 +299,7 @@ async def test_second_invented_figure_on_the_answer_path_escalates(
     )
     assert final_state["escalated"] is True
     assert final_state["escalation_reason"] == "price_provenance"
+    assert final_state["author_node"] == "price_gate"
 
 
 async def test_hedging_the_owners_own_price_is_a_violation(
@@ -300,6 +330,7 @@ async def test_escalation_route_sets_escalated_flag(
     initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
     final_state = await graph.ainvoke(initial_state, context=context)
     assert final_state["escalated"] is True
+    assert final_state["author_node"] == "escalation"
 
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id

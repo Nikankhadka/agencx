@@ -34,6 +34,7 @@ mechanism, and money as the one thing a model never touches.
 | Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced) |
 | Retrieval | Dense (pgvector HNSW) + sparse (Postgres FTS) + RRF (k=60) + cross-encoder rerank | One `retrieve()` behind `get_business_context`; whole-corpus fast path below the token threshold |
 | Identity | Email + 6-digit code issued and verified inside the chat | Decision 6; zero paid dependencies in Stage 1 |
+| Storefront media | Cloudinary signed Upload API | Backend-only credentials; tenant_media stores delivery metadata, not secrets |
 | Infra | Both services as containers in one Vercel project, same origin (B-4) | Supersedes AWS ECS, whose Terraform stays as dormant evidence; decision 10's open frontend host is closed by the same move |
 | Model access | Every call through the provider layer (`app/llm/provider.py`) | Providers are env config; free tiers are the default; budget capped |
 

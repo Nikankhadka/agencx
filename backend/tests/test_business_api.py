@@ -12,8 +12,12 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.business import api as business_api
+from app.features.business import service as business_service
+from app.features.business.media import UploadedMedia
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
+from app.services.knowledge_version import knowledge_version
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -88,10 +92,206 @@ async def test_page_reads_as_the_screen_renders(client: httpx.AsyncClient) -> No
     # and every other part empty rather than absent.
     assert body["name"] == "Business Test Co"
     assert body["tagline"] is None
-    assert body["services"] == []
     assert body["links"] == {}
     assert body["has_cover"] is False
     assert body["slug"].startswith("biz-")
+
+
+async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, tenant_id = await _signup(client)
+
+    created = await client.post(
+        "/api/business/offerings",
+        json={
+            "name": "Screen repair",
+            "description": "Most models",
+            "price_dollars": "89.50",
+            "category": "Screen repairs",
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    offering = created.json()
+    assert offering["price_cents"] == 8950
+
+    listed = await client.get("/api/business/offerings", headers=headers)
+    assert listed.json() == [
+        {
+            "id": offering["id"],
+            "name": "Screen repair",
+            "description": "Most models",
+            "price_cents": 8950,
+            "category": "Screen repairs",
+            "media": None,
+        }
+    ]
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await knowledge_version(conn, tenant_id)
+
+    changed = await client.patch(
+        f"/api/business/offerings/{offering['id']}",
+        json={"name": "Screen replacement", "price_dollars": "99"},
+        headers=headers,
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["price_cents"] == 9900
+    assert (await client.get("/api/business/offerings", headers=headers)).json() == [
+        {
+            "id": offering["id"],
+            "name": "Screen replacement",
+            "description": "Most models",
+            "price_cents": 9900,
+            "category": "Screen repairs",
+            "media": None,
+        }
+    ]
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after_update = await knowledge_version(conn, tenant_id)
+        assert after_update > before
+
+    deleted = await client.delete(f"/api/business/offerings/{offering['id']}", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+    assert (await client.get("/api/business/offerings", headers=headers)).json() == []
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        assert await knowledge_version(conn, tenant_id) > after_update
+
+
+async def test_youtube_offering_media_does_not_require_cloudinary(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings", json={"name": "Repair video"}, headers=headers
+    )
+    offering_id = created.json()["id"]
+
+    class UnconfiguredCloudinary:
+        is_configured = False
+
+    monkeypatch.setattr(business_service, "Cloudinary", UnconfiguredCloudinary)
+    response = await client.put(
+        f"/api/business/offerings/{offering_id}/media/url",
+        json={"url": "https://youtu.be/example"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "type": "video",
+        "provider": "youtube",
+        "url": "https://youtu.be/example",
+        "poster_url": None,
+    }
+    assert (
+        await client.delete(f"/api/business/offerings/{offering_id}/media", headers=headers)
+    ).status_code == 204
+
+
+async def test_cloudinary_cover_is_reported_and_legacy_cover_is_cleared_on_delete(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    headers, tenant_id = await _signup(client)
+
+    class FakeCloudinary:
+        is_configured = True
+
+        async def upload(self, **_: Any) -> UploadedMedia:
+            return UploadedMedia(
+                type="image",
+                provider="cloudinary",
+                url="https://res.cloudinary.com/demo/image/upload/cover.jpg",
+                public_id="tenants/test/cover",
+            )
+
+        async def delete(self, **_: Any) -> None:
+            return None
+
+    fake = FakeCloudinary()
+    monkeypatch.setattr(business_api, "Cloudinary", lambda: fake)
+    monkeypatch.setattr(business_service, "Cloudinary", lambda: fake)
+
+    put = await client.put(
+        "/api/business/cover",
+        files={"file": ("cover.png", PNG_1PX, "image/png")},
+        headers=headers,
+    )
+    assert put.status_code == 204, put.text
+    page = await client.get("/api/business/page", headers=headers)
+    assert page.json()["has_cover"] is True
+    assert page.json()["cover_url"].endswith("cover.jpg")
+
+    deleted = await client.delete("/api/business/cover", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+    assert (await client.get("/api/business/page", headers=headers)).json()["has_cover"] is False
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_media where tenant_id=$1 and role='cover'", tenant_id
+            )
+            == 0
+        )
+
+
+async def test_offerings_are_tenant_scoped(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    other_headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Private service"},
+        headers=headers,
+    )
+    offering_id = created.json()["id"]
+
+    assert (await client.get("/api/business/offerings", headers=other_headers)).json() == []
+    assert (
+        await client.patch(
+            f"/api/business/offerings/{offering_id}",
+            json={"name": "Leaked service"},
+            headers=other_headers,
+        )
+    ).status_code == 404
+    deleted = await client.delete(f"/api/business/offerings/{offering_id}", headers=other_headers)
+    assert deleted.status_code == 404
+
+
+@pytest.mark.parametrize("field", ["name", "description"])
+async def test_a_null_offering_field_is_refused_not_a_500(
+    client: httpx.AsyncClient, field: str
+) -> None:
+    """Both columns are `not null`. An explicit null used to reach the UPDATE
+    and raise a constraint violation the owner saw as a 500; absence, not null,
+    is how a field is left unchanged."""
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "description": "Same day"},
+        headers=headers,
+    )
+    offering_id = created.json()["id"]
+
+    response = await client.patch(
+        f"/api/business/offerings/{offering_id}", json={field: None}, headers=headers
+    )
+    assert response.status_code == 422, response.text
+
+    unchanged = (await client.get("/api/business/offerings", headers=headers)).json()[0]
+    assert unchanged["name"] == "Screen repair"
+    assert unchanged["description"] == "Same day"
+
+
+@pytest.mark.parametrize("price", ["-1", "1.999", "NaN", "1000001"])
+async def test_offering_prices_are_validated(client: httpx.AsyncClient, price: str) -> None:
+    headers, _ = await _signup(client)
+    response = await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "price_dollars": price},
+        headers=headers,
+    )
+    assert response.status_code == 422, response.text
 
 
 async def test_links_round_trip_and_merge(client: httpx.AsyncClient) -> None:
@@ -188,6 +388,149 @@ async def test_a_second_upload_replaces_the_first(client: httpx.AsyncClient) -> 
     got = await client.get("/api/business/cover", headers=headers)
     assert got.content == b"\xff\xd8\xff-second"
     assert got.headers["content-type"].startswith("image/jpeg")
+
+
+async def test_storefront_exposes_only_owner_published_content(client: httpx.AsyncClient) -> None:
+    headers, _tenant_id = await _signup(client)
+    tenant = await client.get("/api/business/page", headers=headers)
+    slug = tenant.json()["slug"]
+    offering = await client.post(
+        "/api/business/offerings",
+        json={
+            "name": "Screen repair",
+            "description": "Repairs for common phone screens.",
+            "price_dollars": "89.50",
+        },
+        headers=headers,
+    )
+    assert offering.status_code == 201, offering.text
+    await client.patch(
+        "/api/business/links",
+        json={"links": {"website": "https://example.com"}},
+        headers=headers,
+    )
+    assert (
+        await client.put(
+            "/api/business/cover",
+            files={"file": ("cover.png", PNG_1PX, "image/png")},
+            headers=headers,
+        )
+    ).status_code == 204
+    storefront = await client.get(f"/api/public/tenant/{slug}/storefront")
+    assert storefront.status_code == 200, storefront.text
+    body = storefront.json()
+    assert body["name"] == "Business Test Co"
+    # The owner's own figure, in the integer cents it was stored as - the page
+    # formats it and nothing recomputes it.
+    assert body["offerings"] == [
+        {
+            "id": offering.json()["id"],
+            "name": "Screen repair",
+            "description": "Repairs for common phone screens.",
+            "price_cents": 8950,
+            "category": None,
+            "media": None,
+        }
+    ]
+    assert "about" not in body
+    assert "reviews" not in body
+    assert body["links"] == {"website": "https://example.com"}
+    assert body["has_cover"] is True
+
+    image = await client.get(f"/api/public/tenant/{slug}/cover")
+    assert image.status_code == 200
+    assert image.content == PNG_1PX
+    # Shared, but revalidated: an owner who replaces their cover must not be
+    # showing customers the old one for the rest of the hour.
+    cache_control = image.headers["cache-control"]
+    assert "public" in cache_control
+    assert "must-revalidate" in cache_control
+    assert image.headers["etag"]
+
+
+async def test_a_priceless_offering_reaches_the_storefront_with_no_price(
+    client: httpx.AsyncClient,
+) -> None:
+    """A price is optional. An offering without one shows no price, rather than
+    a zero or a figure the page made up to fill the space."""
+    headers, _tenant_id = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    created = await client.post(
+        "/api/business/offerings", json={"name": "Free diagnosis"}, headers=headers
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["price_cents"] is None
+
+    body = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+    assert body["offerings"] == [
+        {
+            "id": created.json()["id"],
+            "name": "Free diagnosis",
+            "description": "",
+            "price_cents": None,
+            "category": None,
+            "media": None,
+        }
+    ]
+
+
+async def test_offerings_can_be_edited_and_retired(
+    client: httpx.AsyncClient, superuser_conn: Any
+) -> None:
+    headers, tenant_id = await _signup(client)
+    other_headers, _other_tenant_id = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Battery replacement", "price_dollars": "60"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    offering_id = created.json()["id"]
+    assert created.json()["price_cents"] == 6000
+
+    catalog_document = await superuser_conn.fetchrow(
+        "select id, status from documents where tenant_id = $1 and doc_type = 'catalog'", tenant_id
+    )
+    assert catalog_document is not None
+    assert catalog_document["status"] == "ready"
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from knowledge_chunks where document_id = $1", catalog_document["id"]
+        )
+    ) == 1
+
+    updated = await client.patch(
+        f"/api/business/offerings/{offering_id}",
+        json={"description": "For compatible devices.", "price_dollars": "65.25"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["description"] == "For compatible devices."
+    assert updated.json()["price_cents"] == 6525
+
+    forbidden = await client.delete(f"/api/business/offerings/{offering_id}", headers=other_headers)
+    assert forbidden.status_code == 404
+
+    retired = await client.delete(f"/api/business/offerings/{offering_id}", headers=headers)
+    assert retired.status_code == 204
+
+    # Retired, not deleted: the owner's list and the storefront both drop it,
+    # the row stays so a past quote referring to it still resolves, and the
+    # projection the agent searches loses its last document.
+    assert (await client.get("/api/business/offerings", headers=headers)).json() == []
+    assert (await client.get(f"/api/public/tenant/{slug}/storefront")).json()["offerings"] == []
+    assert (
+        await superuser_conn.fetchval(
+            "select active from offerings where id = $1", uuid.UUID(offering_id)
+        )
+    ) is False
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from documents where tenant_id = $1 and doc_type = 'catalog'",
+            tenant_id,
+        )
+    ) == 0
 
 
 async def test_a_non_image_cover_is_refused(client: httpx.AsyncClient) -> None:

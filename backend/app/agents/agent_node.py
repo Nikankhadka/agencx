@@ -215,7 +215,7 @@ async def _recommend_items_impl(
     ]
     rows = (
         await conn.fetch(
-            "select id, name, description, price_cents from catalog_items "
+            "select id, name, description, price_cents from offerings "
             "where tenant_id = $1 and id = any($2::uuid[]) and active",
             tenant_id,
             item_ids,
@@ -697,6 +697,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "engine_quote": engine_quote,
             "lookup": lookup_result,
             "owner_material": package.profile_text(),
+            "author_node": "agent",
         }
 
     if route == "knowledge" and not retrieved_chunks:

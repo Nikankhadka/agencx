@@ -68,6 +68,12 @@ class AgentState(TypedDict):
     # pattern. Advisory - the turn is still answered; Inspection reads this to
     # scrutinize the draft more strictly.
     injection_suspected: NotRequired[bool]
+    # F-3: which graph node produced the final draft_response ("agent" fast
+    # path, "draft" prose, or one of the deterministic handoffs). Persisted on
+    # the assistant message's agent_node column for the Surface-2 trace
+    # viewer; the inspection node carries it out on its stream event because
+    # the custom-stream controller cannot read final graph state.
+    author_node: NotRequired[str]
 
 
 @dataclass(frozen=True)

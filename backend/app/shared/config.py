@@ -137,6 +137,12 @@ class Settings(BaseSettings):
     # request writes the file and a later save request reads it back to chunk.
     uploads_bucket: str = ""
 
+    # Cloudinary media (optional in local development; media routes fail clearly
+    # until all three server-only values are configured).
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+
     # O-4 whole-corpus fast path: the total prompt budget, in tokens, a tenant's
     # corpus is allowed to occupy before retrieval scoring is worth its latency.
     # A corpus that fits is handed to the model whole (no embed, no rerank); one

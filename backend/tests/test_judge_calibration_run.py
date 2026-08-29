@@ -1,6 +1,6 @@
 """T-024: fake-provider integration test for run_calibration() - no DB
 needed (unlike test_generation_eval_run.py, this script never drives the
-graph or touches eval_cases; it only calls judge_claims/
+graph or writes eval rows; it only calls judge_claims/
 score_citation_faithfulness directly against frozen units)."""
 
 from __future__ import annotations

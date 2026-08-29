@@ -37,8 +37,8 @@ test.describe("tenant app shell on a phone", () => {
 
     // The prototype keeps #tabbar above #screen-layer, so a pushed screen
     // never covers it.
-    await page.getByRole("link", { name: /Settings/ }).click();
-    await page.waitForURL("**/settings");
+    await page.getByRole("link", { name: /Business details/ }).click();
+    await page.waitForURL("**/business/details");
     await expect(bar).toBeVisible();
   });
 

@@ -67,7 +67,12 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
   }
 
   return (
-    <div inert={!open} onKeyDown={handleKeyDown} className="fixed inset-0 z-50">
+    <div
+      inert={!open}
+      aria-hidden={!open}
+      onKeyDown={handleKeyDown}
+      className="fixed inset-0 z-50"
+    >
       <div
         aria-hidden="true"
         onClick={onClose}

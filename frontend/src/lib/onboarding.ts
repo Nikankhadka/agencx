@@ -60,6 +60,7 @@ export interface OnboardingState {
   /** The composer widget for the current beat, or null once complete. */
   input: InputSpec | null;
   can_confirm: boolean;
+  suggested_slug: string | null;
 }
 
 export type OnboardingStreamEvent =
@@ -74,6 +75,7 @@ export type OnboardingStreamEvent =
       completed: boolean;
       input: InputSpec | null;
       can_confirm: boolean;
+      suggested_slug: string;
     }
   | { type: "done" }
   | { type: "error"; detail?: string };

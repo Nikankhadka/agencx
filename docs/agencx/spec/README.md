@@ -33,7 +33,8 @@ Files in `spec/` hold two genres, and they are read differently.
   plan and there was none - the code is the plan, and `git show` is the record.
 
 An amendment declares itself in a line directly under its heading, naming where
-it came from. The amendments in this set are **O-6, O-7, O-8, O-9, and E-6**.
+it came from. The amendments in this set are **O-6, O-7, O-8, O-9, O-10, O-11,
+O-12, and E-6**.
 Do not backfill the missing sections into them; a retrospective "Technical
 spec" is invented, not recorded.
 
@@ -72,7 +73,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | Phase file | Tickets |
 |---|---|
 | `01-foundation.md` | A-1, A-2 |
-| `02-onboarding.md` | O-1, O-2, O-5, O-6, O-7, O-8, O-9 |
+| `02-onboarding.md` | O-1, O-2, O-5, O-6, O-7, O-8, O-9, O-10, O-11, O-12 |
 | `03-chat-spine.md` | P-3, P-1, P-2, P-4, P-5 |
 | `04-chat-grounding.md` | O-3, O-4, C-1, C-2, C-3, C-4, C-5, C-6 |
 | `05-business-page.md` | E-1, E-4, E-5, E-2, E-6 |
@@ -81,6 +82,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | `08-deferred.md` | B-2, D-1, D-3, D-4 |
 | `09-devex.md` | K-1 |
 | `10-deploy.md` | B-4 |
+| `11-offerings-media.md` | M-1, M-2, M-3 |
 
 Tickets added during the build keep the numbering of the phase they belong to
 rather than starting a new file: O-6 to O-9 and E-6 all came out of founder
@@ -114,11 +116,19 @@ Phase 1 is done.
 | 6 | `06-polish.md` | Polish/quality: Agencx copy, colour convention, platform minimal, lean default, CI boundary, eval | C, P |
 | 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
 | 8 | `10-deploy.md` | Deployment: two containers behind one Vercel origin | the three pillars |
+| 9 | `11-offerings-media.md` | Offerings + media (D24): the Booking page's Services list becomes real and owner-writable, with photos | E (M-1 before M-2/M-3) |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
 C-1, C-2, C-3, C-5, C-6, C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1}
--> F-1 -> B-4. C-5 and C-6 precede C-4 so the money matrix is written once,
-against the final escalation/takeover behaviour rather than the terminal one.
+-> F-1 -> B-4 -> {M-1, M-2, M-3}. C-5 and C-6 precede C-4 so the money matrix
+is written once, against the final escalation/takeover behaviour rather than
+the terminal one. `11-offerings-media.md` is not one of the original three
+pillars - it completes the Business page's Services section (E-5/E-6 already
+ship the Booking page these tickets make real) rather than adding a fourth
+pillar, and it isn't one of the explicitly-excluded Stage-1 flows (payments,
+quoting, scheduling, invoicing, leads), so it is sequenced after the pillars
+close rather than filed under `08-deferred.md`'s Phase-2 backlog. `M-2` is
+additionally blocked on the founder provisioning Cloudinary credentials.
 
 **Deferred (not Phase 1)** - see `08-deferred.md`:
 
@@ -149,6 +159,9 @@ against the final escalation/takeover behaviour rather than the terminal one.
 | O-7 | A link that cannot be read says so, and says why |
 | O-8 | Go-live lands on Home without a blank screen |
 | O-9 | An ABN the owner can read, and correct |
+| O-10 | Give onboarding a clear assistant voice |
+| O-11 | Offerings captured at onboarding |
+| O-12 | Server-owned chip answers stay on the same beat |
 
 ### Chat spine (`03-chat-spine.md`)
 
@@ -199,6 +212,7 @@ against the final escalation/takeover behaviour rather than the terminal one.
 | Id | Title |
 |---|---|
 | F-1 | Delete dead agent code |
+| F-3 | Trim dead schema, dedupe seeds, enforce owner/staff roles |
 
 ### Developer experience (`09-devex.md`)
 
@@ -220,3 +234,11 @@ against the final escalation/takeover behaviour rather than the terminal one.
 | D-1 | Tools built from the tenant enabled set |
 | D-3 | Business-tab tool toggle UI |
 | D-4 | Tool gating tests |
+
+### Offerings + media (`11-offerings-media.md`)
+
+| Id | Title |
+|---|---|
+| M-1 | Offerings become a real, owner-writable structured item |
+| M-2 | Reusable business media via Cloudinary |
+| M-3 | Import-and-confirm: knowledge ingestion proposes offerings |

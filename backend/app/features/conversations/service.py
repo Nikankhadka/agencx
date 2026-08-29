@@ -17,9 +17,14 @@ from app.shared import db
 
 
 async def list_conversations(
-    *, tenant_id: str, status_filter: str | None, limit: int, offset: int
+    *,
+    tenant_id: str,
+    status_filter: str | None,
+    limit: int,
+    offset: int,
+    role: str = "tenant_admin",
 ) -> list[dict[str, Any]]:
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         # C-6 adds the three things the owner's Chats list reads at a glance:
         # whether a human is wanted (an open escalation), what it is about
         # (that escalation's summary), and the last thing said. All three are
@@ -58,10 +63,12 @@ async def list_conversations(
     return [dict(row) for row in rows]
 
 
-async def get_conversation(*, tenant_id: str, conversation_id: str) -> dict[str, Any] | None:
+async def get_conversation(
+    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
+) -> dict[str, Any] | None:
     """The conversation shell + messages + tool calls + per-message cost; None
     when the conversation does not belong to this tenant."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         conversation = await conn.fetchrow(
             "select id, customer_ref, channel, status, created_at from conversations "
             "where tenant_id = $1 and id = $2",

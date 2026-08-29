@@ -12,6 +12,10 @@
  * live provider. That is deliberate: what is under test is the client's turn
  * lifecycle, and a free-tier LLM would make the timing - the whole point -
  * non-deterministic. Live turns are covered elsewhere.
+ *
+ * Since M-4 the customer page is a storefront and the conversation lives in a
+ * sheet, so every turn here starts by opening it. What is under test is
+ * unchanged: the sheet holds the same `CustomerChat`.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -21,6 +25,13 @@ const CUSTOMER_URL = `/${SLUG}`;
 
 const sse = (...events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+
+/** Land on the storefront and open the conversation sheet (M-4). */
+async function openChat(page: Page) {
+  await page.goto(CUSTOMER_URL);
+  await page.getByRole("button", { name: "Ask a question" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+}
 
 async function ask(page: Page, question = "What do you charge for a screen?") {
   // `next dev` streams this page, and for a beat after load the server tree
@@ -48,7 +59,7 @@ test.describe("the typing indicator spans the turn", () => {
       await route.fulfill({ status: 200, body: "" });
     });
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
 
     await expect(page.getByTestId("thinking-dots")).toBeVisible();
@@ -74,7 +85,7 @@ test.describe("the typing indicator spans the turn", () => {
       })
     );
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
 
     // Three stages later, still one unbroken indicator.
@@ -108,7 +119,7 @@ test.describe("the typing indicator spans the turn", () => {
       })
     );
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
 
     await expect(page.getByText("A screen repair is $129.")).toBeVisible();
@@ -134,7 +145,7 @@ test.describe("the typing indicator spans the turn", () => {
       })
     );
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
 
     await expect(page.getByText("A screen repair is $129.")).toBeVisible();
@@ -159,7 +170,7 @@ test.describe("the typing indicator spans the turn", () => {
       })
     );
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
     await expect(page.getByText("We are open until 6pm.")).toBeVisible();
 
@@ -184,7 +195,7 @@ test.describe("reduced motion", () => {
       await route.fulfill({ status: 200, body: "" });
     });
 
-    await page.goto(CUSTOMER_URL);
+    await openChat(page);
     await ask(page);
 
     const dots = page.getByTestId("thinking-dots");

@@ -21,14 +21,15 @@ EXPECTED_TABLES = {
     "conversations",
     "messages",
     "tool_calls",
-    "catalog_items",
+    "offerings",
     "pricing_rules",
     "quotes",
     "orders",
     "escalations",
-    "eval_cases",
     "eval_runs",
     "cost_logs",
+    "tenant_assets",
+    "tenant_media",
 }
 
 
@@ -49,8 +50,15 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # 0020 adds C-6's 'human' conversation status + escalations.summary, the
     # takeover state and the owner's one-line note; 0021 adds E-6's
     # tenant_assets, the Booking page's cover photo; 0022 drops auth_codes -
-    # login-in-chat moved to GoTrue OTP, which owns code issuance now.
-    assert len(on_disk) == 22, "expected migrations 0001-0022"
+    # login-in-chat moved to GoTrue OTP, which owns code issuance now; 0023
+    # renames catalog_items to offerings (D24/M-1), 0006 keeping its original
+    # CREATE TABLE because migrations are append-only; 0024 adds M-4's
+    # offerings.position, the order the owner puts their storefront list in;
+    # 0025 (F-3) drops tenant_config.escalation_threshold, offerings.attributes
+    # and the write-only eval_cases table, adds app_role() plus the staff
+    # role-branched RLS policies, and carries the M-2 media tables
+    # (offerings.category, tenant_media) in the same file.
+    assert len(on_disk) == 25, "expected migrations 0001-0025"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

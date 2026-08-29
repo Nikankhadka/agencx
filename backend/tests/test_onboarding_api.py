@@ -2,9 +2,8 @@
 
 Uses an OnboardingFakeProvider that synthesizes extraction updates from canned
 profile data, one field per turn, so the API-level tests never call a real
-model. Onboarding is text-only since O-1: every beat is satisfied by
-extraction, so the walk is seven text turns and a selection payload is
-rejected.
+model. Text answers use extraction; fixed chip and masked values use the O-12
+server selection path.
 """
 
 from __future__ import annotations
@@ -22,7 +21,8 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.features.onboarding.controller import _find_url
+from app.features.onboarding.controller import _find_url, response_from_record
+from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
@@ -34,6 +34,11 @@ from tests.fakes import BaseFakeProvider, ZeroEmbedder
 pytestmark = pytest.mark.db
 
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
+
+
+def test_empty_onboarding_state_introduces_the_agencx_setup_assistant() -> None:
+    state = response_from_record({"version": 3})
+    assert state["prompt"].startswith("Hi! I'm your Agencx setup assistant.")
 
 
 # One profile field per turn, in beat order. Each update carries only what the
@@ -116,7 +121,6 @@ class OffTopicFakeProvider(BaseFakeProvider):
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help you set up your business.",
-                "next_question": "What's your name?",
             }
         )
 
@@ -208,6 +212,10 @@ async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
     await _send(client, {"Authorization": f"Bearer {token}"}, text="skip")
 
 
+def _page_slug(tenant_id: uuid.UUID) -> str:
+    return f"page-{tenant_id.hex[:12]}"
+
+
 async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.get(
@@ -241,7 +249,7 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     """O-6: the beats the prototype chips are the beats that carry chips here.
 
     Ported from agencx-prototype-v6.html: `otpVerified()` (Just me / Got a team),
-    `handlePricing()` (Yes / No, not yet on the ABN) and `handleAbn()`'s GST
+    `handlePricing()` (Yes / No on the ABN) and `handleAbn()`'s GST
     follow-up.
     """
     token, _tenant_id = await _signup_tenant_admin(client)
@@ -274,7 +282,7 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
 
     body = await _send(client, headers, text=_FULL_WALK[6][1])
     assert body["stage"] == "abn"
-    assert labels(body) == ["Yes", "No, not yet"]
+    assert labels(body) == ["Yes", "No"]
     assert body["input"]["chips"][0]["widget"] == "masked"
     assert body["input"]["mask"] == "XX XXX XXX XXX"
     assert body["input"]["prefix"] == "ABN"
@@ -309,6 +317,33 @@ async def test_draft_accumulates_across_turns(client: httpx.AsyncClient) -> None
     body = await _send(client, headers, text="we are Bytefix Repairs")
 
     assert body["draft"] == {"name": "Sam", "business_name": "Bytefix Repairs"}
+
+
+def test_suggested_slug_is_a_shareable_handle() -> None:
+    assert suggested_slug("Bytefix Repairs") == "bytefix-repairs"
+    assert suggested_slug("Café & Co.") == "cafe-co"
+
+
+@pytest.mark.parametrize(
+    "business_name", ["Settings", "Admin", "!!!", "Home", "Bo", "K9", "Bytefix Repairs"]
+)
+def test_a_suggested_slug_is_always_one_confirm_can_use(business_name: str) -> None:
+    """Go-live falls back to the suggestion when the owner types no address, so
+    a name that derives a reserved, empty or too-short slug must not reach
+    validate_slug with nothing left to fall back to - it used to 500 there."""
+    slug = suggested_slug(business_name)
+    assert validate_slug(slug) == slug
+    # The DDL check on tenants.slug is the enforcement point validate_slug
+    # mirrors; a suggestion that passes the validator but not the column would
+    # still 500 at the UPDATE.
+    assert 3 <= len(slug) <= 40
+
+
+def test_validate_slug_mirrors_the_column_length_check() -> None:
+    with pytest.raises(ValueError, match="between 3 and 40"):
+        validate_slug("bo")
+    with pytest.raises(ValueError, match="between 3 and 40"):
+        validate_slug("b" * 41)
 
 
 async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClient) -> None:
@@ -346,18 +381,86 @@ async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> 
     assert body["stage"] == "name"
 
 
-async def test_selection_payload_is_conflict(client: httpx.AsyncClient) -> None:
-    """O-1 retired the chip path; the payload stays in the contract until E-1."""
+async def test_selection_advances_the_server_beat_without_calling_the_model(
+    client: httpx.AsyncClient,
+) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = await client.post(
+    for text in ("I'm Sam", "we are Bytefix Repairs", "we fix phones"):
+        await _send(client, headers, text=text)
+
+    app.dependency_overrides[get_llm_provider] = BaseFakeProvider
+    try:
+        body = await _send(
+            client,
+            headers,
+            selection={"beat": "headcount", "values": ["got a team"]},
+        )
+    finally:
+        app.dependency_overrides[get_llm_provider] = lambda: OnboardingFakeProvider()
+
+    assert body["stage"] == "hours"
+    assert body["draft"]["headcount"] == "got a team"
+    assert body["history"][-2:] == [
+        {"role": "user", "content": "Got a team"},
+        {"role": "assistant", "content": "Got it. When are you open?"},
+    ]
+
+
+async def test_selection_rejects_stale_and_invalid_values(client: httpx.AsyncClient) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    stale = await client.post(
         "/api/onboarding/message",
-        json={"selection": {"beat": "headcount", "values": ["team"]}},
+        json={"selection": {"beat": "headcount", "values": ["got a team"]}},
         headers=headers,
     )
-    assert response.status_code == 409
-    assert "text-only" in response.json()["detail"]
+    assert stale.status_code == 409
+    assert "current beat is name" in stale.json()["detail"]
+
+    for text in ("I'm Sam", "we are Bytefix Repairs", "we fix phones"):
+        await _send(client, headers, text=text)
+
+    invalid = await client.post(
+        "/api/onboarding/message",
+        json={"selection": {"beat": "headcount", "values": ["sometimes"]}},
+        headers=headers,
+    )
+    assert invalid.status_code == 409
+
+
+async def test_abn_selections_validate_the_number_and_skip_gst_for_no(
+    client: httpx.AsyncClient,
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    for text in (step[1] for step in _FULL_WALK[:7]):
+        await _send(client, headers, text=text)
+
+    invalid = await client.post(
+        "/api/onboarding/message",
+        json={"selection": {"beat": "abn", "values": ["123"]}},
+        headers=headers,
+    )
+    assert invalid.status_code == 409
+
+    body = await _send(
+        client,
+        headers,
+        selection={"beat": "abn", "values": ["51 824 753 556"]},
+    )
+    assert body["stage"] == "gst"
+    assert body["draft"]["abn"] == "51824753556"
+
+    body = await _send(
+        client,
+        headers,
+        selection={"beat": "gst", "values": ["not yet"]},
+    )
+    assert body["stage"] == "knowledge"
+    assert body["draft"]["gst"] == "no"
 
 
 async def test_message_requires_exactly_one_of_text_or_selection(
@@ -414,10 +517,10 @@ async def test_full_flow_confirm_writes_profile(
 
     confirm = await client.post("/api/onboarding/confirm", headers=headers)
     assert confirm.status_code == 200
-    assert confirm.json() == {"tenant_id": str(tenant_id)}
+    assert confirm.json() == {"tenant_id": str(tenant_id), "slug": "bytefix-repairs"}
 
     config_row = await superuser_conn.fetchrow(
-        "select system_prompt, tone, escalation_threshold from tenant_config where tenant_id = $1",
+        "select system_prompt, tone from tenant_config where tenant_id = $1",
         tenant_id,
     )
     assert config_row is not None
@@ -426,13 +529,13 @@ async def test_full_flow_confirm_writes_profile(
     assert "phone repair shop" in config_row["system_prompt"]
     # O-1 no longer sets these from the interview - they keep schema defaults.
     assert config_row["tone"] == "friendly"
-    assert config_row["escalation_threshold"] == pytest.approx(0.5)
 
     tenant_row = await superuser_conn.fetchrow(
-        "select business_name from tenants where id = $1", tenant_id
+        "select business_name, slug from tenants where id = $1", tenant_id
     )
     assert tenant_row is not None
     assert tenant_row["business_name"] == "Bytefix Repairs"
+    assert tenant_row["slug"] == "bytefix-repairs"
 
     profile = await superuser_conn.fetchval(
         "select config->'profile' from tenant_config where tenant_id = $1", tenant_id
@@ -445,7 +548,7 @@ async def test_full_flow_confirm_writes_profile(
         "hours": "Mon-Fri 9-6",
         "services": "screen repairs, battery replacements",
         "contact": "555-0100",
-        "abn": "51 824 753 556",
+        "abn": "51824753556",
         "gst": "yes",
     }
 
@@ -456,10 +559,14 @@ async def test_confirm_writes_no_catalog_or_pricing_rows(
     """O-1 captures a profile, not a priced catalog - prices come from uploads."""
     token, tenant_id = await _signup_tenant_admin(client)
     await _walk_to_confirm(client, token)
-    await client.post("/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"})
+    await client.post(
+        "/api/onboarding/confirm",
+        json={"slug": _page_slug(tenant_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
     items = await superuser_conn.fetchval(
-        "select count(*) from catalog_items where tenant_id = $1", tenant_id
+        "select count(*) from offerings where tenant_id = $1", tenant_id
     )
     rules = await superuser_conn.fetchval(
         "select count(*) from pricing_rules where tenant_id = $1", tenant_id
@@ -477,23 +584,46 @@ async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) ->
 
 
 async def test_double_confirm_is_conflict(client: httpx.AsyncClient) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
+    token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     await _walk_to_confirm(client, token)
 
-    first = await client.post("/api/onboarding/confirm", headers=headers)
+    first = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
     assert first.status_code == 200
     second = await client.post("/api/onboarding/confirm", headers=headers)
     assert second.status_code == 409
 
 
-async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -> None:
+async def test_confirm_refuses_a_taken_business_page_address(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
+    await superuser_conn.execute(
+        "insert into tenants (slug, name) values ('taken-page-address', 'Existing business')"
+    )
+    await _walk_to_confirm(client, token)
+
+    response = await client.post(
+        "/api/onboarding/confirm",
+        json={"slug": "taken-page-address"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "That page address is already taken. Choose another."
+
+
+async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     await _walk_to_confirm(client, token)
 
     # Confirm, then try to send another message.
-    await client.post("/api/onboarding/confirm", headers=headers)
+    await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
     response = await client.post(
         "/api/onboarding/message", json={"text": "anything"}, headers=headers
     )

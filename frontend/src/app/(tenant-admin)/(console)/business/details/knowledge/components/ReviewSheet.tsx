@@ -9,8 +9,13 @@ import { sourceLabel } from "../lib/types";
 export interface ReviewSheetProps {
   record: KnowledgeRecord | null;
   busy: boolean;
+  priceConflict: string | null;
   onClose: () => void;
-  onSave: (sections: KnowledgeSection[]) => void;
+  onSave: (
+    sections: KnowledgeSection[],
+    offerings: { name: string; price_cents: number | null }[],
+    acceptPriceChanges?: boolean,
+  ) => void;
   onDiscard: () => void;
 }
 
@@ -25,6 +30,7 @@ export interface ReviewSheetProps {
 export function ReviewSheet({
   record,
   busy,
+  priceConflict,
   onClose,
   onSave,
   onDiscard,
@@ -42,6 +48,7 @@ export function ReviewSheet({
           key={record.id}
           record={record}
           busy={busy}
+          priceConflict={priceConflict}
           onSave={onSave}
           onDiscard={onDiscard}
         />
@@ -53,16 +60,25 @@ export function ReviewSheet({
 function SectionEditor({
   record,
   busy,
+  priceConflict,
   onSave,
   onDiscard,
 }: {
   record: KnowledgeRecord;
   busy: boolean;
-  onSave: (sections: KnowledgeSection[]) => void;
+  priceConflict: string | null;
+  onSave: (
+    sections: KnowledgeSection[],
+    offerings: { name: string; price_cents: number | null }[],
+    acceptPriceChanges?: boolean,
+  ) => void;
   onDiscard: () => void;
 }) {
   const [sections, setSections] = useState<KnowledgeSection[]>(() =>
     record.sections.map((section) => ({ ...section })),
+  );
+  const [offerings, setOfferings] = useState(() =>
+    (record.offering_candidates ?? []).map((offering) => ({ ...offering, selected: true })),
   );
   const draft = record.status === "draft";
 
@@ -94,15 +110,79 @@ function SectionEditor({
         />
       ))}
 
+      {offerings.length ? (
+        <fieldset className="rounded-card border border-hairline p-4">
+          <legend className="px-1 text-row-label font-medium text-text">Offerings found</legend>
+          <p className="mb-3 text-meta text-ink-a40">Select the items to add, then check their names and prices.</p>
+          {offerings.map((offering, index) => (
+            <div key={`${offering.name}-${index}`} className="flex items-start gap-2 py-1.5 text-body-sm text-text">
+              <input
+                className="mt-2"
+                type="checkbox"
+                checked={offering.selected}
+                onChange={() =>
+                  setOfferings((prev) =>
+                    prev.map((item, position) =>
+                      position === index ? { ...item, selected: !item.selected } : item,
+                    ),
+                  )
+                }
+              />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <input
+                  value={offering.name}
+                  aria-label={`Offering ${index + 1} name`}
+                  onChange={(event) =>
+                    setOfferings((prev) =>
+                      prev.map((item, position) =>
+                        position === index ? { ...item, name: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface-container px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
+                />
+                <input
+                  value={offering.price ?? ""}
+                  aria-label={`Offering ${index + 1} price`}
+                  placeholder="Price (optional)"
+                  onChange={(event) =>
+                    setOfferings((prev) =>
+                      prev.map((item, position) =>
+                        position === index ? { ...item, price: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface-container px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
+                />
+              </div>
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
+
+      {priceConflict ? (
+        <p role="alert" className="rounded-card bg-accent-a06 p-3 text-meta text-text">
+          {priceConflict} Confirm to update the existing offering prices.
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-2.5">
         <Button
           className="w-full rounded-field py-4"
           loading={busy}
           disabled={sections.length === 0}
-          onClick={() => onSave(sections)}
+          onClick={() =>
+            onSave(
+              sections,
+              offerings
+                .filter((item) => item.selected && item.name.trim())
+                .map((item) => ({ name: item.name.trim(), price_cents: parsePriceCents(item.price) })),
+              priceConflict !== null,
+            )
+          }
           data-testid="knowledge-save"
         >
-          {draft ? "Save it" : "Save changes"}
+          {priceConflict ? "Confirm price changes" : draft ? "Save it" : "Save changes"}
         </Button>
         <button
           type="button"
@@ -116,6 +196,13 @@ function SectionEditor({
       </div>
     </div>
   );
+}
+
+function parsePriceCents(value: string | null): number | null {
+  const normalized = (value ?? "").trim().replace(/[ $,]/g, "");
+  if (!normalized || !/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const [dollars, cents = ""] = normalized.split(".");
+  return Number(dollars) * 100 + Number(`${cents}00`.slice(0, 2));
 }
 
 /**

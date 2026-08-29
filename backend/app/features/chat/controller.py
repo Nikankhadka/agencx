@@ -167,6 +167,7 @@ async def stream_chat_response(
     buffer: list[dict[str, object]] = []
     verdicts: dict[str, object] = {}
     tool_calls: list[dict[str, object]] = []
+    author_node: str | None = None
     tracer = get_tracer(config.get_settings())
     # Latency baseline. The gap between first_model_token_ms (the model started
     # producing prose) and first_prose_ms (the customer was first allowed to see
@@ -260,6 +261,15 @@ async def stream_chat_response(
                         buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
                     elif etype == "inspection":
                         verdicts = dict(event.get("verdicts", {}))
+                        # F-3: which node authored the final draft rides the
+                        # inspection event - it is the last node to run in
+                        # every path, and the custom stream cannot read final
+                        # graph state. The escalate branch carries
+                        # "inspection" explicitly; all others pass through the
+                        # producer's own claim.
+                        author = event.get("author_node")
+                        if author:
+                            author_node = str(author)
                         if event.get("decision") == "retry":
                             full_text = ""
                             buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
@@ -351,6 +361,7 @@ async def stream_chat_response(
         verdicts=verdicts,
         tool_calls=tool_calls,
         usages=usages,
+        author_node=author_node,
     )
     logger.info(
         "chat turn",

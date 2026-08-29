@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
 import type { ConversationSummary } from "@/lib/api-schemas";
-import type { KnowledgeRecord } from "../settings/knowledge/lib/types";
+import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
 import { buildBrief } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
 

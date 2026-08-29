@@ -57,8 +57,8 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 | Component | What Agencx runs | Where | Notes |
 |---|---|---|---|
 | Database | Postgres 16 + pgvector on Supabase (prod), pgvector/pgvector docker image (dev) | docker-compose.yml:94-108; deploy.md:134-140 | Raw asyncpg, no ORM. Supavisor session pooler port 5432 |
-| Migrations | 22 forward-only SQL files, custom runner, advisory-locked, transactional per file, no down migrations | backend/app/shared/migrate.py:54-93; test_migrations.py | Applied manually to prod (deploy.md:147-153); 0016 applied out of sequence; 0022 drops `auth_codes` (D23) |
-| Schema | 16 tables; tenants, tenant_config, users, platform_admins, documents, knowledge_chunks, conversations, messages, tool_calls, catalog_items, pricing_rules, quotes, orders, escalations, eval_cases/eval_runs, cost_logs, tenant_assets | backend/migrations/0001-0022 | Integer cents + CHECK constraints, quote immutability trigger, composite-FK denormalization; `auth_codes` dropped 2026-08-28 (D23) - login-in-chat moved to GoTrue OTP |
+| Migrations | 23 forward-only SQL files, custom runner, advisory-locked, transactional per file, no down migrations | backend/app/shared/migrate.py:54-93; test_migrations.py | Applied manually to prod (deploy.md:147-153); 0016 applied out of sequence; 0022 drops `auth_codes` (D23) |
+| Schema | 16 tables; tenants, tenant_config, users, platform_admins, documents, knowledge_chunks, conversations, messages, tool_calls, offerings, pricing_rules, quotes, orders, escalations, eval_cases/eval_runs, cost_logs, tenant_assets | backend/migrations/0001-0023 | Integer cents + CHECK constraints, quote immutability trigger, composite-FK denormalization; `auth_codes` dropped 2026-08-28 (D23) - login-in-chat moved to GoTrue OTP |
 | Vector index | HNSW cosine on `knowledge_chunks.embedding vector(384)` | 0004_knowledge.sql:31; 0010_embedding_dim.sql | Retargeted 1536 -> 384 in 0010 |
 | Caching | In-process dicts: context package (900s TTL), slug (60s), usage/limits | context_package.py:156-181; features/tenants/service.py:120-174; shared/limits.py:141-171 | Per-worker duplication; `ponytail:` comments name shared store as upgrade |
 | Backups | None anywhere; no RPO/RTO, no restore procedure, no verification | (absence confirmed by grep of docs/ and infra/) | Supabase free tier pauses after 1 week idle |
@@ -156,11 +156,11 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 | Component | What Agencx runs | Where | Notes |
 |---|---|---|---|
-| DB identity | One `wren_app` role (LOGIN, no BYPASSRLS); transaction-local `app.tenant_id`/`app.role` via `set_config` | 0002_roles.sql; shared/db.py:88-124 | Valid roles: customer, tenant_admin, platform_admin, service |
+| DB identity | One `wren_app` role (LOGIN, no BYPASSRLS); transaction-local `app.tenant_id`/`app.role` via `set_config` | 0002_roles.sql; shared/db.py:88-124 | Valid roles: customer, tenant_admin, staff, platform_admin, service |
 | RLS | ENABLE + FORCE on every table; three standard policy shapes | 0001_extensions.sql:7-17; database.md:57-84 | CI-audited (test_schema_audit.py) |
 | RLS bypass surface | Exactly three audited SECURITY DEFINER resolvers owned by a NOLOGIN `wren_resolver` role | resolve_tenant_slug (0003:67-80); resolve_user_tenant + resolve_platform_admin (0009) | Column-level grants only |
 | API tiering | FastAPI dependencies: require_tenant_admin / require_platform_admin / bare authenticate | shared/auth.py:96-146 | tenant_id resolved from JWT sub per request |
-| RBAC | Two flat tiers; `users.role` ('owner'/'staff') exists but is never enforced | 0003_tenancy.sql:42; auth.py:126-131 | Dead column or missing feature |
+| RBAC | Two tiers enforced; `users.role` ('owner'/'staff') branches the RLS policies (0025) and the endpoint guards | 0025_schema_cleanup.sql; auth.py require_owner | Staff reach only the conversation work surface; provisioning API is future work |
 | Tool gating | `enabled_tools` column documented in architecture.md section 8 but nothing reads it | 0016 migration comment:20-22; agent_node.py:349-397 | No endpoint 404s on a disabled capability |
 
 **Industry standard (2026):** multi-tenant SaaS standard is database-enforced isolation (RLS or row-scoping) as the backstop with an application tier for product logic - exactly the shape here. The common commercial pattern adds a tenant claim to the JWT (GoTrue's Custom Access Token Hook embeds it) so the app layer need not resolve the tenant per request; that is an optimization, not a correctness gap. Role-based permission models (owner/staff/agent with per-capability grants) are the norm once more than one human works a tenant - Agencx's schema already has the column for it.
@@ -169,13 +169,21 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 | Gap | Severity | Industry-standard target | Cost to adopt | Effort | Priority | Phase |
 |---|---|---|---|---|---|---|
-| G3.1 `users.role` dead column (owner/staff never enforced) | Medium | Decide: implement staff-role policies (policy branch on role) or drop the column | Small either way | S | 1 | 1 |
+| G3.1 `users.role` dead column (owner/staff never enforced) | **Resolved** (F-3): staff role enforced via role-branched RLS policies + `require_owner` endpoint guards; `users.role` is live | Implement staff-role policies (policy branch on role) or drop the column | Done | S | 1 | 1 |
 | G3.2 `enabled_tools` gating unimplemented | Medium | Implement the documented gate at tool-selection time, or delete column + amend doc | Small | S | 1 | 1 |
 | G3.3 Tenant resolved per request (no claim in JWT) | Low | GoTrue Custom Access Token Hook embedding a tenant claim | $0 | M | 3 | 3 |
 
 **Migration path:**
 
-- **G3.1:** either (a) add a `role = 'owner'` branch to the tenant RLS policies plus a `require_staff`-style dependency for the endpoints staff should reach, or (b) one migration dropping the column and a doc note. `Effort: S`, `Risk: low`. **`FLAG: none`** - but it is a product decision (do staff exist in stage 1?), so the ticket asks the founder.
+- **G3.1:** **Resolved by F-3 (0025).** The RLS policies branch on `app_role()`
+  (owner -> tenant_admin, staff -> staff, one mapping in auth.py); staff reads
+  only the conversation tables, flips status human<->open, inserts
+  human_agent/system messages, and claims/resolves escalations - no writes or
+  deletes anywhere else. `require_owner` guards the settings/knowledge/
+  offerings/pricing/onboarding routers; conversations/escalations/dashboards
+  thread the caller's role into `tenant_context`. Remaining gap: no
+  staff-provisioning API yet - enforcement is proven with directly-inserted
+  rows (test_rls.py, test_auth_api.py).
 - **G3.2:** wire `enabled_tools` into `_tools_for` at tool-selection time (agent_node.py:349-397) and add the API-layer 404s architecture.md section 8 promises. `Effort: S-M`.
 - **G3.3** is an optimization with a trigger (request latency or multi-tenant admin volume).
 
@@ -188,7 +196,7 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 **Deliberate deviations:**
 
-- Two flat tiers with no per-tenant roles - trigger: a tenant asks to add staff (ticket O-3 already shipped staff takeover, so this trigger is near).
+- Two flat tiers with no per-tenant roles - trigger: a tenant asks to add staff (ticket O-3 already shipped staff takeover, so this trigger is near). **F-3 enforced the split**; what remains is the provisioning API, not the enforcement.
 - `orders.kind`/`orders.status` as unconstrained text - deliberate domain-agnosticism (0007:7-9), not a gap.
 
 ---

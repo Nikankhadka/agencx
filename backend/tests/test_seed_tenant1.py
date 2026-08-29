@@ -42,7 +42,7 @@ async def test_seed_creates_tenant_with_expected_counts(app_pool: None) -> None:
         assert slug == SLUG
 
         catalog_count = await conn.fetchval(
-            "select count(*) from catalog_items where tenant_id = $1", tenant_id
+            "select count(*) from offerings where tenant_id = $1", tenant_id
         )
         assert catalog_count == len(CATALOG_ITEMS)
 
@@ -77,7 +77,7 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
     assert count == 1  # the first tenant was wiped, not left behind
 
     leftover_catalog = await superuser_conn.fetchval(
-        "select count(*) from catalog_items where tenant_id = $1", first_id
+        "select count(*) from offerings where tenant_id = $1", first_id
     )
     assert leftover_catalog == 0  # cascaded away with the first tenant
 

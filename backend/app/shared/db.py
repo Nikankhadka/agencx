@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     AppPool = asyncpg.Pool[asyncpg.Record]
     AppConnection = PoolConnectionProxy[asyncpg.Record]
 
-VALID_ROLES = frozenset({"customer", "tenant_admin", "platform_admin", "service"})
+VALID_ROLES = frozenset({"customer", "tenant_admin", "staff", "platform_admin", "service"})
 
 _pool: AppPool | None = None
 
@@ -102,9 +102,9 @@ async def tenant_context(
     or platform-admin/service flows that don't act as a single tenant); it is sent
     to Postgres as ``''``, which ``app_tenant_id()`` treats as NULL.
 
-    ``role`` must be one of ``customer``, ``tenant_admin``, ``platform_admin``,
-    ``service`` (database.md section 2.2) - anything else raises ``ValueError``
-    before a connection is even acquired.
+    ``role`` must be one of ``customer``, ``tenant_admin``, ``staff``,
+    ``platform_admin``, ``service`` (database.md section 2.2) - anything else
+    raises ``ValueError`` before a connection is even acquired.
 
     Pass ``pool`` to use a pool other than the module-level one (tests point it at
     ``wren_test``); otherwise the pool created by ``create_pool()`` is used.

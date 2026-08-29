@@ -1,9 +1,9 @@
 """T-023: DB-backed integration test for evals/generation_eval.py's
-orchestration (run_eval, _sync_eval_cases, _write_eval_run) using a fake
-provider/embedder - proves the wiring is correct without depending on a
-real (rate-limited, free-tier) LLM. Real-LLM numbers are a separate,
-manual concern (same convention as T-013's "live-model accuracy check
-pending real credentials" - see .agents/memory.md).
+orchestration (run_eval, _write_eval_run) using a fake provider/embedder -
+proves the wiring is correct without depending on a real (rate-limited,
+free-tier) LLM. Real-LLM numbers are a separate, manual concern (same
+convention as T-013's "live-model accuracy check pending real credentials"
+- see .agents/memory.md).
 """
 
 from __future__ import annotations
@@ -113,10 +113,10 @@ async def _seed_tenant_with_chunk(conn: asyncpg.Connection[Any]) -> UUID:
     return tenant_id
 
 
-async def test_run_eval_orchestration_produces_metrics_and_writes_eval_cases(
+async def test_run_eval_orchestration_produces_metrics(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
-    """Proves run_eval's wiring (graph drive, scoring, eval_cases sync) is
+    """Proves run_eval's wiring (graph drive, scoring, eval_runs write) is
     correct without depending on a real, rate-limited LLM. Only the
     positive-case path is exercised here - whether ZeroEmbedder's uniform
     vectors spuriously "match" an unrelated out-of-domain query is not a
@@ -153,12 +153,6 @@ async def test_run_eval_orchestration_produces_metrics_and_writes_eval_cases(
     assert metrics["answer_relevancy"] == 0.0
     assert metrics["citation_faithfulness"] == 1.0
     assert results[0].answer == "We are open weekdays [1]."
-
-    case_rows = await superuser_conn.fetch(
-        "select input from eval_cases where tenant_id = $1 and case_type = 'generation'",
-        tenant_id,
-    )
-    assert len(case_rows) == 1
 
 
 async def test_negative_case_refusal_is_scored_correctly() -> None:

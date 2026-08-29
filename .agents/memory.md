@@ -53,6 +53,17 @@
 
 ## Critical Gotchas
 
+### Seeding order (e2e)
+
+- **`make seed-tenant1` after `make seed` breaks every logged-in e2e spec.**
+  `seed_tenant1_phoneshop.py::_wipe_existing` deletes the `bytefix` tenant row
+  and recreates it with a new id; `users.tenant_id` is `on delete cascade`, so
+  the owner's membership goes with it. The next login sees a user with no
+  tenant, `POST /api/tenants` provisions a fresh one (`owner-…`), and the
+  specs then drive a tenant that has none of the seeded data - failing with
+  confusing symptoms like another tenant's name in a heading. `make test-e2e`
+  needs `make seed` **last**; `seed-tenant1` is for `make eval`.
+
 ### Database and auth
 
 - **Every tenant table needs FORCE ROW LEVEL SECURITY** and the API must connect as `wren_app` role (not `postgres`). `docs/agencx/design/database.md` section 2.

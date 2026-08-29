@@ -15,6 +15,8 @@ import pytest
 from app.llm.provider import ChatMessage, SchemaT
 from app.onboarding import beats
 from app.onboarding.agent import (
+    _COPILOT,
+    _KNOWLEDGE_OFFER,
     Directive,
     OnboardingRecord,
     _echo,
@@ -108,6 +110,18 @@ def test_save_profile_overwrites_a_corrected_field() -> None:
     save_profile(draft, ProfileDraft(business_name="Bytefix Repairs"))
 
     assert draft["business_name"] == "Bytefix Repairs"
+
+
+def test_save_profile_only_accepts_an_abn_or_an_explicit_no() -> None:
+    draft: dict[str, Any] = {}
+    save_profile(draft, ProfileDraft(abn="yes"))
+    assert "abn" not in draft
+
+    save_profile(draft, ProfileDraft(abn="51 824 753 556"))
+    assert draft["abn"] == "51824753556"
+
+    save_profile(draft, ProfileDraft(abn=beats.NO_ABN))
+    assert draft["abn"] == beats.NO_ABN
 
 
 # --- completeness gate ---------------------------------------------------------
@@ -342,19 +356,16 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_turn_uses_next_question() -> None:
-    provider = _ExtractFake(
-        updates=[{"next_question": "What do you sell or offer?"}],
-        replies=["What do you sell or offer?"],
-    )
+async def test_run_turn_uses_the_authoritative_next_beat() -> None:
+    provider = _ExtractFake(updates=[{}], replies=["What does the business go by?"])
     record = OnboardingRecord(draft={"name": "Sam"})
     _updated, reply, _persist = await run_turn(
         admin_message="ok go on", record=record, provider=provider
     )
 
-    assert reply == "What do you sell or offer?"
+    assert reply == "What does the business go by?"
     system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
-    assert any("What do you sell or offer?" in p for p in system_prompts)
+    assert any("What does the business go by?" in p for p in system_prompts)
 
 
 @pytest.mark.asyncio
@@ -390,7 +401,6 @@ async def test_run_turn_off_topic_answers_gently() -> None:
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help you set up your business.",
-                "next_question": "What is your business called?",
             },
         ],
         replies=["I'm here to help you set up your business. What is your business called?"],
@@ -416,7 +426,6 @@ async def test_run_turn_off_topic_keeps_prior_history() -> None:
             {
                 "off_topic": True,
                 "meta_reply": "I'm here to help.",
-                "next_question": "What is your business called?",
             }
         ],
         replies=["I'm here to help. What is your business called?"],
@@ -584,7 +593,38 @@ async def test_prepare_url_turn_reads_back_nothing_when_page_has_no_fields() -> 
     assert "couldn't pin down" in plan.summary
 
 
+@pytest.mark.asyncio
+async def test_prepare_turn_keeps_explicit_offering_names_in_order_without_duplicates() -> None:
+    provider = _ExtractFake(
+        updates=[
+            {
+                "profile": {"name": "Ronin"},
+                "offering_names": ["Screen repair", "Battery swap", "screen repair", ""],
+            }
+        ]
+    )
+    plan = await prepare_turn(
+        admin_message="We offer screen repair and battery swap",
+        record=OnboardingRecord(),
+        provider=provider,
+    )
+    assert plan.record.offering_candidates == ["Screen repair", "Battery swap"]
+
+
 # --- directive shape -----------------------------------------------------------
+def test_onboarding_voice_is_role_led_and_warm() -> None:
+    assert "Agencx setup assistant" in _COPILOT
+    assert "Warmly acknowledge" in _COPILOT
+    assert "one simple question at a time" in _COPILOT
+    assert "becomes a reference" in _KNOWLEDGE_OFFER
+
+
+def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
+    assert beats.BEATS["business_name"].ask == "What does the business go by?"
+    assert beats.BEATS["hours"].ask == "When are you open?"
+    assert beats.BEATS["abn"].ask == "Do you have an ABN?"
+
+
 def test_directive_as_prompt_with_acknowledged() -> None:
     d = Directive(acknowledged=["business name"], ask_for="opening hours")
     prompt = d.as_prompt()

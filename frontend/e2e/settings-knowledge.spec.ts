@@ -21,10 +21,10 @@ test("a pasted link is read back as sections, then saved", async ({
 
   // Relative, like every other spec: since D22 there is one origin, so the
   // session the login helper established is simply still here.
-  await page.goto("/settings");
+  await page.goto("/business/details");
   await expect(page.getByRole("heading", { name: "Settings" })).toHaveCount(0);
   await page.getByText("Knowledge", { exact: true }).click();
-  await page.waitForURL("**/settings/knowledge");
+  await page.waitForURL("**/business/details/knowledge");
 
   await page.getByTestId("knowledge-url-input").fill(SITE_URL);
   await page.getByTestId("knowledge-url-submit").click();

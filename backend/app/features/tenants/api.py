@@ -64,7 +64,7 @@ async def signup(
 
 @router.get("/me", response_model=TenantMeResponse)
 async def me(
-    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> TenantMeResponse:
     result = await controller.me(tenant_id=str(admin.tenant_id))
     return TenantMeResponse(

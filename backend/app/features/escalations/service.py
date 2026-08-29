@@ -17,8 +17,10 @@ from app.shared import db
 _SELECT_COLUMNS = "id, conversation_id, reason, summary, status, created_at, resolved_at"
 
 
-async def list_escalations(*, tenant_id: str, limit: int, offset: int) -> list[dict[str, object]]:
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+async def list_escalations(
+    *, tenant_id: str, limit: int, offset: int, role: str = "tenant_admin"
+) -> list[dict[str, object]]:
+    async with db.tenant_context(tenant_id, role) as conn:
         rows = await conn.fetch(
             f"select {_SELECT_COLUMNS} from escalations where tenant_id = $1 "
             "order by created_at desc limit $2 offset $3",
@@ -29,10 +31,12 @@ async def list_escalations(*, tenant_id: str, limit: int, offset: int) -> list[d
     return [dict(row) for row in rows]
 
 
-async def claim(*, tenant_id: str, escalation_id: str) -> dict[str, str] | None:
+async def claim(
+    *, tenant_id: str, escalation_id: str, role: str = "tenant_admin"
+) -> dict[str, str] | None:
     """Try to claim; the conditional UPDATE returns None when the escalation
     was already moved (the caller then reads the row to tell 404 from 409)."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         claimed = await conn.fetchrow(
             f"update escalations set status = 'claimed' "
             f"where tenant_id = $1 and id = $2 and status = 'open' "
@@ -49,12 +53,12 @@ async def claim(*, tenant_id: str, escalation_id: str) -> dict[str, str] | None:
 
 
 async def resolve(
-    *, tenant_id: str, escalation_id: str, message: str | None
+    *, tenant_id: str, escalation_id: str, message: str | None, role: str = "tenant_admin"
 ) -> dict[str, str] | None:
     """Resolve an open/claimed escalation; ``message`` (if given) becomes a
     human_agent message in the transcript. None means the escalation was
     already resolved or missing - the caller distinguishes 404 from 409."""
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+    async with db.tenant_context(tenant_id, role) as conn:
         resolved = await conn.fetchrow(
             f"update escalations set status = 'resolved', resolved_at = now() "
             f"where tenant_id = $1 and id = $2 and status in ('open', 'claimed') "

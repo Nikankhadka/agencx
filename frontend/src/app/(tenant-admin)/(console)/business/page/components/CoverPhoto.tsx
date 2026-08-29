@@ -19,7 +19,7 @@ import { apiFetch, apiFetchStream } from "@/lib/api";
 const MAX_EDGE_PX = 1600;
 const JPEG_QUALITY = 0.82;
 
-async function downscale(file: File): Promise<Blob> {
+export async function downscale(file: File): Promise<Blob> {
   // createImageBitmap decodes off the main thread; a browser without it (or a
   // file it cannot decode) falls through to sending the original, which the
   // server will accept or refuse on its own terms.

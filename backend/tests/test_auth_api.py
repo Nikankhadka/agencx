@@ -322,6 +322,53 @@ async def test_tenant_admin_me_with_no_users_row_is_forbidden(client: httpx.Asyn
     assert response.status_code == 403
 
 
+# --- staff role (G3.1 / F-3) -------------------------------------------------------
+
+
+async def test_staff_reaches_conversations_but_not_owner_surfaces(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """The 0025 role branch at the API level: staff gets the C-6 work surface
+    (conversations, takeover) and 403s on the owner-only routers. There is no
+    staff-provisioning API yet, so the staff row is inserted directly - the
+    same way test_rls.py seeds its tenants."""
+    owner_user_id = uuid.uuid4()
+    owner_token = _make_token(owner_user_id)
+    signup = await _signup(
+        client,
+        token=owner_token,
+        slug=f"staff-{uuid.uuid4().hex[:8]}",
+        name="Staff Co",
+    )
+    assert signup.status_code == 201
+    tenant_id = uuid.UUID(signup.json()["tenant_id"])
+
+    staff_user_id = uuid.uuid4()
+    await superuser_conn.execute(
+        "insert into users (id, tenant_id, role) values ($1, $2, 'staff')",
+        staff_user_id,
+        tenant_id,
+    )
+    staff_token = _make_token(staff_user_id)
+    conversation_id = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+
+    headers = {"Authorization": f"Bearer {staff_token}"}
+    convs = await client.get("/api/conversations", headers=headers)
+    assert convs.status_code == 200
+
+    takeover = await client.post(f"/api/conversations/{conversation_id}/takeover", headers=headers)
+    assert takeover.status_code == 204
+
+    for path in ("/api/knowledge/records", "/api/tenants/me", "/api/pricing/rules"):
+        denied = await client.get(path, headers=headers)
+        assert denied.status_code == 403, f"{path}: expected 403, got {denied.status_code}"
+
+    me = await client.get("/api/tenants/me", headers={"Authorization": f"Bearer {owner_token}"})
+    assert me.status_code == 200
+
+
 # --- platform admin --------------------------------------------------------------
 
 

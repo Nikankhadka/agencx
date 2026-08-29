@@ -143,7 +143,15 @@ async def run(state: AgentState) -> dict[str, Any]:
         handoff = state.get("draft_response") or HANDOFF_MESSAGE
         if not state.get("draft_response"):
             writer({"type": "refusal", "text": handoff})
-        return {"draft_response": handoff, "draft_deterministic": True, "escalated": True}
+        # An escalation upstream (price_gate/inspection) already named the
+        # author; the agent-tool handoff is the escalation node's text, so it
+        # claims it here.
+        return {
+            "draft_response": handoff,
+            "draft_deterministic": True,
+            "escalated": True,
+            "author_node": state.get("author_node") or "escalation",
+        }
 
     violations = state.get("price_violations") or state.get("inspection_violations")
     clear_violations: dict[str, Any] = {}
@@ -158,7 +166,12 @@ async def run(state: AgentState) -> dict[str, Any]:
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
-        return {"draft_response": text, "draft_deterministic": False, **clear_violations}
+        return {
+            "draft_response": text,
+            "draft_deterministic": False,
+            **clear_violations,
+            "author_node": "draft",
+        }
 
     if route == "knowledge":
         retrieved_chunks = state.get("retrieved_chunks", [])
@@ -168,6 +181,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_response": _KNOWLEDGE_REFUSAL,
                 "retrieved_chunks": [],
                 "draft_deterministic": True,
+                "author_node": "draft",
             }
         citations = [
             {"index": i + 1, "source": citation_source(c), "snippet": c["content"][:200]}
@@ -190,7 +204,12 @@ async def run(state: AgentState) -> dict[str, Any]:
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
-        return {"draft_response": text, "retrieved_chunks": retrieved_chunks, **clear_violations}
+        return {
+            "draft_response": text,
+            "retrieved_chunks": retrieved_chunks,
+            **clear_violations,
+            "author_node": "draft",
+        }
 
     if route == "recommendation":
         selections = state.get("selections", [])
@@ -200,6 +219,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_response": _RECOMMENDATION_REFUSAL,
                 "selections": [],
                 "draft_deterministic": True,
+                "author_node": "draft",
             }
         system_prompt = _build_recommendation_prompt(selections, violations)
         messages = [
@@ -207,7 +227,12 @@ async def run(state: AgentState) -> dict[str, Any]:
             {"role": "user", "content": query},
         ]
         text = await stream_draft(ctx.provider, messages)
-        return {"draft_response": text, "selections": selections, **clear_violations}
+        return {
+            "draft_response": text,
+            "selections": selections,
+            **clear_violations,
+            "author_node": "draft",
+        }
 
     if route == "quoting":
         engine_quote = state.get("engine_quote")
@@ -217,6 +242,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_response": _QUOTING_NO_CANDIDATES,
                 "selections": [],
                 "draft_deterministic": True,
+                "author_node": "draft",
             }
         if not engine_quote.get("quote_id"):
             import json as _json
@@ -247,6 +273,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "selections": state.get("selections", []),
             "engine_quote": engine_quote,
             **clear_violations,
+            "author_node": "draft",
         }
 
     if route == "order_status":
@@ -258,6 +285,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_response": _ORDER_ASK_FOR_CODE,
                 "draft_deterministic": True,
                 "lookup": {"ref_code": None, "found": False},
+                "author_node": "draft",
             }
         if not lookup.get("found"):
             text = _ORDER_NOT_FOUND_TEMPLATE.format(ref_code=ref_code)
@@ -266,6 +294,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "draft_response": text,
                 "draft_deterministic": True,
                 "lookup": {"ref_code": ref_code, "found": False},
+                "author_node": "draft",
             }
         text = _ORDER_FOUND_TEMPLATE.format(
             kind=lookup.get("kind", ""),
@@ -273,7 +302,12 @@ async def run(state: AgentState) -> dict[str, Any]:
             status=lookup.get("status", ""),
         )
         writer({"type": "token", "text": text})
-        return {"draft_response": text, "draft_deterministic": True, "lookup": lookup}
+        return {
+            "draft_response": text,
+            "draft_deterministic": True,
+            "lookup": lookup,
+            "author_node": "draft",
+        }
 
     import logging as _logging
 
@@ -285,7 +319,12 @@ async def run(state: AgentState) -> dict[str, Any]:
         {"role": "user", "content": query},
     ]
     text = await stream_draft(ctx.provider, messages)
-    return {"draft_response": text, "draft_deterministic": False, **clear_violations}
+    return {
+        "draft_response": text,
+        "draft_deterministic": False,
+        **clear_violations,
+        "author_node": "draft",
+    }
 
 
 def citation_source(chunk: dict[str, Any]) -> str:

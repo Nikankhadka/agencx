@@ -71,11 +71,15 @@ class EvalDashboard(BaseModel):
 async def get_cost_dashboard(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> CostDashboard:
-    return CostDashboard(**await controller.cost_dashboard(tenant_id=str(admin.tenant_id)))
+    return CostDashboard(
+        **await controller.cost_dashboard(tenant_id=str(admin.tenant_id), role=admin.role)
+    )
 
 
 @router.get("/evals", response_model=EvalDashboard)
 async def get_eval_dashboard(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
 ) -> EvalDashboard:
-    return EvalDashboard(**await controller.eval_dashboard(tenant_id=str(admin.tenant_id)))
+    return EvalDashboard(
+        **await controller.eval_dashboard(tenant_id=str(admin.tenant_id), role=admin.role)
+    )

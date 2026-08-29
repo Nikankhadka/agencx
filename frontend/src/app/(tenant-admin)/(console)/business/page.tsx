@@ -12,10 +12,9 @@ import { useAuth } from "@/components/AuthProvider";
  * and Plan as rows here, so growth costs a row rather than a re-cut of the
  * navigation.
  *
- * Two rows, the same call `/settings` made when it shipped: the prototype's
- * other rows (Schedule, Money, Plan) open onto Stage 2 machinery that does not
- * exist, and a row that opens onto nothing is worse than an absent one (PRD,
- * "never build dead surfaces"). They are absent, not disabled.
+ * The page stays intentionally shallow: page presentation, offers, and the
+ * supporting business details are distinct jobs, while sign-out remains a
+ * single action rather than becoming a misleading account settings screen.
  *
  * Sign-out lives here because the hamburger drawer that used to hold it is
  * gone (E-1): on a phone the sidebar never renders, and sign-out must stay
@@ -28,16 +27,22 @@ export default function BusinessPage() {
       <ScreenTopbar title="Business" back={false} />
       <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread">
         <RowLink
-          href="/business/booking"
-          label="Booking page"
+          href="/business/page"
+          label="Business page"
           icon="arrow_forward"
-          detail="What customers see, and the link to it"
+          detail="What customers see and how it looks"
         />
         <RowLink
-          href="/settings"
-          label="Settings"
+          href="/business/offerings"
+          label="What you offer"
+          icon="sell"
+          detail="The services and prices shown on your page"
+        />
+        <RowLink
+          href="/business/details"
+          label="Business details"
           icon="settings"
-          detail="What your customers are told"
+          detail="Knowledge, ABN, and tax details"
         />
         <button
           type="button"

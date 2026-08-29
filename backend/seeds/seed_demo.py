@@ -1,9 +1,9 @@
 """Demo world seed: both tenants, auth users, membership, and realistic
-conversations/escalations/costs - the data behind docs/archive/DEMO.md's walkthrough.
+conversations/escalations/costs - the data the demo surfaces show.
 
-Run with ``uv run python -m seeds.seed_demo`` (after scripts/demo.sh has
-started GoTrue + the DB). It is wipe-and-recreate idempotent: re-running
-resets the whole demo world to a known state.
+Run with ``make dev && make seed`` (or ``./scripts/dev.sh --seed``). It is
+wipe-and-recreate idempotent: re-running resets the whole demo world to a
+known state.
 
 Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
 
@@ -47,12 +47,10 @@ from uuid import UUID, uuid4
 
 import httpx
 
-from app.ingestion.pipeline import ingest_catalog_items, process_document
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
-from app.shared.storage import document_key, get_storage
-from seeds import seed_tenant1_phoneshop
+from seeds import _helpers, seed_tenant1_phoneshop
 from seeds.supabase_keys import mint_key
 
 if TYPE_CHECKING:
@@ -243,100 +241,61 @@ async def _gotrue_find_user_by_email(
 # --- Lumident (Tenant 2) --------------------------------------------------------
 
 
-async def _wipe_lumident(conn: AppConnection) -> None:
-    existing_id = await conn.fetchval("select id from tenants where slug = $1", LUMIDENT_SLUG)
-    if existing_id is not None:
-        await conn.execute("delete from tenants where id = $1", existing_id)
-
-
 async def _seed_lumident_core() -> UUID:
     tenant_id = uuid4()
-    async with db.tenant_context(None, "service") as conn:
-        await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
-            tenant_id,
-            LUMIDENT_SLUG,
-            LUMIDENT_NAME,
-        )
-        await conn.execute(
-            "insert into tenant_config (tenant_id, tone, escalation_threshold, brand, config) "
-            "values ($1, 'professional', 0.5, $2, $3)",
-            tenant_id,
-            json.dumps({"display_name": LUMIDENT_NAME, "accent": "#2C7A7B"}),
-            json.dumps(
-                {
-                    "customer": {
-                        "greeting": (
-                            "Hello, and welcome to Lumident Dental. I can help you "
-                            "understand a treatment, estimate a procedure's cost, or "
-                            "check an upcoming appointment - how can I help?"
-                        ),
-                        "starter_questions": [
-                            "How much is a standard cleaning?",
-                            "What does a tooth-colored filling cost?",
-                            "Do you take walk-in emergencies?",
-                        ],
-                    }
-                }
-            ),
-        )
+    await _helpers.insert_tenant_core(
+        tenant_id=tenant_id,
+        slug=LUMIDENT_SLUG,
+        name=LUMIDENT_NAME,
+        tone="professional",
+        brand={"display_name": LUMIDENT_NAME, "accent": "#2C7A7B"},
+        config={
+            "customer": {
+                "greeting": (
+                    "Hello, and welcome to Lumident Dental. I can help you "
+                    "understand a treatment, estimate a procedure's cost, or "
+                    "check an upcoming appointment - how can I help?"
+                ),
+                "starter_questions": [
+                    "How much is a standard cleaning?",
+                    "What does a tooth-colored filling cost?",
+                    "Do you take walk-in emergencies?",
+                ],
+            }
+        },
+    )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        for name, description, price_cents in LUMIDENT_CATALOG:
-            await conn.execute(
-                "insert into catalog_items (tenant_id, name, description, price_cents) "
-                "values ($1, $2, $3, $4)",
-                tenant_id,
-                name,
-                description,
-                price_cents,
-            )
-        for code, label, unit_amount_cents, unit in LUMIDENT_PRICING_RULES:
-            await conn.execute(
-                "insert into pricing_rules (tenant_id, code, label, unit_amount_cents, unit) "
-                "values ($1, $2, $3, $4, $5)",
-                tenant_id,
-                code,
-                label,
-                unit_amount_cents,
-                unit,
-            )
-        for i in range(6):
-            await conn.execute(
-                "insert into orders (tenant_id, ref_code, kind, customer_ref, status, details) "
-                "values ($1, $2, 'appointment', $3, $4, $5)",
-                tenant_id,
-                f"APPT-{3001 + i}",
-                f"patient-{i + 1}",
-                APPOINTMENT_STATUSES[i % len(APPOINTMENT_STATUSES)],
-                json.dumps({"provider": "dr-lumident", "duration_min": 45}),
-            )
+        await _helpers.insert_offerings(conn, tenant_id, LUMIDENT_CATALOG)
+        await _helpers.insert_pricing_rules(conn, tenant_id, LUMIDENT_PRICING_RULES)
+        await _helpers.insert_orders(
+            conn,
+            tenant_id,
+            [
+                (
+                    f"APPT-{3001 + i}",
+                    "appointment",
+                    f"patient-{i + 1}",
+                    APPOINTMENT_STATUSES[i % len(APPOINTMENT_STATUSES)],
+                    {"provider": "dr-lumident", "duration_min": 45},
+                )
+                for i in range(6)
+            ],
+        )
     return tenant_id
 
 
 async def _seed_lumident_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
-    docs = [
-        ("services.md", "other", LUMIDENT_SERVICES_MD),
-        ("faq.md", "faq", LUMIDENT_FAQ_MD),
-    ]
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        for filename, doc_type, content in docs:
-            document_id = uuid4()
-            await get_storage().put(
-                document_key(tenant_id, document_id, ".md"), content.encode("utf-8")
-            )
-            await conn.execute(
-                "insert into documents (id, tenant_id, filename, doc_type, status) "
-                "values ($1, $2, $3, $4, 'pending')",
-                document_id,
-                tenant_id,
-                filename,
-                doc_type,
-            )
-            await process_document(
-                conn, tenant_id=tenant_id, document_id=document_id, embedder=embedder
-            )
-        await ingest_catalog_items(conn, tenant_id=tenant_id, embedder=embedder)
+        await _helpers.ingest_documents(
+            conn,
+            tenant_id,
+            [
+                ("services.md", "other", LUMIDENT_SERVICES_MD),
+                ("faq.md", "faq", LUMIDENT_FAQ_MD),
+            ],
+            embedder,
+        )
 
 
 # --- Membership: users + platform_admins ---------------------------------------
@@ -392,7 +351,7 @@ def _bytefix_conversations(now: datetime) -> list[dict[str, Any]]:
                     "A standard aftermarket screen replacement for the Galaxy S21 is $129, "
                     "or $179 if you'd prefer an original OEM display. Both are same-day. "
                     "Would you like me to put together a quote?",
-                    "quoting",
+                    "draft",
                     {
                         "inspection": {
                             "grounding": {
@@ -437,7 +396,7 @@ def _bytefix_conversations(now: datetime) -> list[dict[str, Any]]:
                     "Yes - every repair is covered by a 90-day warranty against defects in parts "
                     "and workmanship [1]. If the same issue recurs within that window, we'll fix "
                     "it at no charge [1].",
-                    "knowledge",
+                    "draft",
                     {
                         "inspection": {
                             "grounding": {
@@ -484,7 +443,7 @@ def _bytefix_conversations(now: datetime) -> list[dict[str, Any]]:
                     "assistant",
                     "I found it - repair R-1001 is currently in progress and we expect it to be "
                     "ready for pickup later today. We'll text you the moment it's finished.",
-                    "order_status",
+                    "draft",
                     {
                         "inspection": {
                             "grounding": {
@@ -594,7 +553,7 @@ def _lumident_conversations(now: datetime) -> list[dict[str, Any]]:
                     "A standard cleaning is $120. As a new patient you'd also start with a $95 "
                     "comprehensive exam, which includes an oral cancer screening and a treatment "
                     "plan. Would you like me to quote both together?",
-                    "quoting",
+                    "draft",
                     {
                         "inspection": {
                             "grounding": {
@@ -634,7 +593,7 @@ def _lumident_conversations(now: datetime) -> list[dict[str, Any]]:
                     "Yes - we reserve same-day emergency slots every day for severe pain, trauma, "
                     "or a knocked-out tooth. Call ahead if you can, but we'll "
                     "see you either way [1].",
-                    "knowledge",
+                    "draft",
                     {
                         "inspection": {
                             "grounding": {
@@ -766,14 +725,7 @@ async def seed(
     ``settings``; tests inject a fake returning deterministic UUIDs so the
     full seed runs GoTrue-free.
     """
-    created_pool = False
-    try:
-        db.get_pool()
-    except RuntimeError:
-        await db.create_pool()
-        created_pool = True
-
-    try:
+    async with _helpers.seed_pool():
         resolved_embedder = embedder or get_embedder(get_settings())
         user_factory = create_auth_user or _make_gotrue_create_auth_user()
 
@@ -792,7 +744,7 @@ async def seed(
 
         # 3. Lumident (Tenant 2) - wipe + recreate, config + catalog + knowledge.
         async with db.tenant_context(None, "platform_admin") as conn:
-            await _wipe_lumident(conn)
+            await _helpers.wipe_tenant(conn, LUMIDENT_SLUG)
         lumident_id = await _seed_lumident_core()
         await _seed_lumident_knowledge(lumident_id, resolved_embedder)
         print(f"seeded lumident (tenant_id={lumident_id})")
@@ -823,9 +775,6 @@ async def seed(
             "lumident_owner": lumident_owner,
             "founder": founder,
         }
-    finally:
-        if created_pool:
-            await db.close_pool()
 
 
 def main() -> None:

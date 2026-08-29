@@ -18,6 +18,7 @@ replaced by a single Vercel project running two container services.
 | Chat LLM | Google AI Studio + Groq + OpenRouter | $0 |
 | Embeddings | Google `text-embedding-004` | $0 / credits |
 | Reranker | Cohere | $0 free tier |
+| Storefront media | Cloudinary signed Upload API | free tier during Stage 1 |
 | Login-in-chat email | SMTP relay (Brevo) or `console` | $0 |
 | CI/CD | GitHub Actions (gate) + Vercel Git integration (deploy) | $0 |
 
@@ -217,6 +218,11 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
 - Cohere key -> `COHERE_API_KEY` (rerank).
 - Optional: Groq key (`LLM_FALLBACK_API_KEY`) and OpenRouter key
   (`LLM_FAILOVER_API_KEY`) for the two failover legs.
+- Cloudinary: set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
+  `CLOUDINARY_API_SECRET` as backend-only Vercel environment variables. Never
+  expose the API secret to the frontend or commit it. After deployment, run
+  `python -m scripts.migrate_tenant_covers` once to migrate legacy covers and
+  verify its source/destination count before removing the legacy table.
 - Email: **use Brevo**, not Resend, until B-2 buys `agencx.app`. Resend delivers
   only to your own account email until you verify a domain you own, which makes
   it useless for showing anyone else. Brevo allows a verified *single sender*

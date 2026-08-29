@@ -73,4 +73,4 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     writer({"type": "refusal", "text": HANDOFF_MESSAGE})
     writer({"type": "handoff"})
-    return {"escalated": True, "draft_response": HANDOFF_MESSAGE}
+    return {"escalated": True, "draft_response": HANDOFF_MESSAGE, "author_node": "escalation"}

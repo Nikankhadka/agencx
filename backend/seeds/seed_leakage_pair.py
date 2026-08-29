@@ -21,9 +21,10 @@ from uuid import UUID, uuid4
 
 from app.shared import db
 from app.shared.config import get_settings
+from seeds import _helpers
 
 if TYPE_CHECKING:
-    from app.shared.db import AppConnection
+    pass
 
 SLUG_A = "leakpair-a"
 SLUG_B = "leakpair-b"
@@ -47,21 +48,8 @@ SECRETS_A = _secrets("ZX-ALPHA")
 SECRETS_B = _secrets("ZX-BRAVO")
 
 
-async def _wipe_existing(conn: AppConnection, slug: str) -> None:
-    existing_id = await conn.fetchval("select id from tenants where slug = $1", slug)
-    if existing_id is not None:
-        await conn.execute("delete from tenants where id = $1", existing_id)
-
-
 async def _seed_tenant(tenant_id: UUID, slug: str, name: str, secrets: dict[str, str]) -> None:
-    async with db.tenant_context(None, "service") as conn:
-        await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
-            tenant_id,
-            slug,
-            name,
-        )
-        await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
+    await _helpers.insert_tenant_core(tenant_id=tenant_id, slug=slug, name=name)
 
     embedding_dim = get_settings().embedding_dim
     zero_embedding = [0.0] * embedding_dim
@@ -83,7 +71,7 @@ async def _seed_tenant(tenant_id: UUID, slug: str, name: str, secrets: dict[str,
         )
 
         item_id = await conn.fetchval(
-            "insert into catalog_items (tenant_id, name, description, price_cents) "
+            "insert into offerings (tenant_id, name, description, price_cents) "
             "values ($1, $2, $3, 4200) returning id",
             tenant_id,
             f"Secret Widget {secrets['catalog_item']}",
@@ -122,26 +110,16 @@ async def _seed_tenant(tenant_id: UUID, slug: str, name: str, secrets: dict[str,
 
 async def seed() -> tuple[UUID, UUID]:
     """Seed (or re-seed) both leakage-pair tenants. Returns (tenant_a_id, tenant_b_id)."""
-    created_pool = False
-    try:
-        db.get_pool()
-    except RuntimeError:
-        await db.create_pool()
-        created_pool = True
-
-    try:
+    async with _helpers.seed_pool():
         async with db.tenant_context(None, "platform_admin") as conn:
-            await _wipe_existing(conn, SLUG_A)
-            await _wipe_existing(conn, SLUG_B)
+            await _helpers.wipe_tenant(conn, SLUG_A)
+            await _helpers.wipe_tenant(conn, SLUG_B)
 
         tenant_a_id, tenant_b_id = uuid4(), uuid4()
         await _seed_tenant(tenant_a_id, SLUG_A, TENANT_NAME_A, SECRETS_A)
         await _seed_tenant(tenant_b_id, SLUG_B, TENANT_NAME_B, SECRETS_B)
         print(f"seeded leakage pair: A={tenant_a_id} ({SLUG_A}), B={tenant_b_id} ({SLUG_B})")
         return tenant_a_id, tenant_b_id
-    finally:
-        if created_pool:
-            await db.close_pool()
 
 
 def main() -> None:

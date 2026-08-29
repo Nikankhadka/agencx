@@ -189,14 +189,18 @@ async def test_chat_persists_customer_and_assistant_messages(
     conversation_id = events[0]["conversation_id"]
 
     rows = await superuser_conn.fetch(
-        "select role, content from messages where tenant_id = $1 and conversation_id = $2 "
-        "order by created_at",
+        "select role, content, agent_node from messages where tenant_id = $1 "
+        "and conversation_id = $2 order by created_at",
         tenant_id,
         uuid.UUID(conversation_id),
     )
     assert [r["role"] for r in rows] == ["customer", "assistant"]
     assert rows[0]["content"] == "What are your hours?"
     assert rows[1]["content"] == "Sure, here's the answer [1]."
+    # F-3: the trace's author column is populated by the graph, not only by
+    # seeds - this knowledge turn went through the search tool, so the draft
+    # node authored the answer.
+    assert rows[1]["agent_node"] == "draft"
 
 
 async def test_chat_refuses_when_nothing_is_relevant(
@@ -414,6 +418,17 @@ async def test_chat_persists_tool_calls_and_cost_logs_for_order_status_turn(
     assert json.loads(tool_call_row["result"])["found"] is True
     assert tool_call_row["success"] is True
     assert tool_call_row["latency_ms"] is not None
+
+    assistant_row = await superuser_conn.fetchrow(
+        "select agent_node from messages where tenant_id = $1 and conversation_id = $2 "
+        "and role = 'assistant'",
+        tenant_id,
+        uuid.UUID(conversation_id),
+    )
+    assert assistant_row is not None
+    # F-3: a tool-driven turn is authored by the draft node, and the persisted
+    # row now says so (it used to be NULL for every production message).
+    assert assistant_row["agent_node"] == "draft"
 
     cost_rows = await superuser_conn.fetch(
         "select model, input_tokens, output_tokens, cost_usd from cost_logs "
