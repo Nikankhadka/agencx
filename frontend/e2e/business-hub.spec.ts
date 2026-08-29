@@ -62,6 +62,14 @@ test.describe("Business hub", () => {
     const summary = page.getByRole("heading", { name: "What we offer" });
     await expect(summary).toBeVisible();
     await expect(page.getByText("iPhone 11 (Refurbished, 64GB)")).toBeVisible();
+    await expect(page.getByText("$249.00", { exact: true })).toBeVisible();
+
+    const sectionColors = await page
+      .locator('[data-testid="offerings-summary"], [data-testid="booking-links"]')
+      .evaluateAll((sections) =>
+        sections.map((section) => getComputedStyle(section).backgroundColor),
+      );
+    expect(new Set(sectionColors).size).toBe(1);
   });
 
   test("an owner adds, edits, and removes an offering, and the storefront follows", async ({

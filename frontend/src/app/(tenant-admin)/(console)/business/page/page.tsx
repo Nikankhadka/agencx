@@ -97,30 +97,59 @@ export default function BusinessPageScreen() {
             </p>
           ) : null}
           {page?.offerings.length ? (
-            <section className="mt-5 rounded-card border border-hairline bg-surface-container p-4">
+            <section
+              data-testid="offerings-summary"
+              className="mt-5 rounded-card bg-accent-a06 p-4"
+            >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-row-label font-medium text-text">What we offer</h3>
-                <Link href="/business/offerings" className="text-chip font-medium text-accent">Manage</Link>
+                <h3 className="text-eyebrow font-medium uppercase text-ink-a40">
+                  What we offer
+                </h3>
+                <Link
+                  href="/business/offerings"
+                  className="whitespace-nowrap text-chip font-medium text-accent"
+                >
+                  Manage
+                </Link>
               </div>
               <div className="mt-3 divide-y divide-hairline">
                 {page.offerings.map((offering) => (
-                  <div key={offering.name} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                    {offering.media?.type === "image" ? (
-                      <img src={offering.media.url} alt="" className="size-12 shrink-0 rounded-field object-cover" />
-                    ) : offering.media?.type === "video" && offering.media.poster_url ? (
-                      <img src={offering.media.poster_url} alt="" className="size-12 shrink-0 rounded-field object-cover" />
-                    ) : null}
+                  <div
+                    key={offering.name}
+                    className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-accent-a09 text-accent">
+                      {offering.media?.type === "image" ? (
+                        <img
+                          src={offering.media.url}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : offering.media?.type === "video" &&
+                        offering.media.poster_url ? (
+                        <img
+                          src={offering.media.poster_url}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <Icon name="sell" size={18} />
+                      )}
+                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-body-sm text-text">{offering.name}</span>
-                      {offering.category ? (
-                        <span className="mt-0.5 block truncate text-meta text-ink-a40">{offering.category}</span>
+                      {offering.price_cents !== null || offering.category ? (
+                        <span className="mt-0.5 block truncate text-meta text-ink-a40 tabular-nums">
+                          {offering.price_cents !== null
+                            ? `$${(offering.price_cents / 100).toFixed(2)}`
+                            : null}
+                          {offering.price_cents !== null && offering.category
+                            ? " · "
+                            : null}
+                          {offering.category}
+                        </span>
                       ) : null}
                     </span>
-                    {offering.price_cents !== null ? (
-                      <span className="text-body-sm font-medium text-text tabular-nums">
-                        ${(offering.price_cents / 100).toFixed(2)}
-                      </span>
-                    ) : null}
                   </div>
                 ))}
               </div>
@@ -140,7 +169,10 @@ export default function BusinessPageScreen() {
         </div>
 
         {/* `.bk-entry-wrap` - the tinted card holding the link and the tiles. */}
-        <section className="mx-gutter mt-3.5 rounded-card bg-accent-a06 p-4">
+        <section
+          data-testid="booking-links"
+          className="mx-gutter mt-3.5 rounded-card bg-accent-a06 p-4"
+        >
           <h3 className="mb-1 text-chip font-medium text-accent">
             How customers reach you
           </h3>
