@@ -36,7 +36,7 @@ test.describe("the public storefront", () => {
     // The page leads with who the business is, not with a chat box.
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
 
-    await page.getByRole("button", { name: "Ask a question" }).click();
+    await page.getByRole("button", { name: "Chat with Bytefix" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await expect(sheet).toContainText("Bytefix");
@@ -44,10 +44,10 @@ test.describe("the public storefront", () => {
 
   test("offers one customer-facing chat entry", async ({ page }) => {
     await page.goto("/bytefix");
-    const chatEntries = page
-      .locator("main > header button, main > section button")
-      .filter({ hasText: /^(Ask a question|Talk to Bytefix|Ask about this|Chat with Bytefix)/ });
+    const chatEntries = page.getByRole("button", { name: "Chat with Bytefix" });
     await expect(chatEntries).toHaveCount(1);
+    await expect(chatEntries).toHaveText("");
+    await expect(page.getByRole("button", { name: "Ask a question" })).toHaveCount(0);
   });
 
   test("an unknown slug still gets the calm not-found page", async ({ page }) => {

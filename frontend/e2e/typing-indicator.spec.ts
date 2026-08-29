@@ -29,7 +29,7 @@ const sse = (...events: object[]) =>
 /** Land on the storefront and open the conversation sheet (M-4). */
 async function openChat(page: Page) {
   await page.goto(CUSTOMER_URL);
-  await page.getByRole("button", { name: "Ask a question" }).click();
+  await page.getByRole("button", { name: "Chat with Bytefix" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 }
 

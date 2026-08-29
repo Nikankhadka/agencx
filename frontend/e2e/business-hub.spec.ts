@@ -103,12 +103,13 @@ test.describe("Business hub", () => {
 
     // The price the owner typed, on the page a customer actually reads - and
     // exactly as typed. This is the assertion the money rule lives or dies by.
+    // The offering is a row button, not a heading, on the catalogue layout.
     await page.goto("/bytefix");
     // `.first()`: `next dev` streams this page, so for a beat the server tree
     // and the client tree are both in the DOM - the same caveat
     // typing-indicator.spec.ts documents for the composer.
     await expect(
-      page.getByRole("heading", { name: "M1 test offering" }).first(),
+      page.getByRole("button", { name: /M1 test offering/ }).first(),
     ).toBeVisible();
     await expect(page.getByRole("main").last()).toContainText("$89.50");
     const card = page.getByRole("button", { name: /M1 test offering/ });

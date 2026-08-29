@@ -113,115 +113,194 @@ export function Storefront({
   const categories = Array.from(new Set(storefront.offerings.map((item) => item.category).filter(Boolean))) as string[];
   const hasUncategorized = storefront.offerings.some((item) => !item.category);
   const groupedCategories = categories.length > 1 ? [...categories, ...(hasUncategorized ? ["More"] : [])] : ["More"];
+  const sections = groupedCategories.map((category, index) => ({
+    id: `offer-category-${index + 1}`,
+    label: categories.length <= 1 ? "What we offer" : category,
+    offerings: storefront.offerings.filter(
+      (item) => categories.length <= 1 || (item.category || "More") === category,
+    ),
+  }));
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[720px] bg-surface pb-8">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface/95 px-gutter py-3 backdrop-blur">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <BrandMark logoUrl={logoUrl} name={storefront.name} />
-          <span className="truncate text-title-3 font-semibold text-text">{storefront.name}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={() => void share()} className="rounded-chip border border-border px-3 py-2 text-chip font-medium text-text">
-            {shared ? "Copied" : "Share"}
-          </button>
-          <button
-            type="button"
-            onClick={() => openChat()}
-            className="flex items-center gap-1.5 rounded-chip bg-accent px-3 py-2 text-chip font-medium text-text-inverse active:opacity-85"
-          >
-            <Icon name="forum" size={15} />
-            Ask a question
-          </button>
+    <main className="min-h-dvh w-full bg-surface pb-8">
+      <header className="sticky top-0 z-10 h-16 border-b border-hairline bg-surface/95 backdrop-blur">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-gutter">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <BrandMark logoUrl={logoUrl} name={storefront.name} />
+            <span className="truncate text-title-3 font-semibold text-text">{storefront.name}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void share()}
+              aria-label={shared ? "Link copied" : "Share page"}
+              title={shared ? "Link copied" : "Share page"}
+              className="grid size-11 place-items-center rounded-full border border-border text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
+            >
+              <Icon name={shared ? "check_circle" : "share"} size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={openChat}
+              aria-label={`Chat with ${storefront.name}`}
+              title={`Chat with ${storefront.name}`}
+              className="grid size-11 place-items-center rounded-full bg-accent text-text-inverse transition-colors duration-(--duration-fast) hover:bg-accent-hover active:bg-accent-active"
+            >
+              <Icon name="forum" size={20} />
+            </button>
+          </div>
         </div>
       </header>
 
-      {storefront.has_cover ? (
-        <img
-          src={storefront.cover_url || `${API_URL}/api/public/tenant/${encodeURIComponent(slug)}/cover`}
-          alt=""
-          className="h-56 w-full object-cover sm:h-72"
-        />
-      ) : null}
-
-      <section className="px-gutter pb-7 pt-8">
-        <h1 className="text-display-sm font-bold tracking-[var(--text-display-sm-tracking)] text-text">
-          {storefront.name}
-        </h1>
-        {storefront.tagline ? (
-          <p className="mt-3 max-w-prose text-prose text-text-secondary">{storefront.tagline}</p>
+      <div className="mx-auto max-w-7xl md:px-gutter md:pt-6">
+        {storefront.has_cover ? (
+          <img
+            src={storefront.cover_url || `${API_URL}/api/public/tenant/${encodeURIComponent(slug)}/cover`}
+            alt=""
+            fetchPriority="high"
+            className="h-40 w-full object-cover md:h-80 md:rounded-lg"
+          />
         ) : null}
-      </section>
 
-      {storefront.offerings.length > 0 ? (
-        <section className="border-t border-hairline px-gutter py-7">
-          {categories.length > 1 ? (
-            <nav aria-label="Offer categories" className="-mx-gutter mb-4 flex gap-2 overflow-x-auto px-gutter pb-1">
-              {groupedCategories.map((category) => <span key={category} className="shrink-0 rounded-chip bg-surface-container px-3 py-1.5 text-chip text-text-secondary">{category}</span>)}
+        <section className="px-gutter py-7 text-center md:px-0 md:py-9 md:text-left">
+          <h1 className="min-w-0 wrap-anywhere text-title-1 font-bold text-text">
+            {storefront.name}
+          </h1>
+          {storefront.tagline ? (
+            <p className="mx-auto mt-2 max-w-prose text-body text-text-secondary md:mx-0">
+              {storefront.tagline}
+            </p>
+          ) : null}
+          {Object.keys(storefront.links).length > 0 ? (
+            <nav aria-label={`${storefront.name} links`} className="mt-4 flex flex-wrap justify-center gap-2 md:justify-start">
+              {Object.entries(storefront.links).map(([key, href]) => (
+                <a
+                  key={key}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-chip border border-border px-3 text-chip font-medium text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
+                >
+                  {linkLabel(key)}
+                  <Icon name="open_in_new" size={13} />
+                </a>
+              ))}
             </nav>
           ) : null}
-          {groupedCategories.map((category) => (
-            <div key={category} className="mb-6 last:mb-0">
-              <h2 className="text-title-2 font-semibold text-text">{categories.length <= 1 ? "What we offer" : category}</h2>
-              <div className="mt-4 divide-y divide-hairline rounded-card border border-hairline bg-surface">
-            {storefront.offerings.filter((item) => categories.length <= 1 || (item.category || "More") === category).map((offering) => (
-              <button key={offering.id} type="button" onClick={() => setSelected(offering)} className="block w-full p-4 text-left hover:bg-surface-container">
-                {offering.media?.type === "image" ? (
-                  <img src={offering.media.url} alt="" className="mb-3 h-32 w-full rounded-field object-cover" />
-                ) : offering.media?.type === "video" ? (
-                  offering.media.poster_url ? (
-                    <div className="relative mb-3">
-                      <img src={offering.media.poster_url} alt="" className="h-32 w-full rounded-field object-cover" />
-                      <span className="absolute bottom-2 left-2 rounded-chip bg-scrim px-2 py-1 text-meta text-text-inverse">Video</span>
-                    </div>
-                  ) : (
-                    <div className="mb-3 rounded-field bg-surface-container p-3 text-meta text-text-secondary">Video</div>
-                  )
-                ) : null}
-                <div className="flex items-baseline justify-between gap-4">
-                  <h3 className="text-card-hl font-medium text-text">{offering.name}</h3>
-                  {offering.price_cents !== null ? (
-                    <span
-                      data-testid="offering-price"
-                      className="shrink-0 text-card-hl font-medium text-text tabular-nums"
-                    >
-                      {priceLabel(offering.price_cents)}
-                    </span>
-                  ) : null}
-                </div>
-                {offering.description ? (
-                  <p className="mt-1.5 text-body-sm text-text-secondary">{offering.description}</p>
-                ) : null}
-              </button>
-            ))}
-              </div>
-            </div>
-          ))}
         </section>
-      ) : null}
+      </div>
 
-      {Object.keys(storefront.links).length > 0 ? (
-        <nav aria-label={`${storefront.name} links`} className="border-t border-hairline px-gutter py-7">
-          <h2 className="text-title-2 font-semibold text-text">Find us online</h2>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {Object.entries(storefront.links).map(([key, href]) => (
-              <a
-                key={key}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-chip border border-border px-3 py-2 text-chip font-medium text-text hover:bg-surface-container"
-              >
-                {linkLabel(key)}
-                <Icon name="open_in_new" size={13} />
-              </a>
-            ))}
+      {storefront.offerings.length > 0 ? (
+        <div className="border-t border-hairline">
+          {sections.length > 1 ? (
+            <nav
+              aria-label="Offer categories"
+              className="sticky top-16 z-10 flex gap-2 overflow-x-auto border-b border-hairline bg-surface/95 px-gutter py-3 backdrop-blur lg:hidden"
+            >
+              {sections.map((section) => (
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className="min-h-11 shrink-0 whitespace-nowrap rounded-chip bg-surface-container px-4 py-3 text-chip font-medium text-text-secondary active:bg-surface-container-high"
+                >
+                  {section.label}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+
+          <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-4 lg:gap-10 lg:px-gutter">
+            {sections.length > 1 ? (
+              <aside className="hidden lg:col-span-1 lg:block">
+                <nav aria-label="Offer categories" className="sticky top-24 py-8">
+                  <p className="mb-3 text-title-3 font-semibold text-text">Browse</p>
+                  <ul className="space-y-1">
+                    {sections.map((section) => (
+                      <li key={section.id}>
+                        <a
+                          href={`#${section.id}`}
+                          className="block min-h-11 rounded-field px-3 py-3 text-body-sm text-text-secondary transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
+                        >
+                          {section.label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              </aside>
+            ) : null}
+
+            <div className={sections.length > 1 ? "lg:col-span-3" : "lg:col-span-4"}>
+              {sections.map((section) => (
+                <section
+                  key={section.id}
+                  id={section.id}
+                  className="scroll-mt-32 border-b border-hairline px-gutter py-7 last:border-b-0 lg:px-0 lg:py-8"
+                >
+                  <h2 className="text-title-2 font-semibold text-text">{section.label}</h2>
+                  <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
+                    {section.offerings.map((offering) => (
+                      <button
+                        key={offering.id}
+                        type="button"
+                        onClick={() => setSelected(offering)}
+                        className="flex min-h-36 w-full items-start justify-between gap-4 border-b border-hairline py-5 text-left transition-colors duration-(--duration-fast) last:border-b-0 hover:bg-surface-container active:bg-surface-container-high sm:px-3"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-card-hl font-semibold text-text">{offering.name}</span>
+                          {offering.price_cents !== null ? (
+                            <span
+                              data-testid="offering-price"
+                              className="mt-1 block text-body-sm font-medium text-text tabular-nums"
+                            >
+                              {priceLabel(offering.price_cents)}
+                            </span>
+                          ) : null}
+                          {offering.description ? (
+                            <span className="mt-1.5 line-clamp-3 text-body-sm text-text-secondary">
+                              {offering.description}
+                            </span>
+                          ) : null}
+                        </span>
+                        {offering.media?.type === "image" ? (
+                          <img
+                            src={offering.media.url}
+                            alt=""
+                            loading="lazy"
+                            className="h-24 w-24 shrink-0 rounded-field object-cover"
+                          />
+                        ) : offering.media?.type === "video" ? (
+                          offering.media.poster_url ? (
+                            <span className="relative h-24 w-24 shrink-0">
+                              <img
+                                src={offering.media.poster_url}
+                                alt=""
+                                loading="lazy"
+                                className="size-full rounded-field object-cover"
+                              />
+                              <span className="absolute bottom-1.5 left-1.5 rounded-chip bg-scrim px-2 py-1 text-meta text-text-inverse">
+                                Video
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="grid h-24 w-24 shrink-0 place-items-center rounded-field bg-surface-container text-meta text-text-secondary">
+                              Video
+                            </span>
+                          )
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
-        </nav>
+        </div>
       ) : null}
 
-      <footer className="border-t border-hairline px-gutter py-5 text-center text-meta text-text-tertiary">
-        Powered by Agencx
+      <footer className="mx-auto flex max-w-7xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
+        <span className="font-medium text-text">Agencx</span>
+        <span>Powered by Agencx</span>
       </footer>
 
       <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={`Chat with ${storefront.name}`}>
