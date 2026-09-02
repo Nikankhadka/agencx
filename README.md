@@ -2,10 +2,11 @@
 
 This repo is **Agencx**: a multi-tenant SaaS where any small business - a
 dentist, a butcher, a phone repair shop, an online store - signs up, describes
-itself in a conversation, and gets its own private, branded support-and-sales
+itself in a conversation, and gets its own private, branded customer-support
 agent at `agencx.app/{slug}`. The agent answers questions from the business's
-own uploaded knowledge (with citations), hands off to a human when it should,
-and can recommend, quote, and track orders when the owner turns those on. The
+own uploaded knowledge (with citations) and hands off to a human when needed.
+Phase 1 deliberately
+offers grounded knowledge answering/search and human escalation only. The
 codebase and its roles keep the `wren` names it was built with (standing names
 note in [`docs/agencx/README.md`](docs/agencx/README.md)); the product is
 Agencx on every user-facing surface.
@@ -24,8 +25,8 @@ uploaded knowledge - never in code.
    Platform owner            Tenant admin               Customer chat
    agencx.app/admin          agencx.app/login           agencx.app/{slug}
    all-tenants view,         onboarding, knowledge,     streaming Q&A,
-   provisioning              conversations + traces,    quotes, citations,
-                             pricing, dashboards        human handoff
+   tenant listing, metrics,  conversations + traces,    grounded answers,
+   status controls           knowledge + citations     human handoff
         \                         |                          /
          \________________________|_________________________/
                                   |
@@ -38,9 +39,7 @@ uploaded knowledge - never in code.
         +-------------------------------------------------------+
         |  Supervisor (LangGraph)                               |
         |    -> Knowledge  (hybrid RAG + citations)             |
-        |    -> Recommendation (catalog, DB-sourced)            |
-        |    -> Quoting    (selects; engine computes $)         |
-        |    -> Order/Status (deterministic tool lookup)        |
+        |    -> Search knowledge (grounded, cited)              |
         |    -> Escalation (terminal human handoff)             |
         |  Pricing engine (integer cents, no LLM math)          |
         |  Inspection gate (grounding/policy/injection/leak)    |
@@ -63,16 +62,12 @@ dedicated eval and a non-negotiable test. See the artifacts below.
 | [`docs/archive/artifacts/security.md`](docs/archive/artifacts/security.md) | OWASP LLM Top 10 mapping, each control pointing at the code and the test that proves it; deliberate deferrals stated as decisions |
 | [`docs/archive/artifacts/generalization-proof.md`](docs/archive/artifacts/generalization-proof.md) | A dental clinic brought live on identical code through the public API alone - the domain-agnostic hard rule, demonstrated |
 
-**Demo walkthrough video:** _to be recorded_ (a 5-10 minute pass over the three
-surfaces, a quote with trace drill-down, the generalization proof, and the eval
-report) - the one release-criteria item that needs a person, not the codebase.
-
 ## How this repo is organized
 
 ```
 frontend/   Next.js + TypeScript + Tailwind - one app serving all three surfaces
 backend/    Python + FastAPI - agents, RAG, pricing engine, migrations, seeds, evals
-infra/      Terraform (7-file AWS stack, dormant since B-4 - kept as evidence, deployed by nothing)
+infra/      Terraform deployment artifacts (dormant; scheduled for R-11 removal)
 docs/       All documentation - see the guide below
 .agents/    Working files for AI coding agents (file map, session memory)
 ```

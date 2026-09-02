@@ -357,10 +357,10 @@ answers from - so the owner can trust and correct it. Editable through the
 Copilot ("change my rate to $160"), never through settings forms. No
 configuration that exists only as a toggle.
 
-The thin, product-required exceptions: the share link and the **enabled-tools
-toggle (D-3)** - the per-tenant on/off for recommendations / quoting / order
-lookup that implements tool gating (PRD section 8). These are scope, not
-settings-tree creep (decision 7).
+The thin, product-required exception is the share link. The **enabled-tools
+toggle (D-3)** for recommendations, quoting, and order lookup is deferred to
+Phase 2 and is absent from the Phase 1 product. It is not a current settings
+surface.
 
 The "live / not live" indicator that used to head that list is **void**, ruled
 2026-08-23 while closing E-5. There is no not-live state to show: `tenants.status`
@@ -447,7 +447,7 @@ interview asks, with the control the interview asks it with.
 | Review (draft) | Bottom sheet: the sections as editable text, Save / Discard. Nothing answers a customer until Save |
 | Active | Each source shown as its sections, with its own status line; edit reopens the sheet |
 | Failed | The reason in place, plus retry (re-runs the ingest over the stored text) |
-| Tool toggles | Enabled-tools section (D-3); toggling updates `tenant_config.enabled_tools` |
+| Tool toggles | Deferred Phase 2 (D-3); no enabled-tools toggle ships in Phase 1 |
 
 ### S3 - Public page (anonymous, per-tenant slug)
 
@@ -485,7 +485,8 @@ Nav re-cut to **Home**, **Chats** and **Business** (E-1, D21) - the sidebar at
 with traces, Dashboards, Escalations, Pricing) are removed from the tenant nav
 but their routes and code remain (E-2), reachable by the platform owner until
 Stage 2 re-lands them. Platform admin stays minimal (E-3): one Tenants page
-(list, provision, suspend/reactivate) plus aggregate metrics.
+(list, suspend/reactivate) plus aggregate metrics; tenant creation is removed
+by R-4.
 
 **Which tab owns which route.** A drill-down does not have to live under its
 tab's URL, so a nav item can carry an `owns` list of extra prefixes.

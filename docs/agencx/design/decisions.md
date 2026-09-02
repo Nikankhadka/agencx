@@ -18,7 +18,7 @@ the Agencx build.
 | 7 | "No settings screen, ever" | Second tab is **Business** - shown-back profile and knowledge | The owner must be able to trust and correct what the agent knows; it is not a settings tree |
 | 8 | `AGENCX` mode value | `PLATFORM` in `payment_processing_mode` | Brand names in schema become rename migrations; settle before any row exists |
 | 9 | `discovery_mode_teach_me` fork | Removed | "We don't serve your trade" contradicts I8; the geographic fork survives |
-| 10 | Hosting "chosen" (Cloudflare) | **Closed by B-4:** both services are containers in one Vercel project behind one origin. The ECS Terraform stays dormant, still CI-validated, deployed by nothing | The frontend host stayed open until its own phase could decide it; B-4 is that phase, and it closed the backend target too - one provider, one origin, no CORS surface |
+| 10 | Hosting "chosen" (Cloudflare) | **Closed by B-4:** both services are containers in one Vercel project behind one origin. R-11 removes the obsolete ECS Terraform and its CI job | The frontend host stayed open until its own phase could decide it; B-4 is that phase, and it closed the backend target too - one provider, one origin, no CORS surface |
 | 11 | Wren copy ported verbatim | Copy rewritten inside the porting ticket, never "later" | Wren surfaces said "AI"/"agent"; user-facing copy never does |
 
 ## New decisions (D12-D17)
@@ -44,9 +44,9 @@ same shape.
 ### D13: Supervisor-with-tools from day one (Phase 1 shape)
 
 **Decision:** The customer assistant is a supervisor with tools - one model call
-per turn in the common case. Phase 1 ships it with exactly one tool beyond
-answering: `escalate`. Phase 2 adds search/recommend/quote/order-status as
-tools on the same supervisor.
+per turn in the common case. Phase 1 provides grounded `search_knowledge` when
+the corpus requires the hybrid retrieval path, plus `escalate`. Phase 2 may add
+recommend/quote/order-status tools on the same supervisor.
 
 **Why:** The shape that ships must be the shape that scales. Wren's fixed
 five-specialist topology needed a route call before every turn; a supervisor

@@ -207,27 +207,27 @@ Read its `:root` custom properties and the usage around `.pcta-main`, `.ccfm` /
 ### Summary
 
 Confirm and preserve the minimal platform-owner surface: one Tenants page
-(list with status/cost/conversation counts, provision, suspend/reactivate)
+(list with status/cost/conversation counts, suspend/reactivate)
 plus aggregate metrics. No new platform features land in the Stage 1 build.
 
 ### Why
 
-The platform owner persona (PRD section 3) needs provision/suspend and the
-place where the generalization proof is watched - nothing else. Wren's
-platform surface already matches; this ticket is a confirmation pass, not a
-build.
+The platform owner persona (PRD section 3) needs tenant listing, status
+updates, and the place where the generalization proof is watched. Tenant
+creation is removed by R-4; this historical ticket text is retained as
+acceptance evidence but is not a current Phase 1 requirement.
 
 ### User stories
 
 #### US-1 The surface is complete for its job
 
 **As** the platform owner,
-**I want** to list tenants, provision one, suspend/reactivate, and see the
+**I want** to list tenants, suspend/reactivate, and see the
 watch metrics,
 **so that** Stage 1 operations work end to end.
 
 - [ ] Tenants table: slug, name, status, created, conversations, cost
-- [ ] Provision-tenant modal (slug + name + admin user)
+- [ ] No tenant-provisioning form or create endpoint remains (R-4)
 - [ ] Suspend/reactivate with the customer-visible consequences (public page
   shows "unavailable"; reactivation restores)
 - [ ] Aggregate MetricCards on top
@@ -265,7 +265,8 @@ bar, command pill) onto it.
 
 ### Tests
 
-- E2E: provision -> suspend -> public page unavailable -> reactivate
+- E2E: list -> suspend -> public page unavailable -> reactivate; tenant
+  creation is out of scope after R-4
 - Platform API regression tests
 
 ### Files touched
@@ -291,10 +292,8 @@ role requires otherwise (documented in the seed).
 
 ### Why
 
-D-1 ships the machinery; D-2 sets the default world state so the lean flow
-is what everyone actually runs. The current column default is the full
-advanced set - leaving it would make every new tenant quote-capable by
-accident.
+D-1 is deferred. D-2 records a lean data default, while Phase 1 keeps
+recommendation, quote, and order internals dormant as Phase 2 foundations.
 
 ### User stories
 
@@ -315,8 +314,8 @@ accident.
 **so that** the demo world keeps working and real rows are honest.
 
 - [ ] Migration backfills legacy rows to the lean set
-- [ ] Seeds re-assert per-tenant sets explicitly (tenant 1 demo may keep
-  advanced tools to demo them; tenant 2 dental stays lean as the I8 proof)
+- [ ] Seeds keep Phase 1 customer behavior limited to grounded answers and
+  escalation; advanced rows remain dormant test foundations
 
 #### US-3 The migration is forward-only and auditable
 

@@ -1,5 +1,9 @@
 # Phase 1 - Hygiene (F)
 
+**R-1 scope note:** The recommendation, quote, and order handlers mentioned in
+this historical cleanup spec are dormant Phase 2 foundations. Phase 1 exposes
+only grounded knowledge answering/search and human escalation.
+
 Dead-code cleanup after the supervisor-with-tools topology (P-3) lands. The
 one topology survives; superseded fixed-specialist routing is deleted.
 

@@ -21,10 +21,10 @@ at the bottom.
 
 ## Right now
 
-The Wren build is complete except for external shipping gates (live deploy needs
-credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
-a human). The Agencx change work - rebrand, money guardrail loosening, tool
-gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
+The Wren build is complete except for external shipping gates and the remaining
+production-readiness work. The Agencx change work - rebrand, money guardrail
+loosening, three-screen nav, lean flow, provider strategy, pre-load,
+login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
 the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
@@ -50,9 +50,9 @@ supervisor-with-tools re-cut left orphaned (`knowledge.py`, `quoting.py`,
 `conversation.py`, `order_status.py`, `recommendation.py`) are deleted, and
 the refusal constant plus the quote-selection schemas live on in
 `draft_node.py` and `agent_node.py`, where the guard tests re-pointed to
-them. What remains for Stage 1 is the two findings in Known gaps that want
-tickets of their own: the Google tier's `thought_signature` rejection, and
-the absent everyday owner Copilot.
+them. The Google tier's `thought_signature` rejection is the remaining Phase 1
+defect. Owner co-pilot, recommendations, quotations, order or ticket lookup,
+and tool toggles are explicit Phase 2 work.
 
 **The prototype-parity work is merged** (2026-08-23). `feat/docker-dev-stack`
 went to `main` first so both lines shared one base - K-1's containerized dev
@@ -74,8 +74,8 @@ ships as one Vercel project running two container services - `vercel.json`
 routes `/api/*` and `/health` to the backend and everything else to the
 frontend, so all three surfaces serve from one origin and the browser never
 makes a cross-origin request in production. That supersedes both earlier plans:
-the AWS ECS/Terraform stack (`infra/*.tf`, kept and dormant, still validated by
-CI) and the Google Cloud Run backend `deploy.md` described before. The
+the AWS ECS/Terraform stack (scheduled for removal by R-11) and the Google Cloud
+Run backend `deploy.md` described before. The
 production image stays lean, so the deploy embeds through Google's hosted API
 (`GoogleEmbedder`, truncated to the schema's 384 dims) and reranks through
 Cohere. Two CI/CD breakages were found and fixed in the same ticket: this repo
@@ -186,13 +186,13 @@ open for US-2, the `STATUS_TONE` map.
 | Feature | Status | Evidence / change |
 |---|---|---|
 | LangGraph graph skeleton | BUILT | `82322b9`; re-cut by P-3 to supervisor-with-tools: a fast-path turn is one call plus inspection, and the draft node is skipped (it still serves tool routes and every redraft) |
-| Supervisor routing | BUILT | `731b622`, `27662e8` (conversation capability); **CHANGING** - D-1/D-2 build tools from the tenant enabled set; lean default |
+| Supervisor routing | BUILT | `731b622`, `27662e8` (conversation capability); **CHANGING** - R-2 pending enforcement of the Phase 1 grounded-answer and escalation boundary |
 | Knowledge agent | BUILT | `0b99a71` |
-| Recommendation agent | BUILT | `c023918`; **CHANGING** - optional per-tenant tool (D-1), off by default |
-| Deterministic pricing engine | BUILT | `eda876f`; **CHANGING** - engine runs only for quote-enabled tenants (D-1) |
-| Lean tool default | BUILT | D-2 (migration 0016): `tenant_config.enabled_tools` defaults to `["search_knowledge","create_escalation"]` and legacy rows carrying the old full list were backfilled. Tenant 1 states the full set to demo the commerce tools; tenant 2 inherits the default, which is the I8 proof. **Nothing reads the column until D-1** - the data is made honest first so D-1's arrival cannot silently switch quoting on for existing tenants |
-| Quoting agent | BUILT | `8e6b9e5`; **CHANGING** - optional per-tenant tool, off by default |
-| Order/ticket lookup | BUILT | `ecd2b31`; **CHANGING** - optional per-tenant tool, off by default |
+| Recommendation agent | BUILT | `c023918`; dormant Phase 2 foundation - R-2 removes its current customer exposure |
+| Deterministic pricing engine | BUILT | `eda876f`; dormant Phase 2 foundation - no Phase 1 customer flow invokes quoting |
+| Lean tool default | BUILT | D-2 (migration 0016): `tenant_config.enabled_tools` defaults to `["search_knowledge","create_escalation"]` and legacy rows carrying the old full list were backfilled. The column is retained as a dormant Phase 2 foundation; Phase 1 customer exposure is fixed by R-2 |
+| Quoting agent | BUILT | `8e6b9e5`; dormant Phase 2 foundation - R-2 removes its current customer exposure |
+| Order/ticket lookup | BUILT | `ecd2b31`; dormant Phase 2 foundation - R-2 removes its current customer exposure |
 | Escalation agent + handoff | BUILT | `c10b742`; **no longer terminal** - C-5 made a handoff a notification, C-6 added staff takeover/handback (`'human'` status, migration 0020). Only a tenant limit ends a conversation now |
 | Reasoning-inspection layer | BUILT | `e4db924`; stays as the last gate before stream |
 | Money guardrail (price provenance) | BUILT | `7247a1c`; C-1 added owner material as a third allowed source (plus a hedge rule), C-2 put the gate on every route, C-3 added the prompt half, C-4 the 21-case matrix in the absolute gate |
@@ -228,12 +228,11 @@ open for US-2, the `STATUS_TONE` map.
 | Feature | Status | Evidence / change |
 |---|---|---|
 | Deploy runbook ([deploy.md](deploy.md)) | BUILT | `b3e578d`, rewritten by B-4 for the Vercel topology: one project, two container services, hosted Supabase, and the free LLM, embedding and rerank tiers. The status banner is gone because the procedure it warned about is now the current one. Since D22 the auto URL serves all three surfaces. Corrected after the first real deploy (2026-08-26): the `ignoreCommand`-in-`vercel.json` trap (rejects the whole config when `services` is present - three branches failed that way), the Functions region that must match Supabase (`syd1`), the Brevo SMTP vars, and the `SMOKE_TEST_BASE_URL` secret that silently no-op'd both workflows until set - see `fix/staging-deploy-lane`. Corrected after the second (2026-08-27, `fix/customer-page-rsc-fetch`): the frontend service binding was dropped - Vercel's injected internal URL is unreachable from the custom image (its internal CA bundle is absent from `node:bookworm-slim`), which broke the `/bytefix` RSC fetch on every deployment while the smoke test still passed; the RSC lookup now derives the request's own origin instead, and the smoke test asserts the rendered tenant name rather than a bare 200 (Next streams the error shell with a 200) |
-| Terraform AWS backend | BUILT | `d368b03`; superseded by B-4 and dormant. `infra/*.tf` is kept as evidence and still validated by the `infra` job in `ci.yml`, so it cannot rot silently, but nothing deploys through it |
+| Terraform AWS backend | CHANGING | `d368b03`; superseded by B-4. R-11 removes the dormant stack and its CI validation job |
 | Deploy end-to-end (both services on Vercel) | BUILT | B-4: `vercel.json` (two services plus rewrites), `frontend/Dockerfile` with `output: "standalone"`, `backend/Dockerfile` retargeted with a `test` stage, `GoogleEmbedder`, the 4MB upload cap under the platform body limit, and both workflows pointed at branches that exist. The live deploy happened 2026-08-26 (`558898b` deployed fine twice; `8c0edf5`, `a869169` and `5b68822` failed - see the runbook row). `SMOKE_TEST_BASE_URL` is set, `deploy.yml` smoke-tests and `keep-warm.yml` pings both services. **Live as of 2026-08-27 (`e8ecae5`)**: `staging` is the production branch and deploys green with the smoke test passing (`development` preview is green too); the hosted Supabase is migrated and seeded (`bytefix` resolves and chats end to end with citations and deterministic pricing); the alias `agencx-iota.vercel.app` serves the stack. Founder steps that remain: none known - the dashboard settings (Production Branch, Ignored Build Step, region) and the Brevo SMTP vars are all set |
 | Generalization proof (dental, config-only) | BUILT | `2b8437d`; evidence in `docs/archive/artifacts/generalization-proof.md` |
 | Eval report | BUILT | evidence in `docs/archive/artifacts/eval-report.md` |
 | Security write-up | BUILT | evidence in `docs/archive/artifacts/security.md` |
-| Demo walkthrough video | NEW | founder step, unticketed |
 
 ## Provider and latency (new Agencx work, all NEW until P-tickets land)
 
@@ -248,6 +247,19 @@ open for US-2, the `STATUS_TONE` map.
 
 ## Spec ticket status
 
+### Phase 1 closeout
+
+| Ticket | Status | Scope |
+|---|---|---|
+| R-1 Canonical documentation and feature boundary | done | This commit; R-2 onward remains pending |
+
+Phase 1 customer behavior is limited to grounded knowledge answering/search and
+human escalation. Recommendations, quotations, order or ticket lookup, and
+owner co-pilot are deferred Phase 2 behavior. Pricing, catalog, offering, and
+order tables remain dormant foundations. Production refinement work is tracked
+separately and must not be treated as complete until its implementation and
+operational checks land.
+
 Tracked as the work lands. One ticket = one commit; commit message starts with
 the ticket id.
 
@@ -256,7 +268,7 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3/D-4 and B-2 defer. The E block is four
+D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3 and B-2 defer. The E block is four
 tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 (Business hub + Booking page) -> E-2 (hide the advanced screens).
 
@@ -274,7 +286,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-4 Money guardrail test matrix (absolute gate) | done | `dcd5f59` |
 | C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
-| D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
+| D-1, D-3 Per-tenant tool registry + toggle UI | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | done | `3b3a46a` (migration 0016) |
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
@@ -343,7 +355,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   purpose: doing it after D-1 would mean a window where quoting was on for
   tenants who never asked for it.
 
-- **There is no everyday owner Copilot** (found during E-4, deferred by founder
+- **Owner co-pilot is deferred to Phase 2** (found during E-4, deferred by founder
   2026-08-22). S1 promised that after go-live the owner's chat tab holds an
   ongoing conversation with their assistant. No route answers one:
   `POST /api/onboarding/message` 409s once onboarding is confirmed and nothing

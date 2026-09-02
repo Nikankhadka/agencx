@@ -1,5 +1,10 @@
 # Phase 1 - Chat grounding (O-3/O-4 + C)
 
+**R-1 scope note:** Phase 1 customer behavior is grounded knowledge
+answering/search and human escalation only. The quoting and recommendation
+sections below preserve deterministic guardrail acceptance evidence and dormant
+Phase 2 foundations; they are not live Phase 1 customer capabilities.
+
 Chat grounding: knowledge ingest into the whole-corpus/retrieval seam, and the
 loosened money guardrail (verbatim figures from owner material) run across
 every answer path.
@@ -495,7 +500,7 @@ gate.
 
 - [ ] `$12` stated when material says `$12`
 - [ ] `$12.00` stated when material says `12 dollars`
-- [ ] Engine-computed totals on quote-enabled tenants (regression)
+- [ ] Phase 2 regression: engine-computed totals on quote-enabled tenants
 - [ ] Replies with no figures
 
 #### US-2 The fail matrix
@@ -576,7 +581,7 @@ Today every agent-side escalation flips `conversations.status` to
 `{"type": "escalated"}` with no agent turn; the customer surface disables the
 composer. One unanswerable pricing question can therefore dead-end an entire
 support session even though the assistant works fine for everything else. The
-product promise is a support-and-sales agent that keeps helping - a handoff on
+product promise is a customer-support agent that keeps helping - a handoff on
 one topic should not end the session. Founder request, 2026-08-21. This ticket
 supersedes the terminal-flip wording in C-2 US-2 and C-4 US-3.
 

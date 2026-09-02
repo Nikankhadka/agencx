@@ -164,11 +164,11 @@ create table tenant_config (
 );
 ```
 
-**CHANGING (D-1, D-2):** `enabled_tools` defaults to the full advanced set today
-(`["search_knowledge","recommend_items","lookup_order_or_ticket","get_quote_inputs","create_escalation"]`).
-The Agencx lean default changes the default to `["answer_from_knowledge","create_escalation"]`
-and the new-tenant/legacy backfill is a migration in D-2. The tool registry is
-built from this column.
+**Phase 1 boundary:** `enabled_tools` is retained as a dormant Phase 2 foundation.
+Phase 1 does not read it to expose recommendation, quote, or order/ticket
+behavior; customer turns are limited to grounded knowledge and human escalation.
+The deferred registry and toggle work will define its future runtime semantics.
+The historical migration details remain below for schema provenance.
 
 ```sql
 create table users (
@@ -356,9 +356,8 @@ create table quotes (
 
 All Shape A. **Only the pricing engine writes `quotes`** - it computes
 `line_items/subtotal/tax/total`; no other code path constructs those values. In
-Agencx these tables exist but are dormant for lean tenants (D-1): the engine
-runs only when quoting is enabled, and the quote tools are absent from the
-enabled set.
+Agencx these tables exist as dormant Phase 2 foundations. Phase 1 customer
+flows do not invoke the pricing engine or expose quote tools.
 
 ## 6. Conversations and operations
 

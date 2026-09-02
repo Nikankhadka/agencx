@@ -35,7 +35,7 @@ mechanism, and money as the one thing a model never touches.
 | Retrieval | Dense (pgvector HNSW) + sparse (Postgres FTS) + RRF (k=60) + cross-encoder rerank | One `retrieve()` behind `get_business_context`; whole-corpus fast path below the token threshold |
 | Identity | Email + 6-digit code issued and verified inside the chat | Decision 6; zero paid dependencies in Stage 1 |
 | Storefront media | Cloudinary signed Upload API | Backend-only credentials; tenant_media stores delivery metadata, not secrets |
-| Infra | Both services as containers in one Vercel project, same origin (B-4) | Supersedes AWS ECS, whose Terraform stays as dormant evidence; decision 10's open frontend host is closed by the same move |
+| Infra | Both services as containers in one Vercel project, same origin (B-4) | Supersedes AWS ECS; the R-11 cleanup removes the dormant Terraform stack and its CI job |
 | Model access | Every call through the provider layer (`app/llm/provider.py`) | Providers are env config; free tiers are the default; budget capped |
 
 ## 3. Decision ledger and ADRs
@@ -147,30 +147,34 @@ The graph's state carries `input`, `context`, `draft`, `figures`, `guardrail`,
 from 2026-07-28); with one call per turn the buffer's cost is one call, not four.
 
 **Phase 2 (mid-large businesses, >50k corpus + structured commerce):** the same
-supervisor gains the full tool set - search, recommend, quote, order-status,
-escalate - built from the tenant's enabled set (section 8). The shape never
-changes: one call, tools as needed. The specialists Wren built become tool
-implementations, not separate graph nodes.
+supervisor may gain structured commerce tools - search, recommend, quote,
+order-status, and escalate - after the deferred tool registry and product
+controls are explicitly implemented. Phase 1 does not expose recommendations,
+quoting, order-status, or owner co-pilot behavior.
 
 **Why LangGraph, and why only for the assistant:** the ported agent layer was
 already a graph. Stage 2's specialists land as tools on this same supervisor;
 the onboarding agent stays a plain tool loop; deterministic services stay plain
 functions.
 
-## 8. Per-tenant tool gating
+## 8. Phase 1 tool boundary and deferred gating
 
-The assistant's available tools are built from `tenant_config.enabled_tools`,
-never a fixed list. The lean default:
+Phase 1 exposes a fixed, intentionally small tool set:
 
 - `answer_from_knowledge` (the grounded Q&A path - context package + guardrail)
-- `escalate` (terminal human handoff)
+- `escalate` (human handoff)
 
-Optional, off by default: recommendations, quoting, order/ticket lookup. The
-pricing engine runs only when quoting is enabled. Enforcement points:
+The recommendation, quote, and order/ticket internals remain dormant
+foundations for Phase 2. They are not customer-facing Phase 1 capabilities,
+regardless of legacy rows or dormant schemas. The deferred per-tenant registry
+and toggle work will define how `tenant_config.enabled_tools` is honored.
+Until that work lands, no Phase 1 turn may expose those tools. Enforcement
+points for the future registry are documented as upgrade work, not current
+behavior:
 
-- Agent layer: the tool registry is built from the tenant's enabled set
-- Validation layer: inspection rejects any reply that used a disabled tool
-- API layer: routes behind disabled capabilities 404 for that tenant
+- Agent layer: Phase 1 offers only grounded knowledge and escalation
+- Validation layer: unoffered tool calls are rejected defensively
+- API layer: no Phase 1 workflow creates or exposes commerce actions
 
 ## 9. Context assembly and the agent-ready pre-load
 
@@ -383,8 +387,8 @@ in `spec/` adapt, gate, hide, or extend - they do not rebuild.
 | Tenancy + auth | `app/shared/auth.py`, migrations, `resolve_tenant_slug()`, Supabase | Kept (O-2 adds login-in-chat on the tenant surface) |
 | Onboarding | `app/onboarding/agent.py` (`run_turn` / `TurnDirective`, `extract()` DraftUpdate pattern, completeness gate) | Kept (O-1: one tool to save profile fields + LLM turn loop) |
 | Knowledge | upload endpoint + storage, `app/ingestion/` (chunker, embedder, pipeline), `app/retrieval/` | Kept; O-3 adds the URL scrape path + document upload; O-4 adds the whole-corpus fast path + threshold |
-| Agents | `app/agents/` (graph, supervisor, knowledge, escalation, inspection, price_gate, spotlight) | Re-cut: D-1/D-2 build tools from the tenant enabled set; the graph becomes supervisor-with-tools (P-1..P-5 land the new flow) |
-| Money | pricing engine (`app/pricing/engine.py`), `price_gate.py` | Kept; C-1..C-4 loosen the allowed figure set to include verbatim owner material; engine output stays a source only for quote-enabled tenants |
+| Agents | `app/agents/` (graph, supervisor, knowledge, escalation, inspection, price_gate, spotlight) | Phase 1 exposes grounded knowledge and escalation; the recommendation, quote, and order internals remain dormant Phase 2 foundations |
+| Money | pricing engine (`app/pricing/engine.py`), `price_gate.py` | Kept as a dormant deterministic foundation; no Phase 1 customer flow invokes quoting |
 | Eval | `evals/` (retrieval, generation, trajectory, injection, leakage, run_gate) | Kept; G-1 re-cuts the case set for the lean toolset |
 | Observability | `app/observability/{cost,tracing}.py`, Langfuse | Kept |
-| Infra | `infra/*.tf`, `deploy.yml` | Re-cut by B-4: the Terraform is dormant (still CI-validated, deployed by nothing) and `deploy.yml` is now a smoke test, not an ECS deploy |
+| Infra | `deploy.yml` | Re-cut by B-4; R-11 removes the obsolete Terraform stack and CI job. `deploy.yml` is a smoke test, not an ECS deploy |

@@ -1,5 +1,9 @@
 # Offerings + Media (D24)
 
+**R-1 scope note:** Offerings and media are owner-facing storefront
+foundations. Recommendation and quoting references in this historical spec are
+Phase 2 behavior and are not exposed by the Phase 1 customer assistant.
+
 Four tickets. `M-1`, `M-2`, `M-3`, and `M-4` are built; live Cloudinary
 smoke testing remains credential-dependent. See
 `docs/agencx/design/decisions.md` D24 for the design reasoning (catalog/
@@ -71,7 +75,8 @@ re-upload, no document edit required.
 
 - Editing does not create a duplicate row.
 - Removing an offering removes it from the Booking page and from what the
-  agent can recommend, on the next cache lookup (see US-3).
+  future Phase 2 recommendation path can use, on the next cache lookup (see
+  US-3).
 
 #### US-3 The chat agent never answers from a stale offering
 
@@ -80,7 +85,7 @@ catalog, not a cached one from before the owner's last edit.
 
 - Editing an `offerings` row bumps `knowledge_version`, so the context-package
   cache invalidates.
-- A recommendation answer never states a price that isn't the current
+- A future recommendation answer never states a price that isn't the current
   `price_cents` value for that row - unchanged behavior, `agent_node.py:195`'s
   re-fetch pattern already guarantees this and this ticket does not touch it.
 

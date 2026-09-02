@@ -19,11 +19,11 @@ all run the same software; the difference is the data they supply and the
 configuration that shapes the interview that gathers it.
 
 Agencx is the continuation of the shipped Wren build, re-scoped around three
-screens and a lean-by-default toolset. Everything Wren proved - grounded
-answers, cross-tenant isolation, the deterministic money boundary, the
-generalization proof - carries over; the advanced machinery (quoting,
-recommendations, order lookup, the pricing engine) becomes per-tenant opt-in
-instead of the default experience.
+screens and a grounded-answer Phase 1 boundary. Everything Wren proved -
+grounded answers, cross-tenant isolation, the deterministic money boundary, the
+generalization proof - carries over. Advanced machinery such as quoting,
+recommendations, order lookup, and pricing remains dormant foundation code for
+Phase 2 and is not a Phase 1 customer capability.
 
 ## 2. The problem and the reference class
 
@@ -86,7 +86,7 @@ the business's voice.
 ### The platform owner
 
 The operator of the service itself. Stage 1 surface is minimal: a tenants table
-(slug, name, status), provision, suspend/reactivate, and the place where the
+(slug, name, status), suspend/reactivate, and the place where the
 generalization proof is watched.
 
 ## 4. Reference tenants
@@ -136,7 +136,7 @@ is not planned or ticketed until Stage 1 reports back.
    and records the ask.
 8. **The money guardrail.** A figure may be stated only when that exact figure
    appears in owner-supplied material or is the output of the deterministic
-   pricing engine (which runs only for tenants with quoting enabled). Never
+   pricing engine (a dormant Phase 2 foundation). Never
    computed by a model, never invented. The guardrail is the floor under the
    whole spine, not a step after it.
 
@@ -161,13 +161,13 @@ the assistant" and "the customers' threads" are different places.
 
 ### What is explicitly out
 
-- No lead records, quote objects, payments, scheduling, or invoicing as default
-  flows (quoting machinery exists but is per-tenant opt-in and off by default)
+- No lead records, quote objects, payments, scheduling, or invoicing as Phase 1
+  flows. Quoting machinery remains a dormant Phase 2 foundation.
 - No signup form, no settings tree, no configuration toggles
 - No welcome screen, no progress bars, no celebration, no dead surfaces
 - No model-computed pricing - the assistant may repeat a figure from owner
-  material, or one produced by the pricing engine for quote-enabled tenants, but
-  never compute one
+  material, but never compute one. The deterministic pricing engine is a dormant
+  Phase 2 foundation and is not invoked by Phase 1 customer flows.
 
 ### Never build dead surfaces
 
@@ -184,9 +184,8 @@ order:
 1. **Owner-supplied material verbatim** - the figure appears exactly as written
    in a document, the profile, or the pricing rules/catalog the owner
    configured. "About $40" or "roughly $39" fails.
-2. **Pricing-engine output** - a total the engine computed in integer cents,
-   presented exactly. This source exists only for tenants with quoting enabled
-   (see tool gating, below).
+2. **Phase 2 pricing-engine output** - a total the engine computes in integer
+   cents, presented exactly. This source is intentionally unavailable in Phase 1.
 
 This is enforced by a deterministic money guardrail node that checks every
 figure in every assistant reply against the allowed sources - rewrite-once, then
@@ -194,20 +193,21 @@ escalate. Inventing a number is the one failure that must be impossible.
 
 ## 8. Tool gating (how the lean default works)
 
-Every tenant has an enabled-tool set. The assistant's tools are built from that
-set - no fixed list, no hidden capabilities. The lean default is:
+The schema retains an enabled-tool set for deferred Phase 2 gating. Phase 1
+uses a fixed, explicit boundary with no hidden commerce capabilities:
 
 - **Answer from knowledge** (the grounded Q&A path)
 - **Escalate to a human**
 
-Optional per-tenant additions (off by default): recommendations, quoting,
-order/ticket lookup. The pricing engine runs only when quoting is enabled. A
-tenant that never asked for quotes gets a refusal path ("I can't quote that yet -
-I'll have the owner call you"), never a guessed number. The Business tab shows
-the toggle surface so the owner decides.
+Phase 1 has no optional customer tools. The assistant answers from grounded
+knowledge and escalates to a human. Recommendations, quoting, and order/ticket
+lookup are deferred Phase 2 capabilities; their pricing, catalog, offering,
+and order internals remain dormant and must not surface in Phase 1. The
+deferred tool registry and Business-tab controls will be designed and tested in
+Phase 2.
 
-The lean default means the small-business Phase 1 flow - the Sababa slice - is
-one grounded answer path, not a menu of sales machinery.
+The Phase 1 flow - the Sababa slice - is one grounded answer path, not a menu
+of sales machinery.
 
 ## 9. The speed contract
 

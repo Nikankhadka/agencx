@@ -2,7 +2,8 @@
 
 The build documentation for the **Agencx** product: a domain-agnostic, multi-tenant
 SaaS where any small business self-onboards through a conversation and gets a
-private, branded AI support-and-sales agent at `agencx.app/{slug}`.
+private, branded customer-support agent at `agencx.app/{slug}`. Phase 1 offers
+grounded knowledge answering/search and human escalation only.
 
 This set is the single source of truth. The pre-Agencx documentation is archived
 under `docs/archive/` (indexed there) and is not maintained.
