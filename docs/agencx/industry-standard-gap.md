@@ -194,20 +194,20 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 | Gap | Severity | Industry-standard target | Cost to adopt | Effort | Priority | Phase |
 |---|---|---|---|---|---|---|
-| G3.1 `users.role` dead column (owner/staff never enforced) | **Resolved** (F-3): staff role enforced via role-branched RLS policies + `require_owner` endpoint guards; `users.role` is live | Implement staff-role policies (policy branch on role) or drop the column | Done | S | 1 | 1 |
+| G3.1 `users.role` dead column (owner/staff never enforced) | Medium | Implement staff-role policies (policy branch on role) or drop the column | $0 | S | 1 | 1 |
 | G3.2 `enabled_tools` gating unimplemented | Medium | Implement the documented gate at tool-selection time, or delete column + amend doc | Small | S | 1 | 1 |
 | G3.3 Tenant resolved per request (no claim in JWT) | Low | GoTrue Custom Access Token Hook embedding a tenant claim | $0 | M | 3 | 3 |
 
 **Migration path:**
 
-- **G3.1:** **Resolved by F-3 (0025).** The RLS policies branch on `app_role()`
-  (owner -> tenant_admin, staff -> staff, one mapping in auth.py); staff reads
-  only the conversation tables, flips status human<->open, inserts
-  human_agent/system messages, and claims/resolves escalations - no writes or
-  deletes anywhere else. `require_owner` guards the settings/knowledge/
+- **G3.1:** **Lands in F-3 (0025).** The RLS policies will branch on `app_role()`
+  (owner -> tenant_admin, staff -> staff, one mapping in auth.py); staff will read
+  only the conversation tables, flip status human<->open, insert
+  human_agent/system messages, and claim/resolve escalations - no writes or
+  deletes anywhere else. `require_owner` will guard the settings/knowledge/
   offerings/pricing/onboarding routers; conversations/escalations/dashboards
-  thread the caller's role into `tenant_context`. Remaining gap: no
-  staff-provisioning API yet - enforcement is proven with directly-inserted
+  will thread the caller's role into `tenant_context`. Remaining gap: no
+  staff-provisioning API yet - enforcement will be proven with directly-inserted
   rows (test_rls.py, test_auth_api.py).
 - **G3.2:** wire `enabled_tools` into `_tools_for` at tool-selection time (agent_node.py:349-397) and add the API-layer 404s architecture.md section 8 promises. `Effort: S-M`.
 - **G3.3** is an optimization with a trigger (request latency or multi-tenant admin volume).
@@ -646,7 +646,7 @@ Status: `open` | `decided` (founder ruled, ticket optional) | `done` | `ticket` 
 | G5.2 | 5 | No CDN/transformations | Low | M | 3 | open |
 | G5.3 | 5 | No OCR | Low | - | defer | open |
 | G6.1 | 6 | Prompts unversioned | Medium | M | 2 | open |
-| G6.2 | 6 | Legacy agent nodes | Low | S | 1 | open |
+| G6.2 | 6 | Legacy agent nodes | Low | S | 1 | done |
 | G6.3 | 6 | No response cache | Low | M | 3 | open |
 | G7.1 | 7 | Langfuse inert | High | M | 1 | open |
 | G7.2 | 7 | No error tracking | High | S | 1 | open |
