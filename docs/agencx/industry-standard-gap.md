@@ -200,14 +200,14 @@ The **gap register** (after the twelve areas) is the doc's living part: every ga
 
 **Migration path:**
 
-- **G3.1:** **Lands in F-3 (0025).** The RLS policies will branch on `app_role()`
-  (owner -> tenant_admin, staff -> staff, one mapping in auth.py); staff will read
-  only the conversation tables, flip status human<->open, insert
-  human_agent/system messages, and claim/resolve escalations - no writes or
-  deletes anywhere else. `require_owner` will guard the settings/knowledge/
+- **G3.1:** **Fixed by F-3 (0025).** The RLS policies branch on `app_role()`
+  (owner -> tenant_admin, staff -> staff, one mapping in auth.py); staff reads
+  only the conversation tables, flips status human<->open, inserts
+  human_agent/system messages, and claims/resolves escalations - no writes or
+  deletes anywhere else. `require_owner` guards the settings/knowledge/
   offerings/pricing/onboarding routers; conversations/escalations/dashboards
-  will thread the caller's role into `tenant_context`. Remaining gap: no
-  staff-provisioning API yet - enforcement will be proven with directly-inserted
+  thread the caller's role into `tenant_context`. Remaining gap: no
+  staff-provisioning API yet - enforcement is proven with directly-inserted
   rows (test_rls.py, test_auth_api.py).
 - **G3.2:** wire `enabled_tools` into `_tools_for` at tool-selection time (agent_node.py:349-397) and add the API-layer 404s architecture.md section 8 promises. `Effort: S-M`.
 - **G3.3** is an optimization with a trigger (request latency or multi-tenant admin volume).
