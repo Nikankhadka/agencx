@@ -79,7 +79,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | `05-business-page.md` | E-1, E-4, E-5, E-2, E-6 |
 | `06-polish.md` | B-1, B-3, E-3, D-2, F-2, G-1 |
 | `07-hygiene.md` | F-1 |
-| `08-deferred.md` | B-2, D-1, D-3, D-4 |
+| `08-deferred.md` | B-2, D-1, D-3 |
 | `09-devex.md` | K-1 |
 | `10-deploy.md` | B-4 |
 | `11-offerings-media.md` | M-1, M-2, M-3 |
@@ -144,7 +144,7 @@ isn't written for work nobody has scoped yet.
 | Ticket | Why deferred |
 |---|---|
 | B-2 | Point `agencx.app` at the deployed stack - founder buys the domain; one DNS record since D22; local dev unaffected. Depends on B-4 |
-| D-1, D-3, D-4 | Tool-gating machinery + toggle UI + tests - Phase 2 (merge-plan open question) |
+| D-1, D-3 | Per-tenant tool registry and toggle UI - Phase 2; Phase 1 keeps a fixed grounded-answer and escalation boundary |
 | D-2 | *Kept in Phase 1*: flips the tenant default to the lean toolset so quoting/pricing stays OFF by accident - one-line migration 0016 |
 | Payments, quoting, scheduling, invoicing, leads, money screens | No tickets; unticketed Stage 2 backlog (`docs/archive/agencx-planning/stage-2-backlog.md`) - not built now |
 
@@ -242,7 +242,6 @@ isn't written for work nobody has scoped yet.
 | B-2 | Point agencx.app at the deployed stack |
 | D-1 | Tools built from the tenant enabled set |
 | D-3 | Business-tab tool toggle UI |
-| D-4 | Tool gating tests |
 
 ### Offerings + media (`11-offerings-media.md`)
 

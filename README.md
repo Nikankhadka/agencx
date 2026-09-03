@@ -24,8 +24,8 @@ uploaded knowledge - never in code.
    Platform owner            Tenant admin               Customer chat
    agencx.app/admin          agencx.app/login           agencx.app/{slug}
    all-tenants view,         onboarding, knowledge,     streaming Q&A,
-   provisioning              conversations + traces,    quotes, citations,
-                             pricing, dashboards        human handoff
+   tenant listing, metrics,  conversations + traces,    quotes, citations,
+   status controls           knowledge + citations      human handoff
         \                         |                          /
          \________________________|_________________________/
                                   |
@@ -62,10 +62,6 @@ dedicated eval and a non-negotiable test. See the artifacts below.
 | [`docs/archive/artifacts/eval-report.md`](docs/archive/artifacts/eval-report.md) | Every quality number traced to its `eval_runs` row: retrieval, generation, injection, leakage, trajectory, with honest analysis of the free-tier misses |
 | [`docs/archive/artifacts/security.md`](docs/archive/artifacts/security.md) | OWASP LLM Top 10 mapping, each control pointing at the code and the test that proves it; deliberate deferrals stated as decisions |
 | [`docs/archive/artifacts/generalization-proof.md`](docs/archive/artifacts/generalization-proof.md) | A dental clinic brought live on identical code through the public API alone - the domain-agnostic hard rule, demonstrated |
-
-**Demo walkthrough video:** _to be recorded_ (a 5-10 minute pass over the three
-surfaces, a quote with trace drill-down, the generalization proof, and the eval
-report) - the one release-criteria item that needs a person, not the codebase.
 
 ## How this repo is organized
 

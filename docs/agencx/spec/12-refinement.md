@@ -7,9 +7,118 @@ happens as a side effect of it.
 
 Tickets in this file:
 
+- R-1: Documentation truth
 - R-2: Standard API contract
 - R-4: Reliability and provider (partial - see US-2)
 - R-5: Operations and security (partial - see US-2)
+
+---
+
+## R-1: Documentation truth
+
+### Summary
+
+`D-4` (tool-gating tests) is removed from `spec/08-deferred.md` and
+`spec/README.md` - the product decision that would have driven it (D-1's
+per-tenant tool registry) has stayed deferred since D-4 was written, and a
+test ticket for machinery that doesn't exist yet isn't a ticket, it's a
+placeholder. Separately, and more consequentially: a parallel session's
+documentation draft (`docs/phase1-canonical-closeout`, merged as part of this
+ticket) assumed a *different* session's branch - one that deletes the
+recommendation, quoting, and order-lookup agent tools and their tests outright
+- had landed or would land. It had not, and per an explicit founder decision
+made during this ticket's merge, it does not: those tools stay built, off by
+default (D-2), pending D-1 to actually gate them per tenant. Every place that
+assumed otherwise - `README.md`, `progress.md`, `architecture.md`, `prd.md`,
+`design/database.md`, `design/frontend.md`, and four `spec/*.md` phase files -
+is reconciled back to what the code actually does.
+
+### Why
+
+Two failure modes, both real. The first is ordinary drift: a ticket
+(`D-4`) sat in the deferred list for a product decision that was itself
+deferred, so removing the ticket alongside removing the decision keeps the
+doc honest. The second is sharper: two Codex sessions ran the same day, each
+drafting its own `R-`-prefixed hardening backlog independently, and one of
+them wrote its documentation pass as if the other session's most drastic
+branch - the one deleting live agent capability - had already been decided
+and merged. It had not been decided by anyone but a future founder call, and
+this session's founder call (recorded in this ticket's merge) was "leave the
+tools in place." A doc that asserts a deletion that didn't happen is worse
+than a doc that's merely stale - it actively describes a codebase that
+doesn't exist. `git diff` against the actual code, not another draft, is what
+this ticket checked every claim against.
+
+### User stories
+
+#### US-1 `D-4` is gone, honestly
+
+**As** the maintainer,
+**I want** the deferred-tickets list to only contain tickets whose product
+decision is still live,
+**so that** `spec/08-deferred.md` doesn't carry a placeholder for machinery
+nobody has decided to build.
+
+- [x] `D-4` removed from `spec/08-deferred.md`, `spec/README.md`, and
+  `progress.md`'s build-order line
+- [x] `D-1, D-3`'s remaining scope description updated to match (registry +
+  toggle UI, no longer "+ tests")
+
+#### US-2 The docs match the code, not a draft of the code
+
+**As** anyone reading this repo cold,
+**I want** every doc's description of recommendation/quoting/order-lookup to
+match what's actually in `backend/app/agents/agent_node.py` today,
+**so that** "documentation truth" doesn't mean "truth as of a branch that
+didn't merge."
+
+- [x] `README.md` (root): the architecture diagram and product description
+  restored to list Recommendation/Quoting/Order-Status as live supervisor
+  tools, not removed ones
+- [x] `docs/agencx/progress.md`: the Agents-and-money-boundary table rows,
+  the "Right now" narrative, and the Platform-owner surface row all describe
+  the tools as BUILT/CHANGING (optional, off by default, D-1 pending) - not
+  "dormant Phase 2 foundations" the code no longer contains
+- [x] `docs/agencx/architecture.md`, `prd.md`, `design/database.md`,
+  `design/frontend.md`: same reconciliation - section 7/8 (architecture.md),
+  section 8 (prd.md), the `enabled_tools`/`quotes` schema notes
+  (database.md), and the enabled-tools toggle description (frontend.md) all
+  restored to the per-tenant-opt-in framing that matches the code
+- [x] `spec/04-chat-grounding.md`, `spec/06-polish.md`,
+  `spec/11-offerings-media.md`, `spec/07-hygiene.md`: false "R-1 scope
+  note"/"Phase 2 only" annotations removed; `spec/06-polish.md`'s E-3 ticket
+  (platform pre-provisioning, which genuinely *was* removed - separately,
+  unticketed) gets an accurate later-note instead of a rewritten history
+- [x] `docs/agencx/industry-standard-gap.md`: a fictional "R-1 through R-15
+  closeout plan" section removed; the genuinely useful deliberate-deviations
+  table it was wrapping kept
+- [x] Every reference to a ticket id that was never actually created (`R-2`
+  meaning two different things across two branches, `R-4` meaning a third
+  thing, `R-11`) removed; the only `R-`-series that exists after this ticket
+  is this file
+
+### Tests
+
+- Not code - verified by reading every changed file's full diff against the
+  actual current state of `backend/app/agents/agent_node.py` and the
+  Feature status matrix, not by trusting either branch's own account
+
+### Files touched
+
+- `README.md`, `docs/agencx/README.md`, `docs/agencx/progress.md`,
+  `docs/agencx/architecture.md`, `docs/agencx/prd.md`,
+  `docs/agencx/design/database.md`, `docs/agencx/design/frontend.md`,
+  `docs/agencx/design/decisions.md`, `docs/agencx/industry-standard-gap.md`,
+  `docs/agencx/spec/04-chat-grounding.md`, `docs/agencx/spec/06-polish.md`,
+  `docs/agencx/spec/07-hygiene.md`, `docs/agencx/spec/08-deferred.md`,
+  `docs/agencx/spec/11-offerings-media.md`, `docs/agencx/spec/README.md`
+
+### Definition of done
+
+- [x] `D-4` fully removed, no dangling reference
+- [x] No doc claims recommendation/quoting/order-lookup are deleted, dormant,
+  or Phase-2-only when they are none of those things
+- [x] No reference to an `R-`-ticket id that isn't this file's own R-1..R-5
 
 ---
 
@@ -331,24 +440,6 @@ report).
 ---
 
 ## Backlog (not yet scoped)
-
-### R-1: Documentation truth
-
-**Why**: `docs/agencx/progress.md` and `spec/` have drifted from the code in
-small, verifiable ways - `D-4` (tool-gating tests) is still listed as a live
-deferred ticket in `spec/08-deferred.md`, `spec/README.md`, and `progress.md`
-though the product decision that would have driven it (per-tenant tool
-gating, D-1/D-3) has stayed deferred since it was written; some superseded
-designs (the deleted `auth_codes` table, O-5's removed email-extraction
-module, P-5's removed `turn_started` event) are recorded in the commit
-history but not consistently flagged as historical everywhere they're
-mentioned. A build doc that quietly disagrees with the code costs whoever
-reads it next the time to discover which one is wrong.
-
-**Acceptance signal**: every phase file and `progress.md` agree with the
-current code and with each other - no ticket both "deferred" and absent from
-its owning phase file, no design description of something the code has since
-deleted without a note saying so, no broken internal links.
 
 ### R-3: Schema and type safety
 

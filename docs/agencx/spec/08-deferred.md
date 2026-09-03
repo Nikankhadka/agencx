@@ -1,16 +1,14 @@
-# Phase 2 / Deferred (B-2, D-1, D-3, D-4)
+# Phase 2 / Deferred (B-2, D-1, D-3)
 
 Tickets deferred out of Phase 1: the domain/CORS move (the founder buys a
-domain) and the full per-tenant tool-gating machinery + toggle UI + tests
-(Phase 2, with a merge-plan open question on scope). D-1's registry is the
-machinery D-2 depends on, but D-2 itself stays in Phase 1.
+domain) and the per-tenant tool registry plus toggle UI (Phase 2). D-1's
+registry is the machinery D-2 depends on, but D-2 itself stays in Phase 1.
 
 Tickets in this file:
 
 - B-2: Point agencx.app at the deployed stack (deferred - founder buys the domain)
 - D-1: Tools built from the tenant enabled set (Phase 2)
 - D-3: Business-tab tool toggle UI (Phase 2)
-- D-4: Tool gating tests (Phase 2)
 
 ---
 
@@ -244,7 +242,7 @@ turn,
 
 - API: PATCH round-trip, unknown-name rejection, cross-tenant isolation
 - E2E: toggle off -> public page quote attempt refuses; toggle on -> quote
-  path re-enabled (paired with D-4's agent tests)
+  path re-enabled after the deferred registry is implemented
 
 ### Files touched
 
@@ -259,78 +257,3 @@ turn,
 - [ ] E2E proves the toggle changes behavior
 
 ---
-
-## D-4: Tool gating tests
-
-### Summary
-
-The behavioral proof that gating works end to end: a lean tenant cannot
-quote or recommend; an enabled tenant can; toggling flips behavior with no
-restart; disabled-capability routes 404; cross-tenant state never leaks.
-
-### Why
-
-Gating is a product promise and a safety property (a lean tenant who is
-quoted at is a trust failure - the money boundary loosened for the wrong
-tenant). D-1/D-2/D-3 each carry unit tests; D-4 is the end-to-end teeth.
-
-### User stories
-
-#### US-1 Lean tenant cannot quote
-
-**As** the platform owner,
-**I want** a lean tenant's assistant to refuse quoting with the honest
-handoff,
-**so that** gating is real, not cosmetic.
-
-- [ ] Public page: "how much for X?" on a lean tenant -> refusal + escalation
-  path (never a computed figure, never a QuoteCard)
-- [ ] The quote API route 404s for the lean tenant
-- [ ] The pricing engine never runs for the lean tenant (no cost log rows)
-
-#### US-2 Enabled tenant can
-
-**As** a tenant with quoting on,
-**I want** the same question to produce an engine-computed quote,
-**so that** the capability works when chosen.
-
-- [ ] QuoteCard renders engine output verbatim; figures reconcile to the
-  engine (existing provenance check)
-
-#### US-3 Toggling flips behavior
-
-**As** the founder,
-**I want** to flip quoting on and off from the Business tab and see the
-behavior change on the next turn,
-**so that** the toggle is the control plane.
-
-- [ ] Off -> on -> off cycle verified through the real public page (E2E)
-- [ ] No restart, no cache staleness (the registry reads per-turn)
-
-#### US-4 Isolation under gating
-
-**As** the maintainer,
-**I want** one tenant's enabled set to never affect another's,
-**so that** I5 holds under the new control.
-
-- [ ] Two tenants with different sets, same queries: independent behavior
-- [ ] Leakage suite still green (regression)
-
-### Technical spec
-
-- E2E specs over the seeded demo world (tenant 1 advanced, tenant 2 lean)
-- API-level tests for 404s; cost-log assertion for engine dormancy
-
-### Tests
-
-- This ticket IS the tests; wired into CI (`make test-e2e`, `make test-backend`)
-
-### Files touched
-
-- `frontend/e2e/**`, `backend/tests/**`
-
-### Definition of done
-
-- [ ] Lean tenant refuses, enabled tenant quotes
-- [ ] Toggle cycle flips behavior with no restart
-- [ ] Cross-tenant independence green

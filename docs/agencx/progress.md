@@ -21,10 +21,10 @@ at the bottom.
 
 ## Right now
 
-The Wren build is complete except for external shipping gates (live deploy needs
-credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
-a human). The Agencx change work - rebrand, money guardrail loosening, tool
-gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
+The Wren build is complete except for external shipping gates and the remaining
+production-readiness work. The Agencx change work - rebrand, money guardrail
+loosening, three-screen nav, lean flow, provider strategy, pre-load,
+login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
 the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
@@ -50,9 +50,14 @@ supervisor-with-tools re-cut left orphaned (`knowledge.py`, `quoting.py`,
 `conversation.py`, `order_status.py`, `recommendation.py`) are deleted, and
 the refusal constant plus the quote-selection schemas live on in
 `draft_node.py` and `agent_node.py`, where the guard tests re-pointed to
-them. What remains for Stage 1 is the two findings in Known gaps that want
-tickets of their own: the Google tier's `thought_signature` rejection, and
-the absent everyday owner Copilot.
+them. What remains for Stage 1 is the finding in Known gaps that wants a
+ticket of its own: the absent everyday owner Copilot. The Google tier's
+`thought_signature` rejection - previously tracked here as an open defect -
+is resolved by R-4 (see Phase 1 refinement, below). Per-tenant tool gating
+(D-1/D-3) and its toggle UI remain explicit Phase 2 work; recommendation,
+quoting, and order/ticket lookup themselves are already built and stay in
+the codebase, off by default per D-2's lean toolset, pending D-1 to actually
+enforce that per tenant.
 
 **The prototype-parity work is merged** (2026-08-23). `feat/docker-dev-stack`
 went to `main` first so both lines shared one base - K-1's containerized dev
@@ -153,14 +158,20 @@ O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
 open for US-2, the `STATUS_TONE` map.
 
-**Phase 1 refinement (`12-refinement.md`) has opened, with R-2 (the standard
-API contract) closed first**: every JSON error is RFC 9457 Problem Details,
-SSE streams fail safely with a typed `error` event, and `api-contract.md`
-documents the shape. **R-1 (documentation truth), R-3 (schema and type
-safety), R-4 (reliability and provider), and R-5 (operations and security)
-are open as backlog entries**, not yet scoped into full tickets - each gets
-promoted to one when picked up. No Phase 2 feature work happens as a side
-effect of this phase.
+**Phase 1 refinement (`12-refinement.md`) has opened.** R-1 (documentation
+truth), R-2 (the standard API contract), R-4 (reliability and provider, US-1),
+and R-5 (operations and security, US-1) are closed: every JSON error is RFC
+9457 Problem Details, SSE streams fail safely with a typed `error` event,
+`api-contract.md` documents the shape, D-4 and other stale documentation is
+reconciled against the code, Google's tool-history bug is fixed, and the
+URL-ingest path is hardened against SSRF. **R-3 (schema and type safety) is
+open as a backlog entry**, not yet scoped into a full ticket; R-4 and R-5 each
+keep an open second half (judge calibration/production-smoke evidence;
+backups, error tracking, E2E-in-CI, dependency scanning). No Phase 2 feature
+work happens as a side effect of this phase - recommendation, quoting, and
+order/ticket lookup stay exactly where D-2 left them: built, exposed to every
+tenant today because D-1's per-tenant gating hasn't landed yet, not deleted or
+deferred out of the codebase.
 
 ## Feature status matrix
 
@@ -265,7 +276,7 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3/D-4 and B-2 defer. The E block is four
+D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3 and B-2 defer. The E block is four
 tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 (Business hub + Booking page) -> E-2 (hide the advanced screens).
 
@@ -283,9 +294,9 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-4 Money guardrail test matrix (absolute gate) | done | `dcd5f59` |
 | C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
-| D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
+| D-1, D-3 Per-tenant tool registry + toggle UI | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | done | `3b3a46a` (migration 0016) |
-| R-1 Documentation truth | backlog (not scoped) | |
+| R-1 Documentation truth (`12-refinement.md`) | done | D-4 removed (its product decision never happened); a parallel session's draft that assumed recommendation/quoting/order-lookup had been deleted from the codebase was reconciled against what's actually still built and off-by-default (D-2) |
 | R-2 Standard API contract (`12-refinement.md`) | done | Problem Details errors, request correlation, SSE-safe failures, OpenAPI error documentation, and frontend parser contract |
 | R-3 Schema and type safety | backlog (not scoped) | |
 | R-4 Reliability and provider (`12-refinement.md`) | partial | Google tool-history preservation done (thought signatures survive multi-tool turns); judge calibration and production-smoke evidence stay open |
@@ -348,7 +359,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   purpose: doing it after D-1 would mean a window where quoting was on for
   tenants who never asked for it.
 
-- **There is no everyday owner Copilot** (found during E-4, deferred by founder
+- **Owner co-pilot is deferred to Phase 2** (found during E-4, deferred by founder
   2026-08-22). S1 promised that after go-live the owner's chat tab holds an
   ongoing conversation with their assistant. No route answers one:
   `POST /api/onboarding/message` 409s once onboarding is confirmed and nothing
