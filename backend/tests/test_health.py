@@ -3,8 +3,10 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-from app.main import app
+from app.main import app, http_exception_handler, request_validation_handler
 from app.shared import db
 from tests.conftest import _app_dsn_for
 
@@ -44,11 +46,39 @@ async def test_health_unavailable_when_db_down() -> None:
     assert response.json()["code"] == "service_unavailable"
 
 
+class _EchoBody(BaseModel):
+    text: str
+
+
+def _malformed_body_app() -> FastAPI:
+    """A minimal app wired with the real app's exact exception handlers, so a
+    malformed body is proven against real handler code without going through
+    a business route's own dependencies (e.g. /api/chat's LLM provider, which
+    is constructed eagerly and would itself raise - a missing-credentials 500
+    - in any environment with no LLM env configured, before body validation
+    ever gets a chance to run)."""
+    from fastapi.exceptions import RequestValidationError
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    probe = FastAPI()
+    probe.add_exception_handler(RequestValidationError, request_validation_handler)
+    probe.add_exception_handler(StarletteHTTPException, http_exception_handler)
+
+    @probe.post("/echo")
+    async def echo(body: _EchoBody) -> _EchoBody:
+        return body
+
+    return probe
+
+
 @pytest.mark.anyio
 async def test_json_errors_use_problem_details() -> None:
+    malformed_transport = httpx.ASGITransport(app=_malformed_body_app())
+    async with httpx.AsyncClient(transport=malformed_transport, base_url="http://test") as client:
+        malformed = await client.post("/echo", content="{")
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        malformed = await client.post("/api/chat", content="{")
         unauthenticated = await client.get("/api/platform/ping")
         missing = await client.get("/api/not-a-route")
 
