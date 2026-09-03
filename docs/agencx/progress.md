@@ -288,8 +288,8 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | R-1 Documentation truth | backlog (not scoped) | |
 | R-2 Standard API contract (`12-refinement.md`) | done | Problem Details errors, request correlation, SSE-safe failures, OpenAPI error documentation, and frontend parser contract |
 | R-3 Schema and type safety | backlog (not scoped) | |
-| R-4 Reliability and provider (`12-refinement.md`) | done | Google tool-history preservation: provider-native assistant history, including thought signatures, is preserved across tool turns; deterministic provider 400s are not retried |
-| R-5 Operations and security | backlog (not scoped) | |
+| R-4 Reliability and provider (`12-refinement.md`) | partial | Google tool-history preservation done (thought signatures survive multi-tool turns); judge calibration and production-smoke evidence stay open |
+| R-5 Operations and security (`12-refinement.md`) | partial | Secure URL ingestion done (HTTP(S)-only SSRF, DNS, redirect, peer, media-type, size validation, safe failure logging); backups/restore, error tracking, E2E-in-CI, dependency scanning stay open |
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR `e1f2f76` (QR later removed by E-6) |

@@ -9,6 +9,7 @@ Tickets in this file:
 
 - R-2: Standard API contract
 - R-4: Reliability and provider (partial - see US-2)
+- R-5: Operations and security (partial - see US-2)
 
 ---
 
@@ -266,6 +267,69 @@ did.
 
 ---
 
+## R-5: Operations and security (partial - see US-2)
+
+#### US-1 The URL-ingest path can't be turned into an SSRF probe [done]
+
+**As** the platform operator,
+**I want** O-3's server-side URL fetch (an owner pastes a link, the backend
+scrapes it) to be unable to reach internal/private network addresses,
+**so that** an onboarding conversation can't be used to probe the deploy's
+own internal network.
+
+- [x] Only absolute `http`/`https` URLs are accepted; scheme and host are
+  validated before any network I/O
+- [x] DNS resolution is validated - every resolved address must be globally
+  routable, non-multicast; a literal IP in the URL is validated the same way
+  (`_public_addresses`)
+- [x] The connected peer is verified against the validated address after
+  connect (`_verify_peer`), closing the DNS-rebinding gap between resolution
+  and connection
+- [x] Redirects are followed manually, one hop at a time, each hop
+  re-validated the same way, bounded at `_MAX_REDIRECTS`
+- [x] Only HTML media types are accepted; a 2MB body cap rejects (not
+  truncates) oversized pages; every failure surfaces as a safe `ValueError`
+  and is logged
+
+**Why**: O-3 scrapes an owner-supplied URL server-side during onboarding.
+Before this, redirects were followed only bounded by httpx's own limit, with
+no validation that the resolved address - or any address a redirect hop
+resolved to - was actually a public, internet-routable host. An onboarding
+conversation is unauthenticated-adjacent (the owner is mid-signup) and
+world-reachable, so an unvalidated server-side fetch is a classic SSRF
+vector into the deploy's own internal network (cloud metadata endpoints,
+internal services on the Vercel/Supabase network).
+
+#### US-2 The rest of operations and security [not started]
+
+**Why**: backups/restore, error tracking (a Sentry-class tool), running the
+Playwright suite in CI rather than only locally, and dependency scanning are
+all named in the `.lavish` closeout draft this backlog is sourced from, and
+none currently has a status, owner, or validation command recorded anywhere
+canonical.
+
+- [ ] Backups/restore - no status recorded
+- [ ] Error tracking - no status recorded
+- [ ] E2E in CI (currently local-only, `make test-e2e`) - no status recorded
+- [ ] Dependency scanning - no status recorded
+
+**Acceptance signal**: each item above has a status (built / planned /
+deliberately deferred), a trigger for when it becomes urgent, and - once
+built - a command that proves it (a migration-restore drill, a CI job, a scan
+report).
+
+### Tests (US-1)
+
+- `backend/tests/test_url_ingestion.py` - resolution, peer verification,
+  redirect-hop validation, media-type and size limits, safe failure logging
+- `make test-backend` green
+
+### Files touched (US-1)
+
+- `backend/app/ingestion/url.py`, `backend/app/features/onboarding/controller.py`
+
+---
+
 ## Backlog (not yet scoped)
 
 ### R-1: Documentation truth
@@ -302,16 +366,3 @@ the generated TypeScript types are the only declared shape for every route's
 success response the frontend consumes - no hand-duplicated interface next
 to a generated one.
 
-### R-5: Operations and security
-
-**Why**: backups/restore, error tracking (Langfoo/Sentry-class), running the
-Playwright suite in CI rather than only locally, dependency scanning, and
-SSRF hardening on the URL-ingest path (O-3 scrapes an owner-supplied URL
-server-side) are all named in the `.lavish` closeout draft this phase file's
-backlog is sourced from, and none currently has a status, owner, or
-validation command recorded anywhere canonical.
-
-**Acceptance signal**: each item above has a status (built / planned /
-deliberately deferred), a trigger for when it becomes urgent, and - once
-built - a command that proves it (a migration-restore drill, a CI job, a scan
-report).
