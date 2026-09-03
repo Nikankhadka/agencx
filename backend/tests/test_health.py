@@ -61,8 +61,10 @@ def _malformed_body_app() -> FastAPI:
     from starlette.exceptions import HTTPException as StarletteHTTPException
 
     probe = FastAPI()
-    probe.add_exception_handler(RequestValidationError, request_validation_handler)
-    probe.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    # mypy sees these as narrower than add_exception_handler's Exception-typed
+    # signature (the same friction main.py works around for app.openapi).
+    probe.add_exception_handler(RequestValidationError, request_validation_handler)  # type: ignore[arg-type]
+    probe.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
 
     @probe.post("/echo")
     async def echo(body: _EchoBody) -> _EchoBody:
