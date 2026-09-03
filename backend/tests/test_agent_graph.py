@@ -15,6 +15,7 @@ import pytest_asyncio
 
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
+from app.llm.embedder import Embedder
 from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
@@ -345,3 +346,41 @@ async def test_every_node_is_registered() -> None:
     node_names = set(graph.get_graph().nodes.keys())
     expected = {"agent", "draft", "price_gate", "inspection", "escalation", "__start__", "__end__"}
     assert node_names == expected
+
+
+class ExplodingEmbedder(Embedder):
+    """Stands in for the live failure that exposed all of this: Google retired
+    ``text-embedding-004`` and started 404ing it, so every ``recommend_items``
+    call raised inside the tool loop."""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        raise RuntimeError("404 Not Found: embedding model is gone")
+
+
+async def test_a_failing_tool_does_not_take_the_turn_down_with_it(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """A tool that raises is caught, reported back to the model, and the turn
+    still answers the customer.
+
+    The loop has always caught the tool's own exception. What it did not survive
+    was its own bookkeeping afterwards, and the difference never showed up here
+    because the log line that raised is only reached when logging is enabled for
+    INFO - production's level, not pytest's default. ``pyproject.toml`` now pins
+    the suite to INFO so this test exercises the same code path the deploy runs.
+    """
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_provider_for_route("recommendation", tenant_id=tenant_id),
+        embedder=ExplodingEmbedder(),
+        reranker=FakeReranker(),
+    )
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    final_state = await graph.ainvoke(initial_state, context=context)
+
+    assert final_state["draft_response"], "a failing tool must not silence the turn"
+    # Nothing about a dead tool is a handoff: the model is handed the error and
+    # answers from what it already has.
+    assert final_state["escalated"] is False

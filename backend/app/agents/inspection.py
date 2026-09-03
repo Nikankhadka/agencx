@@ -56,9 +56,8 @@ from app.shared import db
 
 # C-5: the conversation continues after this - see app/agents/escalation.py.
 ESCALATION_MESSAGE = (
-    "I couldn't put together an answer to that one I'd trust, so I've asked "
-    "someone from the business to follow up with you on it. I'm still here for "
-    "anything else."
+    "That one's outside what I can answer for you, so I've asked someone from "
+    "the business to follow up with you on it. I'm still here for anything else."
 )
 
 logger = logging.getLogger("app.agents.inspection")

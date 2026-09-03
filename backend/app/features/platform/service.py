@@ -12,16 +12,8 @@ bypass pattern public/auth use for pre-auth reads.
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
 
 from app.shared import db
-
-PROVISION_NOTE = (
-    "Tenant shell created with no owner yet - the self-serve signup flow can't "
-    "currently attach an owner to a pre-provisioned tenant (a known, flagged "
-    "gap; see .agents/memory.md T-033). Provisioned tenants stay in "
-    "status='provisioning' until a founder decision on the claim mechanism."
-)
 
 
 async def metrics() -> dict[str, int | float]:
@@ -48,28 +40,6 @@ async def list_tenants() -> list[dict[str, Any]]:
             "order by t.created_at desc"
         )
     return [{**dict(row), **{"cost_usd": float(row["cost_usd"])}} for row in rows]
-
-
-async def slug_available(slug: str) -> bool:
-    async with db.tenant_context(None, "platform_admin") as conn:
-        exists = await conn.fetchval("select 1 from tenants where slug = $1", slug)
-    return exists is None
-
-
-async def provision(*, slug: str, name: str) -> str:
-    """Insert the 'provisioning' tenant shell + config row, returning the
-    generated tenant id. Raises an asyncpg UniqueViolationError (mapped to a
-    409 by the controller) when the slug is taken."""
-    tenant_id = str(uuid4())
-    async with db.tenant_context(None, "platform_admin") as conn:
-        await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'provisioning')",
-            tenant_id,
-            slug,
-            name,
-        )
-        await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
-    return tenant_id
 
 
 async def update_status(tenant_id: str, status_value: str) -> dict[str, str] | None:

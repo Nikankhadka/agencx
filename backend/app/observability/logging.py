@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -23,9 +24,12 @@ from uuid import uuid4
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
+
+from app.shared.errors import problem_response
 
 REQUEST_ID_HEADER = "X-Request-ID"
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,96}$")
 
 # A dedicated logger whose handler emits plain, human-readable lines (not the
 # JSON shape every other record gets). Used for the conversational transcript
@@ -114,7 +118,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid4().hex
+        supplied_id = request.headers.get(REQUEST_ID_HEADER, "")
+        request_id = supplied_id if _REQUEST_ID_RE.fullmatch(supplied_id) else uuid4().hex
         request.state.request_id = request_id
         token = request_id_var.set(request_id)
         start = time.perf_counter()
@@ -130,10 +135,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     "duration_ms": duration_ms,
                 },
             )
-            response = JSONResponse(
-                status_code=500,
-                content={"detail": "internal server error", "request_id": request_id},
-            )
+            response = problem_response(request, 500)
         else:
             # The ALB pings /health constantly; logging every probe would drown
             # the real traffic, so skip the access line for it.

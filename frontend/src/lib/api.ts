@@ -1,11 +1,15 @@
 import { getSupabase } from "./supabase";
+import type { components } from "./api-types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    public readonly detail: string
+    public readonly detail: string,
+    public readonly code = "request_failed",
+    public readonly requestId?: string,
+    public readonly errors: components["schemas"]["ProblemError"][] = []
   ) {
     super(`${status}: ${detail}`);
     this.name = "ApiError";
@@ -41,24 +45,22 @@ async function getAuthHeaders(init: RequestInit): Promise<Headers> {
  * `detail` string so pages can show it verbatim.
  */
 async function throwApiError(res: Response): Promise<never> {
-  let detail = res.statusText;
+  let detail = "The request could not be completed.";
+  let code = "request_failed";
+  let requestId: string | undefined;
+  let errors: components["schemas"]["ProblemError"][] = [];
   try {
-    const body = (await res.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") {
+    const body = (await res.json()) as Partial<components["schemas"]["ProblemDetails"]>;
+    if (typeof body.type === "string" && typeof body.detail === "string") {
       detail = body.detail;
-    } else if (Array.isArray(body.detail)) {
-      // FastAPI/pydantic 422s send a list of {loc, msg, type} instead of a
-      // string - join the messages so validation errors are readable
-      // inline instead of falling back to the generic status text.
-      const messages = body.detail
-        .map((item) => (item && typeof item === "object" && "msg" in item ? item.msg : null))
-        .filter((msg): msg is string => typeof msg === "string");
-      if (messages.length > 0) detail = messages.join("; ");
+      code = typeof body.code === "string" ? body.code : code;
+      requestId = typeof body.request_id === "string" ? body.request_id : undefined;
+      errors = Array.isArray(body.errors) ? body.errors : [];
     }
   } catch {
     // non-JSON error body; keep statusText
   }
-  throw new ApiError(res.status, detail);
+  throw new ApiError(res.status, detail, code, requestId, errors);
 }
 
 /**

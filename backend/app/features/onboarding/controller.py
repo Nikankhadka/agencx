@@ -69,6 +69,27 @@ _URL_SCRAPE_FAILED = (
 )
 
 
+def _url_failure_code(exc: ValueError) -> str:
+    """Map fetcher's deliberately safe diagnostics to stable log categories."""
+    message = str(exc)
+    if message.startswith("could not read this URL (HTTP"):
+        return "upstream_http"
+    for prefix, code in (
+        ("URL resolves to a blocked", "blocked_address"),
+        ("URL credentials", "credentials_rejected"),
+        ("URL port", "port_rejected"),
+        ("unsupported URL", "scheme_rejected"),
+        ("redirect", "redirect_rejected"),
+        ("too many redirects", "redirect_limit"),
+        ("URL did not return HTML", "media_type_rejected"),
+        ("page body exceeds", "body_limit"),
+        ("network peer", "peer_mismatch"),
+    ):
+        if message.startswith(prefix):
+            return code
+    return "fetch_failed"
+
+
 def _find_url(text: str) -> str | None:
     """The first link in the message, trailing punctuation stripped, or None.
 
@@ -230,7 +251,7 @@ async def _run_url_message(
         # O-7: the owner gets one calm line either way, but the reason is not
         # thrown away. A 403, a page that renders itself in the browser, and a
         # dead host all read the same on screen and must not read the same here.
-        logger.info("url scrape failed url=%s reason=%s", url, exc)
+        logger.info("url scrape failed reason=%s", _url_failure_code(exc))
         onboarding.history.append({"role": "user", "content": url})
         onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
         await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
@@ -319,7 +340,7 @@ async def _stream_url_turn(
             tenant_id=tenant_id, url=url, embedder=embedder
         )
     except ValueError as exc:
-        logger.info("url scrape failed url=%s reason=%s", url, exc)
+        logger.info("url scrape failed reason=%s", _url_failure_code(exc))
         onboarding.history.append({"role": "user", "content": url})
         await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
         yield {"type": "token", "text": _URL_SCRAPE_FAILED}

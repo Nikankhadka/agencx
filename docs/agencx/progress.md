@@ -21,10 +21,10 @@ at the bottom.
 
 ## Right now
 
-The Wren build is complete except for external shipping gates (live deploy needs
-credentials, clean LLM-judged eval numbers need a paid key, the demo video needs
-a human). The Agencx change work - rebrand, money guardrail loosening, tool
-gating, three-screen nav, lean flow, provider strategy, pre-load, login-in-chat -
+The Wren build is complete except for external shipping gates and the remaining
+production-readiness work. The Agencx change work - rebrand, money guardrail
+loosening, three-screen nav, lean flow, provider strategy, pre-load,
+login-in-chat -
 is defined ticket-by-ticket in `spec/`. Phases 1 and 2 of the spec are closed:
 Foundation (A-1/A-2), login-in-chat (O-2), the lean onboarding re-cut (O-1), and
 the onboarding UI port (O-5) are landed. The chat spine (`03-chat-spine.md`) is
@@ -50,9 +50,14 @@ supervisor-with-tools re-cut left orphaned (`knowledge.py`, `quoting.py`,
 `conversation.py`, `order_status.py`, `recommendation.py`) are deleted, and
 the refusal constant plus the quote-selection schemas live on in
 `draft_node.py` and `agent_node.py`, where the guard tests re-pointed to
-them. What remains for Stage 1 is the two findings in Known gaps that want
-tickets of their own: the Google tier's `thought_signature` rejection, and
-the absent everyday owner Copilot.
+them. What remains for Stage 1 is the finding in Known gaps that wants a
+ticket of its own: the absent everyday owner Copilot. The Google tier's
+`thought_signature` rejection - previously tracked here as an open defect -
+is resolved by R-4 (see Phase 1 refinement, below). Per-tenant tool gating
+(D-1/D-3) and its toggle UI remain explicit Phase 2 work; recommendation,
+quoting, and order/ticket lookup themselves are already built and stay in
+the codebase, off by default per D-2's lean toolset, pending D-1 to actually
+enforce that per tenant.
 
 **The prototype-parity work is merged** (2026-08-23). `feat/docker-dev-stack`
 went to `main` first so both lines shared one base - K-1's containerized dev
@@ -153,6 +158,21 @@ O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
 open for US-2, the `STATUS_TONE` map.
 
+**Phase 1 refinement (`12-refinement.md`) has opened.** R-1 (documentation
+truth), R-2 (the standard API contract), R-4 (reliability and provider, US-1),
+and R-5 (operations and security, US-1) are closed: every JSON error is RFC
+9457 Problem Details, SSE streams fail safely with a typed `error` event,
+`api-contract.md` documents the shape, D-4 and other stale documentation is
+reconciled against the code, Google's tool-history bug is fixed, and the
+URL-ingest path is hardened against SSRF. **R-3 (schema and type safety) is
+open as a backlog entry**, not yet scoped into a full ticket; R-4 and R-5 each
+keep an open second half (judge calibration/production-smoke evidence;
+backups, error tracking, E2E-in-CI, dependency scanning). No Phase 2 feature
+work happens as a side effect of this phase - recommendation, quoting, and
+order/ticket lookup stay exactly where D-2 left them: built, exposed to every
+tenant today because D-1's per-tenant gating hasn't landed yet, not deleted or
+deferred out of the codebase.
+
 ## Feature status matrix
 
 ### Foundations and tenancy
@@ -193,7 +213,7 @@ open for US-2, the `STATUS_TONE` map.
 | Lean tool default | BUILT | D-2 (migration 0016): `tenant_config.enabled_tools` defaults to `["search_knowledge","create_escalation"]` and legacy rows carrying the old full list were backfilled. Tenant 1 states the full set to demo the commerce tools; tenant 2 inherits the default, which is the I8 proof. **Nothing reads the column until D-1** - the data is made honest first so D-1's arrival cannot silently switch quoting on for existing tenants |
 | Quoting agent | BUILT | `8e6b9e5`; **CHANGING** - optional per-tenant tool, off by default |
 | Order/ticket lookup | BUILT | `ecd2b31`; **CHANGING** - optional per-tenant tool, off by default |
-| Escalation agent + handoff | BUILT | `c10b742`; **no longer terminal** - C-5 made a handoff a notification, C-6 added staff takeover/handback (`'human'` status, migration 0020). Only a tenant limit ends a conversation now |
+| Escalation agent + handoff | BUILT | `c10b742`; **no longer terminal** - C-5 made a handoff a notification, C-6 added staff takeover/handback (`'human'` status, migration 0020). Only a tenant limit ends a conversation now. Corrected (2026-08-27, `fix/customer-chat-tool-turn-crash`): every turn that called a tool was crashing in production - `agent_node.py`'s per-tool log line used the reserved `extra={"name": ...}` key, which `logging` only raises a `KeyError` for when INFO is enabled, so it was invisible in pytest's default level and fatal in the deploy's. The crash landed as the generic provider-error handoff, which read as an ordinary "can't answer that" escalation rather than the bug it was. Also fixed alongside it: `GOOGLE_EMBED_MODEL` pointed at the now-retired `text-embedding-004` (404ing on every embed call, silently failing new document uploads too); `recommend_items` moved behind the same fast-path gate as `search_knowledge` since the priced catalog is already in the prompt there and the tool cost a round trip to return nothing for any tenant outside the demo seeds; and every handoff message plus the customer-facing `human_agent` bubble label were rewritten to name the business's own staff rather than "a human"/"Human agent" (`pyproject.toml` now runs pytest at `log_level = "INFO"` so a reserved `extra=` key fails a test instead of shipping again) |
 | Reasoning-inspection layer | BUILT | `e4db924`; stays as the last gate before stream |
 | Money guardrail (price provenance) | BUILT | `7247a1c`; C-1 added owner material as a third allowed source (plus a hedge rule), C-2 put the gate on every route, C-3 added the prompt half, C-4 the 21-case matrix in the absolute gate |
 | Cross-tenant leakage test | BUILT | `e7be3d2`; stays an absolute gate |
@@ -216,7 +236,7 @@ open for US-2, the `STATUS_TONE` map.
 | Advanced screens hidden, not deleted | BUILT | E-2: `/conversations`, `/escalations`, `/pricing` and `/knowledge` are absent from `NAV_ITEMS` and from nothing else - each still serves when typed, renders inside the shell, and is pinned by `e2e/hidden-screens.spec.ts`, which also holds the platform surface unchanged |
 | Tenant admin console (conversations, escalations, pricing) | BUILT | `daea6d3`, `b9b561f`; C-6 added the prototype's **Chats** list + thread (`/chats`), whose "Action needed" filter is the owner's queue; E-1 re-cut the shell to Home + Chats + Business (bottom tab bar below `lg`, sidebar at `lg+`; D18 as amended by D21), retired the hamburger drawer, and re-homed `/chats` and `/settings` inside it; **CHANGING** - E-2 marks the advanced screens hidden, E-4 fills Home, E-5 builds the Business hub's Booking page |
 | Tenant dashboards (cost + eval) | BUILT | `1aab440`, `cb9905c`; unlinked from the nav (E-2). **E-3 removed the `/dashboards` redirect**: it was the one hidden screen that had stopped serving, and it holds the eval pass/fail view the keep/pivot/stop signals live in |
-| Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; E-3 verified it against its job and added nothing: `e2e/platform-surface.spec.ts` pins the six columns, the aggregate, the slug-collision refusal, and suspension's effect on the customer's page (the one control whose consequence lands on another surface) |
+| Platform-owner surface | BUILT | `b8a2f5b`, `07b8b13`; E-3 verified it against its job and added nothing: `e2e/platform-surface.spec.ts` pins the six columns, the aggregate, and suspension's effect on the customer's page (the one control whose consequence lands on another surface); **CHANGING** - platform pre-provisioning (a founder-created tenant shell with no owner) is removed: `POST /api/platform/tenants`, `slug_available`, and the "Provision tenant" modal are gone, self-onboarding is the only way a tenant is created, and the e2e spec now pins the control's absence instead of its slug-collision behaviour. This resolves the "platform-provisioned tenant is stuck at `provisioning`" known gap by deleting the code path that could produce one, rather than fixing the stuck state |
 | Customer storefront + chat | BUILT | **M-4 made `/{slug}` a storefront**: categorized offerings with the owner's own prices, optional media, and links, with the chat in a sheet a tap away instead of occupying the page. Legacy About data is preserved but absent from the owner and public UI. **M-5 keeps one prototype-aligned `Ask a question` entry at the top.** `c0adc77`; P-5 pinned the indicator across the whole turn - it was already built out of `ThinkingDots` + `StreamingText`'s `pending`, so the ticket added the tests that keep it unbroken and dropped the unbuilt `turn_started` event from the contract; **CHANGING** - rebrand (B-1). Redesigned 2026-08-29 as a mobile-first catalogue (delivery-app structure the founder referenced): full-width cover, name and tagline up top, dense offering rows with 96px thumbnails, sticky category nav on mobile and a category rail at `lg+`, chat and share as icon-only header buttons (the `Ask a question` text CTA is gone), link chips under the tagline. Specs updated to the new button names and row semantics (`31bf29c`) |
 | Semantic status colours | BUILT | B-3 US-2: `STATUS_TONE` covers the schema's whole vocabulary plus the tenant-defined order/repair statuses, `pending` moved from neutral to amber, `shipped` stays amber because it is not `delivered`, and `toneForStatus` normalises spelling so one entry answers `in_progress` / `in-progress` / "In Progress". The Chats list's crimson "being handled" dot is documented as the single deliberate exception |
 | Full visual rebrand (M3 system, crimson primary) | BUILT | `cc30fc5`, `86b03d9`, `5d2bb7d`; **CHANGING** - D-17 swaps the font to Plus Jakarta Sans (token-level) |
@@ -256,7 +276,7 @@ chat query handling, (3) the business page. Everything else defers to Phase 2 /
 Stage 2 backlog (payments, quoting, scheduling, invoicing, leads, money screens
 are unticketed Stage 2 - not built now). Build order: A -> {O-1, O-2} -> {P-3,
 P-1, P-2, P-4, P-5} -> {O-3, O-4, C-1..C-5} -> {E-1, E-2} -> {B-1, B-3, E-3,
-D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3/D-4 and B-2 defer. The E block is four
+D-2, F-2, G-1} -> F-1 -> B-4. D-1/D-3 and B-2 defer. The E block is four
 tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 (Business hub + Booking page) -> E-2 (hide the advanced screens).
 
@@ -274,8 +294,13 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-4 Money guardrail test matrix (absolute gate) | done | `dcd5f59` |
 | C-5 Non-blocking escalation (chat continues after handoff) | done | `0137d20` |
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
-| D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
+| D-1, D-3 Per-tenant tool registry + toggle UI | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | done | `3b3a46a` (migration 0016) |
+| R-1 Documentation truth (`12-refinement.md`) | done | D-4 removed (its product decision never happened); a parallel session's draft that assumed recommendation/quoting/order-lookup had been deleted from the codebase was reconciled against what's actually still built and off-by-default (D-2) |
+| R-2 Standard API contract (`12-refinement.md`) | done | Problem Details errors, request correlation, SSE-safe failures, OpenAPI error documentation, and frontend parser contract |
+| R-3 Schema and type safety | backlog (not scoped) | |
+| R-4 Reliability and provider (`12-refinement.md`) | partial | Google tool-history preservation done (thought signatures survive multi-tool turns); judge calibration and production-smoke evidence stay open |
+| R-5 Operations and security (`12-refinement.md`) | partial | Secure URL ingestion done (HTTP(S)-only SSRF, DNS, redirect, peer, media-type, size validation, safe failure logging); backups/restore, error tracking, E2E-in-CI, dependency scanning stay open |
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR `e1f2f76` (QR later removed by E-6) |
@@ -328,22 +353,13 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   in migration 0002, carries live RLS policies, and `tests/test_rls.py` asserts
   on it.
 
-- **A platform-provisioned tenant is stuck at `provisioning`** (found while
-  closing E-5's live/not-live bullet, 2026-08-23). `POST /api/platform/tenants`
-  inserts `status='provisioning'` (`features/platform/service.py:66`) pending a
-  founder decision on the claim mechanism, and the admin table renders an action
-  only for `active` (Suspend) and `suspended` (Reactivate) - a provisioning row
-  gets `null` (`admin-surface/(console)/page.tsx`). The API already accepts the
-  change (`_VALID_STATUSES` covers all three), so this is a missing control, not
-  a missing capability. Self-signup is unaffected: it inserts `active`.
-
 - **`enabled_tools` has no reader yet** (D-2). The column now says lean and
   `agents/agent_node.py::_tools_for` still offers every tool to every tenant -
   D-1 wires the two together in Phase 2. The data change lands first on
   purpose: doing it after D-1 would mean a window where quoting was on for
   tenants who never asked for it.
 
-- **There is no everyday owner Copilot** (found during E-4, deferred by founder
+- **Owner co-pilot is deferred to Phase 2** (found during E-4, deferred by founder
   2026-08-22). S1 promised that after go-live the owner's chat tab holds an
   ongoing conversation with their assistant. No route answers one:
   `POST /api/onboarding/message` 409s once onboarding is confirmed and nothing
@@ -353,17 +369,20 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   polish ticket. Revisit after Stage 1 reports back.
 
 
-- **Google's tier rejects our multi-tool turns** (found by G-1's live run,
-  2026-08-22). `openai.BadRequestError: 400 - Function call is missing a
-  thought_signature in functionCall parts ... function call
-  `default_api:lookup_order_or_ticket`, position 2`. Gemini now requires a
-  `thought_signature` echoed back on function-call parts, and it surfaces
-  through the OpenAI-compat endpoint we speak to. It fires on turns with more
-  than one tool call, so `generation_eval`, `trajectory_eval` and
-  `injection_eval` all error out against the primary tier; the deterministic
-  gates are unaffected.
-  **Failover does not absorb it**: `_FAILOVER_ERRORS` in `app/llm/failover.py`
-  covers rate limits, connection faults, upstream errors and validation errors
+- ~~**Google's tier rejects our multi-tool turns**~~ - **resolved by R-4**
+  (`12-refinement.md`). Originally found by G-1's live run, 2026-08-22:
+  `openai.BadRequestError: 400 - Function call is missing a thought_signature
+  in functionCall parts ... function call
+  `default_api:lookup_order_or_ticket`, position 2`. Gemini requires a
+  `thought_signature` echoed back on function-call parts, and the app was
+  reconstructing the assistant message from scratch before appending tool
+  results, dropping that field. `ChatMessage` and `ToolTurn` now carry the
+  provider's own message (`extra_content`/`history_message`), sent back
+  verbatim, so Google's own metadata survives a multi-tool turn instead of
+  being silently rebuilt without it. Left below for its original context; the
+  `_FAILOVER_ERRORS` reasoning still explains why failover correctly did not
+  absorb it: `_FAILOVER_ERRORS` in `app/llm/failover.py` covers rate limits,
+  connection faults, upstream errors and validation errors
   - not `BadRequestError`. That default is right in general (a 400 usually
   means the request is wrong, and retrying it elsewhere would hide a real bug),
   and wrong for a *provider-specific* 400 like this one, which the same request

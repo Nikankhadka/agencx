@@ -41,3 +41,5 @@
 {"question": "Are you open on Sunday?", "negative": true}
 {"question": "Is there parking outside the shop?", "negative": true}
 {"question": "Do you sell gift cards?", "negative": true}
+{"question": "What services do you offer?", "reference_facts": ["screen repair", "battery replacement", "charging port repair", "water damage diagnostic"], "expected_sources": ["catalog"]}
+{"question": "Can you give me a list of the items and prices you sell?", "reference_facts": ["USB-C Charging Cable costs $12.00", "Wall Charger Adapter costs $18.00", "Tempered Glass Screen Protector costs $10.00", "Phone Case - Universal costs $15.00"], "expected_sources": ["catalog"]}

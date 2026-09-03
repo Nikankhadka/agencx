@@ -241,6 +241,16 @@ export function CustomerChat({
             case "escalated":
               setEscalated(true);
               break;
+            case "error":
+              // The backend failed mid-stream and said so on the wire. Without
+              // this the bubble would sit in "streaming" forever - show the
+              // same retry affordance a network failure gets below.
+              updateLastAssistant(() => ({
+                text: "Something went wrong just then. Try again?",
+                error: true,
+                streaming: false,
+              }));
+              break;
             case "done":
               updateLastAssistant(() => ({ streaming: false }));
               break;
@@ -288,7 +298,7 @@ export function CustomerChat({
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
         {messages.map((message, index) => (
-          <ChatBubble key={index} role={message.role}>
+          <ChatBubble key={index} role={message.role} senderLabel={`${displayName} staff`}>
             <StreamingText
               streaming={message.streaming ?? false}
               pending={message.streaming === true && message.text === ""}

@@ -56,6 +56,16 @@ test("staff take a conversation over, reply, and hand it back", async ({ page, r
   expect(events).toContain('"type": "handoff"');
   expect(events).not.toContain('"type": "escalated"');
 
+  // The customer never reads the words "human agent" - the reply is labelled
+  // with a person at the business. The owner-side transcript viewer renders the
+  // same bubble in the same customer perspective, so it is where this is
+  // checkable without driving a live model to a handoff.
+  await page.goto(`/conversations/${conversationId}`);
+  await expect(page.getByText(reply)).toBeVisible();
+  await expect(page.getByText("Business staff")).toBeVisible();
+  await expect(page.getByText("Human agent")).toHaveCount(0);
+
+  await page.goto(`/chats/${conversationId}`);
   await page.getByTestId("hand-back").click();
   await expect(page.getByTestId("thread-status")).toHaveText("Handling");
   await expect(page.getByText("Handed back to Agencx")).toBeVisible();

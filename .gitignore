@@ -34,5 +34,8 @@ backend/var/
 # opencode session plan drafts (transient; decisions get archived to docs/)
 .opencode/plans/
 
+# lavish skill plan-approval artifacts (transient; decisions get archived to docs/)
+.lavish/
+
 # Vercel CLI link + pulled env (never committed)
 .vercel

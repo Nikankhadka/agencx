@@ -122,7 +122,9 @@ class Settings(BaseSettings):
     # It reuses llm_api_key rather than taking a Google key of its own.
     embedder: str = "local"
     local_embed_model: str = "BAAI/bge-small-en-v1.5"
-    google_embed_model: str = "text-embedding-004"
+    # text-embedding-004 was retired by Google and now 404s, which failed every
+    # ingest (documents land in status='failed') and every turn-time retrieval.
+    google_embed_model: str = "gemini-embedding-001"
     embedding_dim: int = 384
 
     # Reranker (T-009): 'cohere' | 'local'

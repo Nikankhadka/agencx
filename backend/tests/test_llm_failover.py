@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from openai import RateLimitError
+from openai import BadRequestError, RateLimitError
 from pydantic import BaseModel
 
 from app.llm.failover import FailoverProvider, collect_legs
@@ -104,6 +104,12 @@ def _rate_limit() -> RateLimitError:
     return RateLimitError("rate limited", response=response, body=None)
 
 
+def _bad_request() -> BadRequestError:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    return BadRequestError("invalid tool history", response=response, body={"error": {}})
+
+
 async def test_chat_fails_over_when_primary_retries_are_exhausted() -> None:
     primary = _Fake(name="primary", failures=[_rate_limit()])
     fallback = _Fake(name="fallback", failures=[])
@@ -180,6 +186,17 @@ async def test_tool_calling_fails_over() -> None:
     )
     assert turn.text == "fallback-text"
     assert fallback.tools_calls == 1
+
+
+async def test_tool_calling_does_not_fail_over_on_deterministic_400() -> None:
+    primary = _Fake(name="primary", failures=[_bad_request()])
+    fallback = _Fake(name="fallback", failures=[])
+    with pytest.raises(BadRequestError):
+        await FailoverProvider(primary, fallback).chat_with_tools(
+            messages=[{"role": "user", "content": "q"}], tools=[], tool_choice="auto"
+        )
+    assert primary.tools_calls == 1
+    assert fallback.tools_calls == 0
 
 
 async def test_fallback_gets_exactly_one_chance() -> None:

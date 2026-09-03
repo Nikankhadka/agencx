@@ -5,7 +5,7 @@
  *
  * E-3 is a verification ticket - no new platform features land in Stage 1 -
  * so this spec exists to hold the surface to its job: list tenants with the
- * numbers to watch, provision one, and suspend or reactivate with the
+ * numbers to watch, and suspend or reactivate with the
  * consequence that reaches the customer.
  *
  * The suspension test is the one worth having, and the one that needs care:
@@ -55,18 +55,11 @@ test.describe("the platform owner's one page", () => {
     await expect(page.getByText("Total cost")).toBeVisible();
   });
 
-  test("provisioning refuses a slug already in use, before submitting", async ({ page }) => {
+  test("does not expose platform provisioning controls", async ({ page }) => {
     await loginAsPlatformAdmin(page, FOUNDER);
-    await page.getByRole("button", { name: "Provision tenant" }).click();
-
-    // Named, because every Modal on this page is in the DOM at once and only
-    // its title tells them apart.
-    const dialog = page.getByRole("dialog", { name: "Provision tenant" });
-    await expect(dialog).toBeVisible();
-
-    // A collision found server-side is a worse experience and a worse row.
-    await dialog.getByLabel(/slug/i).fill(TENANT);
-    await expect(dialog.getByText("Already taken")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Provision tenant" })).toHaveCount(0);
+    await expect(page.getByText("Tenant provisioning")).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
   });
 });
 

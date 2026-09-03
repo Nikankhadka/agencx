@@ -61,17 +61,26 @@ _REFUSAL_SCORE_THRESHOLD = 0.05
 # thread never crowds out the business material it has to share the budget with.
 _HISTORY_MESSAGES = 10
 
+# The per-tool bullet list this used to carry duplicated the ToolSpec
+# descriptions the model already receives, and went stale the moment _tools_for
+# stopped offering a tool. What is left is the part the specs cannot say: when
+# to reach for a tool at all, and when to hand off.
+#
+# It no longer says "if you are unsure, escalate". That line turned every
+# question the material answered indirectly into a handoff - including the most
+# ordinary question a customer asks, "what do you offer?" - because guessing at
+# a tool felt riskier to the model than escalating. Not knowing is a reason to
+# say so and offer a handoff, not a reason to end the turn.
 _TOOL_GUIDANCE = (
-    "You have tools available. Decide which (if any) to call based on what the "
-    "customer asked:\n"
-    "- search_knowledge: look up general information, policies, or FAQs\n"
-    "- recommend_items: help choose products or services based on preferences\n"
-    "- get_quote_inputs: produce a price quote for specific items\n"
-    "- lookup_order_or_ticket: check status of an existing order or ticket\n"
-    "- create_escalation: hand off to a human when you cannot help confidently\n"
-    "If the customer is just greeting, saying thanks, or asking what you can do, "
-    "respond directly without calling any tool. If you are unsure or the message "
-    "is unclear, escalate.\n"
+    "Answer from the business facts and material in this prompt first. Reach for "
+    "a tool only when the answer genuinely is not here - a specific order to look "
+    "up, a quote to compute.\n"
+    "When the customer asks what the business offers, or for a list of its "
+    "services, items, or prices, that answer is in the material above: give it "
+    "to them from there. Do not go looking for a tool, and do not hand off.\n"
+    "If the material does not cover what they asked, say so plainly and offer to "
+    "have someone from the business follow up. Greetings, thanks, and questions "
+    "about what you can do need no tool at all.\n"
     "If the customer asks to speak to a person, call create_escalation straight "
     "away - do not try to talk them out of it. Tell them someone from the "
     "business has been notified, and carry on helping with anything else they "
@@ -94,8 +103,8 @@ _FAST_PATH_GUIDANCE = (
     "the business has published to you, so do not look for a search tool. Answer "
     "from that material and from the business facts above it, citing each factual "
     "claim with its bracket number, e.g. [1]. If the answer is not there, say so "
-    "plainly and offer to have a human follow up - never invent an answer, a "
-    "policy, or a price.\n"
+    "plainly and offer to have someone from the business follow up - never "
+    "invent an answer, a policy, or a price.\n"
     "You are this business's assistant, not a general assistant: answer only "
     "questions about the business, its products, services, policies, and orders. "
     "For anything else - general knowledge, trivia, other companies, advice "
@@ -333,7 +342,8 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
         parts.append(
             "The business has not published any material to you yet. Answer only "
             "from the business facts above; for anything else, say you do not "
-            "have that information and offer to have a human follow up."
+            "have that information and offer to have someone from the business "
+            "follow up."
         )
     parts.append(spotlight.instruction())
     return "\n\n".join(parts)
@@ -342,16 +352,21 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
 def _tools_for(package: ContextPackage) -> list[ToolSpec]:
     """The tool set for this turn.
 
-    ``search_knowledge`` is offered only when the package did not already bring
-    the corpus: on the fast path there is nothing left for it to find, and
-    offering it would buy a round trip for material already in the prompt.
+    The two retrieval tools are offered only when the package did not already
+    bring the corpus: on the fast path there is nothing left for them to find,
+    and offering them would buy a round trip for material already in the prompt.
+
+    ``recommend_items`` joins ``search_knowledge`` under that rule. It reads like
+    a different kind of tool but it is the same kind: a vector search over the
+    same ``knowledge_chunks``, narrowed to ``kind='catalog_item'``. On the fast
+    path those chunks are already in the prompt, priced - the chunker writes
+    ``"Name: description ($NN.NN)"`` - so the model can recommend and enumerate
+    straight from them, and the price gate still reconciles any figure it states
+    because ``owner_material`` reads the very same chunk text. Offering it there
+    cost an embedding round trip to fetch a top-5 subset of the prompt, and made
+    "what do you offer?" a tool call instead of an answer.
     """
     tools = [
-        ToolSpec(
-            name="recommend_items",
-            description="Recommend products/services based on customer preferences",
-            args_schema=_RecommendItemsArgs,
-        ),
         ToolSpec(
             name="get_quote_inputs",
             description="Produce a price quote for selected items/services",
@@ -364,7 +379,7 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
         ),
         ToolSpec(
             name="create_escalation",
-            description="Escalate to a human agent when you cannot help confidently",
+            description="Hand off to someone at the business when you cannot help confidently",
             args_schema=_CreateEscalationArgs,
         ),
     ]
@@ -375,6 +390,11 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
             name="search_knowledge",
             description="Search the business knowledge base for policies or FAQs",
             args_schema=_SearchKnowledgeArgs,
+        ),
+        ToolSpec(
+            name="recommend_items",
+            description="Recommend products/services based on customer preferences",
+            args_schema=_RecommendItemsArgs,
         ),
         *tools,
     ]
@@ -452,6 +472,14 @@ async def run(state: AgentState) -> dict[str, Any]:
 
             if not turn.tool_calls:
                 answer_text = (turn.text or "").strip()
+                break
+
+            if turn.history_message is None:
+                logger.error("provider returned tool calls without history message")
+                answer_text = (
+                    "I can help with this business's published information, "
+                    "or connect you with a person."
+                )
                 break
 
             called_tools.update(call.name for call in turn.tool_calls)
@@ -611,7 +639,15 @@ async def run(state: AgentState) -> dict[str, Any]:
                 logger.info(
                     "agent tool",
                     extra={
-                        "name": call.name,
+                        # Not "name": that is a reserved LogRecord attribute, and
+                        # logging raises KeyError rather than shadowing it. This
+                        # line sits outside the try above, so that KeyError used
+                        # to escape the node and kill every turn that called any
+                        # tool - but only where logging is enabled for INFO,
+                        # which is production (config.log_level) and not the
+                        # default test level. pyproject pins the suite to INFO
+                        # so the next one of these fails a test instead.
+                        "tool": call.name,
                         "duration_ms": int((time.perf_counter() - started) * 1000),
                         "success": not failed,
                     },
@@ -625,20 +661,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                     }
                 )
 
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": c.id,
-                            "type": "function",
-                            "function": {"name": c.name, "arguments": json.dumps(c.args)},
-                        }
-                        for c in turn.tool_calls
-                    ],
-                }
-            )
+            messages.append(turn.history_message)
             messages.extend(tool_result_messages)
 
             if "create_escalation" in called_tools:

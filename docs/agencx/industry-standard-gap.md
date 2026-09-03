@@ -6,6 +6,16 @@
 **Method:** every current-state claim below was read from the repo (file path or ADR given); every industry-standard claim was checked against vendor documentation or the vendor's own pricing page on the date above. Where sources conflict, the report says so and marks the number `[verify at write time]`.
 **Status legend used throughout:** `AT STANDARD` - the choice is the same one a well-run team would make today | `NEAR STANDARD` - right shape, one or two seams short | `GAP` - materially below what a competent team would ship | `DELIBERATE` - below standard on purpose, with a documented reason and a trigger to revisit.
 
+## Deliberate deviations and their upgrade triggers
+
+| Deviation | Current decision | Upgrade trigger |
+|---|---|---|
+| Durable queues | In-request work is acceptable for controlled-pilot volume | First upload or webhook regularly exceeds about 2 seconds, a request is lost, or retry/idempotency is required |
+| Shared caches | The current context cache is process-local | More than one backend worker, cache divergence, or a measured cache hit rate that materially affects latency |
+| Asynchronous ingestion | Ingestion remains synchronous in Phase 1 | Upload latency blocks the customer journey, an upload times out, or ingestion volume needs independent retries |
+| Data-subject automation | Retention, export, and purge remain documented manual operations for the pilot | A real customer requests access/deletion, confidential data is admitted, or retention obligations require an auditable SLA |
+| Continuous evaluation | Golden-set and release evaluations remain offline | Production traffic reaches the controlled-pilot threshold, provider/model configuration changes, or a quality incident requires regression detection |
+
 ## Executive summary
 
 For a solo-founder, stage-1, portfolio venture on Vercel + Supabase, Agencx is at or above industry standard on **authentication** (GoTrue OTP + `@supabase/ssr` cookies end-to-end, closed 2026-08-28 - see D23 in `decisions.md`), **authorization** (RLS posture is textbook), **evaluation** (real gates, real baselines), **money handling** (deterministic, machine-checked), and **retrieval architecture** (dense + sparse + rerank is the reference design). It has real gaps in **backups** (there are none), **error tracking** (none), **E2E in CI** (suite exists, never runs), and **synchronous ingestion** (uploads block the request). Nothing here is un-defendable; three things are currently un-defended: data loss, silent production breakage, and a Hobby-plan license that does not allow the venture to earn money.

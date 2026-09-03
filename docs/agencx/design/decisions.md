@@ -385,7 +385,7 @@ new authorization logic bought for nothing. The owner logs in at a global
 
 **The cost, and the guard.** Every top-level route name is now a name no tenant
 can have. `RESERVED_SLUGS` (`backend/app/features/tenants/slug.py`) refuses them
-at signup and at platform provisioning, and
+at owner self-onboarding, and
 `frontend/src/lib/reserved-slugs.test.ts` fails the build if a route directory
 is added without reserving its name - proven against a planted collision. Next
 resolves static segments before the dynamic one, so a collision would not be

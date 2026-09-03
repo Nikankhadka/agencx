@@ -86,7 +86,7 @@ the business's voice.
 ### The platform owner
 
 The operator of the service itself. Stage 1 surface is minimal: a tenants table
-(slug, name, status), provision, suspend/reactivate, and the place where the
+(slug, name, status), suspend/reactivate, and the place where the
 generalization proof is watched.
 
 ## 4. Reference tenants

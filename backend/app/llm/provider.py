@@ -30,6 +30,9 @@ class ChatMessage(TypedDict, total=False):
     # stays valid.
     tool_calls: list[dict[str, object]]
     tool_call_id: str
+    # Provider-native response metadata (for example Google's thought
+    # signature). This is sent back unchanged with the assistant message.
+    extra_content: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,9 @@ class ToolTurn:
 
     text: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # The complete assistant message as returned by the provider. Callers must
+    # append this verbatim before tool results so provider metadata survives.
+    history_message: ChatMessage | None = None
 
 
 class LLMProvider(ABC):

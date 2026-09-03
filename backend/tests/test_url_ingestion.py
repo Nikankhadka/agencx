@@ -23,6 +23,7 @@ import pytest
 import pytest_asyncio
 
 from app.features.knowledge import service
+from app.ingestion import url as url_ingestion
 from app.ingestion.url import extract_main_text, extract_title, fetch_page
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
@@ -40,6 +41,46 @@ _CANNED_HTML = (
     b"<main><p>We are open weekdays 9 to 5.</p></main>"
     b"<footer>goodbye</footer></body></html>"
 )
+
+
+class _FakeNetworkStream:
+    def __init__(self, address: str | None = "93.184.216.34") -> None:
+        self.address = address
+        self.closed = False
+
+    def get_extra_info(self, name: str) -> tuple[str, int] | None:
+        return (self.address, 80) if self.address and name in {"server_addr", "peername"} else None
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class _ChunkStream(httpx.AsyncByteStream):
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield b"x" * (1024 * 1024)
+        yield b"x" * (1024 * 1024)
+        yield b"x"
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _test_resolver(host: str, port: int) -> list[str]:
+    return ["93.184.216.34"]
+
+
+def _html_response(
+    body: bytes, *, address: str | None = "93.184.216.34", content_type: str = "text/html"
+) -> httpx.Response:
+    return httpx.Response(
+        200,
+        headers={"content-type": content_type},
+        content=body,
+        extensions={"network_stream": _FakeNetworkStream(address)},
+    )
 
 
 # --- unit: extraction --------------------------------------------------------
@@ -82,11 +123,16 @@ async def test_fetch_page_rejects_non_http_scheme() -> None:
 
 async def test_fetch_page_rejects_oversized_body() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"x" * (2 * 1024 * 1024 + 1))
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=b"x" * (2 * 1024 * 1024 + 1),
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(ValueError, match="2MB"):
-            await fetch_page("http://example.com/big", client=client)
+            await fetch_page("http://example.com/big", client=client, resolver=_test_resolver)
 
 
 async def test_fetch_page_rejects_non_2xx() -> None:
@@ -94,11 +140,15 @@ async def test_fetch_page_rejects_non_2xx() -> None:
     teach the assistant the site's 'page not found' copy."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(404, content=b"<html><body>Page not found</body></html>")
+        return httpx.Response(
+            404,
+            content=b"<html><body>Page not found</body></html>",
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(ValueError, match="could not read this URL"):
-            await fetch_page("http://example.com/gone", client=client)
+            await fetch_page("http://example.com/gone", client=client, resolver=_test_resolver)
 
 
 async def test_fetch_page_wraps_transport_errors() -> None:
@@ -115,10 +165,13 @@ async def test_fetch_page_wraps_transport_errors() -> None:
 
 async def test_fetch_page_returns_body() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"<html>hi</html>")
+        return _html_response(b"<html>hi</html>")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        assert await fetch_page("http://example.com/", client=client) == b"<html>hi</html>"
+        assert (
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+            == b"<html>hi</html>"
+        )
 
 
 # --- O-7: the fetch looks like a browser, and says why it failed -------------
@@ -132,10 +185,10 @@ async def test_fetch_page_sends_browser_headers() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.update(request.headers)
-        return httpx.Response(200, content=b"<html>hi</html>")
+        return _html_response(b"<html>hi</html>")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        await fetch_page("http://example.com/", client=client)
+        await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
 
     assert "python-httpx" not in seen["user-agent"]
     assert "Mozilla/5.0" in seen["user-agent"]
@@ -149,11 +202,305 @@ async def test_fetch_page_names_the_http_status() -> None:
     only place the difference can survive is this message, which is logged."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(403, content=b"<html><body>Forbidden</body></html>")
+        return httpx.Response(
+            403,
+            content=b"<html><body>Forbidden</body></html>",
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(ValueError, match=r"HTTP 403"):
-            await fetch_page("http://example.com/blocked", client=client)
+            await fetch_page("http://example.com/blocked", client=client, resolver=_test_resolver)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "10.0.0.1",
+        "172.16.0.1",
+        "192.168.1.1",
+        "127.0.0.1",
+        "169.254.1.1",
+        "224.0.0.1",
+        "192.0.2.1",
+        "198.18.0.1",
+        "100.64.0.1",
+        "0.0.0.0",
+        "::",
+        "::1",
+        "fc00::1",
+        "fe80::1",
+        "ff02::1",
+        "2001:db8::1",
+    ],
+)
+async def test_fetch_page_rejects_blocked_literal_addresses(address: str) -> None:
+    with pytest.raises(ValueError, match="blocked network"):
+        await fetch_page(f"http://[{address}]/" if ":" in address else f"http://{address}/")
+
+
+@pytest.mark.parametrize("address", ["10.0.0.1", "127.0.0.1", "169.254.169.254", "::1"])
+async def test_fetch_page_rejects_blocked_resolved_addresses(address: str) -> None:
+    def resolver(host: str, port: int) -> list[str]:
+        return [address]
+
+    with pytest.raises(ValueError, match="blocked network"):
+        await fetch_page("http://untrusted.example/", resolver=resolver)
+
+
+async def test_fetch_page_rejects_numeric_loopback_and_mixed_dns() -> None:
+    def loopback(host: str, port: int) -> list[str]:
+        return ["127.0.0.1"]
+
+    for numeric_host in ("2130706433", "0x7f000001", "0177.0.0.1"):
+        with pytest.raises(ValueError, match="blocked network"):
+            await fetch_page(f"http://{numeric_host}/", resolver=loopback)
+
+    with pytest.raises(ValueError, match="blocked network"):
+        await fetch_page(
+            "http://mixed.example/", resolver=lambda h, p: ["93.184.216.34", "10.0.0.1"]
+        )
+
+
+@pytest.mark.parametrize(
+    "url,match",
+    [("http://user:pass@example.com/", "credentials"), ("http://example.com:8080/", "port")],
+)
+async def test_fetch_page_rejects_credentials_and_disallowed_ports(url: str, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        await fetch_page(url, resolver=_test_resolver)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/",
+        "http://example.com:443/",
+        "https://example.com/",
+        "https://example.com:80/",
+    ],
+)
+async def test_fetch_page_preserves_bound_port_and_host(url: str) -> None:
+    seen: dict[str, str | int | None] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["port"] = request.url.port
+        seen["host"] = request.headers["host"]
+        seen["sni"] = request.extensions.get("sni_hostname")
+        return _html_response(b"ok")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page(url, client=client, resolver=_test_resolver) == b"ok"
+    authority = url.split("//", 1)[1].split("/", 1)[0]
+    expected_port = (
+        int(authority.rsplit(":", 1)[1])
+        if ":" in authority
+        else (443 if url.startswith("https") else 80)
+    )
+    assert (seen["port"] or (443 if url.startswith("https") else 80)) == expected_port
+    assert seen["host"] == url.split("//", 1)[1].split("/", 1)[0]
+    if url.startswith("https"):
+        assert seen["sni"] == "example.com"
+
+
+async def test_fetch_page_accepts_public_ipv6_with_matching_peer() -> None:
+    address = "2001:4860:4860::8888"
+
+    def resolver(host: str, port: int) -> list[str]:
+        return [address]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _html_response(b"ok", address=address)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page("https://ipv6.example/", client=client, resolver=resolver) == b"ok"
+
+
+async def test_fetch_page_follows_only_validated_redirects_and_caps_depth() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.headers["host"])
+        if len(calls) == 1:
+            return httpx.Response(
+                302,
+                headers={"location": "/next"},
+                extensions={"network_stream": _FakeNetworkStream()},
+            )
+        return _html_response(b"ok")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert (
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver) == b"ok"
+        )
+    assert calls == ["example.com", "example.com"]
+
+    def looping(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302, headers={"location": "/again"}, extensions={"network_stream": _FakeNetworkStream()}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(looping)) as client:
+        with pytest.raises(ValueError, match="too many redirects"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+
+
+async def test_fetch_page_rejects_blocked_redirect_before_following() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            302,
+            headers={"location": "http://internal.example/"},
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
+
+    def resolver(host: str, port: int) -> list[str]:
+        return ["93.184.216.34"] if host == "example.com" else ["10.0.0.1"]
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="blocked network"):
+            await fetch_page("http://example.com/", client=client, resolver=resolver)
+    assert calls == 1
+
+
+async def test_fetch_page_re_resolves_same_host_after_redirect() -> None:
+    resolutions = 0
+    requests = 0
+
+    def resolver(host: str, port: int) -> list[str]:
+        nonlocal resolutions
+        resolutions += 1
+        return ["93.184.216.34"] if resolutions == 1 else ["10.0.0.1"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(
+            302,
+            headers={"location": "/private"},
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="blocked network"):
+            await fetch_page("http://same.example/", client=client, resolver=resolver)
+    assert resolutions == 2
+    assert requests == 1
+
+
+@pytest.mark.parametrize("address", [None, "10.0.0.1", "93.184.216.35", "::ffff:93.184.216.34"])
+async def test_fetch_page_checks_and_closes_connected_peer(address: str | None) -> None:
+    stream = _FakeNetworkStream(address)
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if address == "::ffff:93.184.216.34":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                content=b"ok",
+                extensions={"network_stream": stream},
+            )
+        return httpx.Response(
+            302,
+            headers={"location": "/next"},
+            extensions={"network_stream": stream},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        if address == "::ffff:93.184.216.34":
+            assert (
+                await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+                == b"ok"
+            )
+        else:
+            with pytest.raises(ValueError, match="network peer"):
+                await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+            assert calls == 1
+
+
+@pytest.mark.parametrize("content_type", ["", "application/json", "text/plain"])
+async def test_fetch_page_requires_html_media_type(content_type: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        headers = {"content-type": content_type} if content_type else {}
+        return httpx.Response(
+            200, headers=headers, content=b"x", extensions={"network_stream": _FakeNetworkStream()}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="HTML"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+
+
+async def test_fetch_page_accepts_html_parameters_and_xhtml() -> None:
+    for media_type in ("text/html; charset=utf-8", "application/xhtml+xml; charset=utf-8"):
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request, media_type=media_type: _html_response(
+                    b"ok", content_type=media_type
+                )
+            )
+        ) as client:
+            assert (
+                await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+                == b"ok"
+            )
+
+
+async def test_fetch_page_rejects_declared_and_streamed_oversize() -> None:
+    def declared(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html", "content-length": str(2 * 1024 * 1024 + 1)},
+            content=b"x",
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(declared)) as client:
+        with pytest.raises(ValueError, match="2MB"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+
+    stream = _ChunkStream()
+
+    def streamed(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            stream=stream,
+            extensions={"network_stream": _FakeNetworkStream()},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(streamed)) as client:
+        with pytest.raises(ValueError, match="2MB"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+    assert stream.closed
+
+
+async def test_fetch_page_wraps_transport_and_overall_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def transport_timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport_timeout)) as client:
+        with pytest.raises(ValueError, match="could not read"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
+
+    def slow_resolver(host: str, port: int) -> list[str]:
+        import time as _time
+
+        _time.sleep(0.05)
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(url_ingestion, "_OPERATION_TIMEOUT_S", 0.001)
+    with pytest.raises(ValueError, match="timeout"):
+        await fetch_page("http://slow.example/", resolver=slow_resolver)
 
 
 # --- db: fixtures + helpers --------------------------------------------------

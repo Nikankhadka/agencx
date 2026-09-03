@@ -5,7 +5,7 @@
 //
 // Regenerate with:  npm run gen:types
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import openapiTS, { astToString } from "openapi-typescript";
 
 const schemaJson = execFileSync(
@@ -23,5 +23,17 @@ const ast = await openapiTS(JSON.parse(schemaJson));
 const header =
   "// AUTO-GENERATED from the backend OpenAPI schema by scripts/gen-api-types.mjs.\n" +
   "// Do not edit by hand; run `npm run gen:types` to refresh.\n\n";
-writeFileSync(new URL("../src/lib/api-types.ts", import.meta.url), header + astToString(ast));
-console.log("wrote src/lib/api-types.ts");
+const generated = header + astToString(ast);
+const output = new URL("../src/lib/api-types.ts", import.meta.url);
+if (process.argv.includes("--check")) {
+  const current = readFileSync(output, "utf8");
+  if (current !== generated) {
+    console.error("api-types.ts is out of date; run npm run gen:types");
+    process.exitCode = 1;
+  } else {
+    console.log("api-types.ts is up to date");
+  }
+} else {
+  writeFileSync(output, generated);
+  console.log("wrote src/lib/api-types.ts");
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 
 from app.llm.embedder import Embedder
@@ -91,6 +92,22 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         if self._turn_index < len(self._turns):
             turn = self._turns[self._turn_index]
             self._turn_index += 1
+            if turn.tool_calls and turn.history_message is None:
+                turn.history_message = {
+                    "role": "assistant",
+                    "content": turn.text or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.args),
+                            },
+                        }
+                        for call in turn.tool_calls
+                    ],
+                }
             return turn
         return ToolTurn(text="", tool_calls=[])
 

@@ -139,128 +139,31 @@ async def test_metrics_counts_are_sane(
     assert body["total_cost_usd"] >= 0.0
 
 
-# --- slug availability -------------------------------------------------------
+# --- removed platform pre-provisioning --------------------------------------
 
 
-async def test_slug_availability_true_for_unused_slug(
+async def test_platform_provisioning_endpoints_are_absent(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     admin_id = uuid.uuid4()
     await _insert_platform_admin(superuser_conn, admin_id)
+    before = await superuser_conn.fetchval("select count(*) from tenants")
 
-    response = await client.get(
+    post = await client.post(
+        "/api/platform/tenants",
+        json={"slug": "not-created", "name": "Not Created"},
+        headers=_admin_headers(admin_id),
+    )
+    slug = await client.get(
         "/api/platform/tenants/slug-availability",
-        params={"slug": f"unused-{uuid.uuid4().hex[:8]}"},
+        params={"slug": "not-created"},
         headers=_admin_headers(admin_id),
     )
-    assert response.status_code == 200
-    assert response.json() == {"available": True}
 
-
-async def test_slug_availability_false_for_taken_slug(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
-) -> None:
-    admin_id = uuid.uuid4()
-    await _insert_platform_admin(superuser_conn, admin_id)
-    slug = f"taken-{uuid.uuid4().hex[:8]}"
-    await _seed_tenant(superuser_conn, slug=slug, name="Taken Co")
-
-    response = await client.get(
-        "/api/platform/tenants/slug-availability",
-        params={"slug": slug},
-        headers=_admin_headers(admin_id),
-    )
-    assert response.status_code == 200
-    assert response.json() == {"available": False}
-
-
-# --- provision ---------------------------------------------------------------
-
-
-async def test_provision_creates_tenant_and_config(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
-) -> None:
-    admin_id = uuid.uuid4()
-    await _insert_platform_admin(superuser_conn, admin_id)
-    slug = f"provision-{uuid.uuid4().hex[:8]}"
-
-    response = await client.post(
-        "/api/platform/tenants",
-        json={"slug": slug, "name": "Provisioned Co"},
-        headers=_admin_headers(admin_id),
-    )
-    assert response.status_code == 201
-    body = response.json()
-    assert body["status"] == "provisioning"
-    assert body["note"]
-
-    async with superuser_conn.transaction():
-        await superuser_conn.execute("select set_config('app.role', 'platform_admin', true)")
-        tenant_row = await superuser_conn.fetchrow(
-            "select status from tenants where id = $1", uuid.UUID(body["id"])
-        )
-        config_row = await superuser_conn.fetchrow(
-            "select tenant_id from tenant_config where tenant_id = $1", uuid.UUID(body["id"])
-        )
-    assert tenant_row is not None and tenant_row["status"] == "provisioning"
-    assert config_row is not None
-
-
-async def test_provision_duplicate_slug_is_conflict(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
-) -> None:
-    admin_id = uuid.uuid4()
-    await _insert_platform_admin(superuser_conn, admin_id)
-    slug = f"dupe-{uuid.uuid4().hex[:8]}"
-    await _seed_tenant(superuser_conn, slug=slug, name="Original Co")
-
-    response = await client.post(
-        "/api/platform/tenants",
-        json={"slug": slug, "name": "Duplicate Co"},
-        headers=_admin_headers(admin_id),
-    )
-    assert response.status_code == 409
-
-
-async def test_provision_bad_slug_is_unprocessable(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
-) -> None:
-    admin_id = uuid.uuid4()
-    await _insert_platform_admin(superuser_conn, admin_id)
-
-    response = await client.post(
-        "/api/platform/tenants",
-        json={"slug": "Not A Slug!", "name": "Bad Co"},
-        headers=_admin_headers(admin_id),
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.parametrize("slug", ["admin", "login", "settings", "api"])
-async def test_provision_reserved_slug_is_unprocessable(
-    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], slug: str
-) -> None:
-    """D22: a tenant is served at `/{slug}`, so a slug matching a route the
-    frontend already serves would be shadowed by it and the tenant would be
-    unreachable. Reserved names are refused at provision time."""
-    admin_id = uuid.uuid4()
-    await _insert_platform_admin(superuser_conn, admin_id)
-
-    response = await client.post(
-        "/api/platform/tenants",
-        json={"slug": slug, "name": "Shadowed Co"},
-        headers=_admin_headers(admin_id),
-    )
-    assert response.status_code == 422
-
-
-async def test_non_admin_cannot_provision(client: httpx.AsyncClient) -> None:
-    response = await client.post(
-        "/api/platform/tenants",
-        json={"slug": f"blocked-{uuid.uuid4().hex[:8]}", "name": "Blocked Co"},
-        headers=_admin_headers(uuid.uuid4()),
-    )
-    assert response.status_code == 403
+    assert post.status_code == 405
+    assert slug.status_code in (404, 405)
+    assert "/api/platform/tenants/slug-availability" not in app.openapi()["paths"]
+    assert await superuser_conn.fetchval("select count(*) from tenants") == before
 
 
 # --- suspend / reactivate -----------------------------------------------------

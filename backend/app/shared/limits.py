@@ -61,16 +61,20 @@ TURN_BUDGET_ESCALATION_REASON = "turn_budget"
 # the tenant hit, and the customer can simply ask again.
 PROVIDER_ERROR_ESCALATION_REASON = "provider_error"
 
+# Leads with the handoff, not with the fault. What the customer needs to know is
+# that a person at the business has this now; that something broke on our side is
+# our problem, and saying it first reads as an error page rather than a reply.
 BUDGET_UNAVAILABLE_MESSAGE = (
-    "I can't get you an answer right now, so I'm passing this to a human "
-    "who'll follow up with you. Thanks for your patience."
+    "That one's gone over to the business - someone on their team will pick it "
+    "up and get back to you. Thanks for your patience."
 )
 
 # Same situation from the customer's side, different truth about what happens
 # next: this one invites them to try again, because they can.
 PROVIDER_UNAVAILABLE_MESSAGE = (
-    "Something went wrong on my side just then, so I've let the business know. "
-    "Try me again in a moment - I'm still here."
+    "I couldn't get to an answer on that one, so I've passed it to the business "
+    "and someone on their team will follow up. Try me again in a moment though - "
+    "I'm still here."
 )
 
 

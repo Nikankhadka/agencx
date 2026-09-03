@@ -210,6 +210,12 @@ Confirm and preserve the minimal platform-owner surface: one Tenants page
 (list with status/cost/conversation counts, provision, suspend/reactivate)
 plus aggregate metrics. No new platform features land in the Stage 1 build.
 
+**Later note:** platform pre-provisioning (the "provision a tenant shell"
+control this ticket verified) was itself removed afterward - self-onboarding
+was already the only claim path that worked, and a pre-provisioned tenant
+could get permanently stuck (see progress.md's Platform-owner surface row).
+The rest of this ticket's acceptance evidence is unaffected.
+
 ### Why
 
 The platform owner persona (PRD section 3) needs provision/suspend and the

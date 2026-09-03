@@ -485,7 +485,9 @@ Nav re-cut to **Home**, **Chats** and **Business** (E-1, D21) - the sidebar at
 with traces, Dashboards, Escalations, Pricing) are removed from the tenant nav
 but their routes and code remain (E-2), reachable by the platform owner until
 Stage 2 re-lands them. Platform admin stays minimal (E-3): one Tenants page
-(list, provision, suspend/reactivate) plus aggregate metrics.
+(list, suspend/reactivate) plus aggregate metrics; tenant pre-provisioning was
+removed (see progress.md's Platform-owner surface row) since self-onboarding
+was already the only claim path that worked.
 
 **Which tab owns which route.** A drill-down does not have to live under its
 tab's URL, so a nav item can carry an `owns` list of extra prefixes.

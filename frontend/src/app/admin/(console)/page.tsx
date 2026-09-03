@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Input } from "@/components/ui/Input";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Modal } from "@/components/ui/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table";
@@ -33,17 +32,9 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-const SLUG_RE = /^[a-z0-9](-?[a-z0-9])*$/;
-const SLUG_CHECK_DEBOUNCE_MS = 400;
-
-type ProvisionStep =
-  | { kind: "form" }
-  | { kind: "success"; note: string };
-
 /**
  * T-033: the platform-owner surface (frontend.md 7.3) - one Tenants page,
- * deliberately minimal. Metric cards, provision flow with a live slug
- * availability check, suspend/reactivate with a confirm modal.
+ * deliberately minimal. Metric cards and suspend/reactivate with a confirm modal.
  */
 export default function PlatformHome() {
   const tenantsQuery = useApiQuery<Tenant[]>("/api/platform/tenants");
@@ -52,73 +43,9 @@ export default function PlatformHome() {
   const metrics = metricsQuery.data ?? null;
   const metricsError = errorMessage(metricsQuery.error, "Failed to load metrics");
 
-  const [provisionOpen, setProvisionOpen] = useState(false);
-  const [provisionStep, setProvisionStep] = useState<ProvisionStep>({ kind: "form" });
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
-  const [slugChecking, setSlugChecking] = useState(false);
-  const [provisionError, setProvisionError] = useState<string | null>(null);
-  const [provisioning, setProvisioning] = useState(false);
-
   const [confirmTarget, setConfirmTarget] = useState<Tenant | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-
-  const slugFormatValid = SLUG_RE.test(slug) && slug.length >= 3;
-
-  // Live slug-availability check as the admin types, debounced. A slug too
-  // short to be legal never round-trips to the API - the backend would just
-  // 422 or reject it as a real conflict-check subject, neither of which is
-  // useful feedback while the admin is still mid-keystroke. slugAvailable's
-  // last known value is deliberately NOT reset when the format goes invalid
-  // (no state to synchronize, nothing to derive) - the render below only
-  // trusts it while slugFormatValid is also true, so a stale result never
-  // displays against a currently-invalid slug.
-  useEffect(() => {
-    if (!slugFormatValid) return;
-    const timer = window.setTimeout(() => {
-      setSlugChecking(true);
-      apiFetch<{ available: boolean }>(
-        `/api/platform/tenants/slug-availability?slug=${encodeURIComponent(slug)}`
-      )
-        .then((body) => setSlugAvailable(body.available))
-        .catch(() => setSlugAvailable(null))
-        .finally(() => setSlugChecking(false));
-    }, SLUG_CHECK_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
-  }, [slug, slugFormatValid]);
-
-  function openProvision() {
-    setName("");
-    setSlug("");
-    setSlugAvailable(null);
-    setProvisionError(null);
-    setProvisionStep({ kind: "form" });
-    setProvisionOpen(true);
-  }
-
-  function closeProvision() {
-    setProvisionOpen(false);
-  }
-
-  async function submitProvision() {
-    setProvisionError(null);
-    setProvisioning(true);
-    try {
-      const body = await apiFetch<{ note: string }>("/api/platform/tenants", {
-        method: "POST",
-        body: JSON.stringify({ name, slug }),
-      });
-      setProvisionStep({ kind: "success", note: body.note });
-      void tenantsQuery.refetch();
-      void metricsQuery.refetch();
-    } catch (err) {
-      setProvisionError(err instanceof ApiError ? err.detail : "Failed to provision tenant");
-    } finally {
-      setProvisioning(false);
-    }
-  }
 
   async function submitStatusChange(tenant: Tenant, nextStatus: "active" | "suspended") {
     setConfirmError(null);
@@ -168,23 +95,10 @@ export default function PlatformHome() {
     },
   ];
 
-  const slugHelp = !slugFormatValid
-    ? undefined
-    : slugChecking
-      ? "Checking..."
-      : slugAvailable === true
-        ? "Available"
-        : undefined;
-  const slugFieldError =
-    slugFormatValid && slugAvailable === false ? "Already taken" : undefined;
-  const canSubmitProvision =
-    name.trim().length > 0 && slugFormatValid && slugAvailable === true;
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-title-2 font-semibold text-text">Tenants</h1>
-        <Button onClick={openProvision}>Provision tenant</Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:max-w-md sm:grid-cols-2">
@@ -215,46 +129,10 @@ export default function PlatformHome() {
           <EmptyState
             icon="groups"
             title="No tenants yet"
-            description="Provision the first business to get started."
-            action={<Button onClick={openProvision}>Provision tenant</Button>}
+            description="Tenants appear here after an owner completes self-onboarding."
           />
         }
       />
-
-      <Modal open={provisionOpen} onClose={closeProvision} title="Provision tenant">
-        {provisionStep.kind === "success" ? (
-          <div className="flex flex-col gap-4">
-            <p className="text-body-sm text-text">{provisionStep.note}</p>
-            <Button onClick={closeProvision}>Done</Button>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submitProvision();
-            }}
-            className="flex flex-col gap-4"
-          >
-            <Input
-              label="Business name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <Input
-              label="Slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value.toLowerCase())}
-              help={slugHelp}
-              error={slugFieldError ?? provisionError ?? undefined}
-              required
-            />
-            <Button type="submit" loading={provisioning} disabled={!canSubmitProvision}>
-              Provision
-            </Button>
-          </form>
-        )}
-      </Modal>
 
       <Modal
         open={confirmTarget !== null}

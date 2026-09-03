@@ -41,7 +41,30 @@ async def test_health_unavailable_when_db_down() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/health")
     assert response.status_code == 503
-    assert response.json() == {"status": "unavailable"}
+    assert response.json()["code"] == "service_unavailable"
+
+
+@pytest.mark.anyio
+async def test_json_errors_use_problem_details() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        malformed = await client.post("/api/chat", content="{")
+        unauthenticated = await client.get("/api/platform/ping")
+        missing = await client.get("/api/not-a-route")
+
+    for response in (malformed, unauthenticated, missing):
+        payload = response.json()
+        assert response.headers["content-type"].startswith("application/problem+json")
+        assert (
+            set(("type", "title", "status", "detail", "instance", "code", "request_id"))
+            <= payload.keys()
+        )
+        assert payload["instance"] == f"urn:agencx:request:{payload['request_id']}"
+    assert malformed.status_code == 400
+    assert malformed.json()["code"] == "malformed_request"
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.headers["www-authenticate"] == "Bearer"
+    assert missing.status_code == 404
 
 
 @pytest.mark.anyio
