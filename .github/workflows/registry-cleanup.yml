@@ -1,0 +1,82 @@
+name: Container registry cleanup
+
+# Vercel's container registry (VCR) caps at 50 images per repository on the
+# hobby plan, and every deployment pushes a commit-SHA-tagged image that
+# nothing ever deletes. On 2026-09-03 both `frontend` and `backend` filled up
+# (~9 days of staging + development pushes), and every new deployment failed at
+# the push step with "repository has reached the maximum allowed number of
+# images" - the deployment errored, the deploy.yml smoke test then ran against
+# a stale origin, and both branches showed a red "Vercel deployment failed".
+#
+# This prunes all but the newest 10 images per repository on a schedule, so the
+# deploy lane cannot fill up between deployments. It fails loudly on error -
+# unlike keep-warm.yml, this workflow guards the deploy lane itself.
+#
+# Required repo secret:
+#   VERCEL_TOKEN - a token scoped to the project's team (the same kind of token
+#     as .env.deploy.local's VERCEL_TOKEN). Until it is set this workflow fails
+#     on purpose; the cleanup can also be run by hand (deploy.md, "Container
+#     registry hygiene").
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # weekly, Monday 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-cleanup
+  cancel-in-progress: true
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    env:
+      # Same values as the committed .vercel/project.json - not secrets.
+      VERCEL_PROJECT: prj_wtY5nJsaSQERalmLNsjAIITDbcAU
+      VERCEL_TEAM: team_nrEhsZUAzBz2XyL8eLM7l4gX
+      # The newest 10 images always include the currently-deployed one (a
+      # deployment's image is the newest of its branch), so nothing live is
+      # ever pruned.
+      KEEP_NEWEST: 10
+    steps:
+      - name: Prune old images
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "::error::VERCEL_TOKEN secret not set - add it in Settings > Secrets and variables (see docs/agencx/deploy.md, Container registry hygiene)"
+            exit 1
+          fi
+          for repo in frontend backend; do
+            REPO="$repo" KEEP_NEWEST="$KEEP_NEWEST" VERCEL_PROJECT="$VERCEL_PROJECT" \
+              python3 - "$repo" <<'PY'
+          import json, os, subprocess, sys
+
+          repo = sys.argv[1]
+          project = os.environ["VERCEL_PROJECT"]
+          keep = int(os.environ["KEEP_NEWEST"])
+          listing = subprocess.run(
+              ["npx", "-y", "vercel@latest", "vcr", "image", "ls", repo, "-p", project,
+               "--format", "json"],
+              capture_output=True, check=True, text=True,
+          )
+          images = sorted(
+              json.loads(listing.stdout)["images"],
+              key=lambda i: i.get("createdAt", 0), reverse=True,
+          )
+          stale = [i["id"] for i in images[keep:]]
+          if not stale:
+              print(f"{repo}: {len(images)} images, nothing to prune")
+              raise SystemExit(0)
+          print(f"{repo}: {len(images)} images, pruning {len(stale)} oldest")
+          for image_id in stale:
+              subprocess.run(
+                  ["npx", "-y", "vercel@latest", "vcr", "image", "rm", repo, image_id,
+                   "-p", project, "-y", "--non-interactive"],
+                  check=True,
+              )
+          PY
+          done
