@@ -71,6 +71,12 @@ asyncio_mode = "auto"
 # requesting test's function-scoped loop); see tests/conftest.py.
 asyncio_default_fixture_loop_scope = "function"
 markers = ["db: tests that require a live Postgres (docker compose up -d db)"]
+# Run the suite at the level production runs at (Settings.log_level). Without
+# this, logging short-circuits every logger.info() before makeRecord, so a bad
+# extra={} key - "name", "module", "args" and the rest of the reserved
+# LogRecord set raise KeyError - is inert in tests and fatal in the deploy.
+# That is exactly how a KeyError in the agent's tool loop shipped.
+log_level = "INFO"
 
 [tool.mypy]
 python_version = "3.12"

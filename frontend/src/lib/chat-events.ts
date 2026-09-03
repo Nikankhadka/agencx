@@ -58,7 +58,7 @@ export const PROGRESS_LABELS: Record<ProgressStage, string> = {
   answering: "Finding an answer…",
   quoting: "Preparing your quote…",
   checking: "Checking the answer…",
-  escalating: "Connecting you to a human…",
+  escalating: "Passing this to the business…",
 };
 
 /**

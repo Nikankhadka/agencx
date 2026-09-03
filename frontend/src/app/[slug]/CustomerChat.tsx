@@ -298,7 +298,7 @@ export function CustomerChat({
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
         {messages.map((message, index) => (
-          <ChatBubble key={index} role={message.role}>
+          <ChatBubble key={index} role={message.role} senderLabel={`${displayName} staff`}>
             <StreamingText
               streaming={message.streaming ?? false}
               pending={message.streaming === true && message.text === ""}
