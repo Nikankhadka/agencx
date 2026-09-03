@@ -80,24 +80,6 @@ export interface paths {
         /** List Tenants */
         get: operations["list_tenants_api_platform_tenants_get"];
         put?: never;
-        /** Provision Tenant */
-        post: operations["provision_tenant_api_platform_tenants_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/platform/tenants/slug-availability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Check Slug Availability */
-        get: operations["check_slug_availability_api_platform_tenants_slug_availability_get"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1419,29 +1401,6 @@ export interface components {
             /** Gst */
             gst?: string | null;
         };
-        /** ProvisionTenantRequest */
-        ProvisionTenantRequest: {
-            /** Slug */
-            slug: string;
-            /** Name */
-            name: string;
-        };
-        /** ProvisionTenantResponse */
-        ProvisionTenantResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Slug */
-            slug: string;
-            /** Name */
-            name: string;
-            /** Status */
-            status: string;
-            /** Note */
-            note: string;
-        };
         /** PublicMessage */
         PublicMessage: {
             /**
@@ -1519,11 +1478,6 @@ export interface components {
             beat: string;
             /** Values */
             values?: string[];
-        };
-        /** SlugAvailabilityResponse */
-        SlugAvailabilityResponse: {
-            /** Available */
-            available: boolean;
         };
         /** StorefrontResponse */
         StorefrontResponse: {
@@ -1855,88 +1809,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSummary"][];
-                };
-            };
-            /** @description Problem details error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    provision_tenant_api_platform_tenants_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProvisionTenantRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProvisionTenantResponse"];
-                };
-            };
-            /** @description Validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Problem details error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    check_slug_availability_api_platform_tenants_slug_availability_get: {
-        parameters: {
-            query: {
-                slug: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlugAvailabilityResponse"];
-                };
-            };
-            /** @description Validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */

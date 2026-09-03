@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import asyncpg
 from fastapi import HTTPException, status
 
 from app.features.platform import service
@@ -29,31 +28,6 @@ async def metrics() -> dict[str, Any]:
 
 async def list_tenants() -> list[dict[str, Any]]:
     return await service.list_tenants()
-
-
-async def check_slug_availability(slug: str) -> bool:
-    return await service.slug_available(slug)
-
-
-async def provision(*, actor_user_id: str, slug: str, name: str) -> dict[str, Any]:
-    try:
-        tenant_id = await service.provision(slug=slug, name=name)
-    except asyncpg.UniqueViolationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="slug already taken"
-        ) from exc
-
-    logger.info(
-        "audited platform action: tenant_provisioned",
-        extra={
-            "action": "tenant_provisioned",
-            "actor_user_id": actor_user_id,
-            "tenant_id": tenant_id,
-            "slug": slug,
-            "role": "platform_admin",
-        },
-    )
-    return {"id": tenant_id, "slug": slug, "name": name, "status": "provisioning"}
 
 
 async def update_status(
