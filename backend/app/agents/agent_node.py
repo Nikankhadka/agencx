@@ -454,6 +454,14 @@ async def run(state: AgentState) -> dict[str, Any]:
                 answer_text = (turn.text or "").strip()
                 break
 
+            if turn.history_message is None:
+                logger.error("provider returned tool calls without history message")
+                answer_text = (
+                    "I can help with this business's published information, "
+                    "or connect you with a person."
+                )
+                break
+
             called_tools.update(call.name for call in turn.tool_calls)
             tool_result_messages: list[ChatMessage] = []
 
@@ -625,20 +633,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                     }
                 )
 
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": c.id,
-                            "type": "function",
-                            "function": {"name": c.name, "arguments": json.dumps(c.args)},
-                        }
-                        for c in turn.tool_calls
-                    ],
-                }
-            )
+            messages.append(turn.history_message)
             messages.extend(tool_result_messages)
 
             if "create_escalation" in called_tools:

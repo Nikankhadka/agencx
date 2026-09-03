@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 from openai import LengthFinishReasonError, RateLimitError
@@ -277,6 +277,17 @@ class OpenAISDKProvider(LLMProvider):
 
     # --- chat_with_tools: native path -------------------------------------------
 
+    @staticmethod
+    def _history_message(message: Any) -> ChatMessage:
+        """Preserve the provider's complete assistant message for the next turn."""
+        dump = getattr(message, "model_dump", None)
+        if not callable(dump):
+            raise TypeError("native tool response message must support model_dump()")
+        history = dump(mode="json", exclude_none=True)
+        if not isinstance(history, dict):
+            raise TypeError("native tool response message did not serialize to an object")
+        return cast(ChatMessage, history)
+
     async def _chat_with_tools_native(
         self, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str
     ) -> ToolTurn:
@@ -314,7 +325,11 @@ class OpenAISDKProvider(LLMProvider):
                         f"{tc.function.arguments[:200]}"
                     ) from e
                 tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, args=args))
-        return ToolTurn(text=text, tool_calls=tool_calls)
+        return ToolTurn(
+            text=text,
+            tool_calls=tool_calls,
+            history_message=self._history_message(message),
+        )
 
     # --- chat_with_tools: emulated path -----------------------------------------
 
@@ -341,7 +356,7 @@ class OpenAISDKProvider(LLMProvider):
         if tool_choice == "none":
             # Caller wants prose only, no tools. Use chat() directly.
             text = await self.chat(messages)
-            return ToolTurn(text=text)
+            return ToolTurn(text=text, history_message={"role": "assistant", "content": text})
 
         # Render the conversation tail into a user_input string.
         conv_lines: list[str] = []
@@ -401,11 +416,24 @@ class OpenAISDKProvider(LLMProvider):
 
         name: str = getattr(choice, "tool_name", "__no_tool__")
         if name == "__no_tool__":
-            return ToolTurn()
+            return ToolTurn(history_message={"role": "assistant", "content": ""})
 
         args: dict[str, object] = getattr(choice, "tool_args", {}) or {}
         tool_call = ToolCall(id=f"emulated-{name}", name=name, args=args)
-        return ToolTurn(tool_calls=[tool_call])
+        return ToolTurn(
+            tool_calls=[tool_call],
+            history_message={
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {"name": name, "arguments": json.dumps(args)},
+                    }
+                ],
+            },
+        )
 
     # ------------------------------------------------------------------------
 

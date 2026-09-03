@@ -288,7 +288,7 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | R-1 Documentation truth | backlog (not scoped) | |
 | R-2 Standard API contract (`12-refinement.md`) | done | Problem Details errors, request correlation, SSE-safe failures, OpenAPI error documentation, and frontend parser contract |
 | R-3 Schema and type safety | backlog (not scoped) | |
-| R-4 Reliability and provider | backlog (not scoped) | |
+| R-4 Reliability and provider (`12-refinement.md`) | done | Google tool-history preservation: provider-native assistant history, including thought signatures, is preserved across tool turns; deterministic provider 400s are not retried |
 | R-5 Operations and security | backlog (not scoped) | |
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
@@ -367,17 +367,20 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
   polish ticket. Revisit after Stage 1 reports back.
 
 
-- **Google's tier rejects our multi-tool turns** (found by G-1's live run,
-  2026-08-22). `openai.BadRequestError: 400 - Function call is missing a
-  thought_signature in functionCall parts ... function call
-  `default_api:lookup_order_or_ticket`, position 2`. Gemini now requires a
-  `thought_signature` echoed back on function-call parts, and it surfaces
-  through the OpenAI-compat endpoint we speak to. It fires on turns with more
-  than one tool call, so `generation_eval`, `trajectory_eval` and
-  `injection_eval` all error out against the primary tier; the deterministic
-  gates are unaffected.
-  **Failover does not absorb it**: `_FAILOVER_ERRORS` in `app/llm/failover.py`
-  covers rate limits, connection faults, upstream errors and validation errors
+- ~~**Google's tier rejects our multi-tool turns**~~ - **resolved by R-4**
+  (`12-refinement.md`). Originally found by G-1's live run, 2026-08-22:
+  `openai.BadRequestError: 400 - Function call is missing a thought_signature
+  in functionCall parts ... function call
+  `default_api:lookup_order_or_ticket`, position 2`. Gemini requires a
+  `thought_signature` echoed back on function-call parts, and the app was
+  reconstructing the assistant message from scratch before appending tool
+  results, dropping that field. `ChatMessage` and `ToolTurn` now carry the
+  provider's own message (`extra_content`/`history_message`), sent back
+  verbatim, so Google's own metadata survives a multi-tool turn instead of
+  being silently rebuilt without it. Left below for its original context; the
+  `_FAILOVER_ERRORS` reasoning still explains why failover correctly did not
+  absorb it: `_FAILOVER_ERRORS` in `app/llm/failover.py` covers rate limits,
+  connection faults, upstream errors and validation errors
   - not `BadRequestError`. That default is right in general (a 400 usually
   means the request is wrong, and retrying it elsewhere would hide a real bug),
   and wrong for a *provider-specific* 400 like this one, which the same request

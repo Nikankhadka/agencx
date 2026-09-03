@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from pydantic import BaseModel, Field
 
 from app.llm.openai_base import OpenAISDKProvider, UpstreamResponseError
@@ -41,18 +42,22 @@ def _make_native_provider(
     tool_calls: list[dict[str, object]] | None = None, content: str | None = None
 ) -> OpenAISDKProvider:
     """Build a provider whose client returns a tool-call or text response."""
-    message = SimpleNamespace(
-        content=content,
-        tool_calls=[
-            SimpleNamespace(
-                id=tc["id"],
-                function=SimpleNamespace(
-                    name=tc["name"],
-                    arguments=json.dumps(tc.get("args", {})),
-                ),
-            )
-            for tc in (tool_calls or [])
-        ],
+    message = ChatCompletionMessage.model_validate(
+        {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": json.dumps(tc.get("args", {})),
+                    },
+                }
+                for tc in (tool_calls or [])
+            ],
+        }
     )
     completion = SimpleNamespace(
         usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
@@ -68,6 +73,80 @@ def _make_native_provider(
 
 
 class TestNativeToolCalling:
+    async def test_native_history_preserves_google_signature_on_next_request(self) -> None:
+        signature = "signature-bytes-are-provider-data"
+        first = ChatCompletion.model_validate(
+            {
+                "id": "chatcmpl-1",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "gemini",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {"name": "greet", "arguments": '{"name":"A"}'},
+                                    "extra_content": {"google": {"thought_signature": signature}},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        )
+        second = ChatCompletion.model_validate(
+            {
+                "id": "chatcmpl-2",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "gemini",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": "done"},
+                    }
+                ],
+            }
+        )
+
+        class _Completions:
+            def __init__(self) -> None:
+                self.requests: list[dict[str, Any]] = []
+                self.responses = iter([first, second])
+
+            async def create(self, **kwargs: Any) -> Any:
+                self.requests.append(kwargs)
+                return next(self.responses)
+
+        completions = _Completions()
+        provider = OpenAISDKProvider(
+            SimpleNamespace(chat=SimpleNamespace(completions=completions)),
+            "gemini",
+            supports_tools=True,
+        )
+        result = await provider.chat_with_tools(
+            messages=[{"role": "user", "content": "Hi"}],
+            tools=[GREET_TOOL],
+        )
+        assert result.history_message is not None
+        history_call = result.history_message["tool_calls"][0]
+        assert history_call["extra_content"] == {"google": {"thought_signature": signature}}
+        await provider.chat_with_tools(
+            messages=[{"role": "user", "content": "Hi"}, result.history_message],
+            tools=[GREET_TOOL],
+        )
+        assert completions.requests[1]["messages"][1]["tool_calls"][0]["extra_content"] == {
+            "google": {"thought_signature": signature}
+        }
+
     async def test_native_returns_tool_calls_when_model_calls_tool(self) -> None:
         """The native path returns a ToolTurn with tool_calls populated."""
         provider = _make_native_provider(

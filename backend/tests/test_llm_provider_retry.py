@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 import pytest
-from openai import LengthFinishReasonError, RateLimitError
+from openai import BadRequestError, LengthFinishReasonError, RateLimitError
 from pydantic import BaseModel, ValidationError
 
 from app.llm import openai_base
@@ -33,6 +33,12 @@ def _rate_limit_error(retry_after: str | None = None) -> RateLimitError:
     request = httpx.Request("POST", "https://example.test/v1/chat/completions")
     response = httpx.Response(429, headers=headers, request=request)
     return RateLimitError("rate limited", response=response, body=None)
+
+
+def _bad_request_error() -> BadRequestError:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    return BadRequestError("invalid tool history", response=response, body={"error": {}})
 
 
 def _daily_quota_error() -> RateLimitError:
@@ -145,6 +151,14 @@ async def test_chat_does_not_retry_a_daily_quota(_no_real_sleep: list[float]) ->
         await _provider(exhausted).chat([{"role": "user", "content": "q"}])
     assert exhausted.calls == 1
     assert _no_real_sleep == []  # no backoff was slept
+
+
+async def test_chat_does_not_retry_deterministic_400(_no_real_sleep: list[float]) -> None:
+    bad_request = _Completions([_bad_request_error()], _completion("never"))
+    with pytest.raises(BadRequestError):
+        await _provider(bad_request).chat([{"role": "user", "content": "q"}])
+    assert bad_request.calls == 1
+    assert _no_real_sleep == []
 
 
 def test_is_daily_quota_detects_resource_exhausted() -> None:

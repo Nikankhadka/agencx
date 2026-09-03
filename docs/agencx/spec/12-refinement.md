@@ -8,6 +8,7 @@ happens as a side effect of it.
 Tickets in this file:
 
 - R-2: Standard API contract
+- R-4: Reliability and provider (partial - see US-2)
 
 ---
 
@@ -186,6 +187,85 @@ the real error shape, and a way to catch drift before it ships,
 
 ---
 
+## R-4: Reliability and provider
+
+### Summary
+
+`ChatMessage`/`ToolTurn` now carry the provider's own assistant message
+(`extra_content`/`history_message`) and send it back verbatim on the next
+turn, instead of the app reconstructing a stripped-down `{role, content,
+tool_calls}` message from scratch. That reconstruction was silently dropping
+Google's `thought_signature` metadata, which Gemini requires echoed back on
+any function-call part of a multi-tool turn.
+
+### Why
+
+Found by G-1's live run (2026-08-22):
+`openai.BadRequestError: 400 - Function call is missing a thought_signature
+in functionCall parts ... function call
+default_api:lookup_order_or_ticket, position 2`. It fired on any turn with
+more than one tool call, so `generation_eval`, `trajectory_eval`, and
+`injection_eval` all errored out against the primary tier - the deterministic
+gates were unaffected, but the tier that most customers actually run against
+could not complete a multi-tool turn at all. Failover correctly did not
+absorb it (`_FAILOVER_ERRORS` covers rate limits, connection faults, upstream
+errors and validation errors, not a provider-specific `BadRequestError`,
+which is the right default in general), so this needed a real fix rather than
+a retry.
+
+### User stories
+
+#### US-1 A multi-tool turn survives Google's primary tier
+
+**As** a customer whose question needs more than one tool call in a turn,
+**I want** the turn to complete instead of erroring out on the provider's own
+metadata requirement,
+**so that** the primary (free) tier is actually usable for the turns that
+need it most.
+
+- [x] `ToolTurn.history_message` / `ChatMessage.extra_content` carry the
+  provider's complete assistant message; `agent_node.py` appends
+  `turn.history_message` verbatim rather than rebuilding one
+- [x] Native, emulated, and no-tool-call paths in `openai_base.py` all
+  populate `history_message`, so every provider shape (including ones that
+  never carry a `thought_signature`) has one
+- [x] A `history_message is None` guard degrades to a safe refusal instead
+  of appending `None` into the conversation, if a provider path is ever added
+  that forgets to set it
+
+#### US-2 Production-smoke and judge-calibration evidence status
+
+**As** the maintainer,
+**I want** an honest, current statement of what evidence exists,
+**so that** "done" doesn't imply more verification happened than actually
+did.
+
+- [ ] Judge calibration is still blocked on founder hand-labeling
+  (circular if agent-generated) - unchanged, not addressed by this ticket
+- [ ] Production-smoke evidence beyond the B-4 deploy's own smoke test has
+  not been re-run since - unchanged, not addressed by this ticket
+
+### Tests
+
+- `backend/tests/test_llm_tool_calling.py`, `test_llm_failover.py`,
+  `test_llm_provider_retry.py`, `test_knowledge_agent.py`,
+  `backend/tests/fakes.py` (test double gained `history_message` support)
+- `make test-backend` green
+
+### Files touched
+
+- `backend/app/llm/provider.py`, `backend/app/llm/openai_base.py`,
+  `backend/app/agents/agent_node.py`
+
+### Definition of done
+
+- [x] A multi-tool turn against Google's primary tier no longer 400s on a
+  missing `thought_signature`
+- [ ] US-2 (judge calibration, production-smoke evidence) stays open -
+  this ticket is partial
+
+---
+
 ## Backlog (not yet scoped)
 
 ### R-1: Documentation truth
@@ -221,22 +301,6 @@ deliberate unknown-field policy (not an accident of Pydantic's default), and
 the generated TypeScript types are the only declared shape for every route's
 success response the frontend consumes - no hand-duplicated interface next
 to a generated one.
-
-### R-4: Reliability and provider
-
-**Why**: `progress.md`'s "Known gaps" already tracks two open items this
-ticket would close or deliberately re-defer: Google's primary tier rejects
-multi-tool turns with a missing `thought_signature` (not absorbed by
-failover, since `BadRequestError` isn't in `_FAILOVER_ERRORS` - correctly, in
-general, since most 400s mean the request is wrong, not the provider), and
-judge calibration is blocked on founder hand-labeling. Production-smoke and
-live-LLM-eval evidence also needs a current, explicit status rather than
-being inferred from when B-4 last ran.
-
-**Acceptance signal**: the `thought_signature` gap has a decision (echo it in
-the provider shim, or classify provider-specific 400s as failover-eligible)
-recorded even if not yet implemented; the "Known gaps" section states, for
-each item, whether it's still true today or has been overtaken by later work.
 
 ### R-5: Operations and security
 

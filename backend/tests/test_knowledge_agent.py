@@ -8,14 +8,14 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 import asyncpg
 import pytest
 
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
-from app.llm.provider import ToolCall, ToolTurn
+from app.llm.provider import ChatMessage, ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from app.shared import db
@@ -88,7 +88,25 @@ async def test_knowledge_node_returns_provenance_and_draft_response(
             ToolTurn(
                 tool_calls=[
                     ToolCall(id="call_s", name="search_knowledge", args={"query": "hours"}),
-                ]
+                ],
+                history_message=cast(
+                    ChatMessage,
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_s",
+                                "type": "function",
+                                "function": {
+                                    "name": "search_knowledge",
+                                    "arguments": '{"query":"hours"}',
+                                },
+                                "extra_content": {"google": {"thought_signature": "signature-123"}},
+                            }
+                        ],
+                    },
+                ),
             ),
             ToolTurn(text="ok", tool_calls=[]),
         ],
@@ -109,6 +127,8 @@ async def test_knowledge_node_returns_provenance_and_draft_response(
     assert chunk["content"] == "We are open weekdays 9-5."
     assert chunk["metadata"]["source"] == "faq.md"
     assert "id" in chunk
+    assert provider.tool_call_messages[1][2] == provider._turns[0].history_message
+    assert provider.tool_call_messages[1][3]["role"] == "tool"
 
 
 async def test_knowledge_node_refuses_with_empty_provenance_when_no_chunks(
