@@ -153,6 +153,15 @@ O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
 prototype the onboarding thread is ported from carries that ramp - B-3 stays
 open for US-2, the `STATUS_TONE` map.
 
+**Phase 1 refinement (`12-refinement.md`) has opened, with R-2 (the standard
+API contract) closed first**: every JSON error is RFC 9457 Problem Details,
+SSE streams fail safely with a typed `error` event, and `api-contract.md`
+documents the shape. **R-1 (documentation truth), R-3 (schema and type
+safety), R-4 (reliability and provider), and R-5 (operations and security)
+are open as backlog entries**, not yet scoped into full tickets - each gets
+promoted to one when picked up. No Phase 2 feature work happens as a side
+effect of this phase.
+
 ## Feature status matrix
 
 ### Foundations and tenancy
@@ -276,6 +285,11 @@ tickets since D21: E-1 (the three-tab shell) -> E-4 (Home and its brief) -> E-5
 | C-6 Human takeover: staff step in, and hand back | done | `e3e9019` |
 | D-1, D-3, D-4 Per-tenant tool gating + toggle + tests | deferred (Phase 2) | |
 | D-2 Lean default (quoting OFF) | done | `3b3a46a` (migration 0016) |
+| R-1 Documentation truth | backlog (not scoped) | |
+| R-2 Standard API contract (`12-refinement.md`) | done | Problem Details errors, request correlation, SSE-safe failures, OpenAPI error documentation, and frontend parser contract |
+| R-3 Schema and type safety | backlog (not scoped) | |
+| R-4 Reliability and provider | backlog (not scoped) | |
+| R-5 Operations and security | backlog (not scoped) | |
 | E-1 Three-tab shell (Home + Chats + Business) | done | `172e573` (shell `4063434`) |
 | E-4 Home: the greeting and the brief | done | `ebc9b78` |
 | E-5 Business hub + Booking page | done | `ac01cf0` + QR `e1f2f76` (QR later removed by E-6) |

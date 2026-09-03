@@ -78,7 +78,7 @@ export type OnboardingStreamEvent =
       suggested_slug: string;
     }
   | { type: "done" }
-  | { type: "error"; detail?: string };
+  | { type: "error"; code: string; detail: string; request_id: string };
 
 /**
  * Parse one onboarding SSE `data:` payload into a typed event, or `null` when

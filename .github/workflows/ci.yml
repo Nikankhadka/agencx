@@ -119,6 +119,36 @@ jobs:
             -e SUPABASE_JWT_SECRET \
             wren-backend-test
 
+  api-types:
+    # R-2: src/lib/api-types.ts is generated from the backend's OpenAPI
+    # schema (frontend/scripts/gen-api-types.mjs) - the only place both
+    # toolchains meet is CI, since the frontend dev container has no uv and
+    # the backend one has no node_modules. `--check` fails the job without
+    # writing, catching the exact drift class this ticket exists to prevent.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.19.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+      - name: Sync backend deps
+        # local-ml (torch/sentence-transformers) is not needed just to import
+        # the app and dump its OpenAPI schema.
+        run: uv sync --frozen --no-group local-ml
+        working-directory: backend
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+      - name: Check api-types.ts is current
+        run: npm run gen:types -- --check
+        working-directory: frontend
+
   infra:
     runs-on: ubuntu-latest
     defaults:

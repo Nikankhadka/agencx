@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -29,6 +29,7 @@ from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
 from app.shared import auth
+from app.shared.errors import request_id
 from app.shared.limits import LimitTimeout
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,7 @@ async def post_message(
 
 @router.post("/message/stream")
 async def post_message_stream(
+    request: Request,
     body: OnboardingMessageRequest,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
@@ -129,11 +131,23 @@ async def post_message_stream(
             ):
                 yield await _sse(event)
         except HTTPException as exc:
-            yield await _sse({"type": "error", "detail": exc.detail})
+            yield await _sse(
+                {
+                    "type": "error",
+                    "code": f"http_{exc.status_code}",
+                    "detail": "The request could not be completed.",
+                    "request_id": request_id(request),
+                }
+            )
             return
         except LimitTimeout:
             yield await _sse(
-                {"type": "error", "detail": "That took too long - please send your message again."}
+                {
+                    "type": "error",
+                    "code": "timeout",
+                    "detail": "That took too long - please send your message again.",
+                    "request_id": request_id(request),
+                }
             )
             return
         except Exception:
@@ -143,7 +157,9 @@ async def post_message_stream(
             yield await _sse(
                 {
                     "type": "error",
+                    "code": "internal_error",
                     "detail": "Something went wrong on my side - please send that again.",
+                    "request_id": request_id(request),
                 }
             )
             return

@@ -241,6 +241,16 @@ export function CustomerChat({
             case "escalated":
               setEscalated(true);
               break;
+            case "error":
+              // The backend failed mid-stream and said so on the wire. Without
+              // this the bubble would sit in "streaming" forever - show the
+              // same retry affordance a network failure gets below.
+              updateLastAssistant(() => ({
+                text: "Something went wrong just then. Try again?",
+                error: true,
+                streaming: false,
+              }));
+              break;
             case "done":
               updateLastAssistant(() => ({ streaming: false }));
               break;

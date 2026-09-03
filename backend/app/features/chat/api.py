@@ -10,12 +10,13 @@ service.py.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -25,6 +26,9 @@ from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
+from app.shared.errors import request_id
+
+logger = logging.getLogger("app.features.chat.api")
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -48,6 +52,7 @@ def _sse(event: dict[str, object]) -> str:
 
 @router.post("")
 async def chat(
+    request: Request,
     body: ChatRequest,
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
@@ -77,8 +82,26 @@ async def chat(
         ) from exc
 
     def _wrap(events: AsyncIterator[dict[str, object]]) -> StreamingResponse:
+        async def safe_events() -> AsyncIterator[dict[str, object]]:
+            try:
+                async for event in events:
+                    yield event
+            except Exception:
+                # The stream has already begun, so the failure cannot become a
+                # Problem Details response - it goes out as an `error` event
+                # instead. Log it here regardless: this is the last place the
+                # traceback exists, and swallowing it would leave a customer's
+                # failed turn with no record at all.
+                logger.exception("chat stream failed mid-turn")
+                yield {
+                    "type": "error",
+                    "code": "internal_error",
+                    "detail": "Something went wrong on my side - please send that again.",
+                    "request_id": request_id(request),
+                }
+
         return StreamingResponse(
-            (_sse(event) async for event in events), media_type="text/event-stream"
+            (_sse(event) async for event in safe_events()), media_type="text/event-stream"
         )
 
     # T-020/C-5: a limit stop is terminal - such a conversation never gets

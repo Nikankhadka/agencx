@@ -83,6 +83,7 @@ Each file holds one build phase and its tickets (each ticket keeps its id as a
 | `09-devex.md` | K-1 |
 | `10-deploy.md` | B-4 |
 | `11-offerings-media.md` | M-1, M-2, M-3 |
+| `12-refinement.md` | R-1, R-2, R-3, R-4, R-5 |
 
 Tickets added during the build keep the numbering of the phase they belong to
 rather than starting a new file: O-6 to O-9 and E-6 all came out of founder
@@ -117,18 +118,26 @@ Phase 1 is done.
 | 7 | `07-hygiene.md` | Hygiene: delete dead agent topology (after P-3 lands) | P-3 |
 | 8 | `10-deploy.md` | Deployment: two containers behind one Vercel origin | the three pillars |
 | 9 | `11-offerings-media.md` | Offerings + media (D24): the Booking page's Services list becomes real and owner-writable, with photos | E (M-1 before M-2/M-3) |
+| 10 | `12-refinement.md` | Phase 1 refinement: API contract, documentation truth, schema/type safety, provider reliability, operations | the three pillars, B-4 |
 
 Build order: A (done) -> {O-1, O-2} -> {P-3, P-1, P-2, P-4, P-5} -> {O-3, O-4,
 C-1, C-2, C-3, C-5, C-6, C-4} -> {E-1, E-2} -> {B-1, B-3, E-3, D-2, F-2, G-1}
--> F-1 -> B-4 -> {M-1, M-2, M-3}. C-5 and C-6 precede C-4 so the money matrix
-is written once, against the final escalation/takeover behaviour rather than
-the terminal one. `11-offerings-media.md` is not one of the original three
-pillars - it completes the Business page's Services section (E-5/E-6 already
-ship the Booking page these tickets make real) rather than adding a fourth
-pillar, and it isn't one of the explicitly-excluded Stage-1 flows (payments,
-quoting, scheduling, invoicing, leads), so it is sequenced after the pillars
-close rather than filed under `08-deferred.md`'s Phase-2 backlog. `M-2` is
+-> F-1 -> B-4 -> {M-1, M-2, M-3} -> {R-1, R-2, R-3, R-4, R-5}. C-5 and C-6
+precede C-4 so the money matrix is written once, against the final
+escalation/takeover behaviour rather than the terminal one.
+`11-offerings-media.md` is not one of the original three pillars - it
+completes the Business page's Services section (E-5/E-6 already ship the
+Booking page these tickets make real) rather than adding a fourth pillar, and
+it isn't one of the explicitly-excluded Stage-1 flows (payments, quoting,
+scheduling, invoicing, leads), so it is sequenced after the pillars close
+rather than filed under `08-deferred.md`'s Phase-2 backlog. `M-2` is
 additionally blocked on the founder provisioning Cloudinary credentials.
+`12-refinement.md` is hardening, not a fifth pillar: it comes last precisely
+because refining a contract, a schema, or an ops posture before the product
+it covers has stopped moving would mean refining a moving target. Only R-2 is
+a scoped ticket so far; R-1/R-3/R-4/R-5 are backlog entries, promoted to full
+tickets when picked up - see that file's own note on why a technical spec
+isn't written for work nobody has scoped yet.
 
 **Deferred (not Phase 1)** - see `08-deferred.md`:
 
@@ -242,3 +251,13 @@ additionally blocked on the founder provisioning Cloudinary credentials.
 | M-1 | Offerings become a real, owner-writable structured item |
 | M-2 | Reusable business media via Cloudinary |
 | M-3 | Import-and-confirm: knowledge ingestion proposes offerings |
+
+### Phase 1 refinement (`12-refinement.md`)
+
+| Id | Title |
+|---|---|
+| R-2 | Standard API contract |
+
+R-1 (Documentation truth), R-3 (Schema and type safety), R-4 (Reliability and
+provider), and R-5 (Operations and security) are recorded as backlog entries
+in that file, not yet scoped into tickets.

@@ -44,6 +44,7 @@ export type ChatStreamEvent =
    * it could not answer.
    */
   | { type: "escalated" }
+  | { type: "error"; code: string; detail: string; request_id: string }
   | { type: "done" };
 
 /**

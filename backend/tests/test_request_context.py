@@ -44,7 +44,8 @@ async def test_unhandled_error_becomes_structured_500() -> None:
         response = await client.get("/boom")
     assert response.status_code == 500
     body = response.json()
-    assert body["detail"] == "internal server error"
+    assert body["detail"] == "An unexpected server error occurred."
+    assert body["code"] == "internal_error"
     # The id in the body matches the one echoed in the header.
     assert body["request_id"] == response.headers[REQUEST_ID_HEADER]
     # No stack trace leaked to the caller.

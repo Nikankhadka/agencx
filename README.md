@@ -88,6 +88,7 @@ The canonical set lives in `docs/agencx/`; everything pre-Agencx is archived in 
 | [`docs/agencx/progress.md`](docs/agencx/progress.md) | Where is the build right now? What is built, changing, or new? |
 | [`docs/agencx/prd.md`](docs/agencx/prd.md) | What is Agencx? Why, who, what is in Stage 1 scope, and what signals decide next steps? |
 | [`docs/agencx/architecture.md`](docs/agencx/architecture.md) | How does it work? Invariants, agent flow, providers, latency budget, eval gates |
+| [`docs/agencx/api-contract.md`](docs/agencx/api-contract.md) | What JSON and SSE errors and success responses look like |
 | [`docs/agencx/design/`](docs/agencx/design/) | How is it designed? `database.md`, `frontend.md`, `decisions.md` (the decision ledger + ADRs) |
 | [`docs/agencx/spec/`](docs/agencx/spec/) | What is the work? Every ticket with detailed user stories and acceptance criteria |
 | [`docs/conventions.md`](docs/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
