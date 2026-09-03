@@ -40,12 +40,12 @@ Three decisions shape the rest:
 
 ## Branches
 
-**One branch deploys. Nothing else does.**
+**Two branches build. Nothing else does.**
 
 | Branch | What it is | What Vercel does | URL |
 |---|---|---|---|
 | `staging` | production - always live | production deployment | `<project>.vercel.app`, later `agencx.app` (B-2) |
-| `development` | integration; work happens here and locally | **nothing** | - |
+| `development` | integration; work happens here and locally | preview deployment | `agencx-git-development-<project>.vercel.app` |
 | `feat/*` | in-flight work | **nothing** | - |
 
 There is no `main`. `ci.yml` gates pushes to `staging` and `development` and
@@ -64,18 +64,24 @@ below.**
    the branch from the repo's GitHub default. Set it in the dashboard. It *can*
    be read back, as `link.productionBranch` on the project object.
 2. Settings > Git > **Ignored Build Step** = Custom, with
-   `[ "$VERCEL_GIT_COMMIT_REF" != "staging" ]`. Vercel reads exit 0 as "ignore
-   this build" and exit 1 as "build it", so `staging` builds and every other
-   branch is skipped before a build starts. Without this, Production Branch
-   alone still burns a preview build on every `development` and `feat/*` push
-   and publishes a preview URL for it. Readable and writable over the API as
-   `commandForIgnoringBuildStep`.
+   `[ "$VERCEL_GIT_COMMIT_REF" != "staging" ] && [ "$VERCEL_GIT_COMMIT_REF" != "development" ]`.
+   Vercel reads exit 0 as "ignore this build" and exit 1 as "build it", so
+   `staging` and `development` build (production and preview respectively) and
+   every other branch is skipped before a build starts. Without this, Production
+   Branch alone would also burn a preview build on every `feat/*` push.
+   Readable and writable over the API as `commandForIgnoringBuildStep`.
+
+   The development preview shares the production Supabase database - there is
+   only one. A preview whose branch carries unapplied migrations will error on
+   the endpoints that query the new tables, and testing onboarding on a preview
+   writes real rows into the shared database. Both are accepted for the solo
+   phase; the smoke test gates staging only.
 
    One consequence worth knowing: a deploy started from the CLI has no git ref,
    so `VERCEL_GIT_COMMIT_REF` is empty and the build is skipped like any other
-   non-`staging` branch. This project deploys through the Git integration only,
-   so that is the correct behaviour rather than a limitation - but it will look
-   like a hang if you ever reach for `vercel --prod`.
+   non-`staging`/`development` branch. This project deploys through the Git
+   integration only, so that is the correct behaviour rather than a limitation -
+   but it will look like a hang if you ever reach for `vercel --prod`.
 
 > **Do not put `ignoreCommand` in `vercel.json`.** It is a documented key, but a
 > `vercel.json` that also declares `services` (this one does - the two container
@@ -367,11 +373,12 @@ origin, and both branches showed a red "Vercel deployment failed" commit status.
 
 Prevention, in two layers:
 
-1. The **Ignored Build Step** (Branches above) means only `staging` pushes
-   build, which halves the burn rate. It is writable over the API as
+1. The **Ignored Build Step** (Branches above) means only `staging` and
+   `development` push builds - `feat/*` and PRs are skipped, which keeps the
+   burn rate at the two live branches. It is writable over the API as
    `commandForIgnoringBuildStep`; it was set that way on 2026-09-03.
-2. `.github/workflows/registry-cleanup.yml` prunes all but the newest 10 images
-   per repository on a weekly schedule. It needs one repo secret:
+2. `.github/workflows/registry-cleanup.yml` prunes all but the newest 5 images
+   per repository daily. It needs one repo secret:
 
 ```
 VERCEL_TOKEN=<token scoped to the project's team>
@@ -381,6 +388,12 @@ VERCEL_TOKEN=<token scoped to the project's team>
    Account Settings > Tokens). Until the secret is set the workflow fails on
    purpose - it guards the deploy lane.
 
+   Keeping 5 per repository covers both live images (staging production +
+   development preview, which are the newest of their branches) plus a few
+   rollback steps. The count is deliberately higher than the number of pushes
+   that can land between staging syncs: pruning a live image would break the
+   container's next cold start.
+
    Manual equivalent, from a machine with `.env.deploy.local` sourced:
 
    ```bash
@@ -388,7 +401,7 @@ VERCEL_TOKEN=<token scoped to the project's team>
    npx vercel vcr image rm frontend <image-id> -p "$VERCEL_PROJECT"
    ```
 
-   Keep the newest ~10 per repository - the currently-deployed image is always
+   Keep the newest ~5 per repository - the currently-deployed images are always
    among them.
 
 ## What the repo changes deliver
@@ -435,8 +448,10 @@ The founder steps above are external. The code that makes them work is B-4
    ```
 
 3. Push a branch -> PR into `development`: `ci.yml` passes, and Vercel builds
-   **nothing**. A deployment appearing here means the Ignored Build Step is not
-   taking effect.
+   **nothing** (the branch is skipped by the Ignored Build Step). A deployment
+   appearing here means the Ignored Build Step is not taking effect. Pushing
+   directly to `development` does build a preview deployment at
+   `agencx-git-development-<project>.vercel.app`.
 4. Merge to `staging`: Vercel builds and deploys both services with
    `target: "production"`, then `deploy.yml` smoke-tests `/health`,
    `/api/public/tenant/bytefix` and `/bytefix` on the live origin.
