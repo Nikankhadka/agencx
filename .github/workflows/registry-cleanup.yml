@@ -8,9 +8,16 @@ name: Container registry cleanup
 # images" - the deployment errored, the deploy.yml smoke test then ran against
 # a stale origin, and both branches showed a red "Vercel deployment failed".
 #
-# This prunes all but the newest 10 images per repository on a schedule, so the
-# deploy lane cannot fill up between deployments. It fails loudly on error -
-# unlike keep-warm.yml, this workflow guards the deploy lane itself.
+# This prunes all but the newest 5 images per repository daily, so the deploy
+# lane cannot fill up between deployments. It fails loudly on error - unlike
+# keep-warm.yml, this workflow guards the deploy lane itself.
+#
+# The newest 5 always include both live images in the normal flow (staging
+# production + development preview): a deployment's image is the newest of its
+# branch, and a prune can only remove an image after 5+ newer pushes, which
+# means several development pushes with no staging sync. Pruning a live image
+# would break the container's next cold start, so keep the count higher than
+# the usual number of pushes between staging syncs.
 #
 # Required repo secret:
 #   VERCEL_TOKEN - a token scoped to the project's team (the same kind of token
@@ -20,7 +27,7 @@ name: Container registry cleanup
 
 on:
   schedule:
-    - cron: "0 4 * * 1" # weekly, Monday 04:00 UTC
+    - cron: "0 4 * * *" # daily, 04:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -37,10 +44,10 @@ jobs:
       # Same values as the committed .vercel/project.json - not secrets.
       VERCEL_PROJECT: prj_wtY5nJsaSQERalmLNsjAIITDbcAU
       VERCEL_TEAM: team_nrEhsZUAzBz2XyL8eLM7l4gX
-      # The newest 10 images always include the currently-deployed one (a
-      # deployment's image is the newest of its branch), so nothing live is
-      # ever pruned.
-      KEEP_NEWEST: 10
+      # The newest 5 always include the currently-deployed images (a
+      # deployment's image is the newest of its branch, and both branches are
+      # pushed together in this repo's flow), so nothing live is ever pruned.
+      KEEP_NEWEST: 5
     steps:
       - name: Prune old images
         env:
