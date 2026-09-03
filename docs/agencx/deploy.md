@@ -155,6 +155,14 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
 
    This creates the schema, the `wren_app` role, and the pgvector indexes.
    pgvector is preinstalled on Supabase.
+
+   The runner is forward-only and idempotent (applied files are recorded in
+   `schema_migrations`), so **re-run it on every deploy whose branch adds
+   migration files** - deployed code and database schema must change together.
+   Skipping it has cost a real outage: on 2026-09-03 migrations 0022-0025 (the
+   offerings/catalogue feature) had reached staging but not this database, the
+   storefront endpoint 500'd with `relation "offerings" does not exist`, and the
+   deploy smoke test went red on every CI-green push.
 4. Seed the demo tenant, same shell (the deploy smoke test looks for it):
 
    ```bash
@@ -347,6 +355,42 @@ exactly like "passing": `deploy.yml` never verifies the origin, and
 start it exists to hide is never actually hidden. It went unset from B-4 until
 2026-08-26 and neither workflow ever went red.
 
+## Step 6 - Container registry hygiene
+
+Vercel's container registry (VCR) caps at **50 images per repository** on the
+hobby plan, and every deployment pushes a commit-SHA-tagged image that nothing
+ever deletes. On 2026-09-03 both `frontend` and `backend` were full after ~9
+days of pushes, and every new deployment failed at the image-push step with
+`denied: repository has reached the maximum allowed number of images` - the
+deployment went to ERROR, deploy.yml's smoke test then ran against the stale
+origin, and both branches showed a red "Vercel deployment failed" commit status.
+
+Prevention, in two layers:
+
+1. The **Ignored Build Step** (Branches above) means only `staging` pushes
+   build, which halves the burn rate. It is writable over the API as
+   `commandForIgnoringBuildStep`; it was set that way on 2026-09-03.
+2. `.github/workflows/registry-cleanup.yml` prunes all but the newest 10 images
+   per repository on a weekly schedule. It needs one repo secret:
+
+```
+VERCEL_TOKEN=<token scoped to the project's team>
+```
+
+   The same kind of token as `.env.deploy.local`'s `VERCEL_TOKEN` (Vercel >
+   Account Settings > Tokens). Until the secret is set the workflow fails on
+   purpose - it guards the deploy lane.
+
+   Manual equivalent, from a machine with `.env.deploy.local` sourced:
+
+   ```bash
+   npx vercel vcr image ls frontend -p "$VERCEL_PROJECT"
+   npx vercel vcr image rm frontend <image-id> -p "$VERCEL_PROJECT"
+   ```
+
+   Keep the newest ~10 per repository - the currently-deployed image is always
+   among them.
+
 ## What the repo changes deliver
 
 The founder steps above are external. The code that makes them work is B-4
@@ -370,7 +414,10 @@ The founder steps above are external. The code that makes them work is B-4
    opaque 413.
 7. `.github/workflows/` - `ci.yml` gates `staging`/`development` and runs the
    backend suite in the image's `test` stage; `deploy.yml` drops the AWS build
-   and push entirely and smoke-tests the live origin instead.
+   and push entirely and smoke-tests the live origin instead; `keep-warm.yml`
+   pings `/health` and `/login` every 10 minutes so a visitor is unlikely to
+   wake a cold container; `registry-cleanup.yml` prunes old container-registry
+   images so the hobby 50-image cap cannot block deploys (Step 6).
 8. `.env.example` - documents `EMBEDDER=google`, `RERANKER=cohere` and the
    pooler `DATABASE_URL`.
 
