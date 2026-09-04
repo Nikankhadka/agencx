@@ -30,6 +30,7 @@ Active phase files contain unresolved tickets only:
 |---|---|
 | [`active/08-deferred.md`](active/08-deferred.md) | B-2, D-1, D-3 |
 | [`active/12-refinement.md`](active/12-refinement.md) | R-3, R-4, R-5 |
+| [`active/13-walkthrough.md`](active/13-walkthrough.md) | W-1 through W-6 |
 
 Completed phase files preserve the detailed records for shipped work:
 
@@ -76,7 +77,13 @@ supporting phases landed in this order:
 5. Deployment
 6. Offerings and media
 7. Phase 1 refinement
+8. Walkthrough fixes
 
 The active refinement phase is hardening, not new product scope. B-2, D-1, and
 D-3 remain deferred to Phase 2. Payments, scheduling, invoicing, leads, and
 other Stage 2 work remain outside this spec set.
+
+The walkthrough phase (`W-1` through `W-6`) closes defects a founder
+walkthrough found in already-shipped work: the home escalation queue, the
+onboarding interview, and customer chat grounding. It is a second bug-fix
+pass on Phase 1 surfaces, not new product scope.

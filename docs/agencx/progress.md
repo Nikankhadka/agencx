@@ -38,6 +38,12 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [ ] R-5: decide and validate backups/restore, error tracking, E2E-in-CI, and dependency scanning.
 - [ ] Add the GitHub `VERCEL_TOKEN` secret so registry cleanup can run. The local Vercel token is not a repository secret.
 - [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
+- [ ] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
+- [ ] W-2: stop the onboarding interview from re-asking a filled slot.
+- [ ] W-3: remove the redundant "Answering..." line and stabilize the onboarding composer's height.
+- [ ] W-4: pre-fill the go-live slug on every path and show a real error when it fails.
+- [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together.
+- [ ] W-6: extract priced, described offerings from a whole-business document upload.
 
 ## Known gaps and deliberate deferrals
 
@@ -124,10 +130,24 @@ hosted needs. Custom SMTP (Brevo) is a separate, still-open gap (above): this
 fix restores the founder's own login, but a real tenant owner receives
 nothing until Brevo is configured.
 
+**Phase 13 (walkthrough fixes) has opened** (`13-walkthrough.md`, 2026-09-04).
+A founder walkthrough of the deployed build found defects across the home
+escalation queue, the onboarding interview, and customer chat grounding. Two
+of the six tickets, W-1 and W-5, refine work this same session already
+shipped (the escalation queue above, and `fix/customer-offering-context`'s
+offerings-grounding fix) rather than building it fresh. W-2 is the largest
+ticket: the onboarding interview's next question has always been chosen
+deterministically but composed by a second, unconstrained LLM call, which let
+it re-ask a business name already on file - the fix makes the server emit the
+question verbatim, the same way the chip-answer path already does, and adds a
+flow-change confirmation rule to `conventions.md` so a working conversational
+flow is not altered again without a flagged before/after.
+
 | Location | Status | Contents |
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
+| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-6 |
 | [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |
 | [`docs/archive/phase1-complete/`](../archive/phase1-complete/) | Historical | Completed R-1 and R-2 records |
 
