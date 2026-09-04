@@ -110,6 +110,7 @@
 - **nginx auth-proxy must resolve upstream at request time**, not startup: use `resolver 127.0.0.11 valid=10s` + `set $gotrue http://auth:9999; proxy_pass $gotrue;`. The `set` MUST come BEFORE `rewrite ... break;`.
 - **`GOTRUE_JWT_SECRET` needed by compose interpolation**: `scripts/dev.sh` exports it AND persists it into the repo-root `.env` (compose project env file) - without that file, any raw compose command sees config drift and recreates auth with an empty secret, which GoTrue refuses to boot with (exit 1).
 - **Login "Failed to fetch" = auth stack down, not a code bug**: bring the stack up with `make dev` or `make services`. Port 54321 is only reachable when `auth` + `auth-proxy` containers run.
+- **Hosted Supabase's Auth config is not in git and drifts silently from `docker-compose.yml`'s local GoTrue env** (2026-09-04): Site URL, URI allow list, and the email templates are Management API / dashboard state only. When a `GOTRUE_MAILER_TEMPLATES_*` or `GOTRUE_SITE_URL`-equivalent line changes here, apply the same change to the hosted project via the `curl` in `deploy.md` Step 1.5, or the fix only works locally. Root cause of the 2026-09-04 incident: Step 1.5 had never been applied to the hosted project at all, so `signInWithOtp` mailed a link to Supabase's `http://localhost:3000` default instead of a code.
 
 ### Containerized dev stack (K-1, F-3)
 

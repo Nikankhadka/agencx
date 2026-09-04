@@ -209,6 +209,12 @@ services:
       # back to the built-in template) - so it is served through the
       # auth-proxy nginx alongside GoTrue itself. See auth-proxy.conf.
       GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: http://auth-proxy/gotrue-templates/magic_link.html
+      # GoTrue renders the "Confirm signup" template, not Magic Link, for any
+      # address it hasn't seen before - signInWithOtp auto-creates the user,
+      # so every real tenant owner hits this path on their first login, not
+      # Magic Link. Same link-only-default problem, same fix, same file: there
+      # is nothing signup-specific needed in the body.
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: http://auth-proxy/gotrue-templates/magic_link.html
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9999/health"]
       interval: 5s
