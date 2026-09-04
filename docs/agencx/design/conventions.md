@@ -118,4 +118,15 @@ A single vertical-branch in agent or tool logic invalidates the platform's centr
 - Any ticket touching a customer- or tenant-facing surface should be read as including: fix visibly broken UI encountered along the way, per section 6 above.
 - Any ticket touching agent, tool, retrieval, or pricing logic should be read as including: no vertical-specific branching, per section 9 above.
 
+## 11. Document maintenance
+
+- Keep open tickets in `docs/agencx/spec/active/`.
+- When every ticket in a phase is complete, move its file to
+  `docs/agencx/spec/completed/` with `git mv`.
+- When a ticket ships, update `docs/agencx/progress.md` with its status and
+  evidence.
+- When a decision, assessment, or prototype is superseded, preserve it under
+  `docs/archive/` and update the archive index.
+- Do not delete historical content merely to shorten an active document.
+
 *End of Agent Conventions v2.0.*

@@ -411,7 +411,7 @@ ships.
 ## D23: login-in-chat moves onto GoTrue OTP; sessions move onto @supabase/ssr cookies
 
 **Date:** 2026-08-28 (founder). **Status:** accepted. Closes G2.1 and G2.2 in
-`docs/agencx/industry-standard-gap.md` (`FLAG: auth-model change`).
+`docs/archive/industry-standard-gap.md` (`FLAG: auth-model change`).
 
 **Decision:** The backend stops issuing and verifying its own login codes.
 GoTrue's own OTP flow (`signInWithOtp` / `verifyOtp`, type `email`) replaces
@@ -483,7 +483,7 @@ write path the seed scripts depend on.
 after that session ran out of usage before it could write anything down -
 provenance below). **Status:** `M-1`, `M-2`, `M-3`, and `M-4` built; live
 Cloudinary smoke testing remains credential-dependent - see
-`docs/agencx/spec/11-offerings-media.md`.
+`docs/agencx/spec/completed/11-offerings-media.md`.
 Closes G5.1 in `industry-standard-gap.md`, broadened past that ticket's
 original scope. `FLAG: new external service` (Cloudinary). `FLAG: schema
 change` (`tenant_assets` widens or is replaced).

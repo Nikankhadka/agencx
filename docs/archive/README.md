@@ -1,7 +1,7 @@
 # Archive - the pre-Agencx documentation
 
-Everything documented before the Agencx restructure (2026-08-20), moved here so the new
-canonical set under `docs/agencx/` has no duplicates. Nothing here is edited or
+Historical and point-in-time documentation is moved here so the current set
+under `docs/agencx/` has no duplicate active records. Nothing here is edited or
 maintained. It is reference material for history, evidence, and provenance.
 
 ## What is where
@@ -15,6 +15,9 @@ maintained. It is reference material for history, evidence, and provenance.
 | `wren-design/` | Wren implementation truth: `database.md`, `frontend.md` | `docs/agencx/design/database.md` + `design/frontend.md` (rewritten) |
 | `plan/agencx-merge.md` | The merge plan that scoped this restructure | Its locked decisions and flow design are the spine of the new set |
 | `artifacts/` | Wren build evidence: eval report, security write-up, generalization proof (+ stray `Untitled` dictation file) | Referenced from `docs/agencx/progress.md`; the evidence still stands |
+| `industry-standard-gap.md` | Point-in-time Agencx industry-standard assessment | The current gap summary is in `docs/agencx/architecture.md` and the build dashboard |
+| `phase1-complete/12-refinement-r1-r2.md` | Completed R-1 and R-2 refinement records | Active refinement work is in `docs/agencx/spec/active/12-refinement.md` |
+| `prototypes/agencx-storefront-customer-v3.html` | Superseded storefront prototype | The current prototype is in `docs/agencx/design/prototypes/` |
 
 ## Retired content notes
 

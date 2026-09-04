@@ -6,7 +6,7 @@
 
 Agencx is a domain-agnostic, multi-tenant SaaS where any small business (dentist, butcher, phone repair shop, online store) self-onboards through a conversation and gets its own private, branded support-and-sales agent at `agencx.app/{slug}` that answers from the business's own knowledge, and escalates to a human when it should; recommending, quoting, and order tracking are per-tenant opt-ins. Built on the shipped Wren build (the repo, roles, and env keep the `wren` names). Solo portfolio venture (Ronin Khadka). **The Wren build is complete; the Agencx change build proceeds ticket by ticket from `docs/agencx/spec/`.**
 
-**Do not load the archived docs (`docs/archive/`) into context - all of it.** Start at `README.md`, then `docs/agencx/progress.md` for progress. The canonical set is `docs/agencx/` (`prd.md`, `architecture.md`, `design/`, `spec/`). The only doc that always binds in full is `docs/conventions.md` (summarized under Conventions below). Human-readable progress lives in `docs/agencx/progress.md` - update its row for a ticket whenever you commit one.
+**Do not load the archived docs (`docs/archive/`) into context - all of it.** Start at `README.md`, then `docs/agencx/progress.md` for progress. The canonical set is `docs/agencx/` (`prd.md`, `architecture.md`, `design/`, `spec/`). The only doc that always binds in full is `docs/agencx/design/conventions.md` (summarized under Conventions below). Human-readable progress lives in `docs/agencx/progress.md` - update its row for a ticket whenever you commit one.
 
 ## Stack
 
@@ -68,9 +68,9 @@ Run `make help` for the full list with descriptions.
 
 ## Structure
 
-- `docs/agencx/` - the canonical build docs: `prd.md` (product authority), `architecture.md` (technical ceiling), `progress.md` (BUILT / CHANGING / NEW tracker), `design/` (database, frontend, decisions/ADRs), `spec/` (the change tickets with user stories).
-- `docs/archive/` - everything pre-Agencx, kept for provenance only; never load it into context, never edit it.
-- `docs/conventions.md` - binding conventions (root of docs/).
+- `docs/agencx/` - the canonical build docs: `prd.md` (product authority), `architecture.md` (technical ceiling), `progress.md` (build dashboard), `design/` (database, frontend, decisions/ADRs), `spec/active/` and `spec/completed/` (the change tickets with user stories).
+- `docs/archive/` - historical and point-in-time material, kept for provenance only; never load it into context, never edit it.
+- `docs/agencx/design/conventions.md` - binding conventions.
 - `frontend/` - Next.js app (three surfaces via route groups; tokens in `src/styles/theme.css`)
 - `backend/` - FastAPI app (`app/`), tests, and (from phase 1) migrations, seeds, evals
 - `infra/` - Terraform (7-file AWS stack, dormant since B-4 - still CI-validated, deployed by nothing)
@@ -80,7 +80,7 @@ See `.agents/map.md` for the full generated file map.
 
 ## Conventions
 
-`docs/conventions.md` (Agent Conventions v2.0) is binding on all work in this repo. Highlights - read the full doc, these are pointers not substitutes:
+`docs/agencx/design/conventions.md` (Agent Conventions v2.0) is binding on all work in this repo. Highlights - read the full doc, these are pointers not substitutes:
 
 - No em dashes anywhere; plain dash only. No agent co-author lines in commits. Never hand-edit `CHANGELOG.md` or auto-generated files.
 - Quality, simplicity, robustness, and maintainability outrank development cost - but scope boundaries (30-day clock, MoSCoW cuts) stay fixed; flag conflicts instead of silently resolving them.

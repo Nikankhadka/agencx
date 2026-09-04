@@ -361,6 +361,15 @@ requests/day and Groq 30 RPM bound the demo cohort before cost does. The
 failover tier (section 10) absorbs the spikes; the limits themselves are
 configuration, watched in the dashboards.
 
+## Current operational gap summary
+
+The deployed Stage 1 shape is ready for QA, but the operational baseline still
+needs backups and restore verification, error tracking, E2E execution in CI, and
+dependency scanning. The full point-in-time assessment is preserved in
+[`docs/archive/industry-standard-gap.md`](../archive/industry-standard-gap.md);
+active refinement work is tracked in
+[`spec/active/12-refinement.md`](spec/active/12-refinement.md).
+
 ## 14. Deliberately absent
 
 | Not building | Why | Would reconsider when |

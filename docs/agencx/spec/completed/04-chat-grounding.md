@@ -1,5 +1,7 @@
 # Phase 1 - Chat grounding (O-3/O-4 + C)
 
+**Status: complete.**
+
 Chat grounding: knowledge ingest into the whole-corpus/retrieval seam, and the
 loosened money guardrail (verbatim figures from owner material) run across
 every answer path.

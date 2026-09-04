@@ -407,7 +407,7 @@ VERCEL_TOKEN=<token scoped to the project's team>
 ## What the repo changes deliver
 
 The founder steps above are external. The code that makes them work is B-4
-(`docs/agencx/spec/10-deploy.md`, branch `feat/deploy-containers-cicd`):
+(`docs/agencx/spec/completed/10-deploy.md`, branch `feat/deploy-containers-cicd`):
 
 1. `vercel.json` - the two services and the rewrites that route them. The
    branch filter lives in the dashboard as the Ignored Build Step, not here -

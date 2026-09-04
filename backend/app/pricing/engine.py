@@ -1,7 +1,7 @@
 """T-016: the deterministic pricing engine.
 
 NO LLM IMPORTS ANYWHERE IN THIS MODULE, full stop. This is the one hard-rule
-enforcement point (docs/conventions.md, the deterministic-pricing hard
+enforcement point (docs/agencx/design/conventions.md, the deterministic-pricing hard
 rule): agents select ``rule_code``/``catalog_item_id`` + quantity,
 never a number - this module reads the tenant's pricing_rules/offerings
 fresh from the DB and computes every cent. "Pure function" here means

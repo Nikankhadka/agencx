@@ -1,5 +1,7 @@
 # Phase 1 - Onboarding (O)
 
+**Status: complete.**
+
 The onboarding spine: a single-tool + LLM turn loop and login-in-chat.
 These are the first build-phase tickets for the three pillars.
 

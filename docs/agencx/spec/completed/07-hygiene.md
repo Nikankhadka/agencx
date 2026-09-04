@@ -1,5 +1,7 @@
 # Phase 1 - Hygiene (F)
 
+**Status: complete.**
+
 Dead-code cleanup after the supervisor-with-tools topology (P-3) lands. The
 one topology survives; superseded fixed-specialist routing is deleted.
 
@@ -168,7 +170,7 @@ else,
   dashboards}/**` (role threading)
 - `backend/evals/*` (eval_cases sync removed), `backend/seeds/*` (helpers +
   dedup), `backend/tests/*`, `docs/agencx/design/database.md`,
-  `docs/agencx/industry-standard-gap.md` (G3.1 resolved), `progress.md`
+  `docs/archive/industry-standard-gap.md` (G3.1 resolved), `progress.md`
 
 ### Definition of done
 

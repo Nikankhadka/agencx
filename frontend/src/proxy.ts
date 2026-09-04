@@ -11,7 +11,7 @@ import { serverPublicConfig } from "@/lib/public-config";
  * This is UX, not the enforcement boundary: the backend verifies every bearer
  * token itself (shared/auth.py) and RLS is the real backstop underneath that
  * (database.md sections 2-3), matching the defense-in-depth posture
- * industry-standard-gap.md's G2.2 write-up calls for after CVE-2025-29927
+ * docs/archive/industry-standard-gap.md's G2.2 write-up calls for after CVE-2025-29927
  * proved proxy-only auth is bypassable. What this buys is a server-rendered
  * redirect instead of a client-side flash of a page the owner has no session
  * for.

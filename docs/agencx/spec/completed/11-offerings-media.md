@@ -1,5 +1,7 @@
 # Offerings + Media (D24)
 
+**Status: complete.**
+
 Four tickets. `M-1`, `M-2`, `M-3`, and `M-4` are built; live Cloudinary
 smoke testing remains credential-dependent. See
 `docs/agencx/design/decisions.md` D24 for the design reasoning (catalog/
