@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBrief } from "./brief";
+import { buildBrief, waitingRows } from "./brief";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import type { KnowledgeRecord } from "../../business/details/knowledge/lib/types";
 
@@ -14,6 +14,65 @@ function conversation(over: Partial<ConversationSummary> = {}): ConversationSumm
     ...over,
   } as ConversationSummary;
 }
+
+describe("waitingRows", () => {
+  it("names the waiting customer, their summary, and when they were raised", () => {
+    const rows = waitingRows([
+      conversation({
+        id: "c1",
+        needs_attention: true,
+        customer_ref: "Emma W.",
+        pending_summary: "Wants a price for 15 people.",
+        pending_since: "2026-08-22T09:00:00Z",
+      }),
+    ]);
+    expect(rows).toEqual([
+      { id: "c1", name: "Emma W.", summary: "Wants a price for 15 people.", since: "2026-08-22T09:00:00Z" },
+    ]);
+  });
+
+  it("ignores conversations that do not need attention", () => {
+    expect(waitingRows([conversation({ needs_attention: false })])).toEqual([]);
+  });
+
+  it("falls back when the customer has no name", () => {
+    const rows = waitingRows([conversation({ needs_attention: true })]);
+    expect(rows[0]!.name).toBe("A customer");
+  });
+
+  it("shows a placeholder line before the async summary lands", () => {
+    const rows = waitingRows([
+      conversation({ needs_attention: true, pending_summary: null }),
+    ]);
+    expect(rows[0]!.summary).toBe("The owner's assistant is preparing a summary.");
+  });
+
+  it("sorts oldest escalation first", () => {
+    const rows = waitingRows([
+      conversation({ id: "newer", needs_attention: true, pending_since: "2026-08-22T09:10:00Z" }),
+      conversation({ id: "older", needs_attention: true, pending_since: "2026-08-22T09:00:00Z" }),
+    ]);
+    expect(rows.map((r) => r.id)).toEqual(["older", "newer"]);
+  });
+
+  it("falls back to last_activity_at, then created_at, when pending_since is missing", () => {
+    const rows = waitingRows([
+      conversation({
+        id: "no-pending-since",
+        needs_attention: true,
+        created_at: "2026-08-22T08:00:00Z",
+        last_activity_at: "2026-08-22T09:30:00Z",
+      }),
+      conversation({
+        id: "with-pending-since",
+        needs_attention: true,
+        pending_since: "2026-08-22T09:15:00Z",
+      }),
+    ]);
+    // 09:15 (pending_since) sorts before 09:30 (last_activity_at fallback).
+    expect(rows.map((r) => r.id)).toEqual(["with-pending-since", "no-pending-since"]);
+  });
+});
 
 function record(over: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
   return {
@@ -30,42 +89,6 @@ function record(over: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
 describe("buildBrief", () => {
   it("is empty when a live business has nothing outstanding", () => {
     expect(buildBrief([conversation()], [record()])).toEqual([]);
-  });
-
-  it("names the one customer who is waiting, and why", () => {
-    const items = buildBrief(
-      [
-        conversation({
-          needs_attention: true,
-          customer_ref: "Emma W.",
-          pending_summary: "Wants a price for 15 people.",
-        }),
-      ],
-      [record()],
-    );
-    expect(items).toHaveLength(1);
-    expect(items[0]!.kind).toBe("waiting");
-    expect(items[0]!.headline).toBe("Emma W. is waiting on you.");
-    expect(items[0]!.note).toBe("Wants a price for 15 people.");
-    expect(items[0]!.chips[0]!.href).toBe("/chats");
-  });
-
-  it("counts them once there is more than one", () => {
-    const items = buildBrief(
-      [
-        conversation({ id: "a", needs_attention: true }),
-        conversation({ id: "b", needs_attention: true }),
-        conversation({ id: "c" }),
-      ],
-      [record()],
-    );
-    expect(items[0]!.headline).toBe("2 customers are waiting on you.");
-  });
-
-  it("falls back when the customer has no name", () => {
-    const items = buildBrief([conversation({ needs_attention: true })], [record()]);
-    expect(items[0]!.headline).toBe("A customer is waiting on you.");
-    expect(items[0]!.note).toBeUndefined();
   });
 
   it("surfaces an unsaved draft by its source, not its filename when it is a link", () => {
@@ -102,13 +125,5 @@ describe("buildBrief", () => {
     expect(items[0]!.chips[0]!.href).toBe("/business");
 
     expect(buildBrief([conversation()], []).some((i) => i.kind === "share")).toBe(false);
-  });
-
-  it("puts the waiting customer above the draft", () => {
-    const items = buildBrief(
-      [conversation({ needs_attention: true })],
-      [record({ status: "draft" })],
-    );
-    expect(items.map((i) => i.kind)).toEqual(["waiting", "draft"]);
   });
 });

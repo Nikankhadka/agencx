@@ -6,7 +6,7 @@ import { CommandPill } from "@/components/ui/CommandPill";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { ConversationDetail } from "@/lib/api-schemas";
-import { clockTime } from "../lib/format";
+import { clockTime } from "@/lib/format";
 
 /**
  * C-6 Chats thread: the owner reads a conversation, steps into it, and hands it

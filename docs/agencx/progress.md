@@ -173,6 +173,29 @@ order/ticket lookup stay exactly where D-2 left them: built, exposed to every
 tenant today because D-1's per-tenant gating hasn't landed yet, not deleted or
 deferred out of the codebase.
 
+**Owner-home escalation queue is unticketed UI polish** (founder request,
+2026-09-04, `feat/owner-escalation-panel`), not a spec ticket. Home's
+`WaitingPanel` replaces the single collapsed "waiting" `BriefItem` with one
+row per customer who needs the owner (name, relative time, the assistant's
+one-line summary), sorted oldest escalation first and capped to 3 with a
+"Show all N" expand; a row links straight to `/chats/:id` rather than the bare
+list. The Chats tab badge (bottom bar and sidebar) now carries the count
+instead of a bare dot. `escalations.summary` is only ever written today by the
+`create_escalation` tool - the price_gate/inspection/limit paths leave it
+NULL - so a new async summariser (`app/agents/escalation_summary.py`) fills it
+from the last few messages after the customer's turn is already on the wire
+(never inside it: T-028's 10s turn budget has no room for an extra LLM call at
+the point an escalation fires). `ConversationSummary` gained `pending_since`
+(the escalation's own timestamp) alongside the existing `pending_summary`.
+Also fixed in passing: the Chats-list attention dot and the new count badges
+disagreed on which amber to use (`--color-warning`'s amber-500, a "kept from
+the prior system" holdover that reads brown at text weight and fails 4.5:1
+against its own subtle background, versus `--color-highlight`'s amber-400,
+the prototype's actual notification colour) - `--color-highlight` now points
+at `--amber-300` (a lighter step of the same prototype ramp, 8.8:1 as dark
+text on a solid fill) and every "wants the owner" indicator in the app uses
+it consistently.
+
 ## Feature status matrix
 
 ### Foundations and tenancy

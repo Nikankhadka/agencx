@@ -14,8 +14,12 @@ export interface TabItem {
    * "where am I" failure the bar exists to prevent.
    */
   owns?: string[];
-  /** Draws the prototype's `#ndot` - something on this tab wants the owner. */
-  dot?: boolean;
+  /**
+   * How many things on this tab want the owner - the prototype's `#ndot`
+   * (a bare 8px dot) widened into a number, since "5 waiting" is worth more
+   * than "something is waiting". 0 or undefined draws nothing.
+   */
+  count?: number;
 }
 
 /**
@@ -59,6 +63,7 @@ export function TabBar({ items, pathname }: { items: TabItem[]; pathname: string
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
+            aria-label={item.count ? `${item.label}, ${item.count} waiting` : undefined}
             className={[
               "mx-tab-inset-x my-tab-inset flex h-tab flex-1 flex-col items-center justify-center gap-[3px] rounded-tab transition-colors duration-(--duration-fast)",
               active ? "bg-accent-a09 text-accent" : "text-ink-a40",
@@ -66,11 +71,13 @@ export function TabBar({ items, pathname }: { items: TabItem[]; pathname: string
           >
             <span className="relative">
               <Icon name={item.icon} filled={active} size={20} />
-              {item.dot ? (
+              {item.count ? (
                 <span
                   aria-hidden="true"
-                  className="absolute -right-1.5 -top-0.5 size-ndot rounded-full bg-warning"
-                />
+                  className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-0.5 text-badge font-semibold text-text"
+                >
+                  {item.count > 9 ? "9+" : item.count}
+                </span>
               ) : null}
             </span>
             <span className="text-tab font-medium">{item.label}</span>

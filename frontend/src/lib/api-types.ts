@@ -1005,6 +1005,8 @@ export interface components {
             needs_attention: boolean;
             /** Pending Summary */
             pending_summary?: string | null;
+            /** Pending Since */
+            pending_since?: string | null;
             /** Last Message */
             last_message?: string | null;
             /** Last Activity At */

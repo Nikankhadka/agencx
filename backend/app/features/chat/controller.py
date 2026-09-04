@@ -25,6 +25,7 @@ from uuid import UUID
 
 from langgraph.errors import GraphRecursionError
 
+from app.agents import escalation_summary
 from app.agents.graph import get_graph
 from app.agents.spotlight import scan_input
 from app.agents.state import AgentState, GraphContext
@@ -168,6 +169,11 @@ async def stream_chat_response(
     verdicts: dict[str, object] = {}
     tool_calls: list[dict[str, object]] = []
     author_node: str | None = None
+    # Every in-graph escalation path (create_escalation tool, price_gate,
+    # inspection) routes through escalation.py's node, which always emits
+    # this - the one reliable signal, from inside the custom stream, that
+    # this turn wrote an escalation row worth summarising.
+    handoff_seen = False
     tracer = get_tracer(config.get_settings())
     # Latency baseline. The gap between first_model_token_ms (the model started
     # producing prose) and first_prose_ms (the customer was first allowed to see
@@ -252,6 +258,9 @@ async def stream_chat_response(
                         # assistant message below for the Surface-2 trace, never
                         # streamed to the customer.
                         tool_calls.append(event)
+                    elif etype == "handoff":
+                        handoff_seen = True
+                        buffer.append(event)
                     elif etype == "redraft":
                         # T-018/T-021: a gate rejected the draft text already
                         # accumulated; the producing node is about to stream fresh
@@ -296,6 +305,9 @@ async def stream_chat_response(
             reason=TURN_BUDGET_ESCALATION_REASON,
             message=BUDGET_UNAVAILABLE_MESSAGE,
         )
+        escalation_summary.schedule(
+            tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
+        )
         if usages:
             await service.record_turn_costs(
                 tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
@@ -310,6 +322,9 @@ async def stream_chat_response(
             conversation_id=conversation_id,
             reason=STEP_CAP_ESCALATION_REASON,
             message=BUDGET_UNAVAILABLE_MESSAGE,
+        )
+        escalation_summary.schedule(
+            tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
         )
         # T-030: the overflow turn still made real LLM calls before the cap
         # tripped - by definition more than a normal turn's worth. Its usage
@@ -343,6 +358,9 @@ async def stream_chat_response(
             message=PROVIDER_UNAVAILABLE_MESSAGE,
             terminal=False,
         )
+        escalation_summary.schedule(
+            tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
+        )
         # The failed turn still burned tokens before it died; they belong in
         # cost_logs for the same reason the step-cap path records its own.
         if usages:
@@ -363,6 +381,10 @@ async def stream_chat_response(
         usages=usages,
         author_node=author_node,
     )
+    if handoff_seen:
+        escalation_summary.schedule(
+            tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
+        )
     logger.info(
         "chat turn",
         extra={

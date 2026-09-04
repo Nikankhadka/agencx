@@ -14,6 +14,11 @@ import {
  * reminder) and none of it is ported, because a card with nothing behind it is
  * the dead surface the PRD forbids. Stage 2's quote and order approvals become
  * further kinds in this same list - the card never changes.
+ *
+ * Waiting customers are not a `BriefItem` - see `waitingRows` below. A list of
+ * customers is a different shape from a headline-plus-chips card, and one
+ * BriefItem already collapsed every waiting customer into whichever one
+ * happened to be first; the WaitingPanel this feeds shows every row.
  */
 export interface BriefChip {
   label: string;
@@ -21,14 +26,45 @@ export interface BriefChip {
 }
 
 export interface BriefItem {
-  kind: "waiting" | "draft" | "share";
+  kind: "draft" | "share";
   headline: string;
   note?: string;
   chips: BriefChip[];
 }
 
+export interface WaitingRow {
+  id: string;
+  name: string;
+  summary: string;
+  since: string;
+}
+
 function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
+}
+
+/** Shown for the seconds before the async escalation summariser lands its
+ * result - never a reason-code map, since the summariser is what makes those
+ * unnecessary. */
+const SUMMARY_PENDING = "The owner's assistant is preparing a summary.";
+
+/**
+ * Every customer waiting on the owner, oldest escalation first - the
+ * prioritisation the panel promises. `pending_since` is the escalation's own
+ * timestamp (added alongside `pending_summary`); a row from before that
+ * migration falls back to `last_activity_at` so it still sorts somewhere
+ * sane rather than floating to a NaN-driven top or bottom.
+ */
+export function waitingRows(conversations: ConversationSummary[]): WaitingRow[] {
+  return conversations
+    .filter((row) => row.needs_attention)
+    .map((row) => ({
+      id: row.id,
+      name: row.customer_ref?.trim() || "A customer",
+      summary: row.pending_summary?.trim() || SUMMARY_PENDING,
+      since: row.pending_since ?? row.last_activity_at ?? row.created_at,
+    }))
+    .sort((a, b) => new Date(a.since).getTime() - new Date(b.since).getTime());
 }
 
 /**
@@ -43,23 +79,6 @@ export function buildBrief(
   records: KnowledgeRecord[],
 ): BriefItem[] {
   const items: BriefItem[] = [];
-
-  // Someone is actually waiting, so it goes first.
-  const waiting = conversations.filter((row) => row.needs_attention);
-  if (waiting.length > 0) {
-    const first = waiting[0]!;
-    items.push({
-      kind: "waiting",
-      headline:
-        waiting.length === 1
-          ? `${first.customer_ref?.trim() || "A customer"} is waiting on you.`
-          : `${waiting.length} customers are waiting on you.`,
-      // The assistant's own summary of what it could not finish beats a message
-      // excerpt - it is the sentence that says why this needs a person.
-      note: first.pending_summary?.trim() || undefined,
-      chips: [{ label: "Open", href: "/chats" }],
-    });
-  }
 
   // A draft answers nothing until it is saved (D19), so an unread one is the
   // owner's assistant sitting on knowledge it is not allowed to use yet.

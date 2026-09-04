@@ -1,9 +1,9 @@
 /**
- * C-6 Chats: the two bits of formatting both screens need.
+ * C-6 Chats / home's waiting panel: the two bits of relative-time formatting
+ * every screen showing a conversation stamp needs.
  *
- * Kept out of the components because the list and the thread must agree - a
- * row saying "47m" next to a thread saying "an hour ago" reads like two
- * different systems.
+ * Shared rather than duplicated per screen - a row saying "47m" next to a
+ * panel saying "an hour ago" reads like two different systems.
  */
 
 /** The prototype's relative stamps: `47m`, `2d`, `Yesterday`, `Mon`. */

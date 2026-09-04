@@ -5,8 +5,9 @@ import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
-import { buildBrief } from "./lib/brief";
+import { buildBrief, waitingRows } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
+import { WaitingPanel } from "./components/WaitingPanel";
 
 /**
  * E-4 / D21: Home, the tenant app's first tab - the greeting and the brief.
@@ -52,6 +53,7 @@ export default function HomePage() {
   // empty conversation list is the share nudge's trigger, so composing while
   // one is still in flight would flash a card that is about to be wrong.
   const ready = conversations.data !== undefined && records.data !== undefined;
+  const waiting = ready ? waitingRows(conversations.data) : [];
   const items = ready ? buildBrief(conversations.data, records.data) : [];
 
   return (
@@ -61,6 +63,8 @@ export default function HomePage() {
         <br />
         {name ?? "there"}.
       </h1>
+
+      <WaitingPanel rows={waiting} />
 
       <div data-testid="home-brief">
         {items.map((item) => (

@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import type { ConversationSummary } from "@/lib/api-schemas";
-import { relativeTime } from "./lib/format";
+import { relativeTime } from "@/lib/format";
 
 /**
  * C-6 Chats: every customer conversation, and which ones want the owner.

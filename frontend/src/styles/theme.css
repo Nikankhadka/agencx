@@ -241,7 +241,6 @@
   --size-tab-inset-x: 24px;      /* .tab margin, horizontal - what keeps the
                                     active pill from filling its whole slot */
   --radius-tab: 24px;            /* .tab */
-  --size-ndot: 8px;              /* #ndot */
 
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-2: 0 2px 8px rgb(0 0 0 / 0.07);
@@ -268,7 +267,7 @@
   --color-bubble-out: var(--primary-40);        /* outgoing (owner/customer) - filled */
   --color-bubble-in: var(--neutral-94);         /* incoming assistant - light neutral */
   --color-bubble-agent-in: var(--primary-95);   /* incoming human agent - light crimson */
-  --color-highlight: var(--amber-400);          /* notification dot / rating / overdue */
+  --color-highlight: var(--amber-300);          /* notification dot / rating / overdue - a lighter yellow than --color-warning's amber-500, and legible as dark-text-on-solid-fill (8.8:1) where amber-500-as-text reads brown at 3.17:1 */
 }
 
 /* Dark mode overrides are disabled for now. See git history for the full dark

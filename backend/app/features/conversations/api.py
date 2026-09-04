@@ -32,6 +32,7 @@ class ConversationSummary(BaseModel):
     # amber "needs you" dot, the line explaining why, and the last thing said.
     needs_attention: bool = False
     pending_summary: str | None = None
+    pending_since: datetime | None = None
     last_message: str | None = None
     last_activity_at: datetime | None = None
 

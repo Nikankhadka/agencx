@@ -78,15 +78,16 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .catch(() => setTenant(null));
   }, [session]);
 
-  // The prototype's `#ndot`: the Chats tab says someone is waiting, from
-  // wherever the owner happens to be standing. Same source as the Chats
-  // screen's "Action needed" filter, so the two can never disagree.
+  // The prototype's `#ndot`, widened into a count: the Chats tab says how
+  // many are waiting, from wherever the owner happens to be standing. Same
+  // source as the Chats screen's "Action needed" filter and the home
+  // WaitingPanel, so none of the three can ever disagree.
   const conversations = useApiQuery<ConversationSummary[]>("/api/conversations", {
     enabled: Boolean(session),
   });
-  const waiting = (conversations.data ?? []).some((row) => row.needs_attention);
+  const waitingCount = (conversations.data ?? []).filter((row) => row.needs_attention).length;
   const items = NAV_ITEMS.map((item) =>
-    item.href === "/chats" ? { ...item, dot: waiting } : item
+    item.href === "/chats" ? { ...item, count: waitingCount } : item
   );
 
   if (isLoading) {
@@ -119,6 +120,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
+                  aria-label={item.count ? `${item.label}, ${item.count} waiting` : undefined}
                   className={[
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-body-sm font-medium transition-colors duration-(--duration-fast)",
                     active
@@ -128,11 +130,13 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
                 >
                   <Icon name={item.icon} filled={active} size={20} />
                   {item.label}
-                  {item.dot ? (
+                  {item.count ? (
                     <span
                       aria-hidden="true"
-                      className="ml-auto size-ndot rounded-full bg-warning"
-                    />
+                      className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-0.5 text-badge font-semibold text-text"
+                    >
+                      {item.count > 9 ? "9+" : item.count}
+                    </span>
                   ) : null}
                 </Link>
               </li>

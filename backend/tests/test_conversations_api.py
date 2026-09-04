@@ -9,6 +9,7 @@ import os
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -130,6 +131,30 @@ async def test_list_conversations_filters_by_status(
     body = response.json()
     assert len(body) == 1
     assert body[0]["id"] == str(escalated_id)
+
+
+async def test_list_conversations_surfaces_the_open_escalation(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """pending_summary/pending_since must describe the same open escalation
+    needs_attention is derived from - all three are correlated subqueries
+    against the same row and must never disagree (service.py's own claim)."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="cust-1")
+    escalation_created_at = await superuser_conn.fetchval(
+        "insert into escalations (tenant_id, conversation_id, reason, summary) "
+        "values ($1, $2, 'price_provenance', 'Wants a price for catering Friday') "
+        "returning created_at",
+        tenant_id,
+        conversation_id,
+    )
+
+    response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    row = response.json()[0]
+    assert row["needs_attention"] is True
+    assert row["pending_summary"] == "Wants a price for catering Friday"
+    assert datetime.fromisoformat(row["pending_since"]) == escalation_created_at
 
 
 async def test_get_conversation_detail_includes_tool_calls_verdicts_and_cost(
