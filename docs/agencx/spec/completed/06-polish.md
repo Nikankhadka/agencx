@@ -1,5 +1,7 @@
 # Phase 1 - Polish (B-1/B-3/E-3/D-2/F-2/G-1)
 
+**Status: complete.**
+
 The final build group: rebrand copy, semantic colour convention, minimal
 platform surface, lean default, CI import boundary, and the re-cut eval cases.
 

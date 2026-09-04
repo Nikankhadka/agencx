@@ -1,5 +1,7 @@
 # Phase 9 - Developer experience (K)
 
+**Status: complete.**
+
 Infrastructure tickets that make the repo easier to run and reason about.
 Nothing here touches product behavior.
 

@@ -1,5 +1,7 @@
 # Phase 1 - Chat spine (P)
 
+**Status: complete.**
+
 The customer chat spine: provider layers, latency/failover, agent-ready
 pre-load, knowledge versioning, and the typing indicator. These re-cut the
 chat to the supervisor-with-tools, one-call-per-turn shape.
@@ -458,7 +460,7 @@ Build from the prototype, do not invent:
 rules (7px dots, 5px gap, `tp` keyframes: 1.3s ease-in-out, 220ms stagger,
 -2.5px travel, teal-token dot) and `agentMsg()`'s indicator-then-message
 pacing in the ONBOARDING section. The customer-side placement is
-**`docs/agencx/design/prototypes/agencx-storefront-customer-v3.html`** (the
+**`docs/archive/prototypes/agencx-storefront-customer-v3.html`** (the
 chat bottom sheet); trust it for storefront interaction vocabulary only,
 never for nav (pre-D18) or copy.
 

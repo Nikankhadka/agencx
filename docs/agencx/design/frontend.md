@@ -1,6 +1,7 @@
 # Agencx - Frontend Design System and Surface Specs
 
-The implementation truth for UI. The pixel standard of `docs/conventions.md`
+The implementation truth for UI. The pixel standard of
+`docs/agencx/design/conventions.md`
 section 6 applies to everything here. Design language: **Material 3 tonal
 clarity** - warm-leaning neutrals, a **crimson primary** with teal and green
 functional accents, generous whitespace, Plus Jakarta Sans throughout (D17).
@@ -536,7 +537,7 @@ codebase, responsive; no native app, no PWA shell in Stage 1.
   screen inventory, states, interaction vocabulary, and the bottom tab bar
   pattern, now carrying the shipped crimson identity, the monogram mark, and
   the Sababa reference tenant (D17, D18). The companion storefront surface
-  (`agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
+  (`docs/archive/prototypes/agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
   storefront interaction vocabulary only
 
 ## 8. SSE event contract
@@ -600,6 +601,6 @@ stating, because each is a way the continuity could be lost by accident:
   D18); chat is mobile-first; minimum touch target 44px
 - Tab bar: `aria-current` on the active tab, visible labels on every tab,
   keyboard navigation, safe-area padding honored
-- The `docs/conventions.md` section 6 standard applies: if a screen looks off
+- The `docs/agencx/design/conventions.md` section 6 standard applies: if a screen looks off
   while you're in there - fix it in the shared component/token, not with a local
   patch

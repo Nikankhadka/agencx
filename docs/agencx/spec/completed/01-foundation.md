@@ -1,5 +1,7 @@
 # Phase 1 - Foundation (A)
 
+**Status: complete.**
+
 The doc restructure that stands up the canonical Agencx set and re-points every
 entry point at it. Both tickets are **done**.
 
@@ -96,7 +98,7 @@ progress, design docs, and this spec,
 ### Summary
 
 Re-point every entry point to the canonical Agencx set: root `README.md`,
-`AGENTS.md`, `.agents/memory.md`, and the `docs/conventions.md` header. No
+`AGENTS.md`, `.agents/memory.md`, and the `docs/agencx/design/conventions.md` header. No
 link left pointing at an archived path.
 
 ### Why
@@ -139,7 +141,7 @@ header to reflect the new set,
 
 - [ ] `.agents/memory.md`: the consolidated-docs entry is replaced with the
   Agencx restructure entry (dated), old paths updated
-- [ ] `docs/conventions.md` header: applies-to points at
+- [ ] `docs/agencx/design/conventions.md` header: applies-to points at
   `docs/agencx/prd.md` + `docs/agencx/architecture.md` (the archive source
   docs are retired)
 
@@ -150,13 +152,13 @@ header to reflect the new set,
 ### Tests
 
 - Grep for `docs/source`, `docs/design/`, `docs/PROGRESS`, `docs/plan/`,
-  `docs/artifacts/` in `README.md`, `AGENTS.md`, `docs/conventions.md`,
+  `docs/artifacts/` in `README.md`, `AGENTS.md`, `docs/agencx/design/conventions.md`,
   `.agents/*.md` - remaining hits must be deliberate archive references or
   updated
 
 ### Files touched
 
-- `README.md`, `AGENTS.md`, `docs/conventions.md`, `.agents/memory.md`
+- `README.md`, `AGENTS.md`, `docs/agencx/design/conventions.md`, `.agents/memory.md`
 
 ### Definition of done
 

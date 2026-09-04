@@ -84,10 +84,11 @@ The canonical set lives in `docs/agencx/`; everything pre-Agencx is archived in 
 | [`docs/agencx/progress.md`](docs/agencx/progress.md) | Where is the build right now? What is built, changing, or new? |
 | [`docs/agencx/prd.md`](docs/agencx/prd.md) | What is Agencx? Why, who, what is in Stage 1 scope, and what signals decide next steps? |
 | [`docs/agencx/architecture.md`](docs/agencx/architecture.md) | How does it work? Invariants, agent flow, providers, latency budget, eval gates |
-| [`docs/agencx/api-contract.md`](docs/agencx/api-contract.md) | What JSON and SSE errors and success responses look like |
+| [`docs/agencx/design/api-contract.md`](docs/agencx/design/api-contract.md) | What JSON and SSE errors and success responses look like |
 | [`docs/agencx/design/`](docs/agencx/design/) | How is it designed? `database.md`, `frontend.md`, `decisions.md` (the decision ledger + ADRs) |
-| [`docs/agencx/spec/`](docs/agencx/spec/) | What is the work? Every ticket with detailed user stories and acceptance criteria |
-| [`docs/conventions.md`](docs/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
+| [`docs/agencx/spec/active/`](docs/agencx/spec/active/) | What work remains? Open and deferred tickets |
+| [`docs/agencx/spec/completed/`](docs/agencx/spec/completed/) | What was delivered? Completed phase records |
+| [`docs/agencx/design/conventions.md`](docs/agencx/design/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
 | [`docs/archive/`](docs/archive/) | What came before? The pre-Agencx planning and design docs, kept for provenance |
 
 ## How to follow progress
@@ -139,7 +140,7 @@ troubleshooting: [`docs/agencx/running.md`](docs/agencx/running.md).** See
 1. **Deterministic pricing:** no language model ever produces a monetary amount. Agents only *select* pricing rules, items, and quantities; a pure pricing engine computes all totals in integer cents, and a validation gate rejects anything else.
 2. **Domain-agnostic:** one codebase, zero vertical-specific branches. A dentist and a phone shop run identical code and differ only in configuration and uploaded knowledge.
 
-Full text: [`docs/conventions.md`](docs/conventions.md), sections 8 and 9.
+Full text: [`docs/agencx/design/conventions.md`](docs/agencx/design/conventions.md), sections 8 and 9.
 
 ## What was deliberately deferred (and why)
 

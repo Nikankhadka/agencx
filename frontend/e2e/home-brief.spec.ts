@@ -28,25 +28,27 @@ test.describe("Home - the greeting and the brief", () => {
 
     // The seed leaves conversations flagged needs_attention, which is the same
     // source the Chats "Action needed" filter reads.
-    const waiting = page.getByTestId("brief-card-waiting");
+    const waiting = page.getByTestId("waiting-panel");
     await expect(waiting).toBeVisible();
-    await expect(waiting).toContainText("waiting on you");
+    await expect(waiting).toContainText("waiting for you");
   });
 
-  test("the brief's chip lands on the screen that resolves it", async ({ page, request }) => {
+  test("a waiting row opens that conversation directly, not the list", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/home");
 
-    await page.getByTestId("brief-card-waiting").getByRole("link", { name: "Open" }).click();
-    await page.waitForURL("**/chats");
-    await expect(page.getByTestId("chats-filter-action")).toBeVisible();
+    await page.getByTestId("waiting-row").first().click();
+    await page.waitForURL(/\/chats\/[0-9a-f-]{36}$/);
   });
 
-  test("the brief and the Chats tab dot agree about who is waiting", async ({ page, request }) => {
+  test("the waiting panel and the Chats tab badge agree about who is waiting", async ({
+    page,
+    request,
+  }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/home");
 
-    const waitingCard = page.getByTestId("brief-card-waiting");
+    const waitingPanel = page.getByTestId("waiting-panel");
     const chatsTab = page
       .getByRole("navigation", { name: "Console" })
       .getByRole("link", { name: "Chats" });
@@ -54,15 +56,15 @@ test.describe("Home - the greeting and the brief", () => {
     // Both read `needs_attention`; if one says someone is waiting, so must the
     // other. Disagreement here is the bug the shared source exists to prevent.
     //
-    // Polled, not sampled once: the dot and the card are fed by two separate
-    // queries (the console layout's and Home's), so a bare count() can catch
+    // Polled, not sampled once: the panel and the badge are fed by two separate
+    // queries (Home's and the console layout's), so a bare count() can catch
     // them mid-flight and call a race a disagreement. A real disagreement
     // never converges and still fails here, on timeout.
     await expect
       .poll(async () => {
-        const carded = await waitingCard.count();
-        const dotted = await chatsTab.locator("span[aria-hidden='true']").count();
-        return carded > 0 === dotted > 0;
+        const panelShown = await waitingPanel.count();
+        const badgeShown = await chatsTab.locator("span[aria-hidden='true']").count();
+        return panelShown > 0 === badgeShown > 0;
       })
       .toBe(true);
   });

@@ -1,5 +1,7 @@
 # Phase 10 - Deployment (B)
 
+**Status: complete.**
+
 Shipping the built product to a URL. Everything before this phase is proven in
 containers on a laptop; this is the phase where the link an owner can hand out
 becomes real.
@@ -178,7 +180,7 @@ cannot rot silently, but nothing deploys through it.
 - `backend/evals/_git.py` (new, `54cc0cd`) and the six eval modules that had each
   copy-pasted the same `_git_sha()`
 - `docs/agencx/deploy.md`, `docs/agencx/progress.md`, `docs/agencx/architecture.md`,
-  `docs/agencx/spec/08-deferred.md`, `README.md`, `AGENTS.md`, `.agents/memory.md`,
+  `docs/agencx/spec/active/08-deferred.md`, `README.md`, `AGENTS.md`, `.agents/memory.md`,
   `.env.example`
 
 ### Definition of done

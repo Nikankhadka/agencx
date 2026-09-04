@@ -1,5 +1,7 @@
 # Phase 1 - Business page (E)
 
+**Status: complete.**
+
 The tenant surface re-cut: the three-tab app (Home + Chat + Business, D21) with
 the advanced Wren screens hidden, not deleted.
 
@@ -531,7 +533,7 @@ screen, and the founder does not use it.
 The page a customer lands on (`(customer)/page.tsx`) is still a bare chat
 surface with none of this. The Booking page is the owner's preview of a
 storefront that has not been built. Porting
-`agencx-storefront-customer-v3.html` is the next ticket, and until it lands the
+`docs/archive/prototypes/agencx-storefront-customer-v3.html` is the next ticket, and until it lands the
 headings here claim only what is true.
 
 **E-5's "live / not-live state is legible" DoD bullet was never implemented** -

@@ -211,7 +211,7 @@ small image per tenant, capped at 2MB by the API and resized client-side
 before upload, fits a row fine and needs no new dependency or credential in
 local dev (there was no object store available to every surface at the time).
 `kind` is hard-CHECK-constrained to `'cover'` only, so this table cannot hold
-a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/agencx/spec/11-offerings-media.md`),
+a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/agencx/spec/completed/11-offerings-media.md`),
 which moves business media (a capped gallery + per-offering photos) to
 Cloudinary and either widens or replaces this table.
 
@@ -505,7 +505,7 @@ applied in order by a plain runner (no heavy framework):
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,
-`docs/agencx/spec/11-offerings-media.md`, D24) adds `tenant_media` for the
+`docs/agencx/spec/completed/11-offerings-media.md`, D24) adds `tenant_media` for the
 Cloudinary-backed cover and per-offering visuals while retaining legacy
 `tenant_assets` reads during rollout.
 
