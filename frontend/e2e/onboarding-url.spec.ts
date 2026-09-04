@@ -52,12 +52,12 @@ test("pasting a link reads the site and reads it back", async ({
   // "couldn't pin down the details" when it stated none.
   await expect(readBack).toHaveCount(before + 1, { timeout: 90_000 });
   await expect(readBack.last()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Review your information" })).toBeVisible();
   // ...and the stamp it replaces is gone.
   await expect(thread.getByText(/Reading your site/)).toHaveCount(0);
   await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
 
-  // The site is now a ready `website` document, so the assistant can answer
-  // from it - the read-back alone would not prove the ingest ran.
+  // The site is an unread `website` draft until the owner accepts the review.
   const token = await getAccessToken(page);
   const docs = await request.get(`${BACKEND_URL}/api/knowledge`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -74,5 +74,11 @@ test("pasting a link reads the site and reads it back", async ({
     "the pasted URL should be stored as a website document",
   ).toBeTruthy();
   expect(site?.doc_type).toBe("website");
-  expect(site?.status).toBe("ready");
+  expect(site?.status).toBe("draft");
+
+  await page
+    .getByRole("dialog", { name: "Review your information" })
+    .getByTestId("onboarding-knowledge-discard")
+    .click();
+  await expect(page.getByRole("dialog", { name: "Review your information" })).toBeHidden();
 });

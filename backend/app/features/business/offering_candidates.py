@@ -23,6 +23,8 @@ here that could invent, round or recompute an amount.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
 
 from app.pricing.validation_gate import extract_monetary_figures
@@ -60,6 +62,25 @@ class Offering:
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"Offering(name={self.name!r}, price={self.price!r})"
+
+
+def normalize_name(value: str) -> str:
+    """Return the equality key used for every offering boundary."""
+    normalized = unicodedata.normalize("NFKC", value).strip().casefold()
+    normalized = "".join(
+        " " if unicodedata.category(char).startswith("P") else char for char in normalized
+    )
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _source_lines(heading: str, body: str) -> list[str]:
+    lines = [line for line in body.splitlines() if line.strip()]
+    if len(lines) == 1:
+        delimiter = ";" if heading == "Prices" else ","
+        parts = [part.strip() for part in lines[0].split(delimiter) if part.strip()]
+        if len(parts) >= 4 and all(len(part) <= _MAX_ROW_CHARS for part in parts):
+            return parts
+    return lines
 
 
 def _split_line(line: str) -> Offering | None:
@@ -121,11 +142,11 @@ def derive(records: list[dict[str, Any]]) -> list[dict[str, str | None]]:
         for section in record.get("sections") or []:
             if section.get("heading") not in OFFERING_HEADINGS:
                 continue
-            for line in (section.get("body") or "").splitlines():
+            for line in _source_lines(section["heading"], section.get("body") or ""):
                 row = _split_line(line)
                 if row is None:
                     continue
-                key = row.name.casefold()
+                key = normalize_name(row.name)
                 existing = by_name.get(key)
                 if existing is None:
                     by_name[key] = row

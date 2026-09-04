@@ -24,10 +24,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.agents.spotlight import scan_input
+from app.features.business.offering_candidates import normalize_name
 from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
 from app.onboarding import beats
-from app.onboarding.flow import DraftUpdate
+from app.onboarding.flow import DraftUpdate, PendingOffering
 from app.onboarding.tools import save_profile
 
 logger = logging.getLogger("app.onboarding.agent")
@@ -99,7 +100,7 @@ class OnboardingRecord:
     # owner answers it (paste a link, attach a file, or say "skip"). It never
     # gates go-live - confirm still requires only the seven profile fields.
     knowledge_pending: bool = False
-    offering_candidates: list[str] = field(default_factory=list)
+    offering_candidates: list[PendingOffering] = field(default_factory=list)
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -119,7 +120,7 @@ class OnboardingRecord:
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
                 knowledge_pending=raw.get("knowledge_pending", False),
-                offering_candidates=raw.get("offering_candidates", []),
+                offering_candidates=_load_offerings(raw.get("offering_candidates", [])),
             )
         return cls(
             version=3,
@@ -138,8 +139,50 @@ class OnboardingRecord:
             "off_topic_count": self.off_topic_count,
             "completed": self.completed,
             "knowledge_pending": self.knowledge_pending,
-            "offering_candidates": self.offering_candidates,
+            "offering_candidates": [item.model_dump() for item in self.offering_candidates],
         }
+
+
+def _load_offerings(raw: Any) -> list[PendingOffering]:
+    offerings: list[PendingOffering] = []
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            offering = PendingOffering.model_validate(
+                {"name": item, "sources": ["owner"]} if isinstance(item, str) else item
+            )
+        except (TypeError, ValueError):
+            continue
+        if normalize_name(offering.name) not in {
+            normalize_name(existing.name) for existing in offerings
+        }:
+            offerings.append(offering)
+    return offerings
+
+
+def _merge_owner_offerings(record: OnboardingRecord, names: list[str]) -> None:
+    documents = [item for item in record.offering_candidates if "document" in item.sources]
+    owner: list[PendingOffering] = []
+    seen: set[str] = set()
+    for raw_name in names:
+        name = raw_name.strip()
+        key = normalize_name(name)
+        if name and key not in seen:
+            seen.add(key)
+            owner.append(PendingOffering(name=name, sources=["owner"]))
+    combined = owner + documents
+    merged: dict[str, PendingOffering] = {}
+    for item in combined:
+        key = normalize_name(item.name)
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = item.model_copy(deep=True)
+            continue
+        sources = list(dict.fromkeys([*existing.sources, *item.sources]))
+        if "owner" in item.sources:
+            merged[key] = item.model_copy(update={"sources": sources})
+        else:
+            merged[key] = existing.model_copy(update={"sources": sources})
+    record.offering_candidates = list(merged.values())
 
 
 @dataclass
@@ -352,14 +395,7 @@ async def prepare_turn(
             if getattr(update.profile, beat.key):
                 acknowledged.append(beat.label)
     if update.offering_names is not None:
-        seen: set[str] = set()
-        record.offering_candidates = []
-        for raw_name in update.offering_names:
-            name = raw_name.strip()
-            key = name.casefold()
-            if name and key not in seen:
-                seen.add(key)
-                record.offering_candidates.append(name)
+        _merge_owner_offerings(record, update.offering_names)
 
     nxt = beats.next_beat(record.draft)
     ask_for = nxt.ask if nxt else ""

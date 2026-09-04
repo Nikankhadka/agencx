@@ -61,6 +61,12 @@ export interface OnboardingState {
   input: InputSpec | null;
   can_confirm: boolean;
   suggested_slug: string | null;
+  offering_candidates?: {
+    name: string;
+    description: string;
+    price_cents: number | null;
+    sources: ("owner" | "document")[];
+  }[];
 }
 
 export type OnboardingStreamEvent =
@@ -76,6 +82,7 @@ export type OnboardingStreamEvent =
       input: InputSpec | null;
       can_confirm: boolean;
       suggested_slug: string;
+      offering_candidates?: OnboardingState["offering_candidates"];
     }
   | { type: "done" }
   | { type: "error"; code: string; detail: string; request_id: string };

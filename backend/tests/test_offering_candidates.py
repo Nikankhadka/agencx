@@ -180,3 +180,25 @@ def test_a_qualifier_belongs_to_the_price_not_the_name() -> None:
 def test_no_knowledge_means_no_rows() -> None:
     assert offerings.derive([]) == []
     assert offerings.derive([_record([])]) == []
+
+
+def test_normalize_name_handles_unicode_punctuation_and_spacing() -> None:
+    assert offerings.normalize_name("  Café—Menu!  ") == "café menu"
+
+
+def test_long_comma_and_semicolon_lists_become_rows() -> None:
+    record = _record(
+        [
+            {"heading": "What we offer", "body": "Coffee, Salads, Pita bowls, Catering box"},
+            {
+                "heading": "Prices",
+                "body": "Coffee $5; Salads $12; Pita bowls $16.50; Catering box $285",
+            },
+        ]
+    )
+    assert offerings.derive([record]) == [
+        {"name": "Coffee", "price": "$5"},
+        {"name": "Salads", "price": "$12"},
+        {"name": "Pita bowls", "price": "$16.50"},
+        {"name": "Catering box", "price": "$285"},
+    ]

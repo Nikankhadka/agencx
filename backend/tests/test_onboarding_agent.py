@@ -25,7 +25,7 @@ from app.onboarding.agent import (
     run_turn,
     stream_reply,
 )
-from app.onboarding.flow import ProfileDraft
+from app.onboarding.flow import PendingOffering, ProfileDraft
 from app.onboarding.tools import request_finalize, save_profile
 from tests.fakes import BaseFakeProvider
 
@@ -608,7 +608,17 @@ async def test_prepare_turn_keeps_explicit_offering_names_in_order_without_dupli
         record=OnboardingRecord(),
         provider=provider,
     )
-    assert plan.record.offering_candidates == ["Screen repair", "Battery swap"]
+    assert [item.name for item in plan.record.offering_candidates] == [
+        "Screen repair",
+        "Battery swap",
+    ]
+
+
+def test_old_string_offerings_load_as_owner_candidates() -> None:
+    record = OnboardingRecord.from_jsonb(
+        {"version": 3, "offering_candidates": ["Coffee", "coffee"]}
+    )
+    assert record.offering_candidates == [PendingOffering(name="Coffee", sources=["owner"])]
 
 
 # --- directive shape -----------------------------------------------------------

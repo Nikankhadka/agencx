@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 
+from app.features.business.offering_candidates import normalize_name
 from app.features.knowledge import service as knowledge_service
 from app.features.onboarding import service
 from app.features.tenants.slug import suggested_slug, validate_slug
@@ -31,7 +32,7 @@ from app.onboarding.agent import (
     selection_reply,
     stream_reply,
 )
-from app.onboarding.flow import ProfileDraft
+from app.onboarding.flow import PendingOffering, ProfileDraft
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
@@ -118,23 +119,25 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         "suggested_slug": suggested_slug(
             str(record_data.get("draft", {}).get("business_name", ""))
         ),
+        "offering_candidates": record_data.get("offering_candidates", []),
     }
 
 
-async def _scrape_and_ingest(*, tenant_id: UUID, url: str, embedder: Embedder) -> tuple[str, str]:
-    """Scrape a URL and ingest it as a 'website' document (O-3). Returns
-    ``(page_text, title)``; a scrape failure raises ``ValueError``."""
+async def _scrape_and_draft(
+    *, tenant_id: UUID, url: str, provider: LLMProvider
+) -> tuple[str, str, dict[str, Any] | None]:
+    """Fetch a URL once, then save the fetched source as an unread draft."""
     document_id = uuid4()
     page_text, title = await knowledge_service.scrape_url(url=url)
-    await knowledge_service.ingest_website(
+    record = await knowledge_service.draft_from_url_text(
         tenant_id=tenant_id,
         document_id=document_id,
         url=url,
         text=page_text,
         title=title,
-        embedder=embedder,
+        provider=provider,
     )
-    return page_text, title
+    return page_text, title, record
 
 
 def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
@@ -161,12 +164,41 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
         "suggested_slug": suggested_slug(str(draft.get("business_name", ""))) or None,
+        "offering_candidates": onboarding.to_jsonb().get("offering_candidates", []),
     }
+
+
+def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
+    merged = {normalize_name(item.name): item for item in record.offering_candidates}
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            document = PendingOffering.model_validate(item)
+        except (TypeError, ValueError):
+            continue
+        key = normalize_name(document.name)
+        owner = merged.get(key)
+        if owner is None:
+            merged[key] = document.model_copy(update={"sources": ["document"]})
+            continue
+        merged[key] = owner.model_copy(
+            update={
+                "price_cents": owner.price_cents
+                if owner.price_cents is not None
+                else document.price_cents,
+                "description": owner.description or document.description,
+                "sources": list(dict.fromkeys([*owner.sources, "document"])),
+            }
+        )
+    record.offering_candidates = list(merged.values())
 
 
 async def load_record_state(*, tenant_id: UUID) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
-    return response_from_record(record)
+    response = response_from_record(record)
+    documents = await knowledge_service.list_records(tenant_id=tenant_id)
+    if any(document["status"] == "draft" for document in documents):
+        response["can_confirm"] = False
+    return response
 
 
 async def run_message(
@@ -244,8 +276,8 @@ async def _run_url_message(
     state. A failed scrape degrades to a calm ask-to-describe."""
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
     try:
-        page_text, _title = await _scrape_and_ingest(
-            tenant_id=tenant_id, url=url, embedder=embedder
+        page_text, _title, document = await _scrape_and_draft(
+            tenant_id=tenant_id, url=url, provider=bounded
         )
     except ValueError as exc:
         # O-7: the owner gets one calm line either way, but the reason is not
@@ -257,6 +289,8 @@ async def _run_url_message(
         await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
         return onboarding.to_jsonb()
 
+    if document:
+        _merge_document_candidates(onboarding, document.get("offering_candidates", []))
     plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
     plan.record.history.append({"role": "assistant", "content": plan.summary or ""})
     await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
@@ -336,8 +370,8 @@ async def _stream_url_turn(
     # the extract run, so it has to be on the wire before any of them start.
     yield {"type": "progress", "stage": "reading_site"}
     try:
-        page_text, _title = await _scrape_and_ingest(
-            tenant_id=tenant_id, url=url, embedder=embedder
+        page_text, _title, document = await _scrape_and_draft(
+            tenant_id=tenant_id, url=url, provider=bounded
         )
     except ValueError as exc:
         logger.info("url scrape failed reason=%s", _url_failure_code(exc))
@@ -351,6 +385,8 @@ async def _stream_url_turn(
         yield {"type": "done"}
         return
 
+    if document:
+        _merge_document_candidates(onboarding, document.get("offering_candidates", []))
     plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
     await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
 
@@ -371,6 +407,40 @@ async def _stream_url_turn(
     yield {"type": "done"}
 
 
+async def save_onboarding_knowledge(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    sections: list[dict[str, str]],
+    offerings: list[PendingOffering],
+    embedder: Embedder,
+) -> tuple[dict[str, Any], list[PendingOffering]]:
+    """Publish one reviewed source and retain its catalog decisions in onboarding."""
+    keys: set[str] = set()
+    for offering in offerings:
+        key = normalize_name(offering.name)
+        if not key or key in keys:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="offering names must be unique",
+            )
+        keys.add(key)
+
+    record = await knowledge_service.publish_record(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        sections=sections,
+        embedder=embedder,
+    )
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+
+    onboarding = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
+    onboarding.offering_candidates = offerings
+    await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+    return record, offerings
+
+
 async def confirm(
     *, tenant_id: UUID, slug: str | None = None, embedder: Embedder | None = None
 ) -> dict[str, Any]:
@@ -380,6 +450,12 @@ async def confirm(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="already confirmed",
+        )
+    documents = await knowledge_service.list_records(tenant_id=tenant_id)
+    if any(document["status"] == "draft" for document in documents):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="review or discard every knowledge draft before going live",
         )
     draft = onboarding.draft
     gate = request_finalize(draft)

@@ -25,6 +25,12 @@ import {
   type OnboardingState,
 } from "@/lib/onboarding";
 import { BeatComposer } from "./components/BeatComposer";
+import {
+  type KnowledgeRecord,
+  type PendingOffering,
+  type ReviewOffering,
+} from "@/components/knowledge/types";
+import { ReviewSheet } from "@/components/knowledge/ReviewSheet";
 
 interface Message {
   /** Set only for messages updated after they are pushed (upload stamps). */
@@ -42,6 +48,7 @@ interface StateFields {
   input: InputSpec | null;
   can_confirm: boolean;
   suggested_slug: string | null;
+  offering_candidates?: PendingOffering[];
 }
 
 /**
@@ -117,6 +124,10 @@ export default function OnboardingPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [ownerOfferings, setOwnerOfferings] = useState<PendingOffering[]>([]);
+  const [drafts, setDrafts] = useState<KnowledgeRecord[]>([]);
+  const [reviewing, setReviewing] = useState<KnowledgeRecord | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [openingPaced, setOpeningPaced] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const goLiveTimer = useRef<number | null>(null);
@@ -126,13 +137,17 @@ export default function OnboardingPage() {
     setStage(fields.stage);
     setInput(fields.input);
     setCanConfirm(fields.can_confirm);
+    setOwnerOfferings(fields.offering_candidates ?? []);
     if (fields.can_confirm)
       setPublicSlug((current) => current || fields.suggested_slug || "business");
   }
 
   useEffect(() => {
-    apiFetch<OnboardingState>("/api/onboarding/state")
-      .then((state) => {
+    Promise.all([
+      apiFetch<OnboardingState>("/api/onboarding/state"),
+      apiFetch<KnowledgeRecord[]>("/api/knowledge/records"),
+    ])
+      .then(([state, records]) => {
         // E-1: a business that is already live has no interview left to run -
         // it belongs in the app. The in-session confirm still finishes here,
         // so the owner reads "you are live" before the next visit redirects.
@@ -141,6 +156,12 @@ export default function OnboardingPage() {
           return;
         }
         applyStateFields(state);
+        const pending = records.filter((record) => record.status === "draft");
+        setDrafts(pending);
+        if (pending[0]) {
+          setCanConfirm(false);
+          setReviewing(withCombinedOfferings(pending[0], state.offering_candidates ?? []));
+        }
         const restored = historyToMessages(state.history);
         if (restored.length > 0) {
           // A returning owner sees the whole thread at once - never re-paced.
@@ -267,6 +288,13 @@ export default function OnboardingPage() {
           }
         }
       }
+      const records = await apiFetch<KnowledgeRecord[]>("/api/knowledge/records");
+      const pending = records.filter((record) => record.status === "draft");
+      setDrafts(pending);
+      if (pending[0]) {
+        setCanConfirm(false);
+        setReviewing(withCombinedOfferings(pending[0], ownerOfferings));
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         // Stop before the first token leaves an empty bubble - drop it.
@@ -337,6 +365,7 @@ export default function OnboardingPage() {
     if (busy) return;
     setError(null);
     setBusy(true);
+    const accepted: KnowledgeRecord[] = [];
     try {
       for (const file of files) {
         const verdict = describeUpload(file.name);
@@ -356,14 +385,17 @@ export default function OnboardingPage() {
         form.append("file", file);
         form.append("doc_type", "other");
         try {
-          await apiFetch("/api/knowledge/upload", {
+          const draft = await apiFetch<KnowledgeRecord>("/api/knowledge/drafts/upload", {
             method: "POST",
             body: form,
           });
+          setCanConfirm(false);
+          accepted.push(draft);
+          setDrafts((previous) => [...previous, draft]);
           updateById(id, { text: `${file.name} \u00b7 added` });
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", text: verdict.message },
+            { role: "assistant", text: `I found ${file.name}. Review it before it answers customers.` },
           ]);
         } catch (err) {
           updateById(id, { text: `${file.name} \u00b7 not added` });
@@ -379,6 +411,55 @@ export default function OnboardingPage() {
           ]);
         }
       }
+      if (accepted[0]) setReviewing(withCombinedOfferings(accepted[0], ownerOfferings));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function nextDraft(excluding: string): KnowledgeRecord | null {
+    return drafts.find((draft) => draft.id !== excluding) ?? null;
+  }
+
+  async function saveKnowledge(
+    sections: { heading: string; body: string }[],
+    offerings: PendingOffering[],
+  ) {
+    if (!reviewing) return;
+    setReviewError(null);
+    setBusy(true);
+    try {
+      const response = await apiFetch<{
+        record: KnowledgeRecord;
+        offering_candidates: PendingOffering[];
+      }>(`/api/onboarding/knowledge/${reviewing.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ sections, offerings }),
+      });
+      const remaining = nextDraft(reviewing.id);
+      setOwnerOfferings(response.offering_candidates);
+      setDrafts((previous) => previous.filter((draft) => draft.id !== reviewing.id));
+      setReviewing(remaining ? withCombinedOfferings(remaining, response.offering_candidates) : null);
+      setCanConfirm(!remaining);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.detail : "I couldn't save that information.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function discardKnowledge() {
+    if (!reviewing) return;
+    setReviewError(null);
+    setBusy(true);
+    try {
+      await apiFetch(`/api/knowledge/records/${reviewing.id}`, { method: "DELETE" });
+      const remaining = nextDraft(reviewing.id);
+      setDrafts((previous) => previous.filter((draft) => draft.id !== reviewing.id));
+      setReviewing(remaining ? withCombinedOfferings(remaining, ownerOfferings) : null);
+      setCanConfirm(!remaining);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.detail : "I couldn't discard that draft.");
     } finally {
       setBusy(false);
     }
@@ -477,7 +558,7 @@ export default function OnboardingPage() {
 
       <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
         <div className="mx-auto w-full max-w-thread">
-          {!completed && canConfirm ? (
+          {!completed && canConfirm && !reviewing ? (
             <div className="flex flex-col gap-3">
               <Input
                 label="Your business page"
@@ -526,6 +607,54 @@ export default function OnboardingPage() {
           </p>
         </div>
       </div>
+      <ReviewSheet
+        record={reviewing}
+        busy={busy}
+        priceConflict={reviewError}
+        onboarding
+        onClose={() => {
+          setReviewError(null);
+          setReviewing(null);
+        }}
+        onSave={(sections, offerings) => void saveKnowledge(sections, offerings)}
+        onDiscard={() => void discardKnowledge()}
+      />
     </main>
   );
+}
+
+function withCombinedOfferings(
+  record: KnowledgeRecord,
+  ownerOfferings: PendingOffering[],
+): KnowledgeRecord {
+  const merged = new Map<string, ReviewOffering>();
+  for (const item of ownerOfferings) merged.set(normalizeOfferingName(item.name), { ...item });
+  for (const item of record.offering_candidates ?? []) {
+    const key = normalizeOfferingName(item.name);
+    const owner = merged.get(key);
+    if (!owner) {
+      merged.set(key, { ...item, sources: ["document"] });
+      continue;
+    }
+    const options = [owner.price_cents, item.price_cents].filter(
+      (price): price is number => price !== null,
+    );
+    merged.set(key, {
+      ...owner,
+      description: owner.description || item.description,
+      price_cents: owner.price_cents ?? item.price_cents,
+      sources: [...new Set([...owner.sources, ...item.sources])],
+      price_options: new Set(options).size > 1 ? [...new Set(options)] : undefined,
+    });
+  }
+  return { ...record, offering_candidates: [...merged.values()] };
+}
+
+function normalizeOfferingName(value: string): string {
+  return value
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/[\p{P}]/gu, " ")
+    .replace(/\s+/g, " ");
 }

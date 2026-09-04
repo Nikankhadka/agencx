@@ -575,6 +575,65 @@ async def test_confirm_writes_no_catalog_or_pricing_rows(
     assert rules == 0
 
 
+async def test_confirm_reconciles_reviewed_offerings_once(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    await _walk_to_confirm(client, token)
+
+    await superuser_conn.execute(
+        "insert into offerings (tenant_id, name, description, price_cents, position) "
+        "values ($1, 'coffee', 'Old description', 300, 0)",
+        tenant_id,
+    )
+    onboarding = await superuser_conn.fetchval(
+        "select config->'onboarding' from tenant_config where tenant_id = $1", tenant_id
+    )
+    record = json.loads(onboarding)
+    record["offering_candidates"] = [
+        {
+            "name": "Coffee",
+            "description": "Freshly brewed",
+            "price_cents": 450,
+            "sources": ["owner", "document"],
+        },
+        {
+            "name": "Pita bowls",
+            "description": "A filling lunch",
+            "price_cents": 1200,
+            "sources": ["document"],
+        },
+    ]
+    await superuser_conn.execute(
+        "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true) "
+        "where tenant_id = $1",
+        tenant_id,
+        json.dumps(record),
+    )
+
+    response = await client.post(
+        "/api/onboarding/confirm",
+        json={"slug": _page_slug(tenant_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200, response.text
+
+    rows = await superuser_conn.fetch(
+        "select name, description, price_cents from offerings "
+        "where tenant_id = $1 and active order by position",
+        tenant_id,
+    )
+    assert [dict(row) for row in rows] == [
+        {"name": "Coffee", "description": "Freshly brewed", "price_cents": 450},
+        {"name": "Pita bowls", "description": "A filling lunch", "price_cents": 1200},
+    ]
+    catalog = await superuser_conn.fetchrow(
+        "select status from documents where tenant_id = $1 and doc_type = 'catalog'", tenant_id
+    )
+    assert catalog is not None
+    assert catalog["status"] == "ready"
+
+
 async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.post(
@@ -705,7 +764,12 @@ def uploads_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
-    async def fake_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def fake_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         return html
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
@@ -741,14 +805,14 @@ async def test_url_message_scrapes_ingests_and_reads_back(
     assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
     assert any("Here's what I've got from your site" in m for m in assistant_msgs)
 
-    # The site became a ready 'website' document.
+    # The site remains an unread draft until the owner reviews it.
     doc = await superuser_conn.fetchrow(
         "select doc_type, status, filename from documents where tenant_id = $1",
         tenant_id,
     )
     assert doc is not None
     assert doc["doc_type"] == "website"
-    assert doc["status"] == "ready"
+    assert doc["status"] == "draft"
     assert doc["filename"] == "https://bytefix.example.com"
 
 
@@ -759,7 +823,12 @@ async def test_url_message_scrape_failure_falls_back(
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
 
-    async def fail_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def fail_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         raise ValueError("no extractable content at this URL")
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", fail_fetch)
@@ -785,7 +854,12 @@ async def test_url_message_survives_an_unreachable_host(
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
 
-    async def unreachable(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def unreachable(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         raise ValueError("could not read this URL (ConnectError)")
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", unreachable)

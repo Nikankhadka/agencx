@@ -172,6 +172,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/knowledge/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Onboarding Knowledge */
+        put: operations["save_onboarding_knowledge_api_onboarding_knowledge__document_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/message": {
         parameters: {
             query?: never;
@@ -1194,6 +1211,13 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** KnowledgeSection */
+        KnowledgeSection: {
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
+        };
         /**
          * LinksUpdate
          * @description The four link slots. An empty string clears one; an absent key leaves it.
@@ -1318,6 +1342,19 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** OnboardingKnowledgeRequest */
+        OnboardingKnowledgeRequest: {
+            /** Sections */
+            sections: components["schemas"]["KnowledgeSection"][];
+            /** Offerings */
+            offerings?: components["schemas"]["PendingOffering"][];
+        };
+        /** OnboardingKnowledgeResponse */
+        OnboardingKnowledgeResponse: {
+            record: components["schemas"]["KnowledgeRecord"];
+            /** Offering Candidates */
+            offering_candidates: components["schemas"]["PendingOffering"][];
+        };
         /** OnboardingMessageRequest */
         OnboardingMessageRequest: {
             /** Text */
@@ -1345,6 +1382,25 @@ export interface components {
             can_confirm: boolean;
             /** Suggested Slug */
             suggested_slug: string | null;
+            /** Offering Candidates */
+            offering_candidates: components["schemas"]["PendingOffering"][];
+        };
+        /**
+         * PendingOffering
+         * @description An offering waiting for owner review before it reaches the catalog.
+         */
+        PendingOffering: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Price Cents */
+            price_cents?: number | null;
+            /** Sources */
+            sources?: ("owner" | "document")[];
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -2004,6 +2060,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStateResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    save_onboarding_knowledge_api_onboarding_knowledge__document_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingKnowledgeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingKnowledgeResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */

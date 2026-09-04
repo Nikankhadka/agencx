@@ -22,12 +22,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.features.knowledge.api import KnowledgeRecord
 from app.features.onboarding import controller
 from app.features.tenants.slug import validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
+from app.onboarding.flow import PendingOffering
 from app.shared import auth
 from app.shared.errors import request_id
 from app.shared.limits import LimitTimeout
@@ -47,6 +49,7 @@ class OnboardingStateResponse(BaseModel):
     input: InputSpec | None
     can_confirm: bool
     suggested_slug: str | None
+    offering_candidates: list[PendingOffering]
 
 
 class SelectionPayload(BaseModel):
@@ -79,12 +82,46 @@ class OnboardingConfirmRequest(BaseModel):
         return value if value is None else validate_slug(value)
 
 
+class KnowledgeSection(BaseModel):
+    heading: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=20_000)
+
+
+class OnboardingKnowledgeRequest(BaseModel):
+    sections: list[KnowledgeSection] = Field(min_length=1)
+    offerings: list[PendingOffering] = Field(default_factory=list)
+
+
+class OnboardingKnowledgeResponse(BaseModel):
+    record: KnowledgeRecord
+    offering_candidates: list[PendingOffering]
+
+
 @router.get("/state", response_model=OnboardingStateResponse)
 async def get_state(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> OnboardingStateResponse:
     record = await controller.load_record_state(tenant_id=admin.tenant_id)
     return OnboardingStateResponse(**record)
+
+
+@router.put("/knowledge/{document_id}", response_model=OnboardingKnowledgeResponse)
+async def save_onboarding_knowledge(
+    document_id: UUID,
+    body: OnboardingKnowledgeRequest,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> OnboardingKnowledgeResponse:
+    record, offerings = await controller.save_onboarding_knowledge(
+        tenant_id=admin.tenant_id,
+        document_id=document_id,
+        sections=[section.model_dump() for section in body.sections],
+        offerings=body.offerings,
+        embedder=embedder,
+    )
+    return OnboardingKnowledgeResponse(
+        record=KnowledgeRecord(**record), offering_candidates=offerings
+    )
 
 
 @router.post("/message", response_model=OnboardingStateResponse)

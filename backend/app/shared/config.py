@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # then refuses placeholder/empty secrets (app/core/startup.py).
     environment: str = "local"
 
+    # Exact host:port pairs that may be used by local deterministic fixtures.
+    # Empty in every normal environment; this never broadens public URL fetches.
+    url_fetch_allowlist: str = ""
+
     # Log level for the structured JSON logger (app/observability/logging.py).
     log_level: str = "INFO"
 

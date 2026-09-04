@@ -20,6 +20,9 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/wren
       SUPABASE_URL: http://auth-proxy
+      # Only the deterministic E2E fixture may use the private Compose network.
+      # Production leaves this empty, so the public URL SSRF guard is unchanged.
+      URL_FETCH_ALLOWLIST: frontend:3000
     ports:
       - "8000:8000"
     volumes:

@@ -10,7 +10,9 @@ boundary stays with the customer assistant and the pricing engine).
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProfileDraft(BaseModel):
@@ -42,3 +44,25 @@ class DraftUpdate(BaseModel):
     profile: ProfileDraft | None = None
     meta_reply: str | None = None
     offering_names: list[str] | None = None
+
+
+class PendingOffering(BaseModel):
+    """An offering waiting for owner review before it reaches the catalog."""
+
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    price_cents: int | None = Field(default=None, ge=0)
+    sources: list[Literal["owner", "document"]] = Field(default_factory=list, validate_default=True)
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("offering name must not be empty")
+        return value
+
+    @field_validator("sources")
+    @classmethod
+    def _require_source(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value)) or ["owner"]

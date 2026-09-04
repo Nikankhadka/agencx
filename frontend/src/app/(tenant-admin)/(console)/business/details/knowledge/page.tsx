@@ -6,7 +6,13 @@ import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS, describeUpload } from "@/lib/onboarding";
 import { ReviewSheet } from "./components/ReviewSheet";
-import { sourceLabel, statusLine, type KnowledgeRecord, type KnowledgeSection } from "./lib/types";
+import {
+  sourceLabel,
+  statusLine,
+  type KnowledgeRecord,
+  type KnowledgeSection,
+  type PendingOffering,
+} from "./lib/types";
 
 /**
  * Settings > Knowledge: what the assistant answers from, as one readable text.
@@ -96,7 +102,7 @@ export default function KnowledgePage() {
 
   async function save(
     sections: KnowledgeSection[],
-    offerings: { name: string; price_cents: number | null }[] = [],
+    offerings: PendingOffering[] = [],
     acceptPriceChanges = false,
   ) {
     if (!reviewing) return;
@@ -105,7 +111,11 @@ export default function KnowledgePage() {
     try {
       await apiFetch<KnowledgeRecord>(`/api/knowledge/records/${reviewing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ sections, offerings, accept_price_changes: acceptPriceChanges }),
+        body: JSON.stringify({
+          sections,
+          offerings: offerings.map(({ name, price_cents }) => ({ name, price_cents })),
+          accept_price_changes: acceptPriceChanges,
+        }),
       });
       setPriceConflict(null);
       setReviewing(null);
