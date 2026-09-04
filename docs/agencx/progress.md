@@ -47,6 +47,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - Judge calibration needs founder labels to avoid circular evaluation.
 - The Hobby deployment has cold starts and Supabase can pause after inactivity; keep-warm mitigates this for the portfolio deployment.
 - No real customer data should use the free-tier LLM and embedding providers until the provider decision changes.
+- Custom SMTP (Brevo) is not yet configured on the hosted Supabase project. Its built-in mailer delivers only to project members at ~2/hour, so no real tenant owner can receive a login code until Brevo is set (`deploy.md` Step 1.5) - found 2026-09-04 while fixing the login OTP misconfiguration below.
 
 ## Spec status
 
@@ -104,6 +105,25 @@ at `--amber-300` (a lighter step of the same prototype ramp, 8.8:1 as dark
 text on a solid fill) and every "wants the owner" indicator in the app uses
 it consistently.
 
+**Hosted login OTP was misconfigured, not a code bug** (found 2026-09-04,
+`fix/hosted-otp-sends-link`). Staging's login-in-chat mailed a magic LINK to
+Supabase's default Site URL (`http://localhost:3000`) instead of the
+six-digit code the UI asks for - `auth_logs` showed `POST /otp` 200 followed
+by `GET /verify` **303** (a clicked link, not a typed code, which is a `POST
+/verify` 200), and `auth.users.recovery_sent_at` was stamped instead of
+`confirmation_sent_at`, confirming the Magic Link template's link-only
+default had rendered. `signInWithOtp`/`verifyOtp` (`login/page.tsx`) were
+already correct; the hosted project's Auth config (Site URL, URI allow list,
+Magic Link and Confirm signup email templates) had simply never been set per
+`deploy.md`'s own Step 1.5, which calls this "blocking, not optional." Fixed
+by PATCHing the project's Management API config directly - `deploy.md` Step
+1.5 now gives literal field values and `curl` commands instead of
+dashboard-click prose, and `docker-compose.yml` gained
+`GOTRUE_MAILER_TEMPLATES_CONFIRMATION` so local dev mirrors both templates
+hosted needs. Custom SMTP (Brevo) is a separate, still-open gap (above): this
+fix restores the founder's own login, but a real tenant owner receives
+nothing until Brevo is configured.
+
 | Location | Status | Contents |
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
@@ -114,3 +134,4 @@ it consistently.
 Phase 1 is not called fully complete until the active refinement items are
 validated or explicitly accepted as deferred. QA and optimization are separate
 from the documentation closeout and must be evidence-driven.
+

@@ -179,18 +179,47 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
 5. **Auth dashboard configuration (D23, `design/decisions.md`) - blocking, not
    optional.** Login-in-chat's OTP is issued by GoTrue itself now, not by the
    backend, so this project's Auth settings are the only thing standing between
-   a real owner and a working login:
-   - **Auth > Emails > Email Templates**, the "Magic Link" template: it has to
-     surface the six-digit code as well as the link. Supabase's default template
-     is link-only - mirror `docker/gotrue-templates/magic_link.html` (used
-     locally, same fix): put `{{ .Token }}` in the body, prominently, alongside
-     or instead of `{{ .ConfirmationURL }}`.
+   a real owner and a working login. Read and change it with the Management
+   API (a personal access token from
+   https://supabase.com/dashboard/account/tokens, not a project key) rather
+   than hunting through dashboard tabs - the fields below are literal:
+
+   ```bash
+   export SUPABASE_ACCESS_TOKEN=<personal access token>
+   export PROJECT_REF=rbujlsbnghnfnhaiwlhh
+
+   # Inspect current config first.
+   curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+     "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+     | jq '{site_url, uri_allow_list, mailer_otp_exp,
+            mailer_templates_magic_link_content,
+            mailer_templates_confirmation_content}'
+
+   # Apply the fix.
+   curl -X PATCH -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+     -H "Content-Type: application/json" \
+     "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+     -d '{
+       "site_url": "https://agencx-iota.vercel.app",
+       "uri_allow_list": "https://agencx-iota.vercel.app,https://agencx-git-staging-nikankhadkas-projects.vercel.app,https://agencx-git-development-nikankhadkas-projects.vercel.app,http://localhost:3000",
+       "mailer_otp_exp": 600,
+       "mailer_subjects_magic_link": "{{ .Token }} is your Agencx login code",
+       "mailer_subjects_confirmation": "{{ .Token }} is your Agencx login code",
+       "mailer_templates_magic_link_content": "<h2>Your login code</h2><p>Enter this code to sign in:</p><h1>{{ .Token }}</h1><p>This code expires shortly and can only be used once.</p>",
+       "mailer_templates_confirmation_content": "<h2>Your login code</h2><p>Enter this code to sign in:</p><h1>{{ .Token }}</h1><p>This code expires shortly and can only be used once.</p>"
+     }'
+   ```
+
+   Both templates need the fix, not just Magic Link: `signInWithOtp` renders
+   the **Confirm signup** template instead for any address GoTrue hasn't seen
+   before, which is every real tenant owner on their first login. Re-run the
+   `GET` first if the field names above ever look wrong against a newer API
+   version - `mailer_templates_*_content` is the documented key, but do not
+   assume it never changes.
    - **Auth > Emails > SMTP Settings**: turn on **Custom SMTP** and point it at
      Brevo (see Step 3 below). Supabase's built-in mailer sends at most ~2
      emails/hour and only to addresses that are already project members - with
      it left off, no real tenant owner can ever receive a code, full stop.
-   - **Auth > Emails**, the OTP expiry: set to 600s (10 minutes) to match the
-     UX `GOTRUE_MAILER_OTP_EXP` gives locally; the default is 24h.
    - **Auth > Rate Limits**: raise the email-send limit past whatever traffic
      is expected (GoTrue's own default, ~30/hour project-wide, is fine for a
      demo but will 429 real usage).
@@ -200,6 +229,16 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
      without a code change - but confirm which one this project actually uses
      (Auth > Settings > JWT Keys) so a signing-key rotation is not the first
      time this gets checked.
+
+   **Incident, 2026-09-04:** this step had never been applied to the hosted
+   project. The founder's own login on staging mailed a link to the Supabase
+   default Site URL (`http://localhost:3000`) instead of a code -
+   `auth_logs` showed `POST /otp` 200 followed by `GET /verify` **303** (a
+   clicked link, not a typed code, which is a `POST /verify` 200), and
+   `auth.users.recovery_sent_at` was stamped instead of `confirmation_sent_at`,
+   confirming the Magic Link template's link-only default had rendered. Fixed
+   by PATCHing the config above; no app code changed - see
+   `fix/hosted-otp-sends-link`.
 
 ## Step 2 - Vercel
 
