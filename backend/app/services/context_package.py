@@ -7,7 +7,7 @@ corpus itself when it fits the budget (O-4) - is assembled once when the chat
 opens, cached, and handed to a single tool-calling model call per turn.
 
 Deterministic: no model calls here, and nothing in this module imports ``llm``.
-Assembly is three queries (config, version, corpus), so a cache miss on the
+Assembly is four queries (config, version, offerings, corpus), so a cache miss on the
 first message costs a few milliseconds, not a round trip to a provider.
 
 **Why the corpus is stored raw rather than as a finished prompt string.** The
@@ -67,6 +67,15 @@ _DEFAULT_SYSTEM_PROMPT = "You are the AI support and sales assistant for this bu
 
 
 @dataclass(frozen=True)
+class ActiveOffering:
+    """An active catalog row exposed as authoritative customer context."""
+
+    name: str
+    description: str
+    price_cents: int | None
+
+
+@dataclass(frozen=True)
 class ContextPackage:
     """Everything a turn needs about a tenant, assembled once per version."""
 
@@ -75,8 +84,11 @@ class ContextPackage:
     system_prompt: str
     tone: str
     profile: dict[str, Any] = field(default_factory=dict)
+    offerings: list[ActiveOffering] = field(default_factory=list)
     # Populated only on the fast path; the hybrid path retrieves per turn
-    # (there is no query at chat-open time to retrieve against).
+    # (there is no query at chat-open time to retrieve against). Catalog
+    # projections are deliberately absent from both paths; ``offerings`` above
+    # is the authoritative source for what is currently offered.
     chunks: list[RetrievedChunk] = field(default_factory=list)
     fast_path: bool = False
     assembled_at: float = 0.0
@@ -89,6 +101,14 @@ class ContextPackage:
         not the tenant has uploaded any documents yet.
         """
         return _profile_text(self.profile)
+
+    def offerings_text(self) -> str:
+        """The current catalog as deterministic prompt material, or ``''``."""
+        return format_offerings(self.offerings)
+
+    def owner_material(self) -> str:
+        """All non-chunk tenant material that the answering model received."""
+        return "\n\n".join(text for text in (self.profile_text(), self.offerings_text()) if text)
 
     def is_expired(self, now: float | None = None) -> bool:
         return (now or time.monotonic()) - self.assembled_at > CACHE_TTL_S
@@ -105,11 +125,25 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     system_prompt = (config_row["system_prompt"] if config_row else "") or _DEFAULT_SYSTEM_PROMPT
     tone = (config_row["tone"] if config_row else "") or "friendly"
     profile = _profile_of(config_row["config"] if config_row else None)
+    offering_rows = await conn.fetch(
+        "select name, description, price_cents from offerings "
+        "where tenant_id = $1 and active "
+        "order by position, created_at, id",
+        tenant_id,
+    )
+    offerings = [
+        ActiveOffering(
+            name=row["name"],
+            description=row["description"],
+            price_cents=row["price_cents"],
+        )
+        for row in offering_rows
+    ]
 
     # The prompt material the corpus shares its budget with is known only now,
     # so the fast-path decision is made with the real overhead rather than a
     # guess (O-4's overhead_chars).
-    overhead = len(system_prompt) + len(_profile_text(profile))
+    overhead = len(system_prompt) + len(_profile_text(profile)) + len(format_offerings(offerings))
     total_chars = await corpus_chars(conn, tenant_id)
     fast_path = fits_fast_path(corpus_chars=total_chars, overhead_chars=overhead)
 
@@ -119,6 +153,7 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
         system_prompt=system_prompt,
         tone=tone,
         profile=profile,
+        offerings=offerings,
         chunks=await whole_corpus(conn, tenant_id) if fast_path else [],
         fast_path=fast_path,
         assembled_at=time.monotonic(),
@@ -130,6 +165,7 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
             "fast_path": package.fast_path,
             "chunks": len(package.chunks),
             "corpus_chars": total_chars,
+            "offerings": len(package.offerings),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
         },
     )
@@ -149,6 +185,22 @@ def _profile_of(raw: object) -> dict[str, Any]:
     config = json.loads(raw) if isinstance(raw, str) else (raw or {})
     profile = config.get("profile") if isinstance(config, dict) else None
     return dict(profile) if isinstance(profile, dict) else {}
+
+
+def format_offerings(offerings: list[ActiveOffering]) -> str:
+    """Format active offerings in stable storefront order for model context."""
+    if not offerings:
+        return ""
+
+    lines = ["Current confirmed offerings:"]
+    for offering in offerings:
+        line = offering.name
+        if offering.description:
+            line += f": {offering.description}"
+        if offering.price_cents is not None:
+            line += f" (${offering.price_cents // 100}.{offering.price_cents % 100:02d})"
+        lines.append(f"- {line}")
+    return "\n".join(lines)
 
 
 # --- the cache ----------------------------------------------------------------
@@ -171,7 +223,7 @@ async def get_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     if cached is not None and cached.version == version and not cached.is_expired():
         return cached
 
-    # Assembled outside the lock: holding it across three queries would serialize
+    # Assembled outside the lock: holding it across four queries would serialize
     # every tenant behind one slow build. Two concurrent misses for the same
     # tenant assemble twice and the second store wins - identical content, since
     # assembly is deterministic for a version.

@@ -11,6 +11,7 @@ results with two tenants seeded").
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -101,14 +102,16 @@ async def _seed_chunk(
     document_id: uuid.UUID,
     content: str,
     embedding: list[float],
+    metadata: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     chunk_id: uuid.UUID = await conn.fetchval(
         "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
-        "values ($1, $2, $3, $4, '{}') returning id",
+        "values ($1, $2, $3, $4, $5::jsonb) returning id",
         tenant_id,
         document_id,
         content,
         embedding,
+        json.dumps(metadata or {}),
     )
     return chunk_id
 
@@ -228,3 +231,39 @@ async def test_retrieve_end_to_end_is_tenant_scoped(
 
     assert len(results) == 1
     assert results[0].id == chunk_a
+
+
+async def test_retrieve_excludes_catalog_before_top_k(
+    pool: Any, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    tenant_id, prose_id = await _seed_tenant_with_chunk(
+        superuser_conn,
+        slug=f"exclude-catalog-{uuid.uuid4().hex[:8]}",
+        content="Screen repairs start at fifty dollars",
+        embedding=_basis_vector(0),
+    )
+    document_id = await superuser_conn.fetchval(
+        "select document_id from knowledge_chunks where id = $1", prose_id
+    )
+    catalog_id = await _seed_chunk(
+        superuser_conn,
+        tenant_id=tenant_id,
+        document_id=document_id,
+        content="Screen repair costs $89.50",
+        embedding=_basis_vector(0),
+        metadata={"kind": "catalog_item", "catalog_item_id": str(uuid.uuid4())},
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        results = await retrieve(
+            conn,
+            tenant_id=tenant_id,
+            query="screen repair",
+            embedder=FakeEmbedProvider(),
+            reranker=FakeReranker(),
+            top_k=1,
+            exclude_metadata_kind="catalog_item",
+        )
+
+    assert [result.id for result in results] == [prose_id]
+    assert catalog_id not in {result.id for result in results}

@@ -6,7 +6,7 @@ each gets executed in Python, results feed back to the conversation. When the
 model returns prose instead of tool calls, the loop ends and a route is
 determined from the set of tools that were invoked.
 
-P-3 puts the tenant's context package (system prompt + owner profile + corpus)
+P-3 puts the tenant's context package (system prompt + owner profile + confirmed catalog + corpus)
 into that first call. When the corpus fits the budget (O-4's fast path) it is
 already in the prompt, so ``search_knowledge`` is not offered at all - there is
 nothing for it to fetch - and the model's prose answer *is* the draft: the turn
@@ -322,6 +322,15 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
     profile = package.profile_text()
     if profile:
         parts.append(f"Business facts the owner gave you:\n{profile}")
+    offerings = package.offerings_text()
+    if offerings:
+        parts.append(
+            "The active offering catalog below is authoritative for what the business "
+            "currently offers, including names, availability, and prices. Use reviewed "
+            "knowledge for additional descriptions and supporting details. "
+            "When asked what the business offers, enumerate the complete catalog before "
+            "offering to share more detail.\n" + spotlight.wrap(offerings)
+        )
     parts.append(_TOOL_GUIDANCE)
     parts.append(_STYLE_GUIDANCE)
     # Unconditional: a figure can appear in any answer, on any path, whether or
@@ -356,15 +365,11 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
     bring the corpus: on the fast path there is nothing left for them to find,
     and offering them would buy a round trip for material already in the prompt.
 
-    ``recommend_items`` joins ``search_knowledge`` under that rule. It reads like
-    a different kind of tool but it is the same kind: a vector search over the
-    same ``knowledge_chunks``, narrowed to ``kind='catalog_item'``. On the fast
-    path those chunks are already in the prompt, priced - the chunker writes
-    ``"Name: description ($NN.NN)"`` - so the model can recommend and enumerate
-    straight from them, and the price gate still reconciles any figure it states
-    because ``owner_material`` reads the very same chunk text. Offering it there
-    cost an embedding round trip to fetch a top-5 subset of the prompt, and made
-    "what do you offer?" a tool call instead of an answer.
+    ``recommend_items`` joins ``search_knowledge`` under that rule. It searches
+    only catalog projections, while the authoritative active offering rows are
+    already included in the prompt for enumeration and pricing. Offering it on
+    the fast path would add an embedding round trip for a question the package
+    can already answer.
     """
     tools = [
         ToolSpec(
@@ -722,7 +727,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "selections": selections,
             "engine_quote": engine_quote,
             "lookup": lookup_result,
-            "owner_material": package.profile_text(),
+            "owner_material": package.owner_material(),
             "author_node": "agent",
         }
 
@@ -742,5 +747,5 @@ async def run(state: AgentState) -> dict[str, Any]:
         "selections": selections,
         "engine_quote": engine_quote,
         "lookup": lookup_result,
-        "owner_material": package.profile_text(),
+        "owner_material": package.owner_material(),
     }

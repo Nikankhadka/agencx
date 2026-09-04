@@ -105,7 +105,7 @@ async def whole_corpus(conn: AppConnection, tenant_id: UUID) -> list[RetrievedCh
     record chunk) reassembles each document as it was written, which is how the
     model reads it best - and, being fully deterministic, it also keeps citation
     numbering stable for the life of a cached package. ``c.id`` only breaks ties
-    for chunks with no index at all (catalog items).
+    for chunks with no index at all.
     """
     rows = await conn.fetch(
         "select c.id, c.content, c.metadata from knowledge_chunks c "
@@ -155,6 +155,7 @@ async def get_business_context(
         embedder=embedder,
         reranker=reranker,
         top_k=top_k,
+        exclude_metadata_kind="catalog_item",
     )
     logger.info(
         "business context",

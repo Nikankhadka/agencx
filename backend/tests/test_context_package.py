@@ -80,6 +80,7 @@ async def _seed_tenant(
     *,
     contents: tuple[str, ...] = ("We are open weekdays 9-5.",),
     profile: dict[str, str] | None = None,
+    offerings: tuple[tuple[str, str, int | None], ...] = (),
 ) -> uuid.UUID:
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Package Test Co') returning id",
@@ -109,6 +110,17 @@ async def _seed_tenant(
                 [0.0] * EMBEDDING_DIM,
                 json.dumps({"source": "faq.md", "chunk_index": index, "kind": "prose"}),
             )
+    for position, (name, description, price_cents) in enumerate(offerings):
+        await conn.execute(
+            "insert into offerings "
+            "(tenant_id, name, description, price_cents, position) "
+            "values ($1, $2, $3, $4, $5)",
+            tenant_id,
+            name,
+            description,
+            price_cents,
+            position,
+        )
     return tenant_id
 
 
@@ -151,6 +163,80 @@ async def test_package_carries_prompt_profile_and_corpus(
     assert package.fast_path is True
     assert [c.content for c in package.chunks] == ["We are open weekdays 9-5."]
     assert "Mon-Fri 9-5" in package.profile_text()
+
+
+async def test_package_carries_active_offerings_in_storefront_order(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=(),
+        offerings=(
+            ("Coffee", "Freshly brewed", 350),
+            ("Pita bowls", "Choose your filling", None),
+        ),
+    )
+    await superuser_conn.execute(
+        "insert into offerings (tenant_id, name, description, price_cents, position, active) "
+        "values ($1, 'Retired special', '', 999, 0, false)",
+        tenant_id,
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        package = await build_package(conn, tenant_id)
+
+    assert [offering.name for offering in package.offerings] == ["Coffee", "Pita bowls"]
+    assert package.offerings_text() == (
+        "Current confirmed offerings:\n"
+        "- Coffee: Freshly brewed ($3.50)\n"
+        "- Pita bowls: Choose your filling"
+    )
+    assert package.owner_material().endswith(package.offerings_text())
+
+
+async def test_hybrid_package_also_carries_active_offerings(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        offerings=(("Coffee", "Freshly brewed", 350),),
+    )
+    original = os.environ.get("CORPUS_FAST_PATH_MAX_TOKENS")
+    os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = "1"
+    get_settings.cache_clear()
+    try:
+        async with db.tenant_context(tenant_id, "customer") as conn:
+            package = await build_package(conn, tenant_id)
+    finally:
+        if original is None:
+            os.environ.pop("CORPUS_FAST_PATH_MAX_TOKENS", None)
+        else:
+            os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = original
+        get_settings.cache_clear()
+
+    assert package.fast_path is False
+    assert package.offerings[0].name == "Coffee"
+    assert "Coffee: Freshly brewed ($3.50)" in package.offerings_text()
+
+
+async def test_offering_change_invalidates_the_cached_package(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn, contents=(), offerings=(("Coffee", "Freshly brewed", 350),)
+    )
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await get_package(conn, tenant_id)
+
+    await superuser_conn.execute(
+        "update offerings set price_cents = 400 where tenant_id = $1", tenant_id
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after = await get_package(conn, tenant_id)
+
+    assert after is not before
+    assert after.offerings[0].price_cents == 400
 
 
 async def test_package_without_a_profile_still_assembles(
@@ -300,6 +386,34 @@ async def test_fast_path_prompt_carries_the_corpus_and_drops_the_search_tool(
     assert "Mon-Fri 9-5" in system  # the profile travels with the corpus
     assert "search_knowledge" not in provider.tool_calls_offered[0]
     assert "create_escalation" in provider.tool_calls_offered[0]
+
+
+async def test_fast_path_prompt_lists_the_complete_confirmed_catalog(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=("Our menu may change seasonally.",),
+        offerings=(("Coffee", "Freshly brewed", 350), ("Pita bowls", "", 1200)),
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = RecordingProvider(answer="We offer coffee and pita bowls.")
+
+    await build_graph().ainvoke(
+        _initial_state(tenant_id, conversation_id, "What do you offer?"),
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=provider,
+            embedder=ZeroEmbedder(),
+            reranker=PassthroughReranker(),
+        ),
+    )
+
+    system = provider.tool_call_messages[0][0]["content"]
+    assert "Current confirmed offerings:" in system
+    assert "Coffee: Freshly brewed ($3.50)" in system
+    assert "Pita bowls ($12.00)" in system
+    assert "Our menu may change seasonally." in system
 
 
 async def test_fast_path_answer_still_passes_through_inspection(
