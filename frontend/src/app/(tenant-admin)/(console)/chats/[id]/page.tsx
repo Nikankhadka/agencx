@@ -6,7 +6,7 @@ import { CommandPill } from "@/components/ui/CommandPill";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { ConversationDetail } from "@/lib/api-schemas";
-import { clockTime } from "@/lib/format";
+import { clockTime, customerLabel } from "@/lib/format";
 
 /**
  * C-6 Chats thread: the owner reads a conversation, steps into it, and hands it
@@ -87,7 +87,9 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const customerName = detail?.customer_ref?.trim() || "Customer";
+  // Built from the route id, not the response, so the title is right on first
+  // paint instead of flashing a placeholder while the detail request is out.
+  const customerName = customerLabel(detail?.customer_ref, id);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">

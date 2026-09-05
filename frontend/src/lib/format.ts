@@ -24,3 +24,25 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
 export function clockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
+
+/**
+ * A conversation's short reference: `#4F9A2C`, the head of its own uuid.
+ *
+ * The web chat surface never captures a name, so without this every row in the
+ * owner's list is labelled identically and none of them can be pointed at. The
+ * code is a literal prefix of the id in `/chats/<id>`, so a row and an open
+ * thread cross-reference by eye - which is why it is derived rather than a
+ * separate generated column nothing else would agree with.
+ */
+export function conversationRef(id: string): string {
+  return `#${id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+}
+
+/**
+ * What every surface calls a conversation's customer: their name when they gave
+ * one, the short reference when they did not. A name already identifies the row,
+ * so it carries no code alongside it.
+ */
+export function customerLabel(customerRef: string | null | undefined, id: string): string {
+  return customerRef?.trim() || conversationRef(id);
+}

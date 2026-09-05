@@ -267,6 +267,39 @@ makes timing non-deterministic, and a mocked `/api/chat` would mock away the
 server-side prompt assembly that is the whole change. Before and after were run
 twice each against `bytefix`.
 
+**Chats-list row identity is unticketed UI polish** (founder request,
+2026-09-06, `fix/chats-row-identity`). Every row on the owner's Chats list read
+"Customer", because the web chat surface never captures a name - `chat/service.py`
+inserts a conversation with nothing but `tenant_id`, and only `seed_demo.py` ever
+sets `customer_ref`. The seeded demo world hid this completely: all seven of its
+conversations are named, so the list looked fine in every screenshot and every
+E2E run, and the defect only appears against a conversation a real customer
+started. An unnamed row now falls back to the conversation's own short reference
+(`#06BD83`, the head of its uuid), which is a literal prefix of the id in
+`/chats/<id>` - so a row, its thread topbar, and the URL all identify the same
+conversation without a new column, a migration, or a generated id nothing else
+would agree with. A named customer shows the name alone; the code is a fallback,
+not a suffix.
+
+The second half is the attention signal: "needs you" was a 7px amber dot sitting
+right of the timestamp, unlabelled, beside an identically sized accent dot
+meaning the opposite ("being handled, ignore this"). Two dots differing only in
+hue, one demanding action and one suppressing it, and the amber one's
+`aria-label` was on a bare `<span>` with no role, so it announced to nobody. It
+is now a pill reading "Action needed" in the same words as the filter chip above
+that selects for it, on `--color-highlight` per W-1. The accent dot stays a dot -
+these two states are not peers, and only one of them is asking for something.
+
+Two things worth recording. The three surfaces had drifted to three different
+fallbacks (`"Customer"` twice, `"A customer"` once, `"Anonymous"` on the legacy
+table); the label now lives once in `lib/format.ts` beside `relativeTime`, which
+all three already shared. And `check-tokens.mjs` fails a six-hex-character
+display code as a colour literal - the same "hex-looking, not a colour" class as
+the `href="#abc"` limit its own header documents - so `format.ts` joins
+`brand.ts` on the allowlist rather than the regex being loosened. `/chats` had no
+E2E coverage at all, which is how this shipped; `e2e/chats-list.spec.ts` now
+stubs the unnamed case the seed cannot produce.
+
 | Location | Status | Contents |
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |

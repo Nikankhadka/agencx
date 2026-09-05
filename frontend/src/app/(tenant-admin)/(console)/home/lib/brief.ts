@@ -1,4 +1,5 @@
 import type { ConversationSummary } from "@/lib/api-schemas";
+import { customerLabel } from "@/lib/format";
 import {
   sourceLabel,
   type KnowledgeRecord,
@@ -60,7 +61,7 @@ export function waitingRows(conversations: ConversationSummary[]): WaitingRow[] 
     .filter((row) => row.needs_attention)
     .map((row) => ({
       id: row.id,
-      name: row.customer_ref?.trim() || "A customer",
+      name: customerLabel(row.customer_ref, row.id),
       summary: row.pending_summary?.trim() || SUMMARY_PENDING,
       since: row.pending_since ?? row.last_activity_at ?? row.created_at,
     }))

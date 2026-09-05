@@ -35,9 +35,9 @@ describe("waitingRows", () => {
     expect(waitingRows([conversation({ needs_attention: false })])).toEqual([]);
   });
 
-  it("falls back when the customer has no name", () => {
+  it("falls back to the conversation's short reference when there is no name", () => {
     const rows = waitingRows([conversation({ needs_attention: true })]);
-    expect(rows[0]!.name).toBe("A customer");
+    expect(rows[0]!.name).toBe("#C1");
   });
 
   it("shows a placeholder line before the async summary lands", () => {

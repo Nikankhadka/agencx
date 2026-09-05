@@ -21,10 +21,18 @@ const SRC = join(ROOT, "src");
 // fixtures, not design-system color choices. Still needs a real allowlist
 // entry rather than silently loosening the regex, per the guard's own
 // "strict beats clever" stance above.
+// format.ts derives a conversation's short reference from the head of its uuid
+// (`#4F9A2C`), which is six hex characters after a hash by construction - the
+// same shape as a color, and unavoidably so, since being a literal prefix of
+// the id in /chats/<id> is the whole point of the code. Same "hex-looking, not
+// a color" class as the href="#abc" limit noted above; allowlisted rather than
+// loosened, per "strict beats clever".
 const ALLOWED = new Set([
   "src/styles/theme.css",
   "src/lib/brand.ts",
   "src/lib/brand.test.ts",
+  "src/lib/format.ts",
+  "src/lib/format.test.ts",
 ]);
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".mjs"]);
 
