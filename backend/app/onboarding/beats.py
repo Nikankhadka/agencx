@@ -339,7 +339,12 @@ def input_spec(beat: Beat) -> InputSpec:
     """The composer widget for a beat."""
     return InputSpec(
         kind=beat.kind,
-        placeholder=CHIPPED_PLACEHOLDER if beat.chips else beat.ask,
+        # W-3: a non-chipped beat's placeholder used to repeat `beat.ask`, but
+        # the assistant's question is already the in-thread context - the
+        # field's accessible label carries the affordance instead (see
+        # CommandPill's `ariaLabel` prop). A chipped beat still teaches "or
+        # type…" past its chips.
+        placeholder=CHIPPED_PLACEHOLDER if beat.chips else "",
         chips=list(beat.chips),
         mask=beat.mask,
         prefix=beat.prefix,

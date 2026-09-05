@@ -18,12 +18,16 @@ const dotStyle = (delay: string): CSSProperties => ({
   animationDelay: delay,
 });
 
-export function ThinkingDots() {
+export function ThinkingDots({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
       data-testid="thinking-dots"
-      className="flex items-center gap-[5px]"
+      // inline-flex, not flex: this sits inline beside text in a stamp pill
+      // (W-3) and inside StreamingText's span. A block-level flex box would
+      // break that line. Inside a flex parent (TypingLine) the two compute
+      // identically, so nothing else moves.
+      className={`inline-flex items-center gap-[5px] align-middle ${className}`}
     >
       <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("0ms")} />
       <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("220ms")} />

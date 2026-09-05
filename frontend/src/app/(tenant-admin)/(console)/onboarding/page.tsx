@@ -14,6 +14,7 @@ import {
   ThreadVeil,
   TypingLine,
 } from "@/components/ui/Thread";
+import { ThinkingDots } from "@/components/ui/ThinkingDots";
 import { useAuth } from "@/components/AuthProvider";
 import { apiFetch, apiFetchStream, ApiError } from "@/lib/api";
 import {
@@ -38,6 +39,8 @@ interface Message {
   role: "assistant" | "customer" | "stamp";
   text: string;
   streaming?: boolean;
+  /** W-3: a "stamp" message mid-upload - renders animated dots beside it. */
+  pending?: boolean;
 }
 
 /** A state snapshot without history[] - the SSE ``state`` event carries these. */
@@ -87,6 +90,14 @@ const GO_LIVE_LINE =
 const PROCESSING_COPY: Record<string, string> = {
   reading_site: "Reading your site\u2026",
 };
+
+/**
+ * W-3: the recovery line every upload failure ends with, whether or not the
+ * server gave a reason - it always names the way through, the "+" the file
+ * came in from.
+ */
+const UPLOAD_RECOVERY =
+  "Try again with the +, or tell me about it in a sentence.";
 
 function historyToMessages(
   history: { role: string; content: string }[] | undefined,
@@ -312,17 +323,21 @@ export default function OnboardingPage() {
         setReviewing(withCombinedOfferings(pending[0], ownerOfferings));
       }
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        // Stop before the first token leaves an empty bubble - drop it.
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && last.text === "")
-            return prev.slice(0, -1);
-          const next = [...prev];
-          if (last) next[next.length - 1] = { ...last, streaming: false };
-          return next;
-        });
-      } else {
+      // W-3: an aborted stream and a failed request both leave no reply behind
+      // - either way, drop the empty placeholder bubble (or mark it settled if
+      // some text already arrived) rather than leaving it "streaming" forever.
+      // A failed request used to skip this, so its TypingLine stuck around
+      // after busy cleared - two pending indicators disagreeing about whether
+      // the turn was still in flight.
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === "assistant" && last.text === "")
+          return prev.slice(0, -1);
+        const next = [...prev];
+        if (last) next[next.length - 1] = { ...last, streaming: false };
+        return next;
+      });
+      if (!(err instanceof Error && err.name === "AbortError")) {
         setError(err instanceof ApiError ? err.detail : "Something went wrong");
       }
     } finally {
@@ -411,9 +426,14 @@ export default function OnboardingPage() {
           continue;
         }
         const id = crypto.randomUUID();
+        // W-3: the stamp itself carries the animated processing state
+        // (ThinkingDots, rendered beside `message.text` in the thread) instead
+        // of a frozen "adding\u2026" suffix - reading and scrolling stay available
+        // while extraction runs, and `pending` is always resolved explicitly
+        // below, on both the success and the failure path.
         setMessages((prev) => [
           ...prev,
-          { id, role: "stamp", text: `${file.name} \u00b7 adding\u2026` },
+          { id, role: "stamp", text: file.name, pending: true },
         ]);
         const form = new FormData();
         form.append("file", file);
@@ -426,21 +446,21 @@ export default function OnboardingPage() {
           setCanConfirm(false);
           accepted.push(draft);
           setDrafts((previous) => [...previous, draft]);
-          updateById(id, { text: `${file.name} \u00b7 added` });
+          updateById(id, { text: `${file.name} \u00b7 added`, pending: false });
           setMessages((prev) => [
             ...prev,
             { role: "assistant", text: `I found ${file.name}. Review it before it answers customers.` },
           ]);
         } catch (err) {
-          updateById(id, { text: `${file.name} \u00b7 not added` });
+          updateById(id, { text: `${file.name} \u00b7 not added`, pending: false });
           setMessages((prev) => [
             ...prev,
             {
               role: "assistant",
               text:
                 err instanceof ApiError && err.detail
-                  ? `I couldn't read that one. ${err.detail}`
-                  : "I couldn't read that one. Try another file, or tell me in a sentence.",
+                  ? `I couldn't read that one. ${err.detail} ${UPLOAD_RECOVERY}`
+                  : `I couldn't read that one. ${UPLOAD_RECOVERY}`,
             },
           ]);
         }
@@ -575,7 +595,13 @@ export default function OnboardingPage() {
           message.role === "customer" ? (
             <OwnerBubble key={index}>{message.text}</OwnerBubble>
           ) : message.role === "stamp" ? (
-            <ThreadPill key={index}>{message.text}</ThreadPill>
+            <ThreadPill key={index}>
+              {message.text}
+              {/* W-3: the animated processing state for this stamp - aria-hidden
+                  and no live region of its own, so it does not collide with the
+                  thread's own role="log" (Thread.tsx:55-57). */}
+              {message.pending ? <ThinkingDots className="ml-2" /> : null}
+            </ThreadPill>
           ) : message.streaming && !message.text ? (
             processing ? (
               <ProcessingLine key={index}>{processing}</ProcessingLine>
@@ -644,14 +670,15 @@ export default function OnboardingPage() {
               reliably announce changes inside an existing live region, but
               often miss one that appears and disappears. Sits outside the
               thread's role="log" so the two never compete. */}
+          {/* W-3: TypingLine in the thread is the sole pending-turn indicator
+              now - this slot holds nothing while a turn is in flight, and
+              carries only the error text. */}
           <p
             role="status"
             data-testid={error ? "onboarding-error" : undefined}
-            className="mt-2 h-4 text-meta text-text-secondary"
+            className={`mt-2 h-4 text-meta ${error ? "text-danger" : "text-text-secondary"}`}
           >
-            {/* Nothing is being answered during the go-live hold - `busy` stays
-                true there only to keep the confirm button from re-arming. */}
-            {error ?? (busy && !completed ? "Answering…" : "")}
+            {error ?? ""}
           </p>
         </div>
       </div>

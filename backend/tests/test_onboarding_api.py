@@ -328,6 +328,9 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     # W-7: the skip chip is gone; the beat resolves on its own after two asks,
     # and the catalog is editable later at Business > What you offer.
     assert labels(body) == []
+    # W-3: a non-chipped beat's placeholder is blank - the assistant's question
+    # already in the thread is the context carrier, not a repeated placeholder.
+    assert body["input"]["placeholder"] == ""
 
     body = await _send(client, headers, text=_FULL_WALK[5][1])
     assert body["stage"] == "contact"

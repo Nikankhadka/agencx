@@ -712,18 +712,25 @@ Acceptance requires a browser network trace showing:
 
 ### Definition of done
 
-- [ ] Text-input placeholders are empty by default; labels and the in-thread
+- [x] Text-input placeholders are empty by default; labels and the in-thread
       question remain.
-- [ ] No duplicate "Answering…" text; thinking dots are the sole pending
+- [x] No duplicate "Answering…" text; thinking dots are the sole pending
       indicator.
-- [ ] Composer height is stable across beat changes; still grows with typed
+- [x] Composer height is stable across beat changes; still grows with typed
       content.
-- [ ] Upload processing animates, keeps reading/scroll available, serializes
+- [x] Upload processing animates, keeps reading/scroll available, serializes
       submission, and ends in an explicit success or failure with recovery.
-- [ ] No fabricated percentage progress or background-job machinery.
-- [ ] The transport split is documented and proven by a browser network trace
+- [x] No fabricated percentage progress or background-job machinery.
+- [x] The transport split is documented and proven by a browser network trace
       per the acceptance list.
-- [ ] `make check` green.
+- [x] `make check` green.
+
+Shipped. The browser proof landed as `frontend/e2e/onboarding-transport.spec.ts`
+rather than a hand-driven DevTools trace, on the founder's call. Three adjacent
+defects were fixed in the same pass: `ProcessingLine`'s nested `role="status"`,
+`ThinkingDots` rendering as a block-level box, and `sendText` leaving a failed
+turn's bubble streaming forever - the last of which contradicted this ticket's
+own error-recovery criterion.
 
 ---
 
