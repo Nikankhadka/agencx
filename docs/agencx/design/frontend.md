@@ -3,7 +3,7 @@
 The implementation truth for UI. The pixel standard of
 `docs/agencx/design/conventions.md`
 section 6 applies to everything here. Design language: **Material 3 tonal
-clarity** - warm-leaning neutrals, a **crimson primary** with teal and green
+clarity** - white surfaces, a **crimson primary** with cyan and green
 functional accents, generous whitespace, Plus Jakarta Sans throughout (D17).
 
 The system below is the shipped Wren frontend carried forward; the Agencx
@@ -44,7 +44,7 @@ Rules:
 ## 2. Theme file (`frontend/src/styles/theme.css`)
 
 Layer 1 is a Material 3 tonal ramp set: each role (primary crimson, secondary
-teal, tertiary green, error, neutral) is a ramp of tone steps (higher number =
+cyan, tertiary green, error, neutral) is a ramp of tone steps (higher number =
 lighter); Layer 2 picks a tone per role and per theme. Dark mode is a
 systematic derivation (lighter tone of the same ramp), not a parallel palette.
 
@@ -70,11 +70,11 @@ routed through the semantic tokens (Layer 2) and the `Badge` `STATUS_TONE` map:
   resolved, active, delivered, confirmed.
 - **Red** (`--color-danger`): cancelled, declined, failed, suspended, rejected,
   refunded, error.
-- **Amber** (`--color-warning`): pending, warning, overdue, in-progress,
-  provisioning, processing, claimed, escalated, outstanding.
-- **Neutral / info** (grey, or `--color-info` where a distinct info colour is
-  wanted): open, sent, draft, neutral - any status without a clear
-  good/bad/pending charge.
+- **Amber** (`--color-warning`, shipped `#EFD96B`): pending, warning, overdue,
+  in-progress, provisioning, processing, claimed, escalated, outstanding.
+- **Neutral / info** (grey, or `--color-info` - shipped cyan `#00CAD1` -
+  where a distinct info colour is wanted): open, sent, draft, neutral - any
+  status without a clear good/bad/pending charge.
 
 When a screen needs a status the component maps the status string to a tone via
 `toneForStatus` (Badge.tsx) - never a hardcoded hex. Unknown/tenant-defined
