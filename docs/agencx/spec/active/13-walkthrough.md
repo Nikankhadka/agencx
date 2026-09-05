@@ -1,22 +1,155 @@
+> This file was amended 2026-09-05 to fold a second walkthrough round and the
+> planning that followed it into the phase. The amendment record starts at
+> [Amendment 2: onboarding completion and refinement (2026-09-05)](#amendment-2-onboarding-completion-and-refinement-2026-09-05).
+> Shipped tickets keep their checked criteria and commit evidence; the new and
+> refined tickets below are specifications, with implementation and software
+> delivery statuses left open.
+
 # Phase 13: walkthrough fixes (W)
 
 A founder walkthrough of the deployed build surfaced defects across three
 surfaces: the owner's home escalation queue, the onboarding interview, and
-customer chat grounding. Some of what the walkthrough asked for already
-shipped on this branch and needs refinement, not rebuilding:
+customer chat grounding. A second walkthrough round, its repository scans, and
+the subsequent planning extend this phase to nine tickets (W-1 through W-9)
+and refine what W-3 through W-6 must deliver; W-8 and W-9 are new. W-1, W-2,
+and W-7 shipped and their records are preserved below; the refinement amends
+their behavior where noted under each ticket and in the amendment record.
+
+Some of what the walkthrough asked for already shipped on this branch and
+needs refinement, not rebuilding:
 
 | Commit | What it already delivers |
 |---|---|
 | `8496f25` | Rounded escalation card, count pill on top, per-customer rows with name, age, and an assistant-written summary, oldest first, direct `/chats/:id` link, amber count badge on the Chats tab |
 | `497bbf3` | Onboarding knowledge review sheet, document offering candidates |
 | `0ebd1fc` | Confirmed offerings injected into the customer system prompt |
+| `48c7acb` | W-1: escalation queue fitted to the screen, interval refresh (shipped) |
+| `f2db993` | W-2: interview never re-asks a filled slot, every beat capped at two asks (shipped) |
+| `cd10f6e` | W-7: answers made usable and resumable, single priced review card (shipped) |
 
 So the escalation ask is largely built; W-1 covers what remains. The
-onboarding and retrieval defects (W-2 through W-6) are unaddressed.
+onboarding and retrieval defects (W-3 through W-6) are unaddressed, and W-8
+and W-9 extend the phase into review usability and conversational correction.
 
-Ticket id prefix `W-` (Walkthrough), unused elsewhere in the ticket set. Six
-tickets, in build order. W-5 precedes W-6 so the reported chat bug closes
-before the document-extraction feature builds on top of it.
+Ticket id prefix `W-` (Walkthrough), unused elsewhere in the ticket set. Nine
+tickets, in build order: W-1 and W-2 shipped, W-5 precedes W-6 so the reported
+chat bug closes before the document-extraction feature builds on top of it,
+W-7 shipped after W-6, and W-8 and W-9 extend the review sheet and the
+interview that the earlier tickets touched. W-1, W-2, W-7 are delivered;
+W-3 through W-6, W-8, and W-9 are open specifications.
+
+Dependencies between the refined and new tickets (requested later work links
+to the behavior it refines instead of duplicating its acceptance criteria):
+
+- W-4 depends on W-7's shipped address-only confirmation behavior, which it preserves.
+- W-6 produces the richer offering candidates that W-8 reviews; W-8's save feeds W-5's grounded answers.
+- W-9's offering corrections reuse the update boundaries W-6 and W-8 extend.
+- W-5 and W-6 both depend on the source-backed offering data W-8's review decisions finalize.
+
+---
+
+## Amendment 2: onboarding completion and refinement (2026-09-05)
+
+A second founder walkthrough of the running onboarding and document-review
+flow, supported by repository scans and planning, refined the phase. This
+section records the walkthrough's observations, the founder's clarified
+preferences, the current implementation evidence, and the boundary between
+reported symptoms, confirmed code behavior, suspected causes, and
+outstanding browser verification. It is the single evidence home for the
+refinements; the tickets below reference this section rather than restating
+it. The original PDF behind the 40-row review output is unavailable, so the
+pasted review output is preserved here as reported but cannot establish which
+prices, descriptions, or offerings correctly reflect the source - an
+explicit verification boundary, not a gap in this record.
+
+### The founder's clarified preferences
+
+The agreed product decisions preserved in the refined tickets:
+
+- Keep the existing business-information, hours, location, policies, and
+  other-information sections; improve their readability and editing without
+  discarding factual detail.
+- Show five offerings initially. "Review all" opens the editor with five
+  offerings per page.
+- Suggest possible duplicates and let the owner combine them or keep both.
+- Preserve complex pricing context and flag ambiguity instead of inventing a
+  flat price.
+- Let uploads process responsively while the owner remains on the page.
+- Correct clear spelling mistakes in ordinary descriptions and offerings using
+  the existing model call; preserve personal names and brand names unless
+  explicitly corrected.
+- Quotation functionality and a full pricing-rule editor remain future work.
+
+### Reported observations (from the pasted review output and walkthrough)
+
+The pasted review output proves what the owner reported seeing. The concrete
+defects and phrasing flags in it:
+
+- Offering names rendered as sentence fragments or prose joins
+  (`"Bowl is,"`, `"the,"`, `"Plate and Pita Pocket both run"`), none of which
+  is a sellable item.
+- A possible duplicate pair reported for review (`"coffe"` alongside
+  `"coffee drinks"`), where the owner's preferred outcome - keep both, or
+  merge only on explicit choice - is not yet reflected in how the sheet
+  behaves.
+- Displayed amounts in the output. Because the original PDF is unavailable,
+  which amount (if any) is correct is not established; the amounts are
+  recorded as reported and flagged for re-extraction from source when the
+  PDF regression fixture becomes available.
+
+The full 40-row pasted output is greater than the examples above; only the
+observations the notes name are transcribed here because the paste itself is
+not preserved verbatim. Where a later step reproduces the source, the
+regression fixture replaces this table as the authority.
+
+| # | Reported (pasted review) | Ticket | Classification |
+|---|---|---|---|
+| 1 | Offering name fragments: "Bowl is", "the" | W-6 | Symptom |
+| 2 | Prose-joined offering names: "Plate and Pita Pocket both run" | W-6 | Symptom |
+| 3 | Possible duplicate pair: "coffe" / "coffee drinks" | W-6, W-8 | Symptom |
+| 4 | Displayed amounts (source-correctness not established) | W-6 | Symptom |
+| 5 | Whole catalogue or raw sections in the review sheet | W-8 | Symptom |
+| 6 | Complex price context (ranges, "from", units) flattened or dropped | W-6 | Symptom |
+| 7 | Descriptions missing or invented | W-6 | Symptom |
+| 8 | Review sheet hard to scan when many candidates | W-8 | Symptom |
+| 9 | Same text twice within a single reply (duplicated names) | W-9 | Symptom |
+
+### Confirmed code behavior, suspected causes, and outstanding verification
+
+A repository scan separated what is real in the code from what remains a
+runtime hypothesis. This is read-only evidence; none of it is a shipped fix.
+
+| Area | Status | Evidence |
+|---|---|---|
+| Reply context includes the current owner message twice | Confirmed code | [agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713): `record.history.append({...admin_message})` (line 691) runs before `reply_msgs` is built, whose `record.history[-3:]` loop (lines 711-712) includes that just-appended message, then `admin_message` is appended again (line 713). Its relationship to the reported duplicated names is a **suspected cause** pending browser reproduction |
+| Review-return paths skip slug prefill | Confirmed code | `saveKnowledge`/`discardKnowledge` set confirm state without running `applyStateFields`' slug prefill (see [page.tsx:458-499](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L458-L499) and [page.tsx:141-157](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L141-L157)). Requires browser reproduction against the go-live screen to call the runtime cause established |
+| Upload stamp is client-side only, non-streamed | Confirmed code | [page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417) - a static `"adding…"` stamp over a single non-streamed `POST /api/knowledge/drafts/upload`; no progress events, so any progress shown is client-side animation, never fabricated percentages |
+| Review sheet renders every candidate in one scroll | Confirmed code | [ReviewSheet.tsx:134-212](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L134-L212) - a single `offerings.map`, no pagination; duplicates are a hard save block (`hasDuplicateNames`, [ReviewSheet.tsx:257-264](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L257-L264)), not combine/keep-both choices; price conflicts surface as a "choose one" option row |
+| Candidate price/description/provenance fields | Confirmed code | [flow.py:56-76](../../../../backend/app/onboarding/flow.py#L56-L76) - `PendingOffering` carries `name, description, price_cents, sources`; no identity, provenance, source-reference, complex-price-context, review-issue, or possible-match fields yet (proposed in W-6/W-8 contract extensions) |
+| Merge rule for overlapping candidate | Confirmed code | [flow.py:78-99](../../../../backend/app/onboarding/flow.py#L78-L99) - document values win an overlap; [agent.py:228-246](../../../../backend/app/onboarding/agent.py#L228-L246) re-merges by `normalize_name` |
+| Extraction is heading-limited / prose-splitting | Confirmed code | `offering_candidates.py` derives candidates deterministically from `"What we offer"`/`"Prices"`; no whole-source, section-spanning item extraction or reference-resolution price pass yet (scope of W-6) |
+| SSE vs ordinary request split | Confirmed code | typed answers stream over SSE; chip, resume, and upload use ordinary requests (see [page.tsx:398-425](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L425) for the non-streamed upload). A `fetch` entry in DevTools is not evidence of polling |
+| "Answering…" duplicate pending indicator | Outstanding browser verification | The status line's "Answering…" and the thread's thinking dots are candidate duplicates (W-3); reproduce in the browser before runtime claim |
+
+Outstanding browser verification is required before any of the above is
+declared the established runtime cause. Bug fixes begin with an E2E
+reproduction through the owner-facing surface; none of the W-3 through W-9
+specs claim a runtime fix from these scans.
+
+### Requirement ownership
+
+One owning ticket per requirement, with dependency links instead of duplicated
+acceptance criteria:
+
+| Concern | Owning ticket |
+|---|---|
+| SSE versus polling; pending indicators; repeated input placeholder | [W-3](#w-3-keep-the-onboarding-thread-clear-and-responsive) |
+| Slug prefill, review-return paths, and actionable go-live errors | [W-4](#w-4-complete-go-live-address-handling) |
+| Customer answers combining confirmed offerings and knowledge | [W-5](#w-5-answer-from-confirmed-offerings-and-knowledge-together) |
+| Offering names, descriptions, source-backed prices, duplicate proposals | [W-6](#w-6-extract-accurate-offerings-from-the-complete-source) |
+| Five-item preview, pagination, editing, duplicate decisions | [W-8](#w-8-review-a-large-import-without-losing-information) |
+| Readable, editable knowledge sections | [W-8](#w-8-review-a-large-import-without-losing-information) |
+| Repeated names, conservative wording cleanup, conversational corrections | [W-9](#w-9-correct-captured-information-conversationally) |
 
 ---
 
@@ -142,6 +275,9 @@ current the data behind it is.
 - [x] `--color-highlight` and its documenting comment agree on one amber
       value, matching the prototype's `--c-amber`.
 - [x] `make check` green.
+
+Shipped `48c7acb`. Unchanged by the 2026-09-05 amendment; no refined behaviour
+targets the escalation queue.
 
 ---
 
@@ -424,274 +560,331 @@ convention this ticket adds):
 - **No `version` bump** on the record: the new fields read through a default,
   and a bump would have restarted every interview in flight at deploy.
 
+Shipped `f2db993`. Forward reference: W-9 refines the interview's correction
+behaviour - accepting explicit corrections to already-captured fields during
+any beat and never counting a correction as a failed attempt - building on the
+two-ask and deferral machinery this ticket fixed rather than replacing it.
+
 ---
 
-## W-3: The onboarding thread reads as work in progress
+## W-3: Keep the onboarding thread clear and responsive
 
 ### Summary
 
-Remove the redundant "Answering…" status line (the thinking dots above it
-already show this), stop the composer pill from changing height between
-beats, and give a processing file upload the same dots-based motion the rest
-of the thread uses instead of a static stamp.
+Extend the shipped composer and pending-state work: leave text input
+placeholders empty, stabilize the composer's baseline height, show exactly one
+pending indicator for the active operation, and give a processing upload an
+animated state with an explicit outcome while the owner keeps reading and
+scrolling. Document the transport split (SSE for typed answers, ordinary
+requests for chips, resume, and uploads) and prove it with a browser network
+trace.
 
 ### Why
 
-- [page.tsx:595-607](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607)
-  renders `"Answering…"` in a status line below the composer while
-  `TypingLine` ([Thread.tsx:129-135](../../../../frontend/src/components/ui/Thread.tsx#L129-L135))
-  already renders pulsing dots above it in the thread itself for the same
-  pending turn. The two say the same thing in two places.
-- The composer widget swaps shape per beat - chip row, masked ABN pill, phone
-  pill, or plain text pill
-  ([BeatComposer.tsx:129-179](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/components/BeatComposer.tsx#L129-L179)) -
-  and the plain textarea separately auto-grows with typed content
+A second walkthrough round restated and sharpened W-3's original concerns, and
+a repository scan confirmed the current shape:
+
+- The status line below the composer renders `"Answering…"`
+  ([page.tsx:595-607](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607))
+  while `TypingLine` already renders thinking dots for the same turn
+  ([Thread.tsx:129-135](../../../../frontend/src/components/ui/Thread.tsx#L129-L135)).
+  Two indicators, one operation.
+- The composer swaps widget per beat
+  ([BeatComposer.tsx:129-179](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/components/BeatComposer.tsx#L129-L179)),
+  and the plain textarea auto-grows with content
   ([CommandPill.tsx:28](../../../../frontend/src/components/ui/CommandPill.tsx#L28),
-  [CommandPill.tsx:56-63](../../../../frontend/src/components/ui/CommandPill.tsx#L56-L63)).
-  The combination reads as the composer randomly resizing between turns.
-- An attached file gets one static text stamp,
-  `"${file.name} · adding…"` ([page.tsx:378-383](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L378-L383)),
-  with no animation while the document is scraped, structured, and drafted -
-  a multi-second operation the founder specifically flagged as needing a
-  visible "still working" signal. `PROCESSING_COPY`
-  ([page.tsx:86-88](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L86-L88))
-  already has a `reading_site` entry for the URL path; the upload path has no
-  equivalent even though the backend emits `progress: processing` for it
-  ([controller.py:335](../../../../backend/app/features/onboarding/controller.py#L335)).
+  [CommandPill.tsx:56-63](../../../../frontend/src/components/ui/CommandPill.tsx#L56-L63)),
+  so the composer reads as randomly resizing between turns.
+- An attached file gets one static stamp, `"${file.name} · adding…"`
+  ([page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417)),
+  over a single non-streamed `POST /api/knowledge/drafts/upload`, with no
+  animated processing state and no explicit failure recovery prose while the
+  document is read and structured.
+- Text input placeholders repeat what the assistant's question already says;
+  the field label and the in-thread question are the accessible carriers.
 
 ### User stories
 
-#### US-1 The assistant's "thinking" state is shown once
+#### US-1 Empty input placeholders by default
 
-As a business owner, I see one clear signal that the assistant is composing
-its reply, not a duplicated one.
+As a business owner, the text input I am about to type into shows no text
+until I type; I still get the field's accessible label and the assistant's
+question in the conversation.
+
+- Text inputs and textareas leave their placeholder empty by default.
+- The field keeps an accessible label, and the assistant's question remains
+  the visible in-thread context for what to enter.
+- Chip, phone, numeric, and multiline input behavior is unchanged.
+
+#### US-2 One pending indicator per operation
+
+As a business owner, while a turn is in flight I see one clear pending signal,
+not the same state in two places.
 
 - The thinking-dots row in the thread is the only pending-turn indicator.
-- The status line below the composer is repurposed as the error slot only
-  (see W-4) and shows nothing while a turn is in flight.
+- The status line below the composer holds nothing while a turn is in flight
+  and reads as the error slot only (see W-4) when there is an error.
 
-#### US-2 The composer holds a steady size between questions
+#### US-3 The composer holds a steady size between questions
 
 As a business owner, the input area does not visibly grow or shrink when the
-assistant asks its next question; it only grows as I type a longer answer,
-and shrinks back when I clear it.
+assistant asks its next question; it grows only as I type a longer answer and
+shrinks back when I clear it.
 
 - Switching from one beat's widget to another's does not change the
   composer's baseline height.
-- Typing still grows the textarea up to its existing 96px cap; clearing the
-  text still shrinks it back.
+- Typing still grows the textarea up to its existing cap; clearing still
+  shrinks it back.
 
-#### US-3 A processing upload shows visible progress
+#### US-4 A processing upload keeps the page usable and lands on an outcome
 
-As a business owner, after I attach a file, I see an animated indicator (not
-a static line) while the document is being read and structured, so I know
-work is happening in the background.
+As a business owner, after I attach a file I keep reading and scrolling while
+it processes, see an animated signal that work is happening, and get an
+explicit success or failure with a usable recovery path.
 
-- The upload stamp shows a dots-based or equivalent animated state between
-  "adding" and "added" (or the failure text), reusing the existing
-  `ThinkingDots`/`ProcessingLine` vocabulary rather than a new spinner.
-- A `processing` copy entry exists in `PROCESSING_COPY` alongside
-  `reading_site`, used for whichever backend `progress` event corresponds to
-  document structuring.
+- The upload stamp shows an animated processing state using the existing
+  visual vocabulary while extraction runs.
+- Reading and scrolling are available during extraction; the thread is not
+  blocked.
+- Submission stays serialized so the owner cannot submit conflicting
+  operations at once.
+- The operation ends in an explicit success or failure state, and a failure
+  offers a usable recovery path.
+- No fabricated percentage progress; no queues, workers, background-job
+  polling, or resumable processing are added.
 
 ### Design reference
 
 `ThinkingDots` ([ThinkingDots.tsx:21-33](../../../../frontend/src/components/ui/ThinkingDots.tsx#L21-L33))
 and `ProcessingLine` ([Thread.tsx:144-150](../../../../frontend/src/components/ui/Thread.tsx#L144-L150))
-are the two existing motion primitives this ticket reuses; no new component
-or dependency. The composer's visual shell (pill, chip row, radii, shadow)
-is unchanged - only its height stability.
+are the existing motion primitives this ticket reuses; no new component or
+dependency. The composer's visual shell is unchanged - only its height
+stability and placeholder behavior.
 
 ### Technical spec
 
+- Make text-input placeholders empty by default while keeping accessible
+  labels and the in-thread question as the context carriers. Preserve chip,
+  phone, numeric, and multiline behaviors.
 - Delete the `"Answering…"` branch from the status line at
   [page.tsx:595-607](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607),
-  leaving `{error ?? ""}`. Keep the element mounted (it stays the `role="status"`
-  live region and gains the danger styling in W-4).
-- Give the `BeatComposer` root or its widget wrapper a fixed minimum height
-  matching the tallest common single-line state (the plain `CommandPill` at
-  rest, `min-h-6` inside its padded shell), so a swap between chip/masked/
-  phone/plain widgets does not change the composer's outer height on a normal
-  one-line case. `CommandPill`'s own auto-grow (`useLayoutEffect`,
-  [CommandPill.tsx:56-63](../../../../frontend/src/components/ui/CommandPill.tsx#L56-L63))
-  is unchanged; this only stabilizes the shell around it.
-- Replace the static `"${file.name} · adding…"` stamp's rendering
-  with the existing animated line component while `busy` is true for that
-  stamp, falling back to the static "added"/failure text once resolved. Add
-  a `processing` (or equivalent) key to `PROCESSING_COPY` and have the
-  backend's structuring stage emit a `progress` event of that name if it does
-  not already (check `controller.py`'s upload path for an existing progress
-  emission before adding a new one - the SSE-based URL path already has this
-  shape at [controller.py:371](../../../../backend/app/features/onboarding/controller.py#L371);
-  the file-upload path may need the same event added, since today's upload
-  endpoint response is a single non-streamed POST per
-  [page.tsx:401-406](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L401-L406) -
-  if it is not streamed, the client-side animation for the stamp is
-  sufficient on its own and no new backend event is required).
+  leaving `{error ?? ""}`. Keep the element mounted as the `role="status"`
+  live region and the error slot (danger styling per W-4).
+- Give the `BeatComposer` root or widget wrapper a fixed minimum height
+  matching the tallest common single-line state so a widget swap does not
+  change the outer height. `CommandPill`'s own auto-grow is unchanged; this
+  stabilizes the shell around it.
+- Replace the static `"${file.name} · adding…"` stamp with the existing
+  animated line component while that stamp's operation is in flight, falling
+  back to explicit "added" or failure text once resolved. A failure state
+  carries a usable recovery path (retry the upload). Do not add percentage
+  progress, queues, workers, background-job polling, or resumable processing.
+  Keep submission serialization: the busy guard in the upload path
+  ([page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417))
+  blocks conflicting submissions until the current one settles.
+
+### Transport verification
+
+Document the current split and prove it with a browser network trace. Typed
+answers stream over SSE; chip answers, resume actions, and uploads use
+ordinary requests (see the non-streamed upload at
+[page.tsx:401-406](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L401-L406)).
+A `fetch` entry in DevTools is not evidence of polling.
+
+Acceptance requires a browser network trace showing:
+
+- The typed-answer request consumes incremental SSE events.
+- Final reply reconciliation produces exactly one assistant message.
+- State refreshes are bounded to their triggering actions.
+- Idle onboarding does not request conversation state.
+- Errors end the pending state and leave the conversation usable.
 
 ### Tests
 
 - Frontend: a snapshot or class assertion that the status line renders empty
   (not "Answering…") while `busy` is true.
-- Frontend: a test that the composer wrapper's height class is stable across
-  a beat change (e.g. render with `input.kind` toggled between `"text"` and
-  a chip-bearing spec, assert the outer container's height-affecting classes
-  are unchanged).
-- Frontend: the upload stamp renders the animated state while its message is
-  the "adding" placeholder.
+- Frontend: a test that the composer wrapper's height class is stable across a
+  beat change.
+- Frontend: the upload stamp renders the animated state while processing and
+  the explicit success/failure state once resolved.
+- E2E / manual: the browser network trace acceptance list above, applied
+  through the owner-facing onboarding surface.
 
 ### Definition of done
 
+- [ ] Text-input placeholders are empty by default; labels and the in-thread
+      question remain.
 - [ ] No duplicate "Answering…" text; thinking dots are the sole pending
       indicator.
 - [ ] Composer height is stable across beat changes; still grows with typed
       content.
-- [ ] Upload stamp animates while processing.
+- [ ] Upload processing animates, keeps reading/scroll available, serializes
+      submission, and ends in an explicit success or failure with recovery.
+- [ ] No fabricated percentage progress or background-job machinery.
+- [ ] The transport split is documented and proven by a browser network trace
+      per the acceptance list.
 - [ ] `make check` green.
 
 ---
 
-## W-4: Going live shows the address and says what went wrong
+## W-4: Complete go-live address handling
 
 ### Summary
 
-Fix the one-line bug that leaves the public-address field blank after a
-knowledge-review round trip, move slug-confirmation failures into the
-field's own danger state plus a toast instead of the shared grey status
-line, and validate the slug shape client-side so an owner never sees the
-generic 422 message.
+Narrow W-4 to the remaining go-live address paths and their error handling,
+on top of W-7's shipped address-only confirmation behavior. Every path that
+reaches confirmation - initial load, ordinary answers, optional-knowledge
+skip, review save, review discard, and reload - must provide the suggested
+address. Failures (invalid, reserved, or taken slugs; network errors) produce
+actionable field-level errors, and a retry succeeds without restarting
+onboarding. Backend validation remains authoritative.
 
 ### Why
 
+W-7 already shipped the address-only confirmation step: go-live confirms the
+address only, prefilled to the real slug, with a "Going live as X" read-back.
+What remains is that the prefill and its failures are not handled on every
+path that can flip the confirm step open:
+
 - `applyStateFields` ([page.tsx:135-143](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L135-L143))
-  is the only place that prefills `publicSlug` from the server's
-  `suggested_slug`, and it only runs from the initial load and the turn
-  handlers. `saveKnowledge`
+  is the only place that prefills `publicSlug` from `suggested_slug`, and it
+  runs only from the initial load and the turn handlers. `saveKnowledge`
   ([page.tsx:437-448](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L437-L448))
   and `discardKnowledge`
   ([page.tsx:456-465](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L456-L465))
-  call `setCanConfirm(!remaining)` directly, bypassing it entirely. Since
-  `497bbf3` forces `can_confirm=False` while any knowledge draft exists
-  ([controller.py](../../../../backend/app/features/onboarding/controller.py)),
-  every owner who uploads a document and then reviews it reaches the publish
-  step through this exact bypass - which is the path the founder actually
-  used. The field renders empty and has to be typed by hand.
+  set confirm state directly, bypassing it, so the review-save and
+  review-discard paths reach confirmation without the slug synchronization the
+  initial-load path gets.
 - A confirm failure lands in the shared status line
   ([page.tsx:472-503](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
-  styled `text-meta text-text-secondary` inside a hard `h-4` (one line,
-  clipped) - grey, not danger-colored, and low-visibility. `Input` already
-  supports an `error` prop that renders `border-danger` and
-  `text-footnote text-danger` ([Input.tsx:34-46](../../../../frontend/src/components/ui/Input.tsx#L34-L46)),
-  unused here.
-- A malformed or reserved slug (wrong shape, too short, too long, on the
-  reserved list) is rejected by a pydantic field validator
-  ([slug.py:60-64](../../../../backend/app/features/tenants/slug.py#L60-L64)),
-  which FastAPI surfaces as a generic 422 `"One or more fields are invalid."`
-  ([errors.py:77](../../../../backend/app/shared/errors.py#L77)); the actual
-  reason sits in an `errors[]` array the frontend never reads
-  ([api.ts:44-62](../../../../frontend/src/lib/api.ts#L44-L62)). Only the 409
-  "taken" case currently shows a real message.
+  grey and low-visibility, rather than the slug `Input`'s own danger state
+  ([Input.tsx:34-46](../../../../frontend/src/components/ui/Input.tsx#L34-L46)).
+- Client-side shape/length validation is absent, so an owner sees only the
+  generic 422
+  ([errors.py:77](../../../../backend/app/shared/errors.py#L77)) the frontend
+  never reads the `errors[]` detail from
+  ([api.ts:44-62](../../../../frontend/src/lib/api.ts#L44-L62)).
+
+The scan confirmed the review save/discard paths update confirmation state
+without the same slug synchronization as initial loading. This is recorded as
+implementation evidence; the runtime cause is declared established only after
+a browser reproduction on the go-live screen.
 
 ### User stories
 
-#### US-1 The suggested address is always pre-filled
+#### US-1 Every path that reaches confirmation provides the address
 
-As a business owner, when I reach the "confirm and go live" step, whether I
-uploaded a document and reviewed it first or not, the address field already
+As a business owner, whenever I get to the "confirm and go live" step - after
+initial load, after ordinary answers, after skipping the optional knowledge
+step, after saving or discarding a review, or after reload - the address field
 shows a suggested slug based on my business name.
 
-- The prefill happens through the same code path regardless of which
-  handler flips `canConfirm` to true.
-- Typing over the prefilled value is unaffected (existing behavior).
+- Each of those paths runs the same prefill logic and provides the suggested
+  address.
+- Typing over the prefilled value is unaffected.
 
-#### US-2 A slug problem is visible where the field is, not in a grey caption
+#### US-2 Corrections refresh the suggestion only until the owner edits the address
 
-As a business owner, if my chosen address will not work, the field itself
-shows the problem in red, and a toast tells me immediately.
+As a business owner, if I correct my business name then the address suggestion
+follows it, but once I have typed my own address, unrelated state updates do
+not overwrite it.
 
-- A 409 ("already taken") or a client-caught shape violation sets the
-  `Input`'s `error` prop, producing the red border and red message.
-- The same failure fires a toast via the app's existing `Toaster`
-  ([Toaster.tsx](../../../../frontend/src/components/Toaster.tsx)).
+- A business-name correction refreshes the suggestion only while the owner has
+  not edited the address.
+- Owner-entered addresses survive unrelated state updates.
 
-#### US-3 A malformed slug is caught before it reaches the server
+#### US-3 Slug problems are actionable at the field
 
-As a business owner, typing an address that is too short, too long, or in an
-invalid shape shows me why before I press confirm, not a generic error after.
+As a business owner, if my chosen address is invalid, reserved, or taken, the
+field itself shows why, and a retry can succeed without restarting onboarding.
 
-- Client-side validation mirrors `SLUG_PATTERN`, `SLUG_MIN_LENGTH`, and
-  `SLUG_MAX_LENGTH` from [slug.py](../../../../backend/app/features/tenants/slug.py)
-  (or a shared constant if one is generated for the frontend - check
-  `api-types.ts` for an existing generated constant before hand-duplicating
-  the regex).
-- The confirm button is disabled, or confirm short-circuits with the same
-  red-field-plus-toast treatment as US-2, when the client-side check fails.
+- Invalid, reserved, or taken addresses produce actionable field errors.
+- The failure preserves the draft and the entered address; retrying can
+  succeed without restarting onboarding.
+- Backend validation remains authoritative; client-side checks only add
+  earlier, clearer feedback.
+- A network failure leaves the interview usable and the entered address
+  intact.
 
 ### Design reference
 
-No new screen. The slug `Input` and `Button` are the existing onboarding
-go-live components ([page.tsx:561-581](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L561-L581));
-this ticket wires up states they already support (`Input`'s `error` prop,
-the app-wide `Toaster`) rather than building new ones.
+No new screen. The slug `Input` and `Button` are the existing go-live
+components ([page.tsx:561-581](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L561-L581));
+this ticket wires up states they already support (`Input`'s `error` prop, the
+app-wide `Toaster` ([Toaster.tsx](../../../../frontend/src/components/Toaster.tsx)))
+rather than building new ones.
 
 ### Technical spec
 
-- Route the slug prefill through one function on every path. Either call
-  `applyStateFields`-equivalent logic from `saveKnowledge` and
-  `discardKnowledge` too, or lift the prefill line
-  (`setPublicSlug((current) => current || fields.suggested_slug || "business")`)
-  into a small helper both call whenever `can_confirm` transitions to true,
-  regardless of which handler caused the transition.
-- Add an `error` local state for the slug field (or reuse the existing
-  `error` state if scoping allows without colliding with the general
-  onboarding error), pass it to `Input`'s `error` prop, and call
-  `toast.error(...)` alongside it in `handleConfirm`'s catch block
-  ([page.tsx:472-503](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)).
-- Add a client-side check before the `POST /api/onboarding/confirm` call
-  using the same pattern (regex, min/max length) as
-  [slug.py:16](../../../../backend/app/features/tenants/slug.py#L16) and
-  [slug.py:62](../../../../backend/app/features/tenants/slug.py#L62). Do not
-  duplicate the reserved-word list client-side (low value, server already
-  catches it with a specific message); only shape and length are worth
-  catching before submit.
-- Leave the 409 path's error text untouched -
-  `"That page address is already taken. Choose another."`
+- Route the slug prefill through one function on every path that can open the
+  confirm step, including `saveKnowledge` and `discardKnowledge`, so initial
+  load, ordinary answers, optional-knowledge skip, review save, review
+  discard, and reload all use the same suggestion logic.
+- Refresh the suggested slug when the business name changes, but only while
+  the owner has not edited the address. Preserve an owner-entered address
+  across unrelated state updates.
+- Add slug field error state to `Input`'s `error` prop and fire a
+  `toast.error(...)` in the confirm failure path
+  ([page.tsx:472-503](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
+  covering invalid, reserved, and taken slugs as actionable field errors.
+- Add client-side shape/length validation before `POST /api/onboarding/confirm`
+  mirroring [slug.py:16](../../../../backend/app/features/tenants/slug.py#L16)
+  and [slug.py:62](../../../../backend/app/features/tenants/slug.py#L62). Do
+  not duplicate the reserved list client-side; the server's specific message
+  for it stays authoritative. Keep the existing 409 taken-error text
   ([controller.py:495](../../../../backend/app/features/onboarding/controller.py#L495))
-  is already a usable sentence and now also drives the field's danger state
-  and a toast.
+  as an actionable field error too.
+- On a network failure, keep the draft and the entered address in place so a
+  retry can succeed without restarting onboarding. Backend validation remains
+  authoritative.
 
 ### Tests
 
-- Frontend: after completing a knowledge-review round trip (upload, save,
-  no more drafts), assert `publicSlug` is pre-filled, not empty.
+- Frontend: after each confirm-opening path (initial load, ordinary answer,
+  optional-knowledge skip, review save, review discard, reload), assert
+  `publicSlug` is pre-filled.
+- Frontend: correcting the business name refreshes the suggestion only while
+  the owner has not edited the address; an owner-entered address survives an
+  unrelated state update.
 - Frontend: a 409 confirm failure sets the `Input` error prop and fires a
-  toast (mock `toast.error`, assert called).
-- Frontend: a client-side shape violation (too short, invalid character)
-  blocks submission and shows the same error treatment without a network
-  call.
-- E2E: extend the existing onboarding go-live E2E to cover the
-  upload-then-confirm path, asserting the address field is non-empty at that
-  point.
+  toast; a client-side shape violation blocks submission with the same
+  treatment and no network call.
+- Frontend: a network failure preserves the draft and entered address, and a
+  retry succeeds without restarting onboarding.
+- E2E: reproduce the review-save/discard-then-confirm path on the go-live
+  screen (the recorded implementation evidence above) before declaring the
+  runtime cause established, then assert the address field is non-empty and
+  correct through both paths.
 
 ### Definition of done
 
-- [ ] The slug field is always pre-filled when the confirm step is reached,
-      regardless of path.
-- [ ] A confirm failure shows red field state and a toast.
-- [ ] A malformed slug is caught client-side before submit.
+- [ ] Every confirm-opening path provides the suggested address.
+- [ ] A business-name correction refreshes the suggestion only until the
+      owner edits the address; owner-entered addresses survive unrelated
+      updates.
+- [ ] Invalid, reserved, and taken slugs are actionable field errors.
+- [ ] Network failures preserve the draft and entered address; a retry
+      succeeds without restarting onboarding.
+- [ ] Backend validation remains authoritative.
+- [ ] The review save/discard path is reproduced in the browser and its
+      runtime cause recorded.
 - [ ] `make check` green.
 
 ---
 
-## W-5: One answer draws on the catalog and the knowledge base together
+## W-5: Answer from confirmed offerings and knowledge together
 
 ### Summary
 
-Fix the customer chat grounding gap introduced by `0ebd1fc`: a question like
-"what services do you offer?" must be answered from the confirmed offerings
-catalog and the uploaded knowledge base in the same reply, not the catalog
-alone with the knowledge base surfacing only on a second, more insistent
-question.
+Retain the customer-grounding ticket that fixes the gap introduced by
+`0ebd1fc`: one customer chat answer draws on the confirmed offerings catalog
+and the uploaded knowledge together. A question like "what do you offer?"
+must be answerable from the catalog and the knowledge base in the same reply,
+not the catalog alone with the knowledge base surfacing only after a second,
+more insistent question. Refined by the 2026-09-05 amendment to require the
+relevant confirmed catalog facts and uploaded knowledge together on both the
+fast and the hybrid paths, reusing the existing context package rather than
+adding another catalog query or retrieval subsystem.
 
 ### Why
 
@@ -705,7 +898,7 @@ with uploaded knowledge:
   and to "enumerate the complete catalog before offering to share more
   detail." [agent_node.py:78-80](../../../../backend/app/agents/agent_node.py#L78-L80)
   reinforces this by telling the model not to reach for a tool for exactly
-  this question. On the fast path, the PDF's chunks are in the very same
+  this question. On the fast path, the document's chunks are in the very same
   prompt as the offerings block, yet the model does what it is told and
   answers from the catalog first, matching the founder's observed two-step
   behavior exactly.
@@ -729,20 +922,27 @@ with uploaded knowledge:
 
 ### User stories
 
-#### US-1 A general "what do you offer" question gets one complete answer
+#### US-1 One concise answer combines an offering with a relevant policy or detail
 
-As a customer, when I ask what a business offers, I get one answer that
-includes both the owner-confirmed catalog items and relevant detail from any
-uploaded menu, price list, or FAQ document, without needing to ask a
-follow-up for "all" of it.
+As a customer, when I ask what a business offers, I get one concise answer
+that combines a relevant offering with a relevant policy or business detail,
+without needing to ask a follow-up for "all" of it.
 
 - On the fast path (small corpus, whole document in one prompt), the reply
   synthesizes both blocks instead of listing the catalog and stopping.
 - On the hybrid path (corpus over the fast-path token budget), a
   `search_knowledge` call's resulting `draft_node` answer also includes the
-  confirmed catalog, not knowledge-chunk text alone.
+  relevant confirmed catalog, not knowledge-chunk text alone.
 
-#### US-2 The catalog stays authoritative for names, availability, and price
+#### US-2 Relevant offerings, not an unnecessary catalog dump
+
+As a customer, I get the offerings relevant to my question, not a complete
+catalog enumerations on every answer.
+
+- The answer selects the relevant confirmed catalog facts; it does not dump
+  the whole catalog when the question does not call for it.
+
+#### US-3 The catalog keeps its authority over price and availability
 
 As a customer, if the catalog and an uploaded document ever disagree on a
 price or whether something is still offered, the catalog wins, because it is
@@ -751,11 +951,23 @@ the row the owner actively maintains.
 - The rewritten prompt instruction keeps "authoritative for prices and
   availability" for the catalog; it only removes the "before offering to
   share more detail" sequencing that causes the two-step answer.
+- Confirmed structured prices retain their existing authority.
 - The deterministic-pricing invariant
   ([conventions.md section 8](../../design/conventions.md)) is unaffected:
   no new path lets a model author a price. `owner_material()` remains the
   provenance source for the money gate
-  ([agent_node.py:730](../../../../backend/app/agents/agent_node.py#L730)).
+  ([agent_node.py:730](../../../../backend/app/agents/agent_node.py#L730)),
+  and the pricing and inspection rules continue to be enforced.
+
+#### US-4 Unconfirmed imports stay out of customer answers
+
+As a customer, I am never answered from an import the owner has not reviewed:
+unconfirmed imports remain unavailable to customer answers.
+
+- Draft/reviewed-but-unsaved document content does not reach the customer
+  answer path.
+- Ambiguous source pricing is not silently resolved into an invented exact
+  amount.
 
 ### Design reference
 
@@ -769,7 +981,8 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   reviewed knowledge for additional descriptions and supporting details";
   remove "enumerate the complete catalog before offering to share more
   detail" and replace it with an instruction to answer from both sources
-  together in one reply when both are relevant.
+  together in one reply when both are relevant, naming the relevant
+  offerings rather than enumerating the complete catalog.
 - Soften [agent_node.py:78-80](../../../../backend/app/agents/agent_node.py#L78-L80)
   so it still discourages an unnecessary tool call but no longer implies the
   catalog alone is a complete answer to "what do you offer."
@@ -788,12 +1001,16 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   site in the graph - trace how `retrieved_chunks` currently reaches it and
   thread `package.offerings` the same way rather than re-fetching from the
   database.
-- Do not extend [fuse.py](../../../../backend/app/retrieval/fuse.py) to rank
-  catalog rows against knowledge chunks, and do not add a third retrieval
-  source. The catalog is small and already loaded whole by
+- Reuse the existing context package; do not extend
+  [fuse.py](../../../../backend/app/retrieval/fuse.py) to rank catalog rows
+  against knowledge chunks, and do not add a third retrieval source or a new
+  catalog query. The catalog is small and already loaded whole by
   `build_package` ([context_package.py:128-141](../../../../backend/app/services/context_package.py#L128-L141));
   it belongs in the prompt directly, the same way it already does on the
   fast path, not through the scored-retrieval pipeline.
+- Unconfirmed imports remain outside `offerings` until publish; the customer
+  answer path reads only confirmed rows, and ambiguous source pricing stays
+  flagged rather than becoming an invented exact amount.
 
 ### Tests
 
@@ -801,32 +1018,43 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   **hybrid** knowledge-route prompt (the input to `_build_knowledge_prompt`
   or its resulting draft call) carries the offerings block - today nothing
   asserts this, and it is currently false.
-- Backend: a test that a fast-path answer to "what do you offer" -
-  using a `RecordingProvider` fixture whose canned reply references both an
-  offering name and a knowledge-chunk-only detail - is accepted by
-  whatever downstream check exists for provenance (inspection/price gate),
-  confirming the combined answer does not trip the money-gate or
-  provenance checks.
+- Backend: a test that a fast-path answer to "what do you offer" - using a
+  `RecordingProvider` fixture whose canned reply references both an offering
+  name and a knowledge-chunk-only detail - is accepted by whatever downstream
+  check exists for provenance (inspection/price gate), confirming the
+  combined answer does not trip the money-gate or provenance checks.
 - Backend: `test_fast_path_prompt_lists_the_complete_confirmed_catalog`
   ([test_context_package.py:391](../../../../backend/tests/test_context_package.py#L391))
   stays green; extend its assertion or add a sibling asserting the
-  instruction text no longer contains "before offering to share more
-  detail".
-- E2E or manual: reproduce the founder's exact scenario end to end -
-  onboard a tenant with three chip-typed offerings and upload a document
-  with additional menu detail, then ask the storefront chat "what services
-  do you offer?" once, and confirm the single reply lists items from both
-  sources. Per the bug-fix protocol
+  instruction text no longer contains "before offering to share more detail".
+- Backend: an unconfirmed (draft or unsaved) import is not available to the
+  customer answer path; an ambiguous source price does not surface as an
+  invented exact amount.
+- Integration: publish a W-6/W-8 import, then ask a question that requires
+  both its offering information and the retained knowledge - for example,
+  "how much is X and what are your opening hours?" - and assert a single
+  reply carries both the confirmed offering fact and the knowledge-derived
+  detail.
+- E2E or manual: reproduce the founder's exact scenario end to end - onboard
+  a tenant with three chip-typed offerings and upload a document with
+  additional menu detail, then ask the storefront chat "what services do you
+  offer?" once, and confirm the single reply lists items from both sources.
+  Per the bug-fix protocol
   ([conventions.md section 5](../../design/conventions.md)), reproduce this
   through the actual customer chat surface before considering the fix
   verified, not only via a unit test.
 
 ### Definition of done
 
-- [ ] A single customer-facing reply to "what do you offer" includes both
-      catalog and knowledge-derived content, on both the fast and hybrid
-      paths.
-- [ ] The catalog remains authoritative for price and availability.
+- [ ] A single customer-facing reply combines a relevant offering with a
+      relevant policy or business detail on both the fast and hybrid paths.
+- [ ] Relevant offerings are used; the complete catalog is not dumped
+      unnecessarily.
+- [ ] Confirmed structured prices retain their existing authority.
+- [ ] Pricing and inspection rules remain enforced; unconfirmed imports stay
+      unavailable; ambiguous source pricing is not invented into an exact
+      amount.
+- [ ] The integration scenario above passes.
 - [ ] `_FAST_PATH_GUIDANCE`'s claim about corpus completeness is accurate.
 - [ ] The scenario is reproduced and confirmed fixed through the actual
       customer chat surface, per the bug-fix protocol.
@@ -834,21 +1062,24 @@ No UI change; this is a backend prompt-assembly and grounding fix.
 
 ---
 
-## W-6: The uploaded business document becomes priced offerings
+## W-6: Extract accurate offerings from the complete source
 
 ### Summary
 
-Extend document ingestion so an owner who uploads one document describing
-the whole business - facts, policies, hours, and what they sell with prices
-- gets each sellable item extracted into a reviewable candidate with a name,
-a description, and a price, landing in the `offerings` table at confirm the
-same way chip-typed offerings do today. The model never authors a price; it
-identifies the item and the line of source text that names its price, and
-the server extracts the figure deterministically from that line.
+Rewrite the document-offering extraction around source fidelity rather than
+heading-specific line splitting. An owner who uploads one document describing
+the whole business - facts, policies, hours, and what they sell with prices -
+gets each distinct sellable item extracted into a reviewable candidate with a
+name, a description, and a price bound to the correct item, landing in the
+`offerings` table at confirm the same way chip-typed offerings do today. The
+model never authors a price; it identifies items and references the source
+evidence, and the server resolves those references and derives integer cents
+deterministically. Complex and conflicting pricing is preserved and flagged,
+never flattened or invented.
 
-Sequenced after W-5 so the retrieval fix (one answer draws from both
-sources) is already in place before this ticket makes the catalog larger and
-more complete.
+Sequenced after W-5 so the retrieval fix (one answer draws from both sources)
+is already in place before this ticket makes the catalog larger and more
+complete. The review usability that this richer candidate data feeds is W-8.
 
 ### Why
 
@@ -860,80 +1091,94 @@ monetary figure in each line
 defaults to empty and is only ever filled by hand in the review sheet. A
 business document that describes its menu in prose, under a business-specific
 heading, or with an item's description on a separate line from its price
-produces no offering candidates at all, or candidates with no description.
-The founder's ask is specifically to treat the whole document as the source
-of offerings-with-detail, not only two narrow sections.
+produces no offering candidates at all, or candidates with no description. The
+40-row pasted review output the founder reported shows the downstream result:
+offering names rendered as sentence fragments (`"Bowl is,"`, `"the,"`) and
+prose joins (`"Plate and Pita Pocket both run"`), which no slot on the review
+sheet can map back to a real item. The founder's ask is to treat the whole
+document as the source of offerings-with-detail, with an explicit boundary
+that a numeric amount anywhere in the document does not by itself prove it
+belongs to a particular offering.
 
 ### User stories
 
-#### US-1 A menu item described anywhere in the document becomes a candidate
+#### US-1 Offerings described anywhere in the complete source become candidates
 
 As a business owner, if my uploaded document describes an item I sell - its
-name, what it is, and its price - anywhere in the document, not only under a
-literal "Prices" heading, it shows up as an offering candidate for me to
-review.
+name, what it is, and its price - anywhere in the document, in any formatting,
+it shows up as an offering candidate for me to review.
 
-- The heading match widens beyond the current two literal headings (`"What
-  we offer"`, `"Prices"`) to the full set `structure_document` already
-  produces (`about`, `offerings`, `prices`, `hours`, `location_contact`,
-  `policies`, `other` - [structuring.py:49-81](../../../../backend/app/features/knowledge/structuring.py#L49-L81)),
-  reading `offerings` and `prices` as the primary sources and treating `about`
-  as a fallback when structuring degrades.
-- The deterministic `derive()` fallback path
-  ([offering_candidates.py:125-159](../../../../backend/app/features/business/offering_candidates.py#L125-L159))
-  still applies when structuring falls back to `AS_WRITTEN`
-  ([structuring.py:98](../../../../backend/app/features/knowledge/structuring.py#L98)).
+- The extraction reads the supported text-bearing document in full: lists,
+  table-derived text, prose, and mixed formatting.
+- Offerings are found even when their names, descriptions, and prices appear
+  in different sections of the document.
+- Repeated evidence about the same item is joined, not duplicated.
+- Offerings are distinguished from categories, descriptive sentences, and
+  unrelated facts.
+- No candidate is created whose name is a sentence fragment or prose join such
+  as "Bowl is", "the", or "Plate and Pita Pocket both run".
+- Meaningful distinctions between separately sold items are preserved - a
+  category is not collapsed into its individual products, and two separately
+  sold items stay separate.
 
-#### US-2 A candidate carries its description, not only its name and price
+#### US-2 Incomplete or degraded processing is visible, not silent
 
-As a business owner, an offering candidate extracted from my document shows
-the description that was written about it in the document, so I am not
-starting from a blank description field in review.
+As a business owner, when a document is too messy to extract fully, I can see
+that extraction was incomplete and review the source, instead of being handed
+a truncated result that looks complete.
 
-- A new extraction pass returns `{name, description, source_line}` per
-  candidate.
-- `source_line` is validated as a substring of the source document text
-  before use; a candidate whose `source_line` does not match is dropped
-  rather than trusted.
+- The review state distinguishes "fully extracted" from "partially or not
+  extracted", and keeps the source context available for manual review.
 
-#### US-3 The price is never model-authored
+#### US-3 A candidate carries a source-supported description
+
+As a business owner, an offering candidate extracted from my document shows a
+concise, readable description supported by the source, so I am not starting
+from a blank or invented description in review.
+
+- The description preserves distinguishing inclusions, options, restrictions,
+  and units.
+- The description stays absent when the source provides none.
+- No ingredients, services, or marketing claims are invented.
+
+#### US-4 Money is bound to the item it belongs to, never authored
 
 As the platform, a price shown to a customer is always a number the server
-computed from the document's own text, never a figure the language model
-wrote.
+computed from the document's own text for that item, never a figure the
+language model wrote, and never an amount merely because it appears somewhere
+in the document.
 
-- `price_cents` is extracted from each candidate's `source_line` using the
-  existing `extract_monetary_figures`
-  ([knowledge/service.py:223-234](../../../../backend/app/features/knowledge/service.py#L223-L234)),
-  the same function the current `derive()` path already relies on.
-- The extraction schema for `{name, description, source_line}` has no numeric
-  price field at all, so there is no field for a model to fill with an
-  invented number. This is the concrete implementation of the
-  deterministic-pricing invariant
-  ([conventions.md section 8](../../design/conventions.md)) for this new
-  path.
+- The extraction schema has no numeric price field at all - there is no field
+  for a model to fill with an invented number.
+- The server resolves the source references and derives integer cents
+  deterministically, accepting a price only when its relationship to the item
+  is supported and unambiguous.
+- Missing, invalid, or mismatched references are rejected.
 
-#### US-4 The owner reviews name, description, and price together before publish
+#### US-5 Complex prices stay intact and flagged
 
-As a business owner, the knowledge review sheet shows each extracted
-candidate's name, description, and price together, and I can edit or discard
-any of them before confirming.
+As a business owner, a price that is not a single flat number - a range, a
+"from" price, a unit, a variant, a bundle, a surcharge, or a currency note -
+is preserved with its context and marked for review rather than flattened or
+dropped.
 
-- `ReviewSheet.tsx` renders the `description` field for document-sourced
-  candidates (today it is present in the type but empty for document
-  candidates).
-- Saving a review still calls the same
-  `PUT /api/onboarding/knowledge/{document_id}` shape from `497bbf3`; no new
-  endpoint.
+- The numeric field is populated only when the existing offering
+  representation can preserve the meaning; otherwise it is left unset, the
+  source wording is retained, and the candidate is marked for review.
+- A genuinely absent price is distinguished from an ambiguous or conflicting
+  one.
+- No full variant, quotation, or pricing-rule editor is introduced.
 
 ### Design reference
 
 The onboarding thread and its knowledge-review sheet are unchanged in
 structure - `ReviewSheet.tsx` already has a description field in its data
-model; this ticket makes document-derived candidates populate it, and adds
-no new screen. Images remain explicitly out of scope, per the founder's own
+model; this ticket makes document-derived candidates populate it, and adds no
+new screen. Images remain explicitly out of scope, per the founder's own
 framing: onboarding stays text/price/description only, and an owner adds
-images afterward from the Business tab, which `M-2` already supports.
+images afterward from the Business tab, which `M-2` already supports. The
+paginated review editor and duplicate decisions this feeding data supports are
+W-8.
 
 ### Technical spec
 
@@ -943,77 +1188,135 @@ images afterward from the Business tab, which `M-2` already supports.
   `figures_preserved` money guard
   ([structuring.py:120-128](../../../../backend/app/features/knowledge/structuring.py#L120-L128)),
   which discards the model's structured output entirely (falling back to
-  `AS_WRITTEN`) if it invents a figure. Keep this stage and this guard
-  exactly as they are - they are the existing enforcement of the
-  deterministic-pricing invariant at the structuring layer, and this ticket
-  adds a second enforcement point rather than relaxing this one.
-- **New stage two: item extraction without price.** Add an extraction pass
-  (new Pydantic schema, e.g. `ExtractedOffering { name: str, description: str,
-  source_line: str }`, a list of these) that runs over the `offerings` and
-  `prices` structured sections (and `about` as a fallback). Prompt
-  instruction: identify each distinct sellable item, its description as
-  written, and the exact line of source text where its price appears -
-  never write a number.
-- **Deterministic price extraction and provenance check.** For each
-  `ExtractedOffering`, look up `source_line` in the original section text
-  (exact substring match); reject the candidate if it is not found (the
-  model paraphrased instead of quoting, which also means it is not safe to
-  trust for price extraction). For an accepted candidate, run
-  `extract_monetary_figures` on `source_line` to get `price_cents` the same
-  way `derive()` does today.
+  `AS_WRITTEN`) if it invents a figure. Keep this stage and this guard exactly
+  as they are - they are the existing enforcement of the
+  deterministic-pricing invariant at the structuring layer. This ticket adds a
+  second enforcement point rather than relaxing this one.
+- **Money-reference boundary.** Enforce the five-step contract:
+  1. The server identifies the original source blocks and their monetary
+     occurrences.
+  2. The extraction result identifies offerings and references their
+     supporting evidence (source blocks, not heading-specific lines).
+  3. The model does not populate monetary amounts or `price_cents` anywhere.
+  4. The server resolves the references and derives integer cents
+     deterministically.
+  5. A price is accepted only when its relationship to the item is supported
+     and unambiguous.
+  Reject missing, invalid, and mismatched references. A shared explicit price
+  may apply to two separately named items when the source establishes that
+  relationship (for example a listed price that names both items); it must
+  not be used to create a composite sentence-fragment offering.
+- **New stage two: whole-source item extraction without price.** Add an
+  extraction pass (new Pydantic schema, e.g. `ExtractedOffering` carrying a
+  name, a description or an empty description, and the source references for
+  both, with a separate model-free price relationship) that runs over the
+  full supported text of the document, not only the `offerings` and `prices`
+  structured sections. Prompt instruction: identify each distinct sellable
+  item wherever its name, description, and price-information appear - across
+  lists, table-derived text, prose, and mixed formatting - join repeated
+  evidence about the same item, distinguish offerings from categories and
+  descriptive sentences, and never write a number.
+- **Deterministic price resolution and provenance check.** For each extracted
+  offering, resolve its price references against the server-identified source
+  blocks and the monetary occurrences within them (exact substring match);
+  reject the candidate's price when the reference is not found or does not
+  match (the model paraphrased instead of quoting, which also means it is not
+  safe to trust for price extraction). For an accepted reference, run
+  `extract_monetary_figures` on the source block to get `price_cents` the same
+  way `derive()` does today
+  ([knowledge/service.py:223-234](../../../../backend/app/features/knowledge/service.py#L223-L234)).
+- **Complex prices conservatively.** Preserve the context for ranges, "from"
+  prices, units, variants, bundles, surcharges, and currency. Populate
+  `price_cents` only when the existing offering representation can preserve
+  the meaning; otherwise leave it unset, retain the source wording, and mark
+  the candidate for review. Distinguish genuinely absent prices from
+  ambiguous or conflicting ones. Do not introduce a full variant, quotation,
+  or pricing-rule editor.
+- **Reconcile repeated evidence with one shared precedence policy.** Consolidate
+  exact, compatible repetitions while retaining provenance. Do not silently
+  resolve conflicting prices. Preserve owner edits when incorporating document
+  information. Generate possible-match suggestions for similar names (for
+  example `"coffe"` and `"coffee drinks"`) rather than merging them, and never
+  collapse a broad category into its individual products. Apply one shared
+  precedence policy across backend and frontend behavior - the same rule the
+  client uses to resolve a merge must be the one the server documents.
 - **Fold into `PendingOffering`.** Produce `PendingOffering(name, description,
-  price_cents, sources=["document"])` from the accepted candidates, merging
-  by `normalize_name` the same way `_merge_owner_offerings`
+  price_cents, sources=["document"])` from the accepted candidates, merging by
+  `normalize_name` the same way `_merge_owner_offerings`
   ([agent.py:162-185](../../../../backend/app/onboarding/agent.py#L162-L185))
   already merges owner-typed names, so a document candidate and an
   owner-typed chip candidate with the same normalized name combine into one
-  reviewable row rather than duplicating.
-- **Widen the heading set consumed by `derive()` / `_source_lines()`**
-  ([offering_candidates.py:34](../../../../backend/app/features/business/offering_candidates.py#L34),
-  [offering_candidates.py:76-84](../../../../backend/app/features/business/offering_candidates.py#L76-L84))
-  as the fallback path for documents that degrade to `AS_WRITTEN` - this
-  keeps today's behavior as the safety net rather than replacing it outright.
-- **Review sheet.** Update `ReviewSheet.tsx` to render `description` for
-  every candidate regardless of source, and confirm the existing save/discard
-  handlers (`saveKnowledge`, `discardKnowledge` in `page.tsx`, unchanged by
-  this ticket) pass the description through to
+  reviewable row rather than duplicating - subject to the precedence policy
+  above.
+- **Run extraction during ingestion, not on every read.** The shared
+  extraction mechanism runs during ingestion, not whenever a draft is read.
+  Cover every caller of that mechanism, including onboarding and later
+  knowledge imports.
+- **Handle failure safely.** When extraction fails, preserve usable knowledge
+  and safe candidate information; keep the source context available for manual
+  review. Do not fall back to the same unsafe first-number parsing behavior.
+- **Review sheet.** Update `ReviewSheet.tsx` to render `description` for every
+  candidate regardless of source, to surface flagged complex/conflicting
+  prices, and to render possible-match proposals. Confirm the existing
+  save/discard handlers (`saveKnowledge`, `discardKnowledge` in `page.tsx`)
+  pass the description through to
   `PUT /api/onboarding/knowledge/{document_id}` - check whether
   `OnboardingKnowledgeRequest`'s `offerings` field already round-trips
-  `description` (it should, since `PendingOffering` already has the field);
-  if not, that is the one wire-shape gap to close.
+  `description`; if not, that is the one wire-shape gap to close.
 - **Retrieval consumer.** No change needed beyond W-5: once these
   document-sourced rows are confirmed into `offerings` at publish
   (`reconcile_offerings_batch`, [business/service.py:187-244](../../../../backend/app/features/business/service.py#L187-L244)),
   they are projected into the vector store by the existing
   `ingest_offerings` pipeline and answered from by the same catalog block
-  W-5 already wired into both the fast and hybrid prompts. This ticket's job
-  is only getting a complete, priced, described catalog into that table; W-5
-  is what makes the chat answer from it correctly.
+  W-5 already wired into both the fast and hybrid prompts. This ticket's job is
+  only getting a complete, priced, described, correctly-bound catalog into that
+  table; W-5 is what makes the chat answer from it correctly.
 
 ### Tests
 
-- Backend: a fixture document with an item's description on one line and its
-  price on another (not both in the same source line as today's `derive()`
-  assumes) yields a candidate with both fields populated.
-- Backend: a candidate whose model-returned `source_line` does not appear
+- Backend: a fixture document with an item's name, description, and price on
+  separate lines or in different sections yields one candidate with all three
+  populated and the price bound to the right item.
+- Backend: prose and table-derived documents (not only list-shaped lines
+  under the two fixed headings) yield distinct, correctly-named candidates;
+  a category and its individual products stay distinct.
+- Backend: a candidate whose model-returned source reference does not appear
   verbatim in the source document is dropped, not trusted.
 - Backend: no test path allows a `price_cents` value that does not trace back
-  to `extract_monetary_figures` output on real document text - this is the
-  regression test for the deterministic-pricing invariant on this new path,
-  analogous to the existing figure-provenance tests in `test_agent_graph.py`.
+  to `extract_monetary_figures` output on real document text - the regression
+  test for the deterministic-pricing invariant on this new path, analogous to
+  the existing figure-provenance tests in `test_agent_graph.py`.
+- Backend: a two-priced or range document keeps its context, leaves the
+  numeric field unset, retains the source wording, and is marked for review.
+- Backend: `"coffe"` and `"coffee drinks"` produce a possible-match suggestion,
+  not an automatic merge; a shared explicit price for two named items is
+  honored only when the source establishes the relationship.
+- Backend: extraction does not re-run on every draft read, and every caller of
+  the shared mechanism (onboarding and later knowledge imports) is covered.
 - Backend: a document-sourced candidate and a chip-typed candidate with the
   same normalized name merge into one `PendingOffering` rather than
-  duplicating.
+  duplicating, under the shared precedence policy.
 - Frontend: `ReviewSheet` renders a non-empty description for a
   document-sourced candidate.
 
 ### Definition of done
 
-- [ ] Offerings described anywhere in a whole-business document (not only
-      under two fixed headings) are extracted as reviewable candidates.
-- [ ] Each candidate carries a description sourced from the document.
-- [ ] Every price is extracted deterministically from quoted source text; no
-      extraction schema has a model-fillable numeric price field.
+- [ ] Offerings described anywhere in a whole-business document - lists,
+      table-derived text, prose, and mixed formatting - are extracted as
+      reviewable candidates with correct names.
+- [ ] Each candidate carries a source-supported description (or none when the
+      source provides none).
+- [ ] Every price is derived deterministically from quoted, source-resolved
+      references bound to the correct item; no extraction schema has a
+      model-fillable numeric price field; an amount's mere presence in the
+      document never binds it to an item.
+- [ ] Complex and conflicting prices are preserved with context and marked for
+      review, never flattened or invented.
+- [ ] Repeated evidence is reconciled under one shared precedence policy
+      without silent merges or conflicts.
+- [ ] Extraction runs during ingestion for every caller; failures preserve
+      usable knowledge and source context instead of unsafe first-number
+      parsing.
 - [ ] The review sheet shows name, description, and price together for
       document-sourced candidates.
 - [ ] The confirm-time write path and the retrieval path from W-5 need no
@@ -1119,3 +1422,350 @@ that remain (`deferred`, `ask_beat`, `ask_count`) read through defaults.
 - [x] A final unresolved required beat pauses and can be retried without storing
       an invalid fallback or allowing publication.
 - [x] `make check` green.
+
+Shipped `cd10f6e`. Forward references: W-4 preserves this ticket's shipped
+address-only confirmation behavior and narrows itself to the remaining paths;
+W-9 refines the conversation's response to name corrections. This ticket's
+checked criteria are unchanged by the 2026-09-05 amendment.
+
+---
+
+## W-8: Review a large import without losing information
+
+### Summary
+
+Add a ticket for the existing review sheet's usability with a large import.
+Show up to five offering cards initially, open a five-per-page editor when
+there are more, add possible-duplicate combine/keep-both decisions, and make
+the knowledge sections editable without losing factual detail. The current
+`ReviewSheet` renders every candidate in one scrollable list under the
+knowledge sections; this ticket pages that list, adds duplicate resolution,
+and keeps the existing save, discard, and go-live boundaries.
+
+Refined by the 2026-09-05 amendment to make the five-item preview and the
+five-per-page editor concrete, to add duplicate decision behavior, and to
+require that formatting and editing preserve factual distinctions.
+
+### Why
+
+The 40-row pasted review output showed an import that a single-page review
+cannot manage: every candidate renders inline
+([ReviewSheet.tsx:134-212](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L134-L212)),
+duplicate names are a hard save block rather than a decision
+(`hasDuplicateNames`, [ReviewSheet.tsx:257-264](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L257-L264)),
+and the knowledge sections are single textareas that drift from their source.
+The founder asked for a review that scales to a real business document without
+losing information: a bounded preview, a paginated editor, explicit duplicate
+choices, and readable, editable sections that preserve exceptions, conditions,
+locations, units, and other factual distinctions.
+
+### User stories
+
+#### US-1 A large import opens with a bounded preview
+
+As a business owner, when my upload produces many offering candidates, I see a
+bounded preview first, showing up to five offering cards and the total retained
+count.
+
+- Up to five offering cards are shown initially, with the total count stated.
+- For more than five, a "Review all" control opens the editor.
+- Pagination controls are absent when there are five or fewer offerings.
+
+#### US-2 The expanded editor pages the offerings
+
+As a business owner, when I open the editor I get five offerings per page with
+position and previous/next controls, and my edits survive paging.
+
+- The expanded editor displays five offerings per page with position and
+  previous/next controls.
+- Edits, removals, additions, and review decisions are preserved across page
+  changes.
+- Newly added offerings are revealed for editing.
+- Removing the final item on a page moves to a valid adjacent page.
+- Stable candidate identities keep edits attached to their item after
+  deletion or reordering.
+
+#### US-3 Saving includes everything retained, and nothing publishes early
+
+As a business owner, I can save knowing every retained offering is included,
+even ones I am not currently looking at, and paging or previewing never
+publishes anything.
+
+- Saving includes all retained offerings, including those outside the visible
+  page; the owner does not need to open every page to save correctly.
+- Paging and previewing do not publish data.
+- The existing save, discard, and go-live boundaries are preserved.
+- Off-page validation errors are discoverable, with a direct route to the
+  affected item.
+
+#### US-4 Possible duplicates are decisions, not blocks
+
+As a business owner, when the import finds names that might be the same item,
+I can combine them or keep both, and I always know which values a combine
+would keep.
+
+- Possible duplicates are shown with a subtle highlight, a textual
+  explanation, and source labels.
+- "Combine" and "Keep both" are offered. Before combining, the sheet shows
+  which name, description, and price will be retained.
+- Owner values are preserved unless the owner chooses a replacement; an
+  explicit price choice is required when combining conflicting values.
+- Suggestions left unresolved remain separate; saving never implies an
+  unconfirmed merge occurred.
+- The count of remaining possible matches is shown without forcing inspection
+  of every unrelated offering.
+
+#### US-5 Knowledge sections stay readable and edit without losing detail
+
+As a business owner, the sections I review are readable and editable, and
+formatting preserves the facts, not a lossy summary.
+
+- The existing sections (business information, hours, location, policies,
+  other information) and their order are kept.
+- Short paragraphs, plain bullets, and preserved line breaks are supported.
+- Multiline editing is supported for descriptions and longer knowledge text.
+- Formatting preserves exceptions, conditions, locations, units, and other
+  factual distinctions.
+- The review is not replaced by a lossy summary; unrepresented offering and
+  pricing details stay accessible through a collapsed source-detail view.
+
+### Design reference
+
+The current `ReviewSheet`
+([ReviewSheet.tsx](../../../../frontend/src/components/knowledge/ReviewSheet.tsx))
+is the base; the prototype and design tokens in `theme.css` set the layout,
+spacing, controls, and states. Keyboard access and mobile behavior are
+verified alongside desktop presentation. No new rich-text editor dependency
+and no replacement wizard; a collapsed source-detail view reuses the existing
+sheet/collapse vocabulary.
+
+### Technical spec
+
+- **Preview.** Above the editor, show up to five offering cards (name and
+  price on a row, description beneath - the W-7 card shape) plus the total
+  retained count. When the count exceeds five, a "Review all" control opens
+  the expanded editor; otherwise the preview is the editor.
+- **Pagination.** The expanded editor pages at five offerings per page with
+  position and previous/next controls. Render no pagination controls at five
+  or fewer. Preserve edits, removals, additions, and review decisions across
+  page changes; reveal newly added offerings for editing; move to a valid page
+  when removing a page's final item. Give each candidate a stable identity
+  (see the contract extensions) so edits cannot migrate to another item after
+  deletion, reordering, or a duplicate decision.
+- **Save.** Saving includes every retained offering regardless of the visible
+  page; no per-page save. Paging and previewing are read-only with respect to
+  publish. Keep the existing save, discard, and go-live boundaries. Make
+  off-page validation errors discoverable and link them directly to the
+  affected item.
+- **Possible duplicates and conflicts.** Compute possible matches (see W-6's
+  precedence policy) and render them with a subtle highlight, a textual
+  explanation, and source labels. Offer "Combine" and "Keep both". Before a
+  combine, show which name, description, and price win; keep owner values
+  unless the owner chooses a replacement; require an explicit price choice
+  when the combining values conflict. Unresolved suggestions remain separate,
+  and saving must never imply an unconfirmed merge. Show the count of
+  remaining possible matches without forcing full inspection.
+- **Knowledge formatting.** Keep the sections and their order; render short
+  paragraphs and plain bullets with preserved line breaks; support multiline
+  editing for descriptions and longer text; preserve exceptions, conditions,
+  locations, units, and other factual distinctions; keep a collapsed
+  source-detail view for unrepresented offering and pricing details. No
+  rich-text editor dependency, no lossy summary, no replacement wizard.
+
+### Tests
+
+- Frontend: zero, five, six, 40, and at least 50 candidates render the
+  preview/per-page behavior correctly (no pagination at five or fewer;
+  position and controls at six; correct page counts at 40 and 50+).
+- Frontend: editing, adding, and removing offerings across pages preserves
+  those changes; adding reveals the new item for editing; removing a page's
+  final item lands on a valid page; deleting or reordering an item does not
+  move another item's edits to it.
+- Frontend: a save with items on an unvisited page persists all retained
+  offerings; paging and previewing make no publish calls; off-page validation
+  errors are discoverable and route to the affected item.
+- Frontend: a possible-duplicate pair shows highlight, explanation, and source
+  labels; "Combine" and "Keep both" behave per the rules; conflicting combine
+  requires an explicit price choice; unresolved suggestions stay separate and
+  saving does not imply a merge.
+- Frontend: complete knowledge details survive formatting and save (exceptions,
+  conditions, locations, units; long paragraphs), keyboard and mobile
+  verification alongside desktop.
+- Fixture-driven: use controlled fixtures with explicit expected results for
+  the above, as deterministic regression tests.
+
+### Definition of done
+
+- [ ] Up to five offering cards preview with the total count; "Review all"
+      opens the five-per-page editor.
+- [ ] Edits, removals, additions, and review decisions survive paging; newly
+      added items are revealed; removing the final item pages validly; stable
+      identities prevent cross-item edit drift.
+- [ ] Saving includes all retained offerings; paging and previewing never
+      publish; existing save/discard/go-live boundaries hold; off-page errors
+      are discoverable with a direct route.
+- [ ] Possible duplicates render as decisions (combine or keep both) with the
+      retained values shown, explicit conflict price choice, and no implied
+      unconfirmed merge.
+- [ ] Knowledge sections stay readable and editable, preserving factual
+      distinctions; a collapsed source-detail view keeps unrepresented details
+      accessible.
+- [ ] Keyboard and mobile behavior verified alongside desktop.
+- [ ] `make check` green.
+
+---
+
+## W-9: Correct captured information conversationally
+
+### Summary
+
+Add a ticket covering wording cleanup, explicit corrections, and repeated
+acknowledgements in the onboarding conversation. The scan's central finding is
+that the reply context currently includes the latest owner message twice
+([agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713)):
+`record.history.append({...admin_message})` (line 691) runs before
+`reply_msgs` is built, whose `record.history[-3:]` loop (lines 711-712)
+includes that just-appended message, and then `admin_message` is appended again
+(line 713). The relationship between that duplication and the reported
+duplicated names is a runtime hypothesis pending browser reproduction.
+
+### Why
+
+The walkthrough reported names appearing twice and wording that captured
+mistakes as facts. The repository scan confirmed the double-message reply
+context and that there is no mechanism for the owner to correct a captured
+field conversationally during another beat. Today a correction is treated as
+answering the pending question (or as off-topic), not as an edit to an
+already-captured field, so a wrong business name or description cannot be
+fixed in the interview without a re-ask or a hand rewrite.
+
+### User stories
+
+#### US-1 Conservative wording cleanup
+
+As a business owner, clear spelling mistakes in ordinary words are corrected
+using the existing model call, while my name, brand names, identifiers,
+contact details, and money are preserved unless I explicitly correct them.
+
+- Clear ordinary spelling and wording corrections are applied through the
+  existing extraction call - for example, an obvious coffee typo when the
+  context supports it.
+- Personal names, brand names, intentional capitalization, identifiers,
+  contact details, and monetary text are preserved unless explicitly
+  corrected.
+- Ambiguous input is preserved, not guessed.
+- The change is read back clearly so the owner can correct it.
+
+#### US-2 Explicit corrections during any beat
+
+As a business owner, when I correct a field I already answered - regardless of
+which question is currently being asked - the correction is applied, validated,
+and persisted, and does not count as a failed attempt at the pending question.
+
+- Corrections to previously captured fields are accepted during any onboarding
+  beat.
+- Owner name is distinguished from business name; a focused clarification is
+  asked when the correction target is ambiguous.
+- Every changed field is validated, not only the field currently being
+  requested.
+- The previous valid value is kept when a correction is invalid.
+- Unrelated fields and interview progress are preserved.
+- A correction does not count as a failed attempt to answer the pending
+  question.
+- Accepted corrections persist across reload and into the eventual confirmed
+  profile.
+
+#### US-3 Offering corrections are explicit operations
+
+As a business owner, adding, renaming, removing, and explicitly replacing
+offerings are distinct operations, and renaming one leaves its siblings,
+description, price, and provenance intact.
+
+- Adding, renaming, removing, and explicitly replacing offerings are handled
+  distinctly.
+- Renaming an offering preserves its siblings, description, prices, and
+  relevant provenance.
+- Existing update mechanisms are reused; the walkthrough's description of an
+  update as a "tool call" does not restore an obsolete tool loop.
+
+#### US-4 One acknowledgement, one response, consistent spelling
+
+As a business owner, when I give or correct a name, I see one acknowledgement
+of the captured or corrected name with consistent spelling, one assistant
+response, and one occurrence of my message in the conversation.
+
+- One occurrence of the current owner message in the constructed reply context.
+- One assistant response in the displayed and persisted conversation.
+- One acknowledgement of the captured or corrected name, with consistent
+  spelling.
+- Regression coverage for both SSE and ordinary-response paths.
+
+### Technical spec
+
+- **Conservative cleanup.** Route clear ordinary spelling/wording corrections
+  through the existing extraction call used for capture; do not add a second
+  "cleanup" call. Instruct the model to preserve personal names, brand names,
+  intentional capitalization, identifiers, contact details, and monetary text
+  unless explicitly corrected, and to preserve ambiguous input rather than
+  guessing. Read back changed values so the owner can correct them.
+- **Explicit corrections.** Extend the existing message/update boundary so a
+  turn that corrects a previously captured field is recognized as a correction
+  rather than an answer to the pending question. Distinguish owner name from
+  business name, ask a focused clarification when the correction target is
+  ambiguous, validate every changed field, keep the previous valid value when
+  a correction is invalid, preserve unrelated fields and interview progress,
+  and never count a correction as a failed attempt. Persist accepted
+  corrections across reload and into the confirmed profile.
+- **Offering corrections.** Distinguish adding, renaming, removing, and
+  explicitly replacing offerings, reusing the existing update mechanisms that
+  W-6 and W-8 extend. Renaming preserves siblings, description, prices, and
+  provenance. Do not restore an obsolete tool loop merely because the
+  walkthrough describes an update as a "tool call".
+- **Repeated acknowledgements.** Fix the shared mechanism that includes the
+  latest owner message twice in the reply context
+  ([agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713)).
+  Before the fix is verified, reproduce the duplication through the browser
+  with owner and business names. After the fix, assert one occurrence of the
+  current owner message in the constructed reply context, one assistant
+  response in the displayed and persisted conversation, and one
+  acknowledgement of the captured or corrected name with consistent spelling.
+  Do not add a generic text deduplicator that could remove legitimate repeated
+  words.
+
+### Tests
+
+- E2E / manual: reproduce the reported duplicated names using owner and
+  business names through the real onboarding surface before changing the reply
+  context fix.
+- Backend: the constructed reply context contains one occurrence of the
+  current owner message, for both SSE and ordinary-response paths.
+- Backend: an explicit correction to a previously captured field during another
+  beat is applied, validated, persisted, and does not count as a failed
+  attempt; an invalid correction keeps the previous value; unrelated fields and
+  progress are preserved; the correction survives reload into the confirmed
+  profile.
+- Backend/frontend: owner name vs business name disambiguation, focused
+  clarification for an ambiguous target.
+- Backend: the shared corrections fix does not add a generic text
+  deduplicator.
+- Fixture-driven: controlled fixtures with explicit expected results for
+  deterministic regression tests.
+
+### Definition of done
+
+- [ ] Clear spelling/wording corrections use the existing extraction call;
+      names, brands, identifiers, contacts, and money are preserved unless
+      explicitly corrected; ambiguous input is not guessed; changes are read
+      back.
+- [ ] Corrections to captured fields are accepted during any beat, validated,
+      persisted across reload and into the confirmed profile, and never count
+      as a failed attempt.
+- [ ] Offering corrections (add, rename, remove, explicit replace) are
+      distinct; renaming preserves siblings, description, price, and
+      provenance; no obsolete tool loop is restored.
+- [ ] The reply context holds one occurrence of the current owner message,
+      one displayed and persisted assistant response, and one acknowledgement
+      of the captured or corrected name - reproduced in the browser first,
+      and covered on both SSE and ordinary-response paths.
+- [ ] No generic text deduplicator is added.
+- [ ] `make check` green.

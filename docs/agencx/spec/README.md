@@ -20,7 +20,10 @@ ticket id when a ticket is implemented.
 Tickets are written before implementation. Amendments are written after a
 founder walkthrough exposes a change inside a closed phase. Amendments retain
 their checked acceptance criteria and do not gain invented retrospective
-technical sections. The amendments are O-6 through O-12 and E-6.
+technical sections. The amendments are O-6 through O-12, E-6, and the Phase 13
+amendment record inside `13-walkthrough.md` (2026-09-05), which refines W-3
+through W-6, adds W-8 and W-9, and distinguishes specification updates from
+implementation delivery.
 
 ## Active and completed work
 
@@ -30,7 +33,7 @@ Active phase files contain unresolved tickets only:
 |---|---|
 | [`active/08-deferred.md`](active/08-deferred.md) | B-2, D-1, D-3 |
 | [`active/12-refinement.md`](active/12-refinement.md) | R-3, R-4, R-5 |
-| [`active/13-walkthrough.md`](active/13-walkthrough.md) | W-1 through W-6 |
+| [`active/13-walkthrough.md`](active/13-walkthrough.md) | W-1 through W-9 |
 
 Completed phase files preserve the detailed records for shipped work:
 
@@ -83,7 +86,17 @@ The active refinement phase is hardening, not new product scope. B-2, D-1, and
 D-3 remain deferred to Phase 2. Payments, scheduling, invoicing, leads, and
 other Stage 2 work remain outside this spec set.
 
-The walkthrough phase (`W-1` through `W-6`) closes defects a founder
+The walkthrough phase (`W-1` through `W-9`) closes defects a founder
 walkthrough found in already-shipped work: the home escalation queue, the
-onboarding interview, and customer chat grounding. It is a second bug-fix
-pass on Phase 1 surfaces, not new product scope.
+onboarding interview, customer chat grounding, the review sheet, and
+conversational correction. It is a second bug-fix pass on Phase 1 surfaces,
+not new product scope. W-1, W-2, and W-7 are delivered; W-3 through W-6, W-8,
+and W-9 were refined and added by the 2026-09-05 amendment and remain open
+specifications.
+
+The walkthrough spec file also carries the amendment record for the second
+round ([`13-walkthrough.md`](active/13-walkthrough.md)), which keeps the
+reported observations, the found clarified preferences, the implementation
+evidence, and the boundary between symptoms, confirmed code behavior,
+suspected causes, and outstanding browser verification beside the tickets it
+feeds.

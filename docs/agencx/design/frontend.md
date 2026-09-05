@@ -303,6 +303,18 @@ idiom (18px radius, tip at the top) and the onboarding thread's idiom (bare pros
 plus a 20px owner bubble tipped bottom-right) are different designs in the
 prototype. Do not unify them.
 
+**Phase 13, W-3 (planned, `13-walkthrough.md`):** the onboarding composer and
+pending states are refined without changing this idiom - text-input
+placeholders become empty by default (label plus the in-thread question remain
+the context carriers), the composer's baseline height is stabilized across
+beat changes while typed growth is kept, the thinking-dots row becomes the sole
+pending indicator (the "Answering…" status line is removed; the status line
+becomes the error slot only), and a processing upload animates in the existing
+motion vocabulary with an explicit success or failure and a recovery path. No
+fabricated percentage progress and no queues/workers/background polling are
+added. Typed answers use SSE; chip, resume, and upload use ordinary requests -
+proven by a browser network trace.
+
 **Email in a chat composer (O-5; extraction moved client-side 2026-08-28, D23).**
 The client gate on the login pill is *liveness only* - it arms the send circle
 when the text contains something address-shaped, so "it's sam@shop.com" is
@@ -450,6 +462,17 @@ interview asks, with the control the interview asks it with.
 | Failed | The reason in place, plus retry (re-runs the ingest over the stored text) |
 | Tool toggles | Enabled-tools section (D-3); toggling updates `tenant_config.enabled_tools` |
 
+**Phase 13, W-8 (planned, `13-walkthrough.md`):** the review sheet is
+extended for large imports - up to five offering cards preview with the total
+retained count, a "Review all" editor with five offerings per page, stable
+candidate identities so edits do not migrate across paging, saving that
+includes all retained offerings on unvisited pages, and possible-duplicate
+decisions ("Combine" / "Keep both") that require an explicit price choice on a
+conflict and never imply an unconfirmed merge. The knowledge sections keep
+their order and formatting that preserves exceptions, conditions, locations,
+and units, with a collapsed source-detail view for unrepresented details. No
+rich-text editor dependency, no lossy summary, no replacement wizard.
+
 ### S3 - Public page (anonymous, per-tenant slug)
 
 Centered column (max ~720px), tenant logo + display name header. No auth. The
@@ -466,6 +489,13 @@ question"; the rest of the storefront remains informational.
 
 The address is the owner's own: M-4 lets them choose it at go-live rather than
 keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).
+**Phase 13, W-4 (planned):** every path that reaches confirmation - initial
+load, ordinary answers, optional-knowledge skip, review save, review discard,
+and reload - provides the suggested address; invalid, reserved, and taken
+slugs are actionable field errors (including the backend's own validation
+remaining authoritative); a business-name correction refreshes the suggestion
+only until the owner edits the address; and network failures preserve the
+entered address so a retry succeeds without restarting onboarding.
 
 | State | Spec |
 |---|---|

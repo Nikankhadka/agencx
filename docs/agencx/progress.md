@@ -40,12 +40,16 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
 - [x] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
 - [x] W-2: stop the onboarding interview from re-asking a filled slot.
-- [ ] W-3: remove the redundant "Answering..." line and stabilize the onboarding composer's height.
-- [ ] W-4: pre-fill the go-live slug on every path and show a real error when it fails.
-- [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together.
-- [ ] W-6: extract priced, described offerings from a whole-business document upload.
+- [ ] W-3: keep the onboarding thread clear and responsive - empty placeholders, stable composer geometry, one pending indicator, animated upload processing, and a proven SSE/ordinary-request transport split.
+- [ ] W-4: complete go-live address handling - the suggested slug on every confirm-opening path, actionable field errors, owner-typed addresses preserved, and recoverable network failures.
+- [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together, using the existing context package.
+- [ ] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
 - [x] W-7: make the interview read like a person - challenge junk input, drop the
   skip chip, keep replies short, address-only go-live, priced offering cards.
+- [ ] W-8: review a large import without losing information - five-item preview, five-per-page editor, combine/keep-both duplicate decisions, and readable editable knowledge sections.
+- [ ] W-9: correct captured information conversationally - conservative wording cleanup, explicit corrections on any beat, offering correction operations, and a single acknowledgement for a captured or corrected name.
+
+**Phase 13 specification amended 2026-09-05** (`docs/phase13-walkthrough-refinement`): a second walkthrough round and its planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase introduction to nine tickets. This is a specification update, not implementation delivery. W-1, W-2, and W-7 remain shipped with their records preserved; W-3 through W-6, W-8, and W-9 keep their software delivery statuses open, and no runtime fix is claimed from the repository scans.
 
 ## Known gaps and deliberate deferrals
 
@@ -142,7 +146,11 @@ deterministically but composed by a second, unconstrained LLM call, which let
 it re-ask a business name already on file - the fix makes the server emit the
 question verbatim, the same way the chip-answer path already does, and adds a
 flow-change confirmation rule to `conventions.md` so a working conversational
-flow is not altered again without a flagged before/after.
+flow is not altered again without a flagged before/after. The phase was
+extended to nine tickets by a second walkthrough round and its planning
+(`docs/phase13-walkthrough-refinement`, 2026-09-05) - refined W-3 through
+W-6, new W-8 and W-9 - as a specification update only; those tickets remain
+open for implementation.
 
 **W-2 shipped** (2026-09-05, `fix/w-2-onboarding-repeat`). Building it surfaced
 that the ticket named a symptom the spec had mis-sized: there was no repeat cap
@@ -172,7 +180,7 @@ follow-up.
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
-| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-6 |
+| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-9 (W-1, W-2, W-7 delivered; amended 2026-09-05) |
 | [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |
 | [`docs/archive/phase1-complete/`](../archive/phase1-complete/) | Historical | Completed R-1 and R-2 records |
 
