@@ -31,8 +31,6 @@ import type { WaitingRow } from "../lib/brief";
  * "which one do they mean" step.
  */
 
-const COLLAPSED_ROWS = 3;
-
 function pluralHeadline(n: number): string {
   return n === 1 ? "1 customer is waiting for you" : `${n} customers are waiting for you`;
 }
@@ -42,8 +40,8 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
 
   if (rows.length === 0) return null;
 
-  const visible = expanded ? rows : rows.slice(0, COLLAPSED_ROWS);
-  const hasMore = rows.length > COLLAPSED_ROWS;
+  const hasMore = rows.length > 3;
+  const fitsAtLarge = rows.length <= 5;
 
   return (
     <article
@@ -58,11 +56,14 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
       </div>
 
       <div
+        data-testid="waiting-panel-rows"
         className={
-          expanded ? "max-h-[288px] overflow-y-auto lg:max-h-[432px]" : undefined
+          expanded
+            ? "max-h-[288px] overflow-y-auto lg:max-h-[432px]"
+            : "max-h-[216px] overflow-y-auto lg:max-h-[360px]"
         }
       >
-        {visible.map((row) => (
+        {rows.map((row) => (
           <Link
             key={row.id}
             href={`/chats/${row.id}`}
@@ -92,7 +93,7 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
           type="button"
           data-testid="waiting-panel-toggle"
           onClick={() => setExpanded((value) => !value)}
-          className="block w-full border-t border-hairline px-[18px] py-2.5 text-center text-chip text-accent active:bg-surface-sunken"
+          className={`block w-full border-t border-hairline px-[18px] py-2.5 text-center text-chip text-accent active:bg-surface-sunken${fitsAtLarge ? " lg:hidden" : ""}`}
         >
           {expanded ? "Show fewer" : `Show all ${rows.length}`}
         </button>

@@ -84,6 +84,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   // WaitingPanel, so none of the three can ever disagree.
   const conversations = useApiQuery<ConversationSummary[]>("/api/conversations", {
     enabled: Boolean(session),
+    refetchInterval: 4000,
   });
   const waitingCount = (conversations.data ?? []).filter((row) => row.needs_attention).length;
   const items = NAV_ITEMS.map((item) =>

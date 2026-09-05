@@ -38,7 +38,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [ ] R-5: decide and validate backups/restore, error tracking, E2E-in-CI, and dependency scanning.
 - [ ] Add the GitHub `VERCEL_TOKEN` secret so registry cleanup can run. The local Vercel token is not a repository secret.
 - [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
-- [ ] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
+- [x] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
 - [ ] W-2: stop the onboarding interview from re-asking a filled slot.
 - [ ] W-3: remove the redundant "Answering..." line and stabilize the onboarding composer's height.
 - [ ] W-4: pre-fill the go-live slug on every path and show a real error when it fails.
@@ -106,10 +106,9 @@ Also fixed in passing: the Chats-list attention dot and the new count badges
 disagreed on which amber to use (`--color-warning`'s amber-500, a "kept from
 the prior system" holdover that reads brown at text weight and fails 4.5:1
 against its own subtle background, versus `--color-highlight`'s amber-400,
-the prototype's actual notification colour) - `--color-highlight` now points
-at `--amber-300` (a lighter step of the same prototype ramp, 8.8:1 as dark
-text on a solid fill) and every "wants the owner" indicator in the app uses
-it consistently.
+the prototype's actual notification colour). W-1 points `--color-highlight`
+at that prototype literal, with 8.6:1 dark-text-on-solid-fill contrast, and
+every "wants the owner" indicator in the app uses it consistently.
 
 **Hosted login OTP was misconfigured, not a code bug** (found 2026-09-04,
 `fix/hosted-otp-sends-link`). Staging's login-in-chat mailed a magic LINK to
@@ -154,4 +153,3 @@ flow is not altered again without a flagged before/after.
 Phase 1 is not called fully complete until the active refinement items are
 validated or explicitly accepted as deferred. QA and optimization are separate
 from the documentation closeout and must be evidence-driven.
-

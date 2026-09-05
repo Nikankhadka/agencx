@@ -12,12 +12,13 @@ import { apiFetch, ApiError } from "./api";
  */
 export function useApiQuery<T>(
   path: string,
-  options?: { queryKey?: readonly unknown[]; enabled?: boolean },
+  options?: { queryKey?: readonly unknown[]; enabled?: boolean; refetchInterval?: number },
 ) {
   return useQuery<T, ApiError>({
     queryKey: options?.queryKey ?? [path],
     queryFn: () => apiFetch<T>(path),
     enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

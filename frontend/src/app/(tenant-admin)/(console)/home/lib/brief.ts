@@ -46,7 +46,7 @@ function plural(n: number, one: string, many: string): string {
 /** Shown for the seconds before the async escalation summariser lands its
  * result - never a reason-code map, since the summariser is what makes those
  * unnecessary. */
-const SUMMARY_PENDING = "The owner's assistant is preparing a summary.";
+const SUMMARY_PENDING = "A summary is being prepared.";
 
 /**
  * Every customer waiting on the owner, oldest escalation first - the

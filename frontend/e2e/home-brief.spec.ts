@@ -13,10 +13,34 @@
  * provider-dependent test for a case already pinned deterministically.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
+
+function waitingConversations(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    customer_ref: `Customer ${index + 1}`,
+    status: "open",
+    created_at: "2026-01-01T00:00:00Z",
+    message_count: 1,
+    needs_attention: true,
+    pending_summary: "The customer needs a personal response from the owner.",
+    pending_since: `2026-01-0${index + 1}T00:00:00Z`,
+  }));
+}
+
+async function mockConversations(
+  page: Page,
+  rows: () => ReturnType<typeof waitingConversations>,
+  onRequest?: () => void,
+) {
+  await page.route("**/api/conversations", async (route) => {
+    onRequest?.();
+    await route.fulfill({ json: rows() });
+  });
+}
 
 test.describe("Home - the greeting and the brief", () => {
 
@@ -67,6 +91,77 @@ test.describe("Home - the greeting and the brief", () => {
         return panelShown > 0 === badgeShown > 0;
       })
       .toBe(true);
+  });
+
+  test("keeps every waiting row in a phone-sized scroll container", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockConversations(page, () => waitingConversations(4));
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/home");
+
+    const rows = page.getByTestId("waiting-panel-rows");
+    await expect(rows).toHaveCSS("max-height", "216px");
+    await expect(page.getByTestId("waiting-row")).toHaveCount(4);
+    await expect(page.getByTestId("waiting-panel-toggle")).toBeVisible();
+    await expect
+      .poll(async () => rows.evaluate((element) => element.scrollHeight > element.clientHeight))
+      .toBe(true);
+    await page.getByTestId("waiting-panel-toggle").click();
+    await expect(rows).toHaveCSS("max-height", "288px");
+  });
+
+  test("uses the larger desktop cap without a toggle for up to five rows", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await mockConversations(page, () => waitingConversations(5));
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/home");
+
+    await expect(page.getByTestId("waiting-panel-rows")).toHaveCSS("max-height", "360px");
+    await expect(page.getByTestId("waiting-row")).toHaveCount(5);
+    await expect(page.getByTestId("waiting-panel-toggle")).toBeHidden();
+  });
+
+  test("keeps the desktop toggle beyond five rows", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await mockConversations(page, () => waitingConversations(6));
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/home");
+
+    await expect(page.getByTestId("waiting-row")).toHaveCount(6);
+    await expect(page.getByTestId("waiting-panel-toggle")).toBeVisible();
+    await page.getByTestId("waiting-panel-toggle").click();
+    await expect(page.getByTestId("waiting-panel-rows")).toHaveCSS("max-height", "432px");
+  });
+
+  test("clears the queue and Chats badge on the four-second refresh", async ({ page, request }) => {
+    let resolved = false;
+    let requests = 0;
+    await mockConversations(
+      page,
+      () => (resolved ? [] : waitingConversations(1)),
+      () => {
+        requests += 1;
+      },
+    );
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/home");
+
+    const waitingPanel = page.getByTestId("waiting-panel");
+    const chatsTab = page
+      .getByRole("navigation", { name: "Console" })
+      .getByRole("link", { name: /Chats, 1 waiting/ });
+    await expect(waitingPanel).toBeVisible();
+    await expect(chatsTab.locator("span[aria-hidden='true']")).toHaveCount(1);
+
+    const initialRequests = requests;
+    resolved = true;
+    await expect.poll(() => requests, { timeout: 9_000 }).toBeGreaterThan(initialRequests);
+    await expect(waitingPanel).toHaveCount(0);
+    await expect(chatsTab.locator("span[aria-hidden='true']")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/home$/);
   });
 
   test("Home has no composer - there is no everyday copilot route to answer it", async ({

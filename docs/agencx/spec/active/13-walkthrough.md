@@ -136,12 +136,12 @@ current the data behind it is.
 
 ### Definition of done
 
-- [ ] Collapsed row count is CSS-breakpoint-driven, not a fixed JS constant.
-- [ ] `/api/conversations` refetches on an interval; badge and panel self-heal
+- [x] Collapsed row count is CSS-breakpoint-driven, not a fixed JS constant.
+- [x] `/api/conversations` refetches on an interval; badge and panel self-heal
       without a manual reload.
-- [ ] `--color-highlight` and its documenting comment agree on one amber
+- [x] `--color-highlight` and its documenting comment agree on one amber
       value, matching the prototype's `--c-amber`.
-- [ ] `make check` green.
+- [x] `make check` green.
 
 ---
 

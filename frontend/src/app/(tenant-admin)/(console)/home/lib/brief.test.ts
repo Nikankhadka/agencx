@@ -44,7 +44,7 @@ describe("waitingRows", () => {
     const rows = waitingRows([
       conversation({ needs_attention: true, pending_summary: null }),
     ]);
-    expect(rows[0]!.summary).toBe("The owner's assistant is preparing a summary.");
+    expect(rows[0]!.summary).toBe("A summary is being prepared.");
   });
 
   it("sorts oldest escalation first", () => {
