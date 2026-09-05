@@ -1046,19 +1046,36 @@ No UI change; this is a backend prompt-assembly and grounding fix.
 
 ### Definition of done
 
-- [ ] A single customer-facing reply combines a relevant offering with a
+- [x] A single customer-facing reply combines a relevant offering with a
       relevant policy or business detail on both the fast and hybrid paths.
-- [ ] Relevant offerings are used; the complete catalog is not dumped
+- [x] Relevant offerings are used; the complete catalog is not dumped
       unnecessarily.
-- [ ] Confirmed structured prices retain their existing authority.
-- [ ] Pricing and inspection rules remain enforced; unconfirmed imports stay
+- [x] Confirmed structured prices retain their existing authority.
+- [x] Pricing and inspection rules remain enforced; unconfirmed imports stay
       unavailable; ambiguous source pricing is not invented into an exact
       amount.
-- [ ] The integration scenario above passes.
-- [ ] `_FAST_PATH_GUIDANCE`'s claim about corpus completeness is accurate.
-- [ ] The scenario is reproduced and confirmed fixed through the actual
+- [x] The integration scenario above passes.
+- [x] `_FAST_PATH_GUIDANCE`'s claim about corpus completeness is accurate.
+- [x] The scenario is reproduced and confirmed fixed through the actual
       customer chat surface, per the bug-fix protocol.
-- [ ] `make check` green.
+- [x] `make check` green.
+
+Shipped. Verified through the real customer chat surface against a live model
+(the `bytefix` tenant, 19 confirmed offerings and 4 ready documents), twice
+each way. Before: "What do you offer?" enumerated the catalog price by price
+("the iPhone 11 refurbished 64GB for 249 dollars, the iPhone 12 refurbished
+128GB for 349 dollars ...") - the founder's reported symptom. After: one
+concise reply naming the relevant offerings across devices, accessories, and
+repairs together with the cited knowledge, no price-by-price dump.
+
+One addition beyond the ticket text was required to make the fix hold.
+`inspection._provenance_text` built the grounding judge's only evidence from
+`retrieved_chunks` alone, and catalog rows are excluded from retrieval on both
+paths by design, so a reply naming a confirmed offering had no supporting text
+in front of the judge - this ticket's own goal would have failed grounding and
+escalated. The offerings block is now appended to that provenance text. The
+price gate needed no change: `price_gate.owner_material` already concatenated
+the offerings string.
 
 ---
 

@@ -69,20 +69,31 @@ def _build_knowledge_prompt(
     tenant_prompt: str,
     tone: str,
     violations: list[str] | None,
+    *,
+    offerings_text: str = "",
 ) -> str:
     spotlight = new_spotlight()
     context_block = "\n\n".join(
         f"[{i + 1}] {spotlight.wrap(c['content'])}" for i, c in enumerate(chunks)
     )
     base = tenant_prompt or "You are the AI support and sales assistant for this business."
+    # W-5: the confirmed catalog reaches this prompt as a second grounded block
+    # alongside the numbered chunks - it is state-borne (see AgentState.
+    # offerings_text) rather than fetched here, because the corpus retrieval
+    # that produced ``chunks`` deliberately excludes catalog_item rows, and
+    # this is the hybrid path's only chance to put the two sources in front of
+    # one generation together (agent_node.py's fast path already does this in
+    # its own system prompt).
+    offerings_block = f"\n\n{spotlight.wrap(offerings_text)}" if offerings_text else ""
     prompt = (
         f"{base}\nTone: {tone or 'friendly'}.\n{spotlight.instruction()}\n"
-        "Answer the customer's question using ONLY the numbered context below. "
-        "Cite every factual claim with its bracket number, e.g. [1]. If the "
-        "context doesn't fully answer the question, say what you don't know - "
-        "never invent information.\n"
+        "Answer the customer's question using ONLY the confirmed offerings and "
+        "the numbered context below. Cite every factual claim with its bracket "
+        "number, e.g. [1]. If the context doesn't fully answer the question, "
+        "say what you don't know - never invent information.\n"
         f"{MONEY_GUIDANCE}\n\n"
         f"Context:\n{context_block}"
+        f"{offerings_block}"
     )
     return prompt + _redraft_note(violations)
 
@@ -201,6 +212,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             tenant_prompt=config_row["system_prompt"] if config_row else "",
             tone=config_row["tone"] if config_row else "",
             violations=violations,
+            offerings_text=state.get("offerings_text", ""),
         )
         messages = [
             {"role": "system", "content": system_prompt},

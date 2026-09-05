@@ -176,11 +176,40 @@ because no post-go-live editor exists for them. A profile editor at
 Business > details would let them become skippable, and is the natural
 follow-up.
 
+**W-5 shipped** (2026-09-05, `fix/w-5-combined-grounding`). The customer chat
+answered "what do you offer?" from the confirmed catalog and stopped there,
+surfacing uploaded knowledge only on a second, more insistent question. Three
+mechanisms caused it and all three were prompt-level: the offerings block told
+the model to "enumerate the complete catalog before offering to share more
+detail", the tool guidance said that answer "is in the material above", and on
+the hybrid path the catalog could never reach the same generation as the
+retrieved chunks because `_build_knowledge_prompt` only ever saw
+`retrieved_chunks`. The catalog now rides in state as `offerings_text`, set
+beside the existing `owner_material` on both of the agent node's return paths,
+so the draft node can put both sources in front of one generation without a
+second query.
+
+The ticket missed one thing that would have made the fix backfire: the
+grounding judge's only evidence is `_provenance_text`, which read
+`retrieved_chunks` alone, and catalog rows are stripped from retrieval on both
+paths on purpose (M-1). A reply naming a confirmed offering therefore had no
+provenance in front of the judge, so doing exactly what W-5 asks for would have
+failed grounding and escalated. The offerings block is appended there too. The
+price gate needed nothing - `owner_material` already carried the catalog
+string, which is why the money guardrail never showed the same gap.
+
+Verified through the real customer chat with a live model rather than a mocked
+turn: the repo's E2E convention deliberately scripts customer turns through
+`page.route` (`e2e/typing-indicator.spec.ts` header) because a free-tier model
+makes timing non-deterministic, and a mocked `/api/chat` would mock away the
+server-side prompt assembly that is the whole change. Before and after were run
+twice each against `bytefix`.
+
 | Location | Status | Contents |
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
-| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-9 (W-1, W-2, W-7 delivered; amended 2026-09-05) |
+| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-9 (W-1, W-2, W-5, W-7 delivered; amended 2026-09-05) |
 | [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |
 | [`docs/archive/phase1-complete/`](../archive/phase1-complete/) | Historical | Completed R-1 and R-2 records |
 

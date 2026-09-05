@@ -76,8 +76,9 @@ _TOOL_GUIDANCE = (
     "a tool only when the answer genuinely is not here - a specific order to look "
     "up, a quote to compute.\n"
     "When the customer asks what the business offers, or for a list of its "
-    "services, items, or prices, that answer is in the material above: give it "
-    "to them from there. Do not go looking for a tool, and do not hand off.\n"
+    "services, items, or prices, the answer is in the material in this prompt - "
+    "the confirmed catalog and the published material together. Answer from "
+    "there rather than searching for a tool, and do not hand off.\n"
     "If the material does not cover what they asked, say so plainly and offer to "
     "have someone from the business follow up. Greetings, thanks, and questions "
     "about what you can do need no tool at all.\n"
@@ -100,7 +101,8 @@ _STYLE_GUIDANCE = (
 
 _FAST_PATH_GUIDANCE = (
     "The business's own material is included below in full - it is everything "
-    "the business has published to you, so do not look for a search tool. Answer "
+    "the business has published to you except the confirmed offering catalog, "
+    "which is provided separately above. Do not look for a search tool. Answer "
     "from that material and from the business facts above it, citing each factual "
     "claim with its bracket number, e.g. [1]. If the answer is not there, say so "
     "plainly and offer to have someone from the business follow up - never "
@@ -327,9 +329,10 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
         parts.append(
             "The active offering catalog below is authoritative for what the business "
             "currently offers, including names, availability, and prices. Use reviewed "
-            "knowledge for additional descriptions and supporting details. "
-            "When asked what the business offers, enumerate the complete catalog before "
-            "offering to share more detail.\n" + spotlight.wrap(offerings)
+            "knowledge for additional descriptions and supporting details. When both "
+            "are relevant, answer from the catalog and the business material together "
+            "in one reply, naming the offerings relevant to the question rather than "
+            "enumerating the complete catalog.\n" + spotlight.wrap(offerings)
         )
     parts.append(_TOOL_GUIDANCE)
     parts.append(_STYLE_GUIDANCE)
@@ -728,6 +731,7 @@ async def run(state: AgentState) -> dict[str, Any]:
             "engine_quote": engine_quote,
             "lookup": lookup_result,
             "owner_material": package.owner_material(),
+            "offerings_text": package.offerings_text(),
             "author_node": "agent",
         }
 
@@ -748,4 +752,5 @@ async def run(state: AgentState) -> dict[str, Any]:
         "engine_quote": engine_quote,
         "lookup": lookup_result,
         "owner_material": package.owner_material(),
+        "offerings_text": package.offerings_text(),
     }
