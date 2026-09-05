@@ -1,0 +1,193 @@
+Sabbaba
+Business Profile & Notes — Bondi Junction (Spring St) location
+This is a plain-language write-up of everything publicly findable about Sabbaba's Bondi Junction
+restaurant, put together the way a business owner might describe their own place in an intake form — in
+paragraphs, not spreadsheets. It's meant to sit alongside the structured Excel workbook as unstructured
+training/testing input: the same facts, in prose. Anywhere the research turned up a contradiction or a gap,
+it's called out in the text rather than smoothed over, so a reader (or a model) can decide how to handle it.
+Compiled 4 September 2026, from the Uber Eats storefront, Google Places, TripAdvisor, Yelp, HappyCow,
+abillion, Wanderlog and Time Out Sydney.
+About Sabbaba
+Sabbaba is a fast-casual Middle Eastern and Israeli restaurant built around falafel, pita pockets, grilled
+meats and big customisable plates of salads and dips. The name itself is a bit of a mission statement — in
+Hebrew slang, "sabbaba" means something like "cool" or "no worries," and the brand's own marketing
+leans into that relaxed, casual identity. The food style pulls from across the Mediterranean and North
+Africa: a Tunisian pita gets Marrakech-style salad and sweet potato, an Algerian pita leans on chickpeas
+and eggplant, and there's even a "Cancun" pita that swaps in guacamole, jalapeños and corn chips — so
+the menu isn't strictly traditional, it's more "globe-trotting falafel shop."
+By most accounts the brand started on Hall Street in Bondi Beach and has since grown into at least two
+more Sydney outlets, one of them at Bondi Junction. Reviewers on TripAdvisor even talk about the original
+Bondi Beach shop physically relocating from Hall Street to Campbell Parade around 2019, closer to the
+beach promenade.
+Locations we found
+Bondi Junction — Spring Street (Eastgate Bondi Junction shopping centre). This is the location the
+original Uber Eats link points to, and the main subject of this profile. Uber Eats lists the address as 77
+Spring Street, Bondi Junction NSW 2022; Google's own listing for what appears to be the same storefront
+says 91 Spring St; other directories cite ranges like 71–91 or 55–91 Spring Street. That's a wide enough
+spread that it's worth just asking the owner for the exact shop number rather than guessing.
+Bondi Junction — Westfield / Oxford Street. A second Bondi Junction listing turned up on abillion, at
+Level 5, 500 Oxford Street (elsewhere described as Shop 6007, Level 6). It's not clear from public data
+whether this is a genuinely separate restaurant or just a different entrance/floor reference for a food-court
+counter in the same complex.
+Bondi Beach — Hall Street / Campbell Parade. Widely described as the original Sabbaba, and still
+showing up under both an old address (82 Hall St) and a newer one (152–162 Campbell Parade),
+consistent with the relocation reviewers mention. This location has its own, separate
+Google/TripAdvisor/Yelp presence and shouldn't be blended with the Spring Street numbers.
+Because there appear to be multiple storefronts, this document tries to keep the Spring Street data clearly
+separated from the Bondi Beach and Westfield data. Where a fact could only be confirmed for a location other
+than Spring Street, that's noted in the text.
+
+
+Contact & Practical Details (Spring Street location)
+Address: 77 Spring Street, Bondi Junction NSW 2022 (per Uber Eats) — also seen as 91 Spring St
+(Google) and 71–91 Spring St (other directories).
+Phone: +61 493 872 535 (Google Business listing) — an older number, (02) 9369 5599, also appears on
+Yelp for what looks like this same storefront.
+Website: sabbaba.com.au — referenced consistently by Yelp, HappyCow and GrubFinder, but the site
+blocks automated access, so its current content couldn't be checked directly for this profile.
+Ordering: Available on Uber Eats (source of this profile) and listed on the order-ahead app Hey You. Not
+confirmed on DoorDash or Menulog.
+Price point: "$" — budget/inexpensive, consistently across every platform that rates price level.
+Cuisine tags: Mediterranean, Middle Eastern, Israeli, Falafel, Kebab, Salads, Bowls, Vegan,
+Vegan-friendly, Vegetarian.
+One odd detail worth flagging: the description text Uber Eats itself displays for this store opens with "Sabbaba in
+Bondi Beach, Sydney, offers a healthy dining experience..." — even though the address on the same page is
+Bondi Junction. That reads like a copy-paste error, possibly reusing another Sabbaba location's blurb, and is
+probably worth flagging to Uber Eats merchant support.
+Opening Hours
+Hours are one of the messier parts of this dataset. Uber Eats shows an 11:00 AM start every day, closing
+around 8:00 PM on weekdays and stretching later on some days (with what look like separate "alternate"
+and "public holiday" schedules overlapping on the same page — Friday and Saturday, for instance, show
+both an 8:00 PM and an 8:30 PM close, and several days show an 11:00 PM "holiday" window). Google's
+listing for the same address, on the other hand, shows a 6:00 AM opening every day of the week, which
+doesn't fit a lunch-and-dinner Mediterranean menu — it looks like stale data, possibly left over from a
+previous café tenant at the same address.
+The safest read: expect roughly an 11:00 AM–8:00 PM window most days, but treat the exact daily hours and
+any holiday variations as unconfirmed until the owner supplies a current schedule.
+
+
+The Menu
+The Uber Eats menu for the Spring Street store is built around three core formats — a Pita Pocket, a Bowl,
+and a Plate — which are really the same core of salads and dips (village salad, tabouli, red cabbage and
+pickles, plus hummus, tahini, babaganoush and salsa) served three different ways. The Plate and Pita
+Pocket both run $20–$30 and come with one pita; the Bowl is $27 and comes with pita on the side instead
+of wrapped in. For $37, the Super Plate steps things up with a choice of two proteins, four seasonal salads
+and two dips.
+Above the base formats sits a line-up of "Pimped Up" pita pockets, each themed around a different place:
+the house Sabbaba Pita Pocket ($20) with the full four-salad, four-dip combo; a Larnaca pocket ($19.90)
+with olives, green chilli and shredded halloumi; an Algerian pocket ($19.90) built on chickpeas and
+eggplant; a Tunisian pocket ($20) with Marrakech salad and sweet potato; and a Cancun pocket ($21.90)
+that goes full Tex-Mex with salsa, sour cream, guacamole, jalapeños, corn chips and cheese. The
+most-liked item on the whole menu, by Uber Eats' own "percent liked" metric, is the Sabbaba Pita Pocket
+at 89% approval across 554 ratings, followed closely by the Plate at 90% across 996 ratings.
+Salads are sold individually too, mostly $10–14: a cauliflower-and-avocado salad, plain pickles, a vegan
+tabouli, red cabbage in a sweet-and-sour dressing, crunchy edamame, and a lentil-quinoa-haloumi salad.
+On the sides menu, the Hot Chips ($10, described as "famous" and lightly seasoned) and Six Falafel
+($10.90, 89% liked) look like the standout add-ons, alongside haloumi chips with tzatziki, chicken
+shawarma and chicken shish. A can of soft drink is $4.50.
+Four menu sections exist on the Uber Eats page — Pita Packs, Dips/Condiments & Extras, Desserts, and
+Drinks — but returned no items when this was pulled, which is almost certainly a scraping gap rather than an
+empty menu (a $4.50 soft drink can, for instance, showed up under "Featured" but logically belongs in Drinks). A
+full, current price list from the owner would close this gap far more reliably than re-scraping the delivery app.
+What Customers Are Saying
+The picture that emerges depends a lot on which platform you're reading. Uber Eats shows a very strong
+4.6 out of 5 across more than 3,000 ratings, though it only surfaces 17 written comments, and every one of
+them is 5 stars — reviewers there call out "great food and good value," praise it as "the best falafel and
+chicken pitas in Bondi," and one recent reviewer went as far as calling it "the best food I've ordered off
+Uber Eats in Sydney by far."
+Google tells a more mixed story for the same address: 3.8 out of 5 across 188 ratings. The handful of
+review texts available lean positive on service and on the salads and hummus specifically — two reviewers
+name staff members ("manzil" and "twinkle") for good service, and one recommends the lamb pita for halal
+diners — but two others raise real concerns: one found the grilled meat under-seasoned and "not smokey
+enough," and another said the $18 plate "tasted good but the place did not seem hygienic." That's a
+notable gap worth taking seriously rather than averaging away.
+For brand-level context (not the Spring Street store specifically), the original Bondi Beach location sits at
+4.1 out of 5 on TripAdvisor across 102 reviews, ranked #6 of 30 "quick bites" in the area. The range there
+is wide — five-star reviews call it "authentically Middle Eastern" and praise the lamb shish and shawarma,
+while critical reviews mention a cleanliness lapse ("food scraps all over the floor"), an overdone lamb
+shish, and — in one 2019 review — a foreign object found in a falafel order that was refunded on the spot.
+Vegan and vegetarian diners consistently rate the falafel and salad options well across HappyCow and
+
+
+abillion, both of which describe the Bondi Junction options as "clearly defined" for plant-based eaters.
+Read together, the consistent strengths across every platform are the falafel, the salads/dips (hummus,
+tahini, babaganoush), and value for money at a $ price point. The consistent soft spots are grilled-meat
+seasoning/doneness and, occasionally, cleanliness — both worth the owner's attention regardless of
+which platform surfaced them.
+A few representative comments, as written:
+"Honestly the best food I've ordered off uber eats in Sydney by far. Insane quality and taste." — Uber
+Eats, 12 Jul 2025
+"Had the plate. Well priced at around $18... but the place did not seem hygienic." — Google, undated
+"Stumbled across sabbaba and the smell was amazing... we really loved it. We will be back!" —
+TripAdvisor, Sep 2023
+"Falafel was crunchy also tasty! Pita was fluffy." — HappyCow, Sep 2024
+Everything Else on the Uber Eats Page
+Beyond the menu, hours and reviews already covered, the store page carries a handful of platform-level
+details worth keeping. Uber Eats' internal store ID for this listing is
+f8b5ecba-2b13-4479-97f6-af8d416dd32b. Oddly, the page's own breadcrumb trail files the store under
+Australia > New South Wales > Sydney > Bondi Beach > Sabbaba — not Bondi Junction, which is the
+address actually listed. That lines up with the earlier note about the store description text also saying
+"Bondi Beach": it looks like Uber Eats has this listing tagged with a neighbourhood template built for the
+Hall Street / Campbell Parade store rather than Spring Street.
+On ordering: the page offers a "Group order" option for shared carts, shows a "$0 delivery fee (new users)"
+banner, and its FAQ mentions Uber One membership as a way to get $0 delivery on select orders going
+forward. Payment runs entirely through the customer's Uber Eats account, and ordering itself happens
+either in the Uber Eats app or on the website — there's no separate direct-order link for this store. At the
+time this was pulled, the page showed delivery as unavailable ("too far to deliver," "available at 11:00 am")
+— that reflects the browsing session's location, not a permanent property of the store, so it's worth
+re-checking live from an address near Bondi Junction.
+On photos: the only image the static page exposes is a single store cover photo (used for both the page
+header and the social-share/meta image). Individual menu items only get photos inside an on-page modal
+that Uber Eats loads with JavaScript when a shopper clicks an item — that content isn't present in the
+page's underlying markup, so it can't be pulled without an actual browser session driving the site.
+The store page's own FAQ, in full:
+Can I order Sabbaba delivery in Sydney with Uber Eats?
+Yes. Sabbaba delivery is available on Uber Eats in Sydney.
+Is Sabbaba delivery available near me?
+Enter your address to see if Sabbaba delivery is available to your location in Sydney.
+How do I order Sabbaba delivery online in Sydney?
+
+
+There are 2 ways to place an order on Uber Eats: on the app or online using the Uber Eats website. After
+looking over the menu, choose your items, add them to your cart, then review, place, and track your order.
+Where can I find Sabbaba online menu prices?
+Upfront pricing for Sabbaba's items is shown directly on the store page.
+How do I get free delivery on my Sabbaba order?
+An Uber One membership, where available, includes a $0 delivery fee on select orders.
+How do I pay for my Sabbaba order?
+Payment is handled via the customer's Uber Eats account.
+What's the best thing to order for Sabbaba delivery in Sydney?
+The FAQ points shoppers to the items shown in "Picked for you" on the store page.
+
+
+Open Questions for the Business Owner
+This section is meant to be handed to the owner directly — a short list of things only they can confirm,
+written as plain questions rather than data-quality jargon.
+1
+What is the exact shopfront address (street number and shop number) for Spring Street, Bondi
+Junction? Sources disagree between 77, 91, and a 71–91 range.
+2
+What are the current, correct weekly opening hours — including any public-holiday hours? Google and
+Uber Eats currently show conflicting schedules for the same store.
+3
+Is the Westfield / Oxford Street listing a separate Sabbaba, or the same business under a different
+entrance/floor reference?
+4
+Are the Spring Street, Westfield, and Bondi Beach locations under common ownership, a franchise
+arrangement, or fully independent operators? This affects whether an AI/agentic build should be
+scoped to a single store or the whole brand.
+5
+Can you provide a current, complete menu with prices — including the Pita Packs, Dips/Condiments,
+Desserts and Drinks sections, which returned no items in this pass?
+6
+Do you actively monitor and respond to Google reviews? The Google rating (3.8) is notably lower than
+Uber Eats (4.6) for the same store, and it's worth understanding why.
+7
+Is sabbaba.com.au actively maintained? It couldn't be crawled for this profile (it blocks automated
+access) so its current menu/hours/contact info is unverified here.
+8
+What delivery platforms are you currently active on, beyond Uber Eats?
+Sources: Uber Eats storefront page, Google Places, TripAdvisor, Yelp, HappyCow, abillion, Wanderlog, Time
+Out Sydney. Compiled 4 September 2026 for internal use as a phase-1 training/testing dataset. Not an official
+statement from Sabbaba's ownership — all facts above should be verified with the business before being relied
+on operationally.

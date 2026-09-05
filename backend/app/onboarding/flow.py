@@ -60,6 +60,21 @@ class PendingOffering(BaseModel):
     description: str = Field(default="", max_length=2000)
     price_cents: int | None = Field(default=None, ge=0)
     sources: list[Literal["owner", "document"]] = Field(default_factory=list, validate_default=True)
+    # W-6: a price the offering row cannot represent - a range, a "from" price,
+    # a rate - kept as the source's own wording so the owner sees what the
+    # document actually said instead of a number picked out of it.
+    price_note: str = Field(default="", max_length=400)
+    # W-6: this candidate needs a decision before it is right. Set when the
+    # price is complex or could not be bound to this item unambiguously; not set
+    # merely because a price is absent, which is an ordinary thing for a source
+    # to be silent about.
+    needs_review: bool = False
+    # W-6: names that might be this same item ("coffe" / "coffee drinks"), never
+    # merged automatically. W-8 turns these into a combine/keep-both choice.
+    possible_matches: list[str] = Field(default_factory=list)
+    # W-6: the competing amounts when two sources price one item differently.
+    # The owner picks; nothing here decides for them.
+    price_options: list[int] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
@@ -78,12 +93,28 @@ class PendingOffering(BaseModel):
 def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> PendingOffering:
     """Combine two candidates for the same offering, document values winning.
 
-    W-7: when an uploaded document and an owner-typed name describe the same
-    thing, the document's price and description are authoritative - the founder
-    asked that the PDF reference always win an overlap. Sources are unioned so
-    the review sheet can still show it came from both, and the owner can
-    override either field there before publish. The name follows the document
-    when one is present, so its spelling (and any punctuation) is preserved.
+    **This is the offering precedence policy, in one place.** Every merge in the
+    system runs through here - the onboarding record combining an owner-typed
+    name with a document candidate, and W-6's reconciliation of the same item
+    found twice across two segments of one document. It used to be reimplemented
+    in the browser with the opposite precedence, which is exactly the kind of
+    disagreement the single policy exists to prevent.
+
+    The rules:
+
+    - **Document wins.** W-7: when an uploaded document and an owner-typed name
+      describe the same thing, the document's name, price and description are
+      authoritative - the founder asked that the PDF reference always win an
+      overlap. The name follows the document so its spelling and punctuation are
+      preserved.
+    - **Sources union**, so the review sheet can show it came from both.
+    - **Conflicting prices do not resolve silently.** W-6: two different amounts
+      for one item become ``price_options`` for the owner to choose between,
+      rather than one of them quietly winning.
+    - **Review state and match suggestions survive** the merge; a flag raised by
+      either candidate stays raised.
+
+    The owner can override any of it on the review sheet before publish.
     """
     pair = (existing, incoming)
     document = next((item for item in pair if "document" in item.sources), None)
@@ -94,6 +125,15 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
     description = next((item.description for item in preferred if item.description), "")
     sources = list(dict.fromkeys([*existing.sources, *incoming.sources]))
     name = document.name if document else existing.name
+    offered = [item.price_cents for item in pair if item.price_cents is not None]
+    conflicting = sorted({*offered, *existing.price_options, *incoming.price_options})
     return PendingOffering(
-        name=name, description=description, price_cents=price_cents, sources=sources
+        name=name,
+        description=description,
+        price_cents=price_cents,
+        sources=sources,
+        price_note=next((item.price_note for item in preferred if item.price_note), ""),
+        needs_review=existing.needs_review or incoming.needs_review,
+        possible_matches=sorted({*existing.possible_matches, *incoming.possible_matches}),
+        price_options=conflicting if len(conflicting) > 1 else [],
     )

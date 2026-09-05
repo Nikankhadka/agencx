@@ -148,7 +148,7 @@ async def structure_document(raw_text: str, *, provider: LLMProvider) -> list[di
         return []
     merged: dict[str, list[str]] = {heading: [] for _, heading in _HEADINGS}
     as_written: list[str] = []
-    for segment in _segments(text):
+    for segment in segments(text):
         try:
             structured = await provider.extract(
                 system_prompt=_PROMPT, user_input=segment, schema=StructuredKnowledge
@@ -174,22 +174,25 @@ async def structure_document(raw_text: str, *, provider: LLMProvider) -> list[di
     return result or _as_written(text)
 
 
-def _segments(text: str) -> list[str]:
-    """Split on source line boundaries while keeping each model input bounded."""
-    segments: list[str] = []
+def segments(text: str) -> list[str]:
+    """Split on source line boundaries while keeping each model input bounded.
+
+    Shared with W-6's offering extraction so both passes cut a document the same
+    way and a block maps back to the segment it was read in."""
+    chunks: list[str] = []
     current: list[str] = []
     size = 0
     for line in text.splitlines(keepends=True):
         if current and size + len(line) > STRUCTURE_MAX_CHARS:
-            segments.append("".join(current).strip())
+            chunks.append("".join(current).strip())
             current = []
             size = 0
         if len(line) > STRUCTURE_MAX_CHARS:
             if current:
-                segments.append("".join(current).strip())
+                chunks.append("".join(current).strip())
                 current = []
                 size = 0
-            segments.extend(
+            chunks.extend(
                 line[index : index + STRUCTURE_MAX_CHARS].strip()
                 for index in range(0, len(line), STRUCTURE_MAX_CHARS)
             )
@@ -197,8 +200,8 @@ def _segments(text: str) -> list[str]:
             current.append(line)
             size += len(line)
     if current:
-        segments.append("".join(current).strip())
-    return [segment for segment in segments if segment]
+        chunks.append("".join(current).strip())
+    return [chunk for chunk in chunks if chunk]
 
 
 def _as_written(text: str) -> list[dict[str, str]]:

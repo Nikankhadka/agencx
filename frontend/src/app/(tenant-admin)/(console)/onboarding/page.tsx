@@ -774,6 +774,21 @@ export default function OnboardingPage() {
   );
 }
 
+/**
+ * Owner-typed offerings unioned with a draft document's candidates, for review.
+ *
+ * W-6: the precedence applied here is the server's, not a second opinion. The
+ * rule is written down once, in `merge_offerings`
+ * (`backend/app/onboarding/flow.py`): the document wins name, price and
+ * description, and sources union. This function used to resolve the opposite
+ * way - owner wins - so an uploaded price list and a chip-typed name produced
+ * different answers depending on which surface you were looking at.
+ *
+ * It exists at all only because a file uploaded mid-interview posts to the
+ * shared `/api/knowledge/drafts/upload` route, which does not fold candidates
+ * into the onboarding record the way the URL turn does. Every other path
+ * displays the list the server already merged.
+ */
 function withCombinedOfferings(
   record: KnowledgeRecord,
   ownerOfferings: PendingOffering[],
@@ -783,18 +798,14 @@ function withCombinedOfferings(
   for (const item of record.offering_candidates ?? []) {
     const key = normalizeOfferingName(item.name);
     const owner = merged.get(key);
-    if (!owner) {
-      merged.set(key, { ...item, sources: ["document"] });
-      continue;
-    }
-    const options = [owner.price_cents, item.price_cents].filter(
-      (price): price is number => price !== null,
+    const options = [owner?.price_cents, item.price_cents].filter(
+      (price): price is number => price != null,
     );
     merged.set(key, {
-      ...owner,
-      description: owner.description || item.description,
-      price_cents: owner.price_cents ?? item.price_cents,
-      sources: [...new Set([...owner.sources, ...item.sources])],
+      ...item,
+      description: item.description || owner?.description || "",
+      price_cents: item.price_cents ?? owner?.price_cents ?? null,
+      sources: [...new Set([...(owner?.sources ?? []), ...item.sources])],
       price_options: new Set(options).size > 1 ? [...new Set(options)] : undefined,
     });
   }

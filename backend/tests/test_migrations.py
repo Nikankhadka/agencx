@@ -57,8 +57,10 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # 0025 (F-3) drops tenant_config.escalation_threshold, offerings.attributes
     # and the write-only eval_cases table, adds app_role() plus the staff
     # role-branched RLS policies, and carries the M-2 media tables
-    # (offerings.category, tenant_media) in the same file.
-    assert len(on_disk) == 25, "expected migrations 0001-0025"
+    # (offerings.category, tenant_media) in the same file; 0026 adds W-6's
+    # documents.offerings, the candidates extracted once at ingest instead of
+    # re-derived on every read.
+    assert len(on_disk) == 26, "expected migrations 0001-0026"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

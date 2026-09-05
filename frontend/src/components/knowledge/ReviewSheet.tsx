@@ -3,12 +3,47 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
-import type { KnowledgeRecord, KnowledgeSection, PendingOffering } from "./types";
+import type {
+  KnowledgeRecord,
+  KnowledgeSection,
+  PendingOffering,
+  ReviewOffering,
+} from "./types";
 import { sourceLabel } from "./types";
 
 interface WorkingOffering extends PendingOffering {
   priceText: string;
   priceOptions: number[];
+  /** W-6: the source's own wording for a price that could not be reduced to one
+   *  flat amount, shown instead of a number picked out of it. */
+  priceNote: string;
+  /** W-6: names the extraction thinks might be this same item. Never merged
+   *  automatically - W-8 turns these into a combine/keep-both choice. */
+  possibleMatches: string[];
+}
+
+/**
+ * One server candidate as the editor holds it.
+ *
+ * W-6 put three new decisions on the wire, and this is where they turn into
+ * what the owner sees. The one that carries product meaning is `priceNote`: it
+ * is populated only when the server flagged the row, because the note is the
+ * source's own wording for a price it refused to reduce to a number ("$20-$30",
+ * "mostly $10-14"). An unflagged row has no note to show even if the column
+ * carries text, and an absent price is not a flag - a source is allowed to be
+ * silent about what something costs.
+ */
+export function toWorkingOffering(item: ReviewOffering): WorkingOffering {
+  return {
+    name: item.name,
+    description: item.description ?? "",
+    price_cents: item.price_cents,
+    sources: item.sources,
+    priceText: item.price_cents == null ? "" : formatPrice(item.price_cents),
+    priceOptions: item.price_options ?? [],
+    priceNote: item.needs_review ? (item.price_note ?? "") : "",
+    possibleMatches: item.possible_matches ?? [],
+  };
 }
 
 export interface ReviewSheetProps {
@@ -67,14 +102,7 @@ function SectionEditor({
     record.sections.map((section) => ({ ...section })),
   );
   const [offerings, setOfferings] = useState<WorkingOffering[]>(() =>
-    (record.offering_candidates ?? []).map((item) => ({
-      name: item.name,
-      description: item.description ?? "",
-      price_cents: item.price_cents,
-      sources: item.sources,
-      priceText: item.price_cents == null ? "" : formatPrice(item.price_cents),
-      priceOptions: item.price_options ?? [],
-    })),
+    (record.offering_candidates ?? []).map(toWorkingOffering),
   );
 
   const duplicate = hasDuplicateNames(offerings);
@@ -131,6 +159,16 @@ function SectionEditor({
       <fieldset className="rounded-card border border-hairline p-4">
         <legend className="px-1 text-row-label font-medium text-text">What you offer</legend>
         <p className="mb-3 text-meta text-ink-a40">Check the names, descriptions, and prices before saving.</p>
+        {/* W-6 US-2: a partly-read document must say so. A truncated list that
+            looks complete is worse than a short one that admits it. */}
+        {record.extraction_status === "partial" || record.extraction_status === "failed" ? (
+          <p role="status" className="mb-3 rounded-field bg-warning-subtle p-2 text-meta text-text">
+            {record.extraction_status === "failed"
+              ? "I could not read the offerings out of this one."
+              : "I could not read all of this document."}{" "}
+            Add anything missing here, or check the sections above against your original.
+          </p>
+        ) : null}
         <div className="flex flex-col gap-3">
           {offerings.map((offering, index) => (
             <div key={index} className="rounded-field bg-surface-container p-3">
@@ -183,6 +221,24 @@ function SectionEditor({
                   className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
                 />
               </label>
+              {/* W-6: a price the row cannot hold - a range, a "from" price, a
+                  rate. The source's own wording is shown rather than a number
+                  picked out of it, so the owner types the one that is right. */}
+              {offering.priceNote ? (
+                <p className="mt-2 rounded-field bg-warning-subtle p-2 text-meta text-text">
+                  <span className="font-medium">Check this price.</span> The source says:{" "}
+                  {offering.priceNote}
+                </p>
+              ) : null}
+              {/* W-6: similar names stay separate rows. Merging on similarity
+                  would silently delete a real offering, so this is a pointer,
+                  not a decision - W-8 makes it one. */}
+              {offering.possibleMatches.length > 0 ? (
+                <p className="mt-2 text-meta text-ink-a40">
+                  Might be the same as {offering.possibleMatches.join(", ")}. Both are kept unless
+                  you remove one.
+                </p>
+              ) : null}
               {offering.priceOptions.length > 1 ? (
                 <div role="alert" className="mt-2 rounded-field bg-accent-a06 p-2 text-meta text-text">
                   This source has two prices. Choose one or type the final price.
@@ -205,7 +261,7 @@ function SectionEditor({
         </div>
         <button
           type="button"
-          onClick={() => setOfferings((previous) => [...previous, { name: "", description: "", price_cents: null, sources: ["owner"], priceText: "", priceOptions: [] }])}
+          onClick={() => setOfferings((previous) => [...previous, { name: "", description: "", price_cents: null, sources: ["owner"], priceText: "", priceOptions: [], priceNote: "", possibleMatches: [] }])}
           className="mt-3 text-action font-medium text-accent active:opacity-60"
         >
           Add another offering

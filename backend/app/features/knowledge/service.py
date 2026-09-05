@@ -19,22 +19,21 @@ from uuid import UUID
 
 from starlette.concurrency import run_in_threadpool
 
-from app.features.business.offering_candidates import derive, normalize_name
+from app.features.business.offering_candidates import normalize_name
 from app.features.business.service import create_offerings_batch
+from app.features.knowledge.offering_extraction import extract_offerings
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
 from app.ingestion.pipeline import ingest_offerings, process_document
 from app.ingestion.url import AllowedTarget, extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
-from app.onboarding.flow import PendingOffering
-from app.pricing.validation_gate import extract_monetary_figures
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.storage import document_key, get_storage
 
 _SELECT_COLUMNS = "id, filename, doc_type, status, error"
-_RECORD_COLUMNS = f"{_SELECT_COLUMNS}, structured"
+_RECORD_COLUMNS = f"{_SELECT_COLUMNS}, structured, offerings"
 
 
 class OfferingPriceConflict(ValueError):
@@ -216,22 +215,24 @@ async def reprocess_document(
 
 def _record(row: Any) -> dict[str, Any]:
     """One document as the knowledge screen reads it: the row plus its readable
-    sections (``structured`` is jsonb, so it arrives as a string from asyncpg)."""
+    sections and its offering candidates (both jsonb, so they arrive as strings
+    from asyncpg).
+
+    W-6: candidates are read back, not recomputed. They used to be re-derived on
+    every call by splitting section lines at their first monetary figure, which
+    made every list request redo the parse and produced sentence fragments from
+    prose. Extraction now needs a model call, so it belongs to ingest; this
+    function only reads what ingest stored.
+    """
     record = dict(row)
     raw = record.pop("structured", None)
     record["sections"] = json.loads(raw) if isinstance(raw, str) else (raw or [])
-    candidates: list[dict[str, Any]] = []
-    for candidate in derive([{**record, "status": "ready"}]):
-        price = candidate.get("price")
-        figures = extract_monetary_figures(price) if price else []
-        candidates.append(
-            PendingOffering(
-                name=str(candidate["name"]),
-                price_cents=figures[0].cents if figures else None,
-                sources=["document"],
-            ).model_dump()
-        )
-    record["offering_candidates"] = candidates
+    stored = record.pop("offerings", None)
+    extraction = json.loads(stored) if isinstance(stored, str) else stored
+    record["offering_candidates"] = (extraction or {}).get("candidates", [])
+    # Null on a row ingested before this column existed; get_record extracts it
+    # on first view, the same way it backfills `sections`.
+    record["extraction_status"] = (extraction or {}).get("status", "pending")
     return record
 
 
@@ -247,6 +248,12 @@ async def list_records(*, tenant_id: UUID) -> list[dict[str, Any]]:
     return [_record(row) for row in rows]
 
 
+async def _extraction(text: str, *, provider: LLMProvider) -> dict[str, Any]:
+    """Run W-6's offering extraction and shape it for the ``offerings`` column."""
+    candidates, status = await extract_offerings(text, provider=provider)
+    return {"status": status, "candidates": [item.model_dump() for item in candidates]}
+
+
 async def _insert_draft(
     *,
     tenant_id: UUID,
@@ -254,16 +261,19 @@ async def _insert_draft(
     filename: str,
     doc_type: str,
     sections: list[dict[str, str]],
+    extraction: dict[str, Any],
 ) -> dict[str, Any] | None:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
-            "insert into documents (id, tenant_id, filename, doc_type, status, structured) "
-            "values ($1, $2, $3, $4, 'draft', $5)",
+            "insert into documents "
+            "(id, tenant_id, filename, doc_type, status, structured, offerings) "
+            "values ($1, $2, $3, $4, 'draft', $5, $6)",
             document_id,
             tenant_id,
             filename,
             doc_type,
             json.dumps(sections),
+            json.dumps(extraction),
         )
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", document_id
@@ -296,6 +306,7 @@ async def draft_from_upload(
         filename=filename,
         doc_type="other",
         sections=sections,
+        extraction=await _extraction(raw_text, provider=provider),
     )
 
 
@@ -343,6 +354,7 @@ async def draft_from_url_text(
     target = existing or document_id
     await get_storage().put(document_key(tenant_id, target, ".txt"), text.encode("utf-8"))
 
+    extraction = await _extraction(text, provider=provider)
     if existing is None:
         return await _insert_draft(
             tenant_id=tenant_id,
@@ -350,13 +362,16 @@ async def draft_from_url_text(
             filename=url,
             doc_type="website",
             sections=sections,
+            extraction=extraction,
         )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
-            "update documents set structured = $2, status = 'draft', error = null where id = $1",
+            "update documents set structured = $2, offerings = $3, "
+            "status = 'draft', error = null where id = $1",
             existing,
             json.dumps(sections),
+            json.dumps(extraction),
         )
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", existing
@@ -528,20 +543,27 @@ async def get_record(
             return None
         record = _record(row)
         record.pop("uploaded_at", None)
-        if record["sections"]:
+        if record["sections"] and record["extraction_status"] != "pending":
             return record
         text = await _stored_text(
             tenant_id=tenant_id, filename=row["filename"], document_id=document_id
         )
         if not text:
             return record
-        sections = await structure_document(text, provider=provider)
+        # A row from before either column existed: structure it and extract its
+        # offerings once, when someone actually looks, rather than backfilling
+        # every historical document with a pair of model calls.
+        sections = record["sections"] or await structure_document(text, provider=provider)
+        extraction = await _extraction(text, provider=provider)
         await conn.execute(
-            "update documents set structured = $2 where id = $1",
+            "update documents set structured = $2, offerings = $3 where id = $1",
             document_id,
             json.dumps(sections),
+            json.dumps(extraction),
         )
         record["sections"] = sections
+        record["offering_candidates"] = extraction["candidates"]
+        record["extraction_status"] = extraction["status"]
     return record
 
 

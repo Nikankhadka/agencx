@@ -9,7 +9,7 @@ so a crafted filename can never escape the tenant's upload directory.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
@@ -56,6 +56,11 @@ class KnowledgeRecord(DocumentResponse):
 
     sections: list[Section]
     offering_candidates: list[dict[str, object]] = []
+    # W-6: how completely the document could be read. "partial" and "failed" mean
+    # the candidate list is not the whole document, and the review sheet says so
+    # rather than presenting a truncated list as if it were complete. "pending"
+    # is a row ingested before extraction existed, filled in on first view.
+    extraction_status: Literal["full", "partial", "failed", "pending"] = "pending"
 
 
 class ConfirmedOffering(BaseModel):
