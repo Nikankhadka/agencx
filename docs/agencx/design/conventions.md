@@ -79,6 +79,10 @@ Per the Architecture Doc's closing note: anything not already decided in these d
 
 Before writing a fix for any bug (during the 30-day build or in the post-launch "next sprint" iteration loop), first reproduce it in an end-to-end setting as close as possible to how a real end user would hit it - through the actual customer chat surface or the tenant admin console, not a unit test or a direct API call, unless the bug is already known to be isolated at that layer. Reproducing it for real is what confirms the fix addresses the actual problem rather than a guessed-at symptom.
 
+### 5.1 Flow-change confirmation
+
+A change to a working user-facing flow - the onboarding interview script or beat order, the chat routing between fast and hybrid paths, the publish/confirm sequence, or any other multi-turn behavior a user has already exercised successfully - is flagged to the founder before it is made, with the current behavior and the proposed behavior both stated. This applies even when the change is a refactor that is not intended to alter behavior: intent and actual behavior have diverged before in this codebase (the onboarding beat-versus-paraphrase seam W-2 closes is the concrete example), and the flag is what catches that divergence before a user does.
+
 ## 6. End-to-end testing and UI standard
 
 Whenever end-to-end testing the product (the customer chat surface, the tenant admin console, the platform-owner surface, the escalation flow, the dashboards), be exacting about the UI. If something looks visibly off - misaligned, inconsistent spacing, a broken state, a confusing empty state - fix it along the way even if it isn't related to the current ticket. This applies most directly to E10/E11/E12 (the three surfaces) and the Week 4 polish pass.

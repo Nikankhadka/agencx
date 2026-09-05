@@ -270,7 +270,9 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     await _send(client, headers, text=_FULL_WALK[3][1])
     body = await _send(client, headers, text=_FULL_WALK[4][1])
     assert body["stage"] == "services"
-    assert body["input"]["chips"] == []
+    # W-2: a skippable beat carries its own way out, and the catalog is
+    # editable later at Business > What you offer.
+    assert labels(body) == ["Skip for now"]
 
     body = await _send(client, headers, text=_FULL_WALK[5][1])
     assert body["stage"] == "contact"
@@ -404,7 +406,12 @@ async def test_selection_advances_the_server_beat_without_calling_the_model(
     assert body["draft"]["headcount"] == "got a team"
     assert body["history"][-2:] == [
         {"role": "user", "content": "Got a team"},
-        {"role": "assistant", "content": "Got it. When are you open?"},
+        {
+            "role": "assistant",
+            "content": (
+                "Got it. What are your opening hours, and which days of the week are you open?"
+            ),
+        },
     ]
 
 
@@ -640,6 +647,55 @@ async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) ->
         "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 409
+
+
+async def test_confirm_accepts_a_corrected_business_name_and_type(
+    client: httpx.AsyncClient,
+) -> None:
+    """W-2: the go-live screen is the last chance to fix a verbatim-taken value.
+
+    The interview's terminal rule stores whatever the owner typed after two
+    unanswered asks, and neither field has an editor once the page is live, so
+    the confirm step reads both back and a correction wins over the draft.
+    """
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_to_confirm(client, token)
+
+    response = await client.post(
+        "/api/onboarding/confirm",
+        json={
+            "slug": _page_slug(tenant_id),
+            "business_name": "Bytefix Repairs",
+            "business_type": "phone repair shop",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    draft = state.json()["draft"]
+    assert draft["business_name"] == "Bytefix Repairs"
+    assert draft["business_type"] == "phone repair shop"
+
+
+async def test_confirm_keeps_the_draft_when_no_correction_is_sent(
+    client: httpx.AsyncClient,
+) -> None:
+    """An owner who changes nothing must not blank either field."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_to_confirm(client, token)
+    before = (await client.get("/api/onboarding/state", headers=headers)).json()["draft"]
+
+    response = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
+    assert response.status_code == 200
+
+    after = (await client.get("/api/onboarding/state", headers=headers)).json()["draft"]
+    assert after["business_name"] == before["business_name"]
+    assert after["business_type"] == before["business_type"]
 
 
 async def test_double_confirm_is_conflict(client: httpx.AsyncClient) -> None:

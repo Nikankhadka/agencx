@@ -151,9 +151,11 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             prompt = msg.get("content", "")
             break
     if not prompt:
+        # The opening ends with the first beat's own ask rather than a
+        # paraphrase of it - same seam W-2 closes for every later question.
         prompt = (
             "Hi! I'm your Agencx setup assistant. I'll help you get your business "
-            "ready. What's your name?"
+            f"ready. {beats.BEAT_ORDER[0].ask}"
         )
     return {
         "stage": stage,
@@ -224,12 +226,9 @@ async def run_message(
     # tenant's per-tenant llm_timeout_s; resolve TenantLimits like
     # features/chat/controller.py if onboarding ever needs per-tenant overrides.
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
-    updated, _reply, persist = await run_turn(
-        admin_message=text, record=onboarding, provider=bounded
-    )
+    updated, _reply = await run_turn(admin_message=text, record=onboarding, provider=bounded)
     record_data = updated.to_jsonb()
-    if persist:
-        await service.save_record(tenant_id=tenant_id, record=record_data)
+    await service.save_record(tenant_id=tenant_id, record=record_data)
     return record_data
 
 
@@ -242,20 +241,28 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
         )
-    current = beats.next_beat(onboarding.draft)
+    current = beats.next_beat(onboarding.draft, onboarding.skipped, onboarding.deferred)
     if current is None or current.key != beat_key:
         stage = current.key if current is not None else "confirm"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"stale selection - current beat is {stage}",
         )
-    try:
-        user_message = beats.apply_selection(onboarding.draft, beat_key, values)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    # W-2: "Skip for now" is only offered on a skippable beat, and it records
+    # the beat rather than writing a sentinel into the profile - `services` and
+    # `hours` are read straight into the public storefront subtitle.
+    if beats.is_skip(beat_key, values):
+        onboarding.skipped.append(beat_key)
+        onboarding.ask_beat, onboarding.ask_count = "", 0
+        user_message = "Skip for now"
+    else:
+        try:
+            user_message = beats.apply_selection(onboarding.draft, beat_key, values)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
     reply = selection_reply(onboarding)
     onboarding.history.append({"role": "user", "content": user_message})
     onboarding.history.append({"role": "assistant", "content": reply})
@@ -329,8 +336,7 @@ async def run_message_stream(
     # ponytail: platform default timeout (see run_message above).
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
     plan = await prepare_turn(admin_message=text, record=onboarding, provider=bounded)
-    if plan.persist:
-        await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
 
     yield {"type": "progress", "stage": "processing"}
 
@@ -345,9 +351,8 @@ async def run_message_stream(
     # Kept for the old client; the new client reassembles ``token`` events.
     yield {"type": "reply", "text": full}
 
-    if plan.persist:
-        plan.record.history.append({"role": "assistant", "content": full})
-        await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    plan.record.history.append({"role": "assistant", "content": full})
+    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
 
     yield _state_event(plan.record)
     yield {"type": "done"}
@@ -442,7 +447,12 @@ async def save_onboarding_knowledge(
 
 
 async def confirm(
-    *, tenant_id: UUID, slug: str | None = None, embedder: Embedder | None = None
+    *,
+    tenant_id: UUID,
+    slug: str | None = None,
+    business_name: str | None = None,
+    business_type: str | None = None,
+    embedder: Embedder | None = None,
 ) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
@@ -458,7 +468,13 @@ async def confirm(
             detail="review or discard every knowledge draft before going live",
         )
     draft = onboarding.draft
-    gate = request_finalize(draft)
+    # W-2: a correction typed on the go-live screen wins over what the
+    # interview captured - the terminal rule may have taken the owner's words
+    # verbatim, and neither field has an editor after go-live.
+    for field, corrected in (("business_name", business_name), ("business_type", business_type)):
+        if corrected and corrected.strip():
+            draft[field] = corrected.strip()
+    gate = request_finalize(draft, onboarding.skipped)
     if not gate.ok:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

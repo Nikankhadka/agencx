@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -34,12 +35,12 @@ def save_profile(draft: dict[str, Any], args: ProfileDraft) -> dict[str, Any]:
     return draft
 
 
-def _check_completeness(draft: dict[str, Any]) -> list[str]:
-    return beats.check_completeness(draft)
+def _check_completeness(draft: dict[str, Any], skipped: Sequence[str] = ()) -> list[str]:
+    return beats.check_completeness(draft, skipped)
 
 
-def request_finalize(draft: dict[str, Any]) -> ToolResult:
-    missing = _check_completeness(draft)
+def request_finalize(draft: dict[str, Any], skipped: Sequence[str] = ()) -> ToolResult:
+    missing = _check_completeness(draft, skipped)
     if missing:
         return ToolResult(ok=False, missing=missing)
     return ToolResult(ok=True, message="All required fields complete.")

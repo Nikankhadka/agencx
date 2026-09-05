@@ -57,9 +57,15 @@ test("onboarding first message streams a reply", async ({ page, request }) => {
 
   // The onboarding thread IS the screen: no heading, and no console chrome
   // (agencx-prototype-v6.html shows no navigation until the business is live).
-  await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Console" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Onboarding" })).toHaveCount(0);
+  await expect(
+    page.getByRole("log", { name: "Onboarding conversation" }),
+  ).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Console" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("heading", { name: "Onboarding" })).toHaveCount(
+    0,
+  );
 
   const thread = page.getByTestId("onboarding-thread");
   await expect(thread).toContainText(/\S/);
@@ -69,7 +75,9 @@ test("onboarding first message streams a reply", async ({ page, request }) => {
   await composer.getByRole("button", { name: "Send" }).click();
 
   // The customer message echoes into the thread...
-  await expect(thread.getByText("I run a phone repair shop.", { exact: true })).toBeVisible();
+  await expect(
+    thread.getByText("I run a phone repair shop.", { exact: true }),
+  ).toBeVisible();
 
   // ...and the stream resolves without an error line (a 401 surfaces there).
   await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
@@ -93,7 +101,8 @@ test("team selection and the next question stay on the same server beat", async 
   };
   const hoursInput = {
     kind: "text",
-    placeholder: "When are you open?",
+    placeholder:
+      "What are your opening hours, and which days of the week are you open?",
     chips: [],
     mask: null,
     cta_label: null,
@@ -114,7 +123,10 @@ test("team selection and the next question stay on the same server beat", async 
         },
         completed: false,
         history: [
-          { role: "assistant", content: "Is it just you, or do you work with a team?" },
+          {
+            role: "assistant",
+            content: "Is it just you, or do you work with a team?",
+          },
         ],
         input: headcountInput,
         can_confirm: false,
@@ -130,8 +142,8 @@ test("team selection and the next question stay on the same server beat", async 
       contentType: "text/event-stream",
       body: [
         'data: {"type":"progress","stage":"processing"}',
-        'data: {"type":"token","text":"When are you open?"}',
-        'data: {"type":"reply","text":"When are you open?"}',
+        'data: {"type":"token","text":"What are your opening hours, and which days of the week are you open?"}',
+        'data: {"type":"reply","text":"What are your opening hours, and which days of the week are you open?"}',
         `data: ${JSON.stringify({
           type: "state",
           stage: "headcount",
@@ -159,7 +171,8 @@ test("team selection and the next question stay on the same server beat", async 
       contentType: "application/json",
       body: JSON.stringify({
         stage: "hours",
-        prompt: "Got it. When are you open?",
+        prompt:
+          "Got it. What are your opening hours, and which days of the week are you open?",
         draft: {
           name: "Ronin",
           business_name: "Test Repairs",
@@ -168,9 +181,16 @@ test("team selection and the next question stay on the same server beat", async 
         },
         completed: false,
         history: [
-          { role: "assistant", content: "Is it just you, or do you work with a team?" },
+          {
+            role: "assistant",
+            content: "Is it just you, or do you work with a team?",
+          },
           { role: "user", content: "Got a team" },
-          { role: "assistant", content: "Got it. When are you open?" },
+          {
+            role: "assistant",
+            content:
+              "Got it. What are your opening hours, and which days of the week are you open?",
+          },
         ],
         input: hoursInput,
         can_confirm: false,
@@ -182,6 +202,11 @@ test("team selection and the next question stay on the same server beat", async 
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
   await page.getByRole("button", { name: "Got a team" }).click();
 
-  await expect(page.getByText("Got it. When are you open?", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "Got it. What are your opening hours, and which days of the week are you open?",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Got a team" })).toHaveCount(0);
 });

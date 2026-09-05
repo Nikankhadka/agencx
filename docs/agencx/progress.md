@@ -39,7 +39,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [ ] Add the GitHub `VERCEL_TOKEN` secret so registry cleanup can run. The local Vercel token is not a repository secret.
 - [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
 - [x] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
-- [ ] W-2: stop the onboarding interview from re-asking a filled slot.
+- [x] W-2: stop the onboarding interview from re-asking a filled slot.
 - [ ] W-3: remove the redundant "Answering..." line and stabilize the onboarding composer's height.
 - [ ] W-4: pre-fill the go-live slug on every path and show a real error when it fails.
 - [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together.
@@ -141,6 +141,30 @@ it re-ask a business name already on file - the fix makes the server emit the
 question verbatim, the same way the chip-answer path already does, and adds a
 flow-change confirmation rule to `conventions.md` so a working conversational
 flow is not altered again without a flagged before/after.
+
+**W-2 shipped** (2026-09-05, `fix/w-2-onboarding-repeat`). Building it surfaced
+that the ticket named a symptom the spec had mis-sized: there was no repeat cap
+anywhere to raise or lower - `next_beat` was a stateless rescan and
+`off_topic_count` was incremented but read by nothing - and every one of the
+nine beats was a hard gate, so an unanswerable one looped forever and blocked
+go-live. The diagnosis that shaped the fix is that *adjacency*, not count, is
+what made the transcript infuriating: three business-name questions back to
+back. So each beat now gets two asks, and then resolves rather than repeating -
+a skippable beat takes a default or is dropped, a required one is deferred to a
+second pass that returns only once every other beat is done. Which beats are
+which follows one rule: skippable means nothing downstream reads it, or the
+owner can still edit it after go-live. On the final pass the owner's own words
+are taken verbatim so the interview always ends, and the go-live screen now
+reads `business_name` and `business_type` back as editable fields, because
+neither has an editor once the page is published. A skip deliberately writes no
+sentinel into the profile - `profile_tagline` renders `services` and `hours`
+straight into the public storefront subtitle, so a "skipped" string there would
+have shown to customers.
+
+Still open from this ticket's edges: `hours` and `contact` are required only
+because no post-go-live editor exists for them. A profile editor at
+Business > details would let them become skippable, and is the natural
+follow-up.
 
 | Location | Status | Contents |
 |---|---|---|

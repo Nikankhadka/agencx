@@ -387,17 +387,42 @@ Backend, in `backend/tests/test_onboarding_agent.py` or the equivalent
 
 ### Definition of done
 
-- [ ] The onboarding reply's question text is server-appended, not
+- [x] The onboarding reply's question text is server-appended, not
       model-composed, for every beat (chip and free-text paths agree).
-- [ ] A filled slot cannot be re-asked, proven by a regression test.
-- [ ] An off-beat answer is captured without derailing the pending question.
-- [ ] An unpunctuated offer list yields multiple candidates.
-- [ ] A three-times-unanswered beat offers to move on instead of repeating.
-- [ ] The hours beat asks for both hours and days.
-- [ ] Every turn persists regardless of extraction outcome.
-- [ ] [conventions.md](../../design/conventions.md) carries the new
+- [x] A filled slot cannot be re-asked, proven by a regression test.
+- [x] An off-beat answer is captured without derailing the pending question.
+- [x] An unpunctuated offer list yields multiple candidates.
+- [x] A two-times-unanswered beat resolves or defers instead of repeating.
+- [x] The hours beat asks for both hours and days.
+- [x] Every turn persists regardless of extraction outcome.
+- [x] [conventions.md](../../design/conventions.md) carries the new
       flow-change confirmation subsection.
-- [ ] `make check` green.
+- [x] `make check` green.
+
+Amended during the build, with the founder's confirmation (per the 5.1
+convention this ticket adds):
+
+- **Two asks per beat, not three.** Three adjacent asks was the symptom, so a
+  third was never the fix. What made the founder's transcript read as a loop
+  was the *adjacency*, not the count.
+- **Required and skippable beats are now defined**, closing US-4's undefined
+  "where the beat's semantics allow it". Skippable = nothing downstream reads
+  it, or the owner can still edit it after go-live: `name`, `headcount`,
+  `services`, `abn`, `gst`. Required: `business_name`, `business_type`,
+  `hours`, `contact`.
+- **A skippable beat resolves; a required one defers.** `headcount` takes
+  "just me", `abn` takes `NO_ABN`; `name` and `services` carry a "Skip for
+  now" chip. A required beat is held back to a second pass so the interview
+  keeps moving, and returns once every other beat is done.
+- **Terminal rule:** on the final pass the owner's own words are taken
+  verbatim, so the interview always ends. The go-live screen reads
+  `business_name` and `business_type` back as editable fields, since neither
+  has an editor after publish.
+- **A skip writes no sentinel into the profile** - `profile_tagline` renders
+  `services` and `hours` into the public storefront subtitle, so the skipped
+  keys are tracked beside the draft instead.
+- **No `version` bump** on the record: the new fields read through a default,
+  and a bump would have restarted every interview in flight at deploy.
 
 ---
 

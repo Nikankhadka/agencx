@@ -6,11 +6,17 @@ from a server-computed directive. Structured extraction (rather than tool
 calls) keeps capture robust on free/edge models that answer in prose; the
 server's completeness gate stays authoritative.
 
+The model writes only an acknowledgment; the server appends the beat's ``ask``
+verbatim (W-2), so the question the owner sees is always the one the beat
+cursor chose. Every turn is persisted - skipping the write let a later turn
+reload an older row and rewind the beat pointer.
+
 Guardrails: scan_input, price echo check, bounded history. Off-topic/meta
 questions are answered in one line then gently redirected - no escalating
-firmness. Off-topic turns that collect nothing are not persisted (``persist``
-flag), so greeting noise never lands in the stored history.
-State: {version: 2, draft, history, off_topic_count, completed} in jsonb.
+firmness, and they never burn one of a beat's two asks.
+State: {version: 3, draft, history, off_topic_count, completed,
+knowledge_pending, offering_candidates, skipped, deferred, ask_beat,
+ask_count} in jsonb.
 """
 
 from __future__ import annotations
@@ -43,9 +49,17 @@ def _ms(started: float) -> float:
 
 @dataclass
 class Directive:
+    """What the reply model is asked to write - an acknowledgment, never a question.
+
+    W-2: the visible question is the beat's own ``ask``, appended verbatim by
+    the server after whatever this produces. Before W-2 the directive said
+    ``"Ask for: {ask}"`` and let the model phrase the question itself, which is
+    how a beat that was already filled kept getting asked again.
+    """
+
     acknowledged: list[str] = field(default_factory=list)
     meta_answer: str = ""
-    ask_for: str = ""
+    nudge: str = ""
 
     def as_prompt(self) -> str:
         parts: list[str] = []
@@ -53,7 +67,12 @@ class Directive:
             parts.append(f"Just captured: {', '.join(self.acknowledged)}.")
         if self.meta_answer:
             parts.append(f"Briefly answer: {self.meta_answer}")
-        parts.append(f"Ask for: {self.ask_for}" if self.ask_for else "All info captured.")
+        if self.nudge:
+            parts.append(self.nudge)
+        parts.append(
+            "Write only a short, warm acknowledgment of what the owner just said. "
+            "Do not ask a question - the next question is added after your words."
+        )
         return " ".join(parts)
 
 
@@ -61,9 +80,9 @@ _COPILOT = (
     "You are the owner's Agencx setup assistant. Help a small-business owner describe "
     "their name, business name, business type, team size, opening hours, what "
     "they sell, how customers reach them, and their ABN and GST registration. "
-    "Warmly acknowledge each answer, ask one simple question at a time, and keep "
-    "the wording close to the owner's own words. Answer meta questions in one "
-    "line, then gently return to onboarding."
+    "Warmly acknowledge what the owner tells you, in wording close to their own. "
+    "You never choose or write the question - the server appends it to your reply. "
+    "Answer meta questions in one line."
 )
 
 # C-3: a figure the extractor rounds into the profile becomes a figure the
@@ -81,7 +100,9 @@ _EXTRACT_PROMPT = (
     "work one out. Two fields have a fixed vocabulary: set abn to the digits "
     'the owner gave, or to "none" if they said they do not have one yet; set '
     'gst to "yes" or "no". Never infer or invent offering names, and never add prices '
-    "or descriptions to offering_names. "
+    "or descriptions to offering_names. Split a run-on list into one entry per item "
+    'even when it has no commas: "we offer pita coffee and wraps" is offering_names '
+    '["pita", "coffee", "wraps"], not a single entry. '
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false. Leave the profile null "
@@ -101,6 +122,14 @@ class OnboardingRecord:
     # gates go-live - confirm still requires only the seven profile fields.
     knowledge_pending: bool = False
     offering_candidates: list[PendingOffering] = field(default_factory=list)
+    # W-2's two-pass cursor and ask counter. ``skipped`` beats are gone for
+    # good; ``deferred`` ones are required beats held back to pass two.
+    # ``ask_beat``/``ask_count`` track only the beat being asked right now,
+    # since that is the only one whose repeat count matters.
+    skipped: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
+    ask_beat: str = ""
+    ask_count: int = 0
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -121,6 +150,13 @@ class OnboardingRecord:
                 completed=raw.get("completed", False),
                 knowledge_pending=raw.get("knowledge_pending", False),
                 offering_candidates=_load_offerings(raw.get("offering_candidates", [])),
+                # W-2's fields read through a default rather than forcing a
+                # version bump: absence is indistinguishable from "fresh", and
+                # bumping would restart every interview in flight at deploy.
+                skipped=list(raw.get("skipped", [])),
+                deferred=list(raw.get("deferred", [])),
+                ask_beat=raw.get("ask_beat", ""),
+                ask_count=raw.get("ask_count", 0),
             )
         return cls(
             version=3,
@@ -140,6 +176,10 @@ class OnboardingRecord:
             "completed": self.completed,
             "knowledge_pending": self.knowledge_pending,
             "offering_candidates": [item.model_dump() for item in self.offering_candidates],
+            "skipped": self.skipped,
+            "deferred": self.deferred,
+            "ask_beat": self.ask_beat,
+            "ask_count": self.ask_count,
         }
 
 
@@ -193,13 +233,15 @@ class TurnPlan:
     ``summary`` is set when the turn completes the profile - the
     reply is server-synthesized from the draft and never touches the model.
     ``reply_msgs`` is set otherwise and is what the reply path feeds the LLM.
+    ``question`` is the next beat's ``ask``, verbatim; the reply path appends
+    it after the model's acknowledgment so the model never phrases it (W-2).
     ``off_topic`` mirrors the extraction verdict for logging.
     """
 
     record: OnboardingRecord
-    persist: bool
     summary: str | None
     reply_msgs: list[ChatMessage] | None
+    question: str | None = None
     off_topic: bool = False
 
 
@@ -240,7 +282,7 @@ def _completion_reply(record: OnboardingRecord) -> str:
 
 def selection_reply(record: OnboardingRecord) -> str:
     """A deterministic acknowledgement followed by the authoritative next ask."""
-    nxt = beats.next_beat(record.draft)
+    nxt = _advance(record)
     return f"Got it. {nxt.ask}" if nxt is not None else _completion_reply(record)
 
 
@@ -251,7 +293,7 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     so the SSE state and the REST state never disagree. A completed profile
     passes through the optional ``knowledge`` stage before ``confirm``.
     """
-    nxt = beats.next_beat(record.draft)
+    nxt = beats.next_beat(record.draft, record.skipped, record.deferred)
     if nxt is not None:
         return nxt.key, beats.input_spec(nxt), False
     if record.knowledge_pending:
@@ -259,13 +301,70 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     return "confirm", None, not record.completed
 
 
-def _extraction_input(record: OnboardingRecord, admin_message: str) -> str:
+def _advance(record: OnboardingRecord) -> beats.Beat | None:
+    """The beat to ask now, against this record's skipped and deferred keys.
+
+    ``deferred`` is never cleared: once pass one runs out of beats,
+    ``next_beat`` falls through to the deferred ones on its own, and keeping
+    the list is what lets the caller tell a second ask from a final one.
+    """
+    return beats.next_beat(record.draft, record.skipped, record.deferred)
+
+
+def _resolve(record: OnboardingRecord, beat: beats.Beat, admin_message: str) -> None:
+    """Close a beat the owner has not answered in two asks.
+
+    A skippable beat takes its default or is dropped. A required beat is
+    deferred on pass one; on pass two there is nowhere left to defer it to, so
+    the owner's own words are taken verbatim - these four fields have no
+    validation, so whatever they typed *is* the answer, and the confirm screen
+    reads the name and type back for correction before anything is published.
+    """
+    if beat.optional:
+        if beat.default:
+            record.draft[beat.key] = beat.default
+        else:
+            record.skipped.append(beat.key)
+    elif beat.key not in record.deferred:
+        record.deferred.append(beat.key)
+    elif admin_message.strip():
+        record.draft[beat.key] = admin_message.strip()
+    record.ask_beat = ""
+    record.ask_count = 0
+
+
+def _nudge(beat: beats.Beat, *, final_pass: bool) -> str:
+    """The extra instruction on a beat's second ask - acknowledgment only."""
+    if beat.optional:
+        return (
+            "The owner has not answered this yet. Say warmly that it can wait, and "
+            'mention they can tap "Skip for now".'
+        )
+    if final_pass:
+        return (
+            "The owner still has not answered this. Say plainly and kindly that you "
+            f"need it to publish their page. Work in this example: {beat.example}."
+        )
+    return (
+        "The owner has not answered this yet. Acknowledge that warmly and work in "
+        f"this example: {beat.example}."
+    )
+
+
+def _extraction_input(
+    record: OnboardingRecord, admin_message: str, asked: beats.Beat | None = None
+) -> str:
     lines: list[str] = []
     if record.draft:
         lines.append("Current draft (already captured):")
         lines.append(json.dumps(record.draft))
     for entry in record.history[-_MAX_HIST:]:
         lines.append(f"{entry['role']}: {entry['content']}")
+    # A hint, never a filter: it only helps disambiguate a reply that could be
+    # an answer to several fields. The full schema stays available, so an
+    # answer to some *other* question is still captured into its own field.
+    if asked is not None:
+        lines.append(f"The question asked this turn was: {asked.ask}")
     lines.append(f"user: {admin_message}")
     return "\n".join(lines)
 
@@ -322,7 +421,6 @@ async def prepare_url_turn(
     if record.completed:
         return TurnPlan(
             record=record,
-            persist=False,
             summary="Onboarding is already complete.",
             reply_msgs=None,
         )
@@ -336,12 +434,11 @@ async def prepare_url_turn(
         record.draft = save_profile(record.draft, update.profile)
     # A link pasted once the profile is complete is the owner's answer to the
     # website ask - it satisfies the offer the same way "skip" does.
-    if beats.next_beat(record.draft) is None:
+    if beats.next_beat(record.draft, record.skipped, record.deferred) is None:
         record.knowledge_pending = False
     record.history.append({"role": "user", "content": url})
     return TurnPlan(
         record=record,
-        persist=True,
         summary=_url_readback(record.draft),
         reply_msgs=None,
     )
@@ -367,16 +464,16 @@ async def prepare_turn(
     if record.completed:
         return TurnPlan(
             record=record,
-            persist=False,
             summary="Onboarding is already complete.",
             reply_msgs=None,
         )
     scan_input(admin_message)
 
+    asked = beats.BEATS.get(record.ask_beat)
     extract_started = time.perf_counter()
     update = await provider.extract(
         system_prompt=_EXTRACT_PROMPT,
-        user_input=_extraction_input(record, admin_message),
+        user_input=_extraction_input(record, admin_message, asked),
         schema=DraftUpdate,
     )
     logger.info(
@@ -396,23 +493,44 @@ async def prepare_turn(
                 acknowledged.append(beat.label)
     if update.offering_names is not None:
         _merge_owner_offerings(record, update.offering_names)
+        # A named offering is an answer to the offer beat, so it fills that
+        # field too rather than leaving the beat open and asking again.
+        if not record.draft.get("services") and "services" not in record.skipped:
+            record.draft["services"] = ", ".join(item.name for item in record.offering_candidates)
 
-    nxt = beats.next_beat(record.draft)
-    ask_for = nxt.ask if nxt else ""
-    persist = bool(acknowledged) or not update.off_topic
     directive = Directive(acknowledged=acknowledged)
     if update.off_topic:
-        if persist:
-            record.off_topic_count += 1
+        record.off_topic_count += 1
         directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
-        directive.ask_for = ask_for
-    else:
-        directive.ask_for = ask_for
+
+    nxt = _advance(record)
+    # The counter tracks how many times this beat has been *asked*. An
+    # off-topic turn is noise, not a failed answer, so it burns neither ask.
+    on_topic = not update.off_topic
+    if nxt is not None and on_topic and nxt.key == record.ask_beat and record.ask_count >= 2:
+        # Rather than ask a third time, close the beat out and move on.
+        _resolve(record, nxt, admin_message)
+        nxt = _advance(record)
+
+    if nxt is None:
+        record.ask_beat, record.ask_count = "", 0
+    elif nxt.key != record.ask_beat:
+        record.ask_beat, record.ask_count = nxt.key, 1
+    elif on_topic:
+        record.ask_count += 1
+
+    if nxt is not None and record.ask_count >= 2:
+        directive.nudge = _nudge(nxt, final_pass=nxt.key in record.deferred)
 
     state_parts = [
         f"captured={', '.join(sorted(record.draft)) or 'none'}",
-        f"ask_for={directive.ask_for or 'all captured'}",
+        f"ask_for={nxt.key if nxt else 'all captured'}",
+        f"ask_count={record.ask_count}",
     ]
+    if record.skipped:
+        state_parts.append(f"skipped={', '.join(record.skipped)}")
+    if record.deferred:
+        state_parts.append(f"deferred={', '.join(record.deferred)}")
     if directive.meta_answer:
         state_parts.append(f"meta={directive.meta_answer}")
     transcript.info("[onboarding] state: " + "; ".join(state_parts))
@@ -431,22 +549,23 @@ async def prepare_turn(
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
     reply_msgs.append({"role": "user", "content": admin_message})
 
-    if persist:
-        record.history.append({"role": "user", "content": admin_message})
+    # Every turn is persisted. Skipping the write when a turn collected nothing
+    # used to let the next turn reload an older row and rewind the beat pointer
+    # - the emitted state and the stored record have to agree (W-2).
+    record.history.append({"role": "user", "content": admin_message})
 
     if nxt is None:
         return TurnPlan(
             record=record,
-            persist=persist,
             summary=_completion_reply(record),
             reply_msgs=None,
             off_topic=update.off_topic,
         )
     return TurnPlan(
         record=record,
-        persist=persist,
         summary=None,
         reply_msgs=reply_msgs,
+        question=nxt.ask,
         off_topic=update.off_topic,
     )
 
@@ -458,7 +577,9 @@ async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterato
     the price-echo guard tripped and the client should drop what it has so far.
     A deterministic summary streams as a single token with no LLM call; a
     model reply streams deltas from ``chat_stream`` and, on echo, does one
-    redraft pass over the original messages plus the flagged reply.
+    redraft pass over the original messages plus the flagged reply. The beat's
+    question is appended verbatim as a final token once the model is done - and
+    after any redraft - so the echo guard only ever inspects model output.
     """
     if plan.summary is not None:
         yield ("token", plan.summary)
@@ -491,17 +612,21 @@ async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterato
                 "chars": len(full),
             },
         )
+    if plan.question:
+        tail = f" {plan.question}" if full.strip() else plan.question
+        full += tail
+        yield ("token", tail)
     transcript.info(f"[onboarding] assistant: {full}")
 
 
 async def run_turn(
     *, admin_message: str, record: OnboardingRecord, provider: LLMProvider
-) -> tuple[OnboardingRecord, str, bool]:
-    """Runs one copilot turn (non-streamed). Returns ``(record, reply, persist)``.
+) -> tuple[OnboardingRecord, str]:
+    """Runs one copilot turn (non-streamed). Returns ``(record, reply)``.
 
-    ``persist`` is False when the turn is off-topic and collected nothing, so
-    the caller can skip writing it: greeting/noise turns stay ephemeral and the
-    conversation effectively restarts clean on the next visit.
+    The model writes the acknowledgment; the server appends the beat's question
+    verbatim, so the question the owner sees is always the one the beat cursor
+    actually chose.
     """
     turn_started = time.perf_counter()
     plan = await prepare_turn(admin_message=admin_message, record=record, provider=provider)
@@ -533,9 +658,10 @@ async def run_turn(
                     "chars": len(reply),
                 },
             )
+        if plan.question:
+            reply = f"{reply.strip()} {plan.question}".strip()
 
-    if plan.persist:
-        plan.record.history.append({"role": "assistant", "content": reply})
+    plan.record.history.append({"role": "assistant", "content": reply})
     transcript.info(f"[onboarding] assistant: {reply}")
     logger.info(
         "onboarding turn done",
@@ -543,11 +669,10 @@ async def run_turn(
             "step": "turn_done",
             "total_ms": _ms(turn_started),
             "off_topic": plan.off_topic,
-            "persist": plan.persist,
             "reply_chars": len(reply),
         },
     )
-    return plan.record, reply, plan.persist
+    return plan.record, reply
 
 
 def _echo(reply: str, draft: dict[str, Any]) -> bool:

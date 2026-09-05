@@ -13,11 +13,16 @@ vertical (I8): ``business_type`` is captured as one more field and shapes the
 tenant's system prompt at confirm, never the question set. ``abn``/``gst`` are
 Australian by wording, not by vertical, and ``gst`` is conditional on the
 answer to ``abn`` rather than on what the business does.
+
+W-2 caps every beat at two asks. Which beat is required and which is skippable
+follows one rule - skippable means nothing downstream reads it, or the owner
+can still edit it after go-live - and ``next_beat`` runs the two passes that
+cap implies.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -29,6 +34,14 @@ WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 # the beat unsatisfied forever; "none" is a stated answer, and it is what makes
 # the GST beat skip itself.
 NO_ABN = "none"
+
+# W-2: the value the "Skip for now" chip submits. It is never stored in the
+# draft - a skipped beat's field stays empty and the beat key is remembered
+# separately, because `profile_tagline` reads `services` and `hours` straight
+# into the public storefront subtitle and a sentinel there would show to
+# customers. (NO_ABN is the opposite case: "no ABN" is a real answer that is
+# meant to display.)
+SKIP = "__skip__"
 
 
 class ChipSpec(BaseModel):
@@ -59,6 +72,19 @@ class InputSpec(BaseModel):
 
 @dataclass(frozen=True)
 class Beat:
+    """One question in the interview.
+
+    W-2 splits the beats in two. A ``optional`` beat is one nothing downstream
+    reads (``name``, ``headcount``) or one the owner can still edit after
+    go-live (``services`` via Business > What you offer, ``abn``/``gst`` via
+    Business > details) - it resolves to its ``default`` or to nothing rather
+    than being asked a third time. A required beat has neither property, so it
+    is deferred to a second pass instead of being dropped.
+
+    ``example`` is fed to the reply model on a beat's second ask, to be worked
+    into the acknowledgment. The question itself is always emitted verbatim.
+    """
+
     key: str
     label: str
     ask: str
@@ -68,6 +94,9 @@ class Beat:
     mask: str | None = None
     prefix: str | None = None
     suggest_owner_email: bool = False
+    optional: bool = False
+    default: str = ""
+    example: str = ""
 
 
 def _complete(field: str) -> Callable[[dict[str, Any]], bool]:
@@ -87,6 +116,8 @@ def _gst_complete(draft: dict[str, Any]) -> bool:
     return bool(draft.get("gst"))
 
 
+SKIP_CHIP = ChipSpec(label="Skip for now", value=SKIP, dashed=True)
+
 BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="name",
@@ -94,6 +125,10 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="What name would you like me to use?",
         kind="text",
         complete=_complete("name"),
+        # Nothing downstream reads the owner's name, and it cannot be guessed,
+        # so this is the one beat that skips to a genuine blank.
+        optional=True,
+        chips=(SKIP_CHIP,),
     ),
     Beat(
         key="business_name",
@@ -101,6 +136,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="What does the business go by?",
         kind="text",
         complete=_complete("business_name"),
+        example='even a short one works - "Bytefix" or "Sababa"',
     ),
     Beat(
         key="business_type",
@@ -108,6 +144,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="In a few words, what kind of business is it?",
         kind="text",
         complete=_complete("business_type"),
+        example='a few words is plenty - "phone repair shop" or "family dental practice"',
     ),
     Beat(
         key="headcount",
@@ -119,13 +156,18 @@ BEAT_ORDER: tuple[Beat, ...] = (
             ChipSpec(label="Just me", value="just me"),
             ChipSpec(label="Got a team", value="got a team"),
         ),
+        # Read by nothing downstream, and solo is the overwhelming majority of
+        # businesses that self-onboard, so an unanswered team size takes it.
+        optional=True,
+        default="just me",
     ),
     Beat(
         key="hours",
         label="opening hours",
-        ask="When are you open?",
+        ask="What are your opening hours, and which days of the week are you open?",
         kind="text",
         complete=_complete("hours"),
+        example='"9 to 5, Monday to Friday" - or "online, always open"',
     ),
     Beat(
         key="services",
@@ -133,6 +175,10 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="What would you like customers to know you offer?",
         kind="text",
         complete=_complete("services"),
+        # Editable after go-live at Business > What you offer, and an uploaded
+        # menu or price list can fill the catalog instead.
+        optional=True,
+        chips=(SKIP_CHIP,),
     ),
     Beat(
         key="contact",
@@ -145,6 +191,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # composer to the country-code pill rather than submitting the words.
         chips=(ChipSpec(label="Phone number", value="phone", dashed=True, widget="phone"),),
         suggest_owner_email=True,
+        example="an email or a phone number - whichever you'd rather they used",
     ),
     Beat(
         key="abn",
@@ -158,6 +205,10 @@ BEAT_ORDER: tuple[Beat, ...] = (
             ChipSpec(label="Yes", value="yes", widget="masked"),
             ChipSpec(label="No", value=NO_ABN),
         ),
+        # Editable after go-live at Business > details > ABN & Tax. "No" is
+        # already one tap away, so an unanswered ABN takes the same value.
+        optional=True,
+        default=NO_ABN,
     ),
     Beat(
         key="gst",
@@ -169,6 +220,9 @@ BEAT_ORDER: tuple[Beat, ...] = (
             ChipSpec(label="Yes", value="yes"),
             ChipSpec(label="Not yet", value="not yet"),
         ),
+        # Rarely reached: defaulting `abn` to NO_ABN satisfies this one too.
+        optional=True,
+        default="no",
     ),
 )
 
@@ -179,12 +233,32 @@ BEATS: dict[str, Beat] = {beat.key: beat for beat in BEAT_ORDER}
 CHIPPED_PLACEHOLDER = "or type…"
 
 
-def next_beat(draft: dict[str, Any]) -> Beat | None:
-    """The first unsatisfied beat, or None when the draft is complete."""
-    for beat in BEAT_ORDER:
-        if not beat.complete(draft):
-            return beat
-    return None
+def next_beat(
+    draft: dict[str, Any],
+    skipped: Sequence[str] = (),
+    deferred: Sequence[str] = (),
+) -> Beat | None:
+    """The beat to ask now, or None when nothing is left to ask.
+
+    W-2 runs the interview in two passes. ``skipped`` beats are gone for good.
+    A ``deferred`` beat is a required one the owner did not answer in two asks:
+    it is held back so the interview keeps moving, and comes back once every
+    other beat has been through pass one. That way a repeated question is never
+    adjacent to itself, which is what made the founder's transcript read as a
+    loop.
+    """
+    pending = [beat for beat in BEAT_ORDER if not beat.complete(draft) and beat.key not in skipped]
+    if not pending:
+        return None
+    first_pass = [beat for beat in pending if beat.key not in deferred]
+    # Nothing left in pass one means the deferred beats are all that remain.
+    return first_pass[0] if first_pass else pending[0]
+
+
+def is_skip(key: str, values: list[str]) -> bool:
+    """Whether this selection is the "Skip for now" chip on a skippable beat."""
+    beat = BEATS.get(key)
+    return beat is not None and beat.optional and values == [SKIP]
 
 
 def input_spec(beat: Beat) -> InputSpec:
@@ -230,6 +304,12 @@ def apply_selection(draft: dict[str, Any], key: str, values: list[str]) -> str:
 KNOWLEDGE_INPUT = InputSpec(kind="text", placeholder='Paste a link, attach a file, or say "skip"')
 
 
-def check_completeness(draft: dict[str, Any]) -> list[str]:
-    """Labels of every unsatisfied beat."""
-    return [beat.label for beat in BEAT_ORDER if not beat.complete(draft)]
+def check_completeness(draft: dict[str, Any], skipped: Sequence[str] = ()) -> list[str]:
+    """Labels of every unsatisfied beat the owner has not skipped.
+
+    A deferred beat is deliberately not excused here - pass two has to finish
+    before go-live, or a required field would reach the storefront empty.
+    """
+    return [
+        beat.label for beat in BEAT_ORDER if not beat.complete(draft) and beat.key not in skipped
+    ]

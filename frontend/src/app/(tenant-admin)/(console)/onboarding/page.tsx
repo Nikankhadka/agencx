@@ -120,6 +120,11 @@ export default function OnboardingPage() {
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
   const [publicSlug, setPublicSlug] = useState("");
+  // W-2: the go-live screen reads these two back because the interview's
+  // terminal rule can take an owner's words verbatim after two unanswered
+  // asks, and neither field has an editor once the page is live.
+  const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,8 +143,11 @@ export default function OnboardingPage() {
     setInput(fields.input);
     setCanConfirm(fields.can_confirm);
     setOwnerOfferings(fields.offering_candidates ?? []);
-    if (fields.can_confirm)
+    if (fields.can_confirm) {
       setPublicSlug((current) => current || fields.suggested_slug || "business");
+      setBusinessName((current) => current || fields.draft.business_name || "");
+      setBusinessType((current) => current || fields.draft.business_type || "");
+    }
   }
 
   useEffect(() => {
@@ -475,7 +483,11 @@ export default function OnboardingPage() {
     try {
       await apiFetch("/api/onboarding/confirm", {
         method: "POST",
-        body: JSON.stringify({ slug: publicSlug }),
+        body: JSON.stringify({
+          slug: publicSlug,
+          business_name: businessName.trim() || undefined,
+          business_type: businessType.trim() || undefined,
+        }),
       });
       setCompleted(true);
       setCanConfirm(false);
@@ -560,6 +572,20 @@ export default function OnboardingPage() {
         <div className="mx-auto w-full max-w-thread">
           {!completed && canConfirm && !reviewing ? (
             <div className="flex flex-col gap-3">
+              <Input
+                label="Business name"
+                value={businessName}
+                onChange={(event) => setBusinessName(event.target.value)}
+                disabled={busy}
+                data-testid="onboarding-business-name"
+              />
+              <Input
+                label="What the business does"
+                value={businessType}
+                onChange={(event) => setBusinessType(event.target.value)}
+                disabled={busy}
+                data-testid="onboarding-business-type"
+              />
               <Input
                 label="Your business page"
                 value={publicSlug}

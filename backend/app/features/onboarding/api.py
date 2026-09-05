@@ -75,6 +75,11 @@ class OnboardingConfirmResponse(BaseModel):
 
 class OnboardingConfirmRequest(BaseModel):
     slug: str | None = Field(default=None, min_length=3, max_length=40)
+    # W-2: the go-live screen reads the business name and type back, because
+    # the interview's terminal rule can take an owner's words verbatim after
+    # two unanswered asks. This is the last point either can be corrected.
+    business_name: str | None = Field(default=None, min_length=1, max_length=200)
+    business_type: str | None = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("slug")
     @classmethod
@@ -218,6 +223,10 @@ async def confirm(
     embedder: Annotated[Embedder | None, Depends(get_embedder_dependency)] = None,
 ) -> OnboardingConfirmResponse:
     result = await controller.confirm(
-        tenant_id=admin.tenant_id, slug=body.slug if body else None, embedder=embedder
+        tenant_id=admin.tenant_id,
+        slug=body.slug if body else None,
+        business_name=body.business_name if body else None,
+        business_type=body.business_type if body else None,
+        embedder=embedder,
     )
     return OnboardingConfirmResponse(**result)
