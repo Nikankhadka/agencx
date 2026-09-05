@@ -62,6 +62,10 @@ Plans and chat replies follow Tier A, plus:
 
 - Never add an agent name (Claude, Claude Code, or otherwise) as a co-author on commits.
 - Commit messages describe what changed and why, in plain language.
+- After a temporary branch merges into `development` or `staging` and the target
+  is pushed successfully, delete the source branch locally and on origin, then
+  check out the target. Never delete `development` or `staging`; preserve any
+  unique commits and dirty worktrees before cleanup.
 
 ## 3. Auto-generated files
 
