@@ -41,7 +41,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [x] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
 - [x] W-2: stop the onboarding interview from re-asking a filled slot.
 - [x] W-3: keep the onboarding thread clear and responsive - empty placeholders, stable composer geometry, one pending indicator, animated upload processing, and a proven SSE/ordinary-request transport split.
-- [ ] W-4: complete go-live address handling - the suggested slug on every confirm-opening path, actionable field errors, owner-typed addresses preserved, and recoverable network failures.
+- [x] W-4: complete go-live address handling - the suggested slug on every confirm-opening path, actionable field errors, owner-typed addresses preserved, and recoverable network failures.
 - [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together, using the existing context package.
 - [ ] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
 - [x] W-7: make the interview read like a person - challenge junk input, drop the

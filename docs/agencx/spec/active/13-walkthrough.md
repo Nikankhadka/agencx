@@ -865,17 +865,31 @@ rather than building new ones.
 
 ### Definition of done
 
-- [ ] Every confirm-opening path provides the suggested address.
-- [ ] A business-name correction refreshes the suggestion only until the
+- [x] Every confirm-opening path provides the suggested address.
+- [x] A business-name correction refreshes the suggestion only until the
       owner edits the address; owner-entered addresses survive unrelated
       updates.
-- [ ] Invalid, reserved, and taken slugs are actionable field errors.
-- [ ] Network failures preserve the draft and entered address; a retry
+- [x] Invalid, reserved, and taken slugs are actionable field errors.
+- [x] Network failures preserve the draft and entered address; a retry
       succeeds without restarting onboarding.
-- [ ] Backend validation remains authoritative.
-- [ ] The review save/discard path is reproduced in the browser and its
+- [x] Backend validation remains authoritative.
+- [x] The review save/discard path is reproduced in the browser and its
       runtime cause recorded.
-- [ ] `make check` green.
+- [x] `make check` green.
+
+Shipped. The address is now derived (`slugDraft ?? suggestedSlug`) rather than
+pushed down six paths: `applyStateFields` sets the suggestion unconditionally
+on every state read, so US-1 holds by construction and `saveKnowledge` /
+`discardKnowledge` have nothing left to bypass. That also removed the need for
+a client-side mirror of `suggested_slug()` - only the shape check
+(`frontend/src/lib/slug.ts`) is mirrored.
+
+Runtime cause recorded: the prefill was a one-shot latch
+(`setPublicSlug(current => current || ...)`) whose client fallback was the
+literal `"business"` - a name in `RESERVED_SLUGS`, so that fallback could only
+ever produce a 422. The generic "One or more fields are invalid." the owner saw
+was `ApiError.errors[0].detail` going unread; nothing in the repo read that
+field before this ticket.
 
 ---
 

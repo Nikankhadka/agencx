@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -25,6 +26,7 @@ import {
   type OnboardingDraft,
   type OnboardingState,
 } from "@/lib/onboarding";
+import { slugShapeError } from "@/lib/slug";
 import { BeatComposer } from "./components/BeatComposer";
 import {
   type KnowledgeRecord,
@@ -109,6 +111,40 @@ function historyToMessages(
 }
 
 /**
+ * W-4 US-3: is this confirm failure about the slug specifically? The confirm
+ * request's only body field is `slug` (OnboardingConfirmRequest in
+ * api.py), so a 422 - pydantic's field_validator on that field - always
+ * carries a `/slug` pointer in `errors[]` (api.ts:58 populates it from the
+ * ProblemDetails body; errors.py:109-116 builds it from the validator's own
+ * ValueError). A 409 never carries `errors[]` (the plain-HTTPException path,
+ * main.py:161-166, sends `detail` only) - by the time the confirm button is
+ * even visible, the other 409s this endpoint can raise (an unreviewed draft,
+ * a paused beat, an already-completed record - controller.py:487-501) are
+ * already excluded by this screen's own render condition
+ * (`!completed && canConfirm && !reviewing`), so the one 409 left that can
+ * reach here is the taken-slug conflict (controller.py:535-539).
+ */
+function isSlugConfirmFailure(err: ApiError): boolean {
+  if (err.errors.some((problem) => problem.pointer === "/slug")) return true;
+  return err.status === 409;
+}
+
+/**
+ * The owner-facing text for a slug confirm failure: the specific reason from
+ * `errors[]` when pydantic supplied one, the generic `detail` otherwise.
+ * Pydantic prefixes a field_validator's raised ValueError with
+ * "Value error, " before it reaches `errors[].detail` (errors.py:113 passes
+ * the validator's `msg` through verbatim, and pydantic-core adds that prefix
+ * ahead of FastAPI) - stripped here so the owner reads slug.py's own message,
+ * not its pydantic wrapper.
+ */
+function confirmFailureDetail(err: ApiError): string {
+  const raw = err.errors[0]?.detail ?? err.detail;
+  const prefix = "Value error, ";
+  return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
+}
+
+/**
  * The onboarding interview. Ported from the ONBOARDING section of
  * docs/agencx/design/prototypes/agencx-prototype-v6.html: a full-bleed thread
  * that IS the screen - no title, no nav, and no progress surface of any kind
@@ -132,7 +168,27 @@ export default function OnboardingPage() {
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
   const [pausedBeat, setPausedBeat] = useState<string | null>(null);
-  const [publicSlug, setPublicSlug] = useState("");
+  // W-4: the address is derived, never latched. `suggestedSlug` is set
+  // unconditionally on every state read - the server recomputes it from the
+  // draft's business name every time (controller.py:175-181, 121-125), so it
+  // is always current. `slugDraft` stays null until the owner types into the
+  // field, then holds exactly what they typed. `publicSlug` below is the
+  // derived value: the owner's text once they have any, the live suggestion
+  // until then. This is what makes every path that reaches the confirm step
+  // (initial load, ordinary answers, optional-knowledge skip, review save,
+  // review discard, reload - W-4 US-1) supply the suggestion automatically,
+  // and what makes a business-name correction keep following it only until
+  // the owner edits the field (W-4 US-2): there is no separate
+  // `applySlugSuggestion()` call to add to six call sites, so do not
+  // reintroduce the old `current || fields.suggested_slug` latch here - that
+  // shape is exactly what let saveKnowledge/discardKnowledge bypass the
+  // prefill in the first place.
+  const [suggestedSlug, setSuggestedSlug] = useState("");
+  const [slugDraft, setSlugDraft] = useState<string | null>(null);
+  const publicSlug = slugDraft ?? suggestedSlug;
+  // W-4 US-3: the slug-specific confirm failure, shown on the Input's own
+  // `error` prop rather than the shared status line below.
+  const [slugError, setSlugError] = useState<string | null>(null);
   // W-7: the go-live screen confirms only the address. The business name is
   // read back for reassurance (not editable - it was captured during the
   // interview), so the page holds the value but no input state for it.
@@ -157,16 +213,10 @@ export default function OnboardingPage() {
     setPausedBeat(fields.paused_beat);
     setOwnerOfferings(fields.offering_candidates ?? []);
     setBusinessName((current) => current || fields.draft.business_name || "");
-    // W-7/W-4 US-1: prefill the address as soon as there is a real suggestion
-    // (business name captured) or the confirm step is reached, on every path -
-    // the upload -> review -> save path flips can_confirm from its own handler
-    // and used to bypass this. Gating on a non-empty suggestion is what avoids
-    // locking the reserved-name fallback ("business" -> "business-page") from an
-    // early event before the name exists. `current || ...` never overwrites
-    // what the owner has typed.
-    if (fields.suggested_slug || fields.can_confirm) {
-      setPublicSlug((current) => current || fields.suggested_slug || "business");
-    }
+    // W-4 US-1/US-2: unconditional, every time - see the `suggestedSlug`
+    // declaration above for why this alone is enough for every confirm-
+    // opening path, and why it never overwrites an owner-entered address.
+    setSuggestedSlug(fields.suggested_slug ?? "");
   }
 
   useEffect(() => {
@@ -525,6 +575,16 @@ export default function OnboardingPage() {
 
   async function handleConfirm() {
     setError(null);
+    setSlugError(null);
+    // W-4 US-3: client-side shape/length check first, mirroring slug.py -
+    // catches an invalid address before any network call, with no `busy`
+    // flip at all (the button stays clickable for another try).
+    const shapeError = slugShapeError(publicSlug);
+    if (shapeError) {
+      setSlugError(shapeError);
+      toast.error(shapeError);
+      return;
+    }
     setBusy(true);
     try {
       await apiFetch("/api/onboarding/confirm", {
@@ -547,11 +607,23 @@ export default function OnboardingPage() {
       // changes. Releasing it re-armed a second click, and the second confirm
       // 409s "already confirmed" - painting an error over the live line.
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.detail
-          : "Something went wrong. Please try again.",
-      );
+      // W-4 US-3: a slug problem (invalid/reserved 422, taken-slug 409) goes
+      // on the field, with a toast for visibility; anything else (the
+      // network failure this catch also handles, since apiFetch throws a
+      // plain Error for that - not ApiError) keeps using the shared status
+      // line below the composer. The draft and the entered address are both
+      // untouched either way - only `error`/`slugError` and `busy` change.
+      if (err instanceof ApiError && isSlugConfirmFailure(err)) {
+        const message = confirmFailureDetail(err);
+        setSlugError(message);
+        toast.error(message);
+      } else {
+        setError(
+          err instanceof ApiError
+            ? err.detail
+            : "Something went wrong. Please try again.",
+        );
+      }
       setBusy(false);
     }
   }
@@ -628,8 +700,12 @@ export default function OnboardingPage() {
               <Input
                 label="Your business page"
                 value={publicSlug}
-                onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
+                onChange={(event) => {
+                  setSlugDraft(event.target.value.toLowerCase());
+                  setSlugError(null);
+                }}
                 help={`Shared as agencx.app/${publicSlug}`}
+                error={slugError ?? undefined}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
