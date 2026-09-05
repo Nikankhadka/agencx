@@ -725,7 +725,7 @@ Acceptance requires a browser network trace showing:
       per the acceptance list.
 - [x] `make check` green.
 
-Shipped. The browser proof landed as `frontend/e2e/onboarding-transport.spec.ts`
+Shipped `cadbbd7`. The browser proof landed as `frontend/e2e/onboarding-transport.spec.ts`
 rather than a hand-driven DevTools trace, on the founder's call. Three adjacent
 defects were fixed in the same pass: `ProcessingLine`'s nested `role="status"`,
 `ThinkingDots` rendering as a block-level box, and `sendText` leaving a failed
@@ -877,7 +877,7 @@ rather than building new ones.
       runtime cause recorded.
 - [x] `make check` green.
 
-Shipped. The address is now derived (`slugDraft ?? suggestedSlug`) rather than
+Shipped `d56588c`. The address is now derived (`slugDraft ?? suggestedSlug`) rather than
 pushed down six paths: `applyStateFields` sets the suggestion unconditionally
 on every state read, so US-1 holds by construction and `saveKnowledge` /
 `discardKnowledge` have nothing left to bypass. That also removed the need for
