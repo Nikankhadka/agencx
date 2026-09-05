@@ -28,11 +28,12 @@ from app.onboarding.agent import (
     prepare_turn,
     prepare_url_turn,
     progress,
+    resume_paused_beat,
     run_turn,
     selection_reply,
     stream_reply,
 )
-from app.onboarding.flow import PendingOffering, ProfileDraft
+from app.onboarding.flow import PendingOffering, ProfileDraft, merge_offerings
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
@@ -116,10 +117,16 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         "completed": record_data.get("completed", False),
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
-        "suggested_slug": suggested_slug(
-            str(record_data.get("draft", {}).get("business_name", ""))
-        ),
+        # W-7: null until a business name exists, matching response_from_record.
+        # suggested_slug("") is the reserved-name fallback "business-page", and
+        # emitting it on early turns let the client lock it before the real name
+        # was captured, so the go-live address showed "business-page" not the
+        # business's own slug.
+        "suggested_slug": suggested_slug(business_name)
+        if (business_name := str(record_data.get("draft", {}).get("business_name", "")))
+        else None,
         "offering_candidates": record_data.get("offering_candidates", []),
+        "paused_beat": record.paused_beat,
     }
 
 
@@ -165,8 +172,15 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "history": onboarding.history,
         "input": input_.model_dump() if input_ else None,
         "can_confirm": can_confirm,
-        "suggested_slug": suggested_slug(str(draft.get("business_name", ""))) or None,
+        # W-7: null until a business name exists. suggested_slug("") is the
+        # reserved-name fallback "business-page" (truthy), so `or None` never
+        # nulled it - the initial load then locked "business-page" into the
+        # client's address field before the real name was ever captured.
+        "suggested_slug": (
+            suggested_slug(name) if (name := str(draft.get("business_name", ""))) else None
+        ),
         "offering_candidates": onboarding.to_jsonb().get("offering_candidates", []),
+        "paused_beat": onboarding.paused_beat,
     }
 
 
@@ -177,20 +191,11 @@ def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
             document = PendingOffering.model_validate(item)
         except (TypeError, ValueError):
             continue
+        document = document.model_copy(update={"sources": ["document"]})
         key = normalize_name(document.name)
-        owner = merged.get(key)
-        if owner is None:
-            merged[key] = document.model_copy(update={"sources": ["document"]})
-            continue
-        merged[key] = owner.model_copy(
-            update={
-                "price_cents": owner.price_cents
-                if owner.price_cents is not None
-                else document.price_cents,
-                "description": owner.description or document.description,
-                "sources": list(dict.fromkeys([*owner.sources, "document"])),
-            }
-        )
+        existing = merged.get(key)
+        # W-7: the document's price and description win an overlap.
+        merged[key] = document if existing is None else merge_offerings(existing, document)
     record.offering_candidates = list(merged.values())
 
 
@@ -212,6 +217,11 @@ async def run_message(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
+        )
+    if onboarding.paused_beat:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="finish the paused field before sending another answer",
         )
     url = _find_url(text)
     if url is not None:
@@ -241,6 +251,11 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
         )
+    if onboarding.paused_beat:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="finish the paused field before selecting an answer",
+        )
     current = beats.next_beat(onboarding.draft, onboarding.skipped, onboarding.deferred)
     if current is None or current.key != beat_key:
         stage = current.key if current is not None else "confirm"
@@ -248,23 +263,33 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
             status_code=status.HTTP_409_CONFLICT,
             detail=f"stale selection - current beat is {stage}",
         )
-    # W-2: "Skip for now" is only offered on a skippable beat, and it records
-    # the beat rather than writing a sentinel into the profile - `services` and
-    # `hours` are read straight into the public storefront subtitle.
-    if beats.is_skip(beat_key, values):
-        onboarding.skipped.append(beat_key)
-        onboarding.ask_beat, onboarding.ask_count = "", 0
-        user_message = "Skip for now"
-    else:
-        try:
-            user_message = beats.apply_selection(onboarding.draft, beat_key, values)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(exc),
-            ) from exc
+    try:
+        user_message = beats.apply_selection(onboarding.draft, beat_key, values)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     reply = selection_reply(onboarding)
     onboarding.history.append({"role": "user", "content": user_message})
+    onboarding.history.append({"role": "assistant", "content": reply})
+    record_data = onboarding.to_jsonb()
+    await service.save_record(tenant_id=tenant_id, record=record_data)
+    return record_data
+
+
+async def run_resume(*, tenant_id: UUID) -> dict[str, Any]:
+    """Resume a required field paused after both interview passes."""
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    if onboarding.completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="onboarding already confirmed"
+        )
+    try:
+        reply = resume_paused_beat(onboarding)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     onboarding.history.append({"role": "assistant", "content": reply})
     record_data = onboarding.to_jsonb()
     await service.save_record(tenant_id=tenant_id, record=record_data)
@@ -321,6 +346,11 @@ async def run_message_stream(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="onboarding already confirmed",
+        )
+    if onboarding.paused_beat:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="finish the paused field before sending another answer",
         )
     url = _find_url(text)
     if url is not None:
@@ -450,8 +480,6 @@ async def confirm(
     *,
     tenant_id: UUID,
     slug: str | None = None,
-    business_name: str | None = None,
-    business_type: str | None = None,
     embedder: Embedder | None = None,
 ) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
@@ -461,6 +489,11 @@ async def confirm(
             status_code=status.HTTP_409_CONFLICT,
             detail="already confirmed",
         )
+    if onboarding.paused_beat:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="finish the paused field before going live",
+        )
     documents = await knowledge_service.list_records(tenant_id=tenant_id)
     if any(document["status"] == "draft" for document in documents):
         raise HTTPException(
@@ -468,12 +501,6 @@ async def confirm(
             detail="review or discard every knowledge draft before going live",
         )
     draft = onboarding.draft
-    # W-2: a correction typed on the go-live screen wins over what the
-    # interview captured - the terminal rule may have taken the owner's words
-    # verbatim, and neither field has an editor after go-live.
-    for field, corrected in (("business_name", business_name), ("business_type", business_type)):
-        if corrected and corrected.strip():
-            draft[field] = corrected.strip()
     gate = request_finalize(draft, onboarding.skipped)
     if not gate.ok:
         raise HTTPException(

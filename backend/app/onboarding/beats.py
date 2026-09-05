@@ -18,10 +18,16 @@ W-2 caps every beat at two asks. Which beat is required and which is skippable
 follows one rule - skippable means nothing downstream reads it, or the owner
 can still edit it after go-live - and ``next_beat`` runs the two passes that
 cap implies.
+
+W-7 adds the missing half: a beat now knows what a *plausible* answer looks
+like (``valid``) and what to say when it does not get one (``reject``). Both
+are deterministic and server-owned, so a junk answer is challenged in the
+beat's own words with no model call at all.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -35,13 +41,13 @@ WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 # the GST beat skip itself.
 NO_ABN = "none"
 
-# W-2: the value the "Skip for now" chip submits. It is never stored in the
-# draft - a skipped beat's field stays empty and the beat key is remembered
-# separately, because `profile_tagline` reads `services` and `hours` straight
-# into the public storefront subtitle and a sentinel there would show to
-# customers. (NO_ABN is the opposite case: "no ABN" is a real answer that is
+# W-7 removed the "Skip for now" chip. A beat that will not fill is closed out
+# by the ask cap instead, so there is no chip to explain and no skip vocabulary
+# to teach. A skipped beat's field still stays empty and its key is remembered
+# beside the draft, because `profile_tagline` reads `services` and `hours`
+# straight into the public storefront subtitle and a sentinel there would show
+# to customers. (NO_ABN is the opposite case: "no ABN" is a real answer that is
 # meant to display.)
-SKIP = "__skip__"
 
 
 class ChipSpec(BaseModel):
@@ -81,8 +87,17 @@ class Beat:
     than being asked a third time. A required beat has neither property, so it
     is deferred to a second pass instead of being dropped.
 
-    ``example`` is fed to the reply model on a beat's second ask, to be worked
-    into the acknowledgment. The question itself is always emitted verbatim.
+    ``example`` is the concrete answer worked into a retry, and ``reject`` is
+    what the beat says when it gets something that cannot be its answer. Both
+    are server-owned strings: W-7 answers a junk turn without a model call at
+    all, so there is nothing in that reply for a model to embellish.
+
+    ``valid`` is what makes a junk answer junk. ``complete`` only asks whether
+    the field is non-empty, which is satisfied by "34234234" as a name; this
+    asks whether the value is plausible *for this field*. It is deliberately
+    permissive - it rejects what cannot be an answer, never what merely looks
+    unusual, because a false rejection is worse than a wrong value the owner
+    can still correct.
     """
 
     key: str
@@ -97,6 +112,53 @@ class Beat:
     optional: bool = False
     default: str = ""
     example: str = ""
+    valid: Callable[[str], bool] | None = None
+    reject: str = ""
+
+
+# Deterministic per-beat plausibility checks (W-7). Nothing here calls a model,
+# and nothing here is clever: each one names the single property without which
+# the value cannot be an answer to its question.
+
+# Two or more letters in a row - enough to tell a word from a serial number.
+_WORDISH = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
+_DAYS = (
+    "mon",
+    "tue",
+    "wed",
+    "thu",
+    "fri",
+    "sat",
+    "sun",
+    "weekday",
+    "weekend",
+    "daily",
+    "every day",
+    "always",
+    "24",
+)
+
+
+def _wordish(value: str) -> bool:
+    """A name, a business name, a business type, a service list: needs a word.
+
+    Digits are allowed *inside* the answer ("Cafe 21", "3 Chairs Dental") - the
+    test is that a word is present at all, not that digits are absent.
+    """
+    return _WORDISH.search(value) is not None
+
+
+def _hours_like(value: str) -> bool:
+    """Opening hours: a time of day, a day of the week, or "always"."""
+    lowered = value.casefold()
+    return any(char.isdigit() for char in value) or any(day in lowered for day in _DAYS)
+
+
+def _contact_like(value: str) -> bool:
+    """A way to reach the business: an email address or a phone number."""
+    if "@" in value and "." in value.rsplit("@", 1)[-1]:
+        return True
+    return sum(char.isdigit() for char in value) >= 6
 
 
 def _complete(field: str) -> Callable[[dict[str, Any]], bool]:
@@ -116,19 +178,22 @@ def _gst_complete(draft: dict[str, Any]) -> bool:
     return bool(draft.get("gst"))
 
 
-SKIP_CHIP = ChipSpec(label="Skip for now", value=SKIP, dashed=True)
-
 BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="name",
         label="your name",
-        ask="What name would you like me to use?",
+        # W-7: "What name would you like me to use?" landed right after a
+        # sentence about setting the *business* up, and read as a question
+        # about the business name. The two name beats now say which is which.
+        ask="First - what should I call you? I'll ask about the business next.",
         kind="text",
         complete=_complete("name"),
         # Nothing downstream reads the owner's name, and it cannot be guessed,
         # so this is the one beat that skips to a genuine blank.
         optional=True,
-        chips=(SKIP_CHIP,),
+        valid=_wordish,
+        reject="That doesn't look like a name.",
+        example='just a first name is plenty - "Nikan"',
     ),
     Beat(
         key="business_name",
@@ -136,6 +201,8 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="What does the business go by?",
         kind="text",
         complete=_complete("business_name"),
+        valid=_wordish,
+        reject="That doesn't look like a business name.",
         example='even a short one works - "Bytefix" or "Sababa"',
     ),
     Beat(
@@ -144,6 +211,8 @@ BEAT_ORDER: tuple[Beat, ...] = (
         ask="In a few words, what kind of business is it?",
         kind="text",
         complete=_complete("business_type"),
+        valid=_wordish,
+        reject="I didn't catch what kind of business that is.",
         example='a few words is plenty - "phone repair shop" or "family dental practice"',
     ),
     Beat(
@@ -160,13 +229,18 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # businesses that self-onboard, so an unanswered team size takes it.
         optional=True,
         default="just me",
+        example='"just me" or "there are four of us"',
     ),
     Beat(
         key="hours",
         label="opening hours",
-        ask="What are your opening hours, and which days of the week are you open?",
+        # W-7: W-2's wording was two questions joined by "and", which is the
+        # thing the interview is not supposed to do. One question, both halves.
+        ask="What days and hours are you open?",
         kind="text",
         complete=_complete("hours"),
+        valid=_hours_like,
+        reject="I couldn't read that as opening hours.",
         example='"9 to 5, Monday to Friday" - or "online, always open"',
     ),
     Beat(
@@ -178,7 +252,9 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # Editable after go-live at Business > What you offer, and an uploaded
         # menu or price list can fill the catalog instead.
         optional=True,
-        chips=(SKIP_CHIP,),
+        valid=_wordish,
+        reject="I couldn't read that as something you offer.",
+        example='a short list is plenty - "haircuts, colour, beard trims"',
     ),
     Beat(
         key="contact",
@@ -191,6 +267,8 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # composer to the country-code pill rather than submitting the words.
         chips=(ChipSpec(label="Phone number", value="phone", dashed=True, widget="phone"),),
         suggest_owner_email=True,
+        valid=_contact_like,
+        reject="That doesn't look like an email address or a phone number.",
         example="an email or a phone number - whichever you'd rather they used",
     ),
     Beat(
@@ -209,6 +287,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # already one tap away, so an unanswered ABN takes the same value.
         optional=True,
         default=NO_ABN,
+        example='tap "No" if you do not have one yet',
     ),
     Beat(
         key="gst",
@@ -223,6 +302,7 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # Rarely reached: defaulting `abn` to NO_ABN satisfies this one too.
         optional=True,
         default="no",
+        example='"yes" or "not yet"',
     ),
 )
 
@@ -253,12 +333,6 @@ def next_beat(
     first_pass = [beat for beat in pending if beat.key not in deferred]
     # Nothing left in pass one means the deferred beats are all that remain.
     return first_pass[0] if first_pass else pending[0]
-
-
-def is_skip(key: str, values: list[str]) -> bool:
-    """Whether this selection is the "Skip for now" chip on a skippable beat."""
-    beat = BEATS.get(key)
-    return beat is not None and beat.optional and values == [SKIP]
 
 
 def input_spec(beat: Beat) -> InputSpec:

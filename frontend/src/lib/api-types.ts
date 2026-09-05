@@ -1360,6 +1360,11 @@ export interface components {
             /** Text */
             text?: string | null;
             selection?: components["schemas"]["SelectionPayload"] | null;
+            /**
+             * Resume
+             * @default false
+             */
+            resume: boolean;
         };
         /** OnboardingStateResponse */
         OnboardingStateResponse: {
@@ -1384,6 +1389,8 @@ export interface components {
             suggested_slug: string | null;
             /** Offering Candidates */
             offering_candidates: components["schemas"]["PendingOffering"][];
+            /** Paused Beat */
+            paused_beat: string | null;
         };
         /**
          * PendingOffering

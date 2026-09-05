@@ -113,14 +113,20 @@ function SectionEditor({
       {sections.length === 0 ? (
         <p className="text-prose text-text">I couldn&apos;t read anything usable from this one.</p>
       ) : null}
-      {sections.map((section, index) => (
-        <SectionField
-          key={`${section.heading}-${index}`}
-          heading={section.heading}
-          body={section.body}
-          onChange={(body) => setSections((previous) => previous.map((item, position) => position === index ? { ...item, body } : item))}
-        />
-      ))}
+      {/* W-7: the offering headings are shown as priced cards below, not as raw
+          text - the owner read the same menu three times otherwise. The sections
+          stay in state and still round-trip on save, so the text the assistant
+          answers from is unchanged; only their editors are hidden here. */}
+      {sections.map((section, index) =>
+        OFFERING_HEADINGS.has(section.heading) ? null : (
+          <SectionField
+            key={`${section.heading}-${index}`}
+            heading={section.heading}
+            body={section.body}
+            onChange={(body) => setSections((previous) => previous.map((item, position) => position === index ? { ...item, body } : item))}
+          />
+        ),
+      )}
 
       <fieldset className="rounded-card border border-hairline p-4">
         <legend className="px-1 text-row-label font-medium text-text">What you offer</legend>
@@ -141,15 +147,32 @@ function SectionEditor({
                   Remove
                 </button>
               </div>
-              <label className="block">
-                <span className="sr-only">Offering {index + 1} name</span>
-                <input
-                  value={offering.name}
-                  aria-label={`Offering ${index + 1} name`}
-                  onChange={(event) => updateOffering(index, { name: event.target.value })}
-                  className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
-                />
-              </label>
+              {/* W-7: name and price sit on one row - the offering and what it
+                  costs read together - with the description beneath, so an owner
+                  manages one compact card per item instead of three lists. */}
+              <div className="flex gap-2">
+                <label className="block grow">
+                  <span className="sr-only">Offering {index + 1} name</span>
+                  <input
+                    value={offering.name}
+                    aria-label={`Offering ${index + 1} name`}
+                    placeholder="Offering"
+                    onChange={(event) => updateOffering(index, { name: event.target.value })}
+                    className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
+                  />
+                </label>
+                <label className="block w-24 shrink-0">
+                  <span className="sr-only">Offering {index + 1} price</span>
+                  <input
+                    value={offering.priceText}
+                    aria-label={`Offering ${index + 1} price`}
+                    placeholder="Price"
+                    inputMode="decimal"
+                    onChange={(event) => updateOffering(index, { priceText: event.target.value, priceOptions: [] })}
+                    className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
+                  />
+                </label>
+              </div>
               <label className="mt-2 block">
                 <span className="sr-only">Offering {index + 1} description</span>
                 <input
@@ -157,17 +180,6 @@ function SectionEditor({
                   aria-label={`Offering ${index + 1} description`}
                   placeholder="Description (optional)"
                   onChange={(event) => updateOffering(index, { description: event.target.value })}
-                  className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
-                />
-              </label>
-              <label className="mt-2 block">
-                <span className="sr-only">Offering {index + 1} price</span>
-                <input
-                  value={offering.priceText}
-                  aria-label={`Offering ${index + 1} price`}
-                  placeholder="Price (optional)"
-                  inputMode="decimal"
-                  onChange={(event) => updateOffering(index, { priceText: event.target.value, priceOptions: [] })}
                   className="w-full rounded-field border-[length:var(--border-chip)] border-transparent bg-surface px-3 py-2 text-field text-text outline-none focus:border-accent-a35"
                 />
               </label>
@@ -234,6 +246,13 @@ function SectionField({ heading, body, onChange }: { heading: string; body: stri
     </label>
   );
 }
+
+// W-7: mirrors OFFERING_HEADINGS in
+// backend/app/features/business/offering_candidates.py - the two structured
+// headings whose lines become priced offering cards, so their raw text is not
+// also shown as an editable section.
+const OFFERING_HEADINGS = new Set(["What we offer", "Prices"]);
+
 
 function hasDuplicateNames(offerings: WorkingOffering[]): boolean {
   const names = offerings.map((item) => normalizeName(item.name)).filter(Boolean);

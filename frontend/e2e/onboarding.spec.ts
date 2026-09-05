@@ -9,7 +9,7 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 test("onboarding first message streams a reply", async ({ page, request }) => {
   const nameInput = {
     kind: "text",
-    placeholder: "What name would you like me to use?",
+    placeholder: "First - what should I call you? I'll ask about the business next.",
     chips: [],
     mask: null,
     cta_label: null,
@@ -28,6 +28,7 @@ test("onboarding first message streams a reply", async ({ page, request }) => {
         input: nameInput,
         can_confirm: false,
         suggested_slug: null,
+        paused_beat: null,
       }),
     }),
   );
@@ -47,6 +48,7 @@ test("onboarding first message streams a reply", async ({ page, request }) => {
           input: { ...nameInput, placeholder: "What does the business go by?" },
           can_confirm: false,
           suggested_slug: null,
+          paused_beat: null,
         })}`,
         'data: {"type":"done"}',
         "",
@@ -101,8 +103,7 @@ test("team selection and the next question stay on the same server beat", async 
   };
   const hoursInput = {
     kind: "text",
-    placeholder:
-      "What are your opening hours, and which days of the week are you open?",
+    placeholder: "What days and hours are you open?",
     chips: [],
     mask: null,
     cta_label: null,
@@ -131,6 +132,7 @@ test("team selection and the next question stay on the same server beat", async 
         input: headcountInput,
         can_confirm: false,
         suggested_slug: "test-repairs",
+        paused_beat: null,
       }),
     }),
   );
@@ -142,8 +144,8 @@ test("team selection and the next question stay on the same server beat", async 
       contentType: "text/event-stream",
       body: [
         'data: {"type":"progress","stage":"processing"}',
-        'data: {"type":"token","text":"What are your opening hours, and which days of the week are you open?"}',
-        'data: {"type":"reply","text":"What are your opening hours, and which days of the week are you open?"}',
+        'data: {"type":"token","text":"What days and hours are you open?"}',
+        'data: {"type":"reply","text":"What days and hours are you open?"}',
         `data: ${JSON.stringify({
           type: "state",
           stage: "headcount",
@@ -156,6 +158,7 @@ test("team selection and the next question stay on the same server beat", async 
           input: headcountInput,
           can_confirm: false,
           suggested_slug: "test-repairs",
+          paused_beat: null,
         })}`,
         'data: {"type":"done"}',
         "",
@@ -172,7 +175,7 @@ test("team selection and the next question stay on the same server beat", async 
       body: JSON.stringify({
         stage: "hours",
         prompt:
-          "Got it. What are your opening hours, and which days of the week are you open?",
+          "Got it. What days and hours are you open?",
         draft: {
           name: "Ronin",
           business_name: "Test Repairs",
@@ -189,12 +192,13 @@ test("team selection and the next question stay on the same server beat", async 
           {
             role: "assistant",
             content:
-              "Got it. What are your opening hours, and which days of the week are you open?",
+              "Got it. What days and hours are you open?",
           },
         ],
         input: hoursInput,
         can_confirm: false,
         suggested_slug: "test-repairs",
+        paused_beat: null,
       }),
     });
   });
@@ -204,9 +208,64 @@ test("team selection and the next question stay on the same server beat", async 
 
   await expect(
     page.getByText(
-      "Got it. What are your opening hours, and which days of the week are you open?",
+      "Got it. What days and hours are you open?",
       { exact: true },
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Got a team" })).toHaveCount(0);
+});
+
+test("a paused required field resumes with a fresh question", async ({ page, request }) => {
+  const businessTypeInput = {
+    kind: "text",
+    placeholder: "In a few words, what kind of business is it?",
+    chips: [],
+    mask: null,
+    cta_label: null,
+    prefix: null,
+    suggest_owner_email: false,
+  };
+  const paused = {
+    stage: "paused",
+    prompt: "I still need your business type before you can go live.",
+    draft: { name: "Ronin", business_name: "Test Repairs" },
+    completed: false,
+    history: [
+      { role: "assistant", content: "I still need your business type before you can go live." },
+    ],
+    input: null,
+    can_confirm: false,
+    suggested_slug: "test-repairs",
+    paused_beat: "business_type",
+  };
+  await page.route("**/api/onboarding/state", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify(paused) }),
+  );
+  await page.route("**/api/onboarding/message", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ resume: true });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...paused,
+        stage: "business_type",
+        input: businessTypeInput,
+        paused_beat: null,
+        history: [
+          ...paused.history,
+          { role: "assistant", content: "Let's try that again. In a few words, what kind of business is it?" },
+        ],
+      }),
+    });
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  await expect(page.getByTestId("onboarding-paused")).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByTestId("onboarding-thread")).toContainText(
+    "In a few words, what kind of business is it?",
+  );
+  await expect(page.getByTestId("onboarding-composer").getByRole("textbox")).toHaveAttribute(
+    "placeholder",
+    "In a few words, what kind of business is it?",
+  );
 });

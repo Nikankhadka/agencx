@@ -44,6 +44,8 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [ ] W-4: pre-fill the go-live slug on every path and show a real error when it fails.
 - [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together.
 - [ ] W-6: extract priced, described offerings from a whole-business document upload.
+- [x] W-7: make the interview read like a person - challenge junk input, drop the
+  skip chip, keep replies short, address-only go-live, priced offering cards.
 
 ## Known gaps and deliberate deferrals
 
@@ -154,12 +156,12 @@ a skippable beat takes a default or is dropped, a required one is deferred to a
 second pass that returns only once every other beat is done. Which beats are
 which follows one rule: skippable means nothing downstream reads it, or the
 owner can still edit it after go-live. On the final pass the owner's own words
-are taken verbatim so the interview always ends, and the go-live screen now
-reads `business_name` and `business_type` back as editable fields, because
-neither has an editor once the page is published. A skip deliberately writes no
-sentinel into the profile - `profile_tagline` renders `services` and `hours`
-straight into the public storefront subtitle, so a "skipped" string there would
-have shown to customers.
+are never stored as a fallback: an unresolved required field pauses the
+interview, survives reload, and offers a retry with a fresh two-ask allowance.
+Go-live stays blocked until it has a valid value. A skipped beat deliberately
+writes no sentinel into the profile - `profile_tagline` renders `services` and
+`hours` straight into the public storefront subtitle, so a "skipped" string
+there would have shown to customers.
 
 Still open from this ticket's edges: `hours` and `contact` are required only
 because no post-go-live editor exists for them. A profile editor at

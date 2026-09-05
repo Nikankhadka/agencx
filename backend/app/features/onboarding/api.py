@@ -50,6 +50,7 @@ class OnboardingStateResponse(BaseModel):
     can_confirm: bool
     suggested_slug: str | None
     offering_candidates: list[PendingOffering]
+    paused_beat: str | None
 
 
 class SelectionPayload(BaseModel):
@@ -60,11 +61,12 @@ class SelectionPayload(BaseModel):
 class OnboardingMessageRequest(BaseModel):
     text: str | None = None
     selection: SelectionPayload | None = None
+    resume: bool = False
 
     @model_validator(mode="after")
     def _exactly_one_of_text_or_selection(self) -> OnboardingMessageRequest:
-        if (self.text is None) == (self.selection is None):
-            raise ValueError("provide exactly one of 'text' or 'selection'")
+        if sum((self.text is not None, self.selection is not None, self.resume)) != 1:
+            raise ValueError("provide exactly one of 'text', 'selection', or 'resume'")
         return self
 
 
@@ -74,12 +76,10 @@ class OnboardingConfirmResponse(BaseModel):
 
 
 class OnboardingConfirmRequest(BaseModel):
+    # W-7: the go-live screen confirms the public address only. Name and type
+    # were captured (and validated) during the interview; the founder asked not
+    # to re-confirm details already given, so this carries just the slug.
     slug: str | None = Field(default=None, min_length=3, max_length=40)
-    # W-2: the go-live screen reads the business name and type back, because
-    # the interview's terminal rule can take an owner's words verbatim after
-    # two unanswered asks. This is the last point either can be corrected.
-    business_name: str | None = Field(default=None, min_length=1, max_length=200)
-    business_type: str | None = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("slug")
     @classmethod
@@ -136,6 +136,9 @@ async def post_message(
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingStateResponse:
+    if body.resume:
+        record_data = await controller.run_resume(tenant_id=admin.tenant_id)
+        return OnboardingStateResponse(**controller.response_from_record(record_data))
     if body.selection is not None:
         record_data = await controller.run_selection(
             tenant_id=admin.tenant_id,
@@ -225,8 +228,6 @@ async def confirm(
     result = await controller.confirm(
         tenant_id=admin.tenant_id,
         slug=body.slug if body else None,
-        business_name=body.business_name if body else None,
-        business_type=body.business_type if body else None,
         embedder=embedder,
     )
     return OnboardingConfirmResponse(**result)

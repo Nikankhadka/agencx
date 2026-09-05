@@ -44,6 +44,13 @@ class DraftUpdate(BaseModel):
     profile: ProfileDraft | None = None
     meta_reply: str | None = None
     offering_names: list[str] | None = None
+    # W-7: the extractor's verdict on whether this reply is a genuine, plausible
+    # answer to the field that was asked this turn. Paired with the server's own
+    # deterministic `Beat.valid` check - either may veto - so a word-shaped
+    # nonsense answer the regex waves through ("asdfgh" for a business type) is
+    # still caught, and a value the model hallucinated into a field the regex
+    # rejects still bounces. ``None`` when no field was asked (the opening turn).
+    answered_asked: bool | None = None
 
 
 class PendingOffering(BaseModel):
@@ -66,3 +73,27 @@ class PendingOffering(BaseModel):
     @classmethod
     def _require_source(cls, value: list[str]) -> list[str]:
         return list(dict.fromkeys(value)) or ["owner"]
+
+
+def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> PendingOffering:
+    """Combine two candidates for the same offering, document values winning.
+
+    W-7: when an uploaded document and an owner-typed name describe the same
+    thing, the document's price and description are authoritative - the founder
+    asked that the PDF reference always win an overlap. Sources are unioned so
+    the review sheet can still show it came from both, and the owner can
+    override either field there before publish. The name follows the document
+    when one is present, so its spelling (and any punctuation) is preserved.
+    """
+    pair = (existing, incoming)
+    document = next((item for item in pair if "document" in item.sources), None)
+    preferred: tuple[PendingOffering, ...] = ((document,) if document else ()) + pair
+    price_cents = next(
+        (item.price_cents for item in preferred if item.price_cents is not None), None
+    )
+    description = next((item.description for item in preferred if item.description), "")
+    sources = list(dict.fromkeys([*existing.sources, *incoming.sources]))
+    name = document.name if document else existing.name
+    return PendingOffering(
+        name=name, description=description, price_cents=price_cents, sources=sources
+    )

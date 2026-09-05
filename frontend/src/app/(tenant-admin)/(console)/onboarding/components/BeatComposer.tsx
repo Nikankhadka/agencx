@@ -101,7 +101,10 @@ export function BeatComposer({
           chip again drops back to the pill, and the other chips still answer.
           The prototype needs an edit pencil on the sent bubble for this; here
           the chips have not gone anywhere, so they can just be the way back. */}
-      {chips.length > 0 ? (
+      {/* W-7: the chip row is gone for the whole in-flight turn - after a chip
+          tap and after a typed answer alike - so a tapped chip disappears
+          instead of lingering disabled, and the next beat's chips replace it. */}
+      {chips.length > 0 && !busy ? (
         <div className="flex flex-wrap gap-2">
           {chips.map((chip) => (
             <Chip

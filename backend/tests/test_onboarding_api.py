@@ -21,11 +21,13 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.onboarding import service as onboarding_service
 from app.features.onboarding.controller import _find_url, response_from_record
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
+from app.onboarding.agent import OnboardingRecord
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -189,8 +191,15 @@ async def _send(
     *,
     text: str | None = None,
     selection: dict[str, object] | None = None,
+    resume: bool = False,
 ) -> dict[str, Any]:
-    payload: dict[str, object] = {"text": text} if text is not None else {"selection": selection}
+    payload: dict[str, object] = (
+        {"text": text}
+        if text is not None
+        else {"selection": selection}
+        if selection is not None
+        else {"resume": resume}
+    )
     response = await client.post("/api/onboarding/message", json=payload, headers=headers)
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()
@@ -229,6 +238,52 @@ async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     assert body["history"] == []
     assert body["can_confirm"] is False
     assert body["input"]["kind"] == "text"
+
+
+async def test_paused_required_field_blocks_publish_and_resumes_in_place(
+    client: httpx.AsyncClient,
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    draft = {
+        "name": "Sam",
+        "business_name": "Bytefix Repairs",
+        "headcount": "just me",
+        "hours": "Mon-Fri 9-6",
+        "services": "screen repairs",
+        "contact": "555-0100",
+        "abn": "none",
+    }
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft=draft,
+            deferred=["business_type"],
+            paused_beat="business_type",
+        ).to_jsonb(),
+    )
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    assert state.status_code == 200
+    assert state.json()["stage"] == "paused"
+    assert state.json()["paused_beat"] == "business_type"
+    assert state.json()["can_confirm"] is False
+
+    blocked = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
+    assert blocked.status_code == 409
+    assert "paused" in blocked.json()["detail"]
+
+    resumed = await _send(client, headers, resume=True)
+    assert resumed["stage"] == "business_type"
+    assert resumed["paused_beat"] is None
+    assert resumed["history"][-1]["content"].endswith(
+        "In a few words, what kind of business is it?"
+    )
+
+    duplicate = await client.post("/api/onboarding/message", json={"resume": True}, headers=headers)
+    assert duplicate.status_code == 409
 
 
 async def test_every_beat_still_accepts_typed_text(client: httpx.AsyncClient) -> None:
@@ -270,9 +325,9 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     await _send(client, headers, text=_FULL_WALK[3][1])
     body = await _send(client, headers, text=_FULL_WALK[4][1])
     assert body["stage"] == "services"
-    # W-2: a skippable beat carries its own way out, and the catalog is
-    # editable later at Business > What you offer.
-    assert labels(body) == ["Skip for now"]
+    # W-7: the skip chip is gone; the beat resolves on its own after two asks,
+    # and the catalog is editable later at Business > What you offer.
+    assert labels(body) == []
 
     body = await _send(client, headers, text=_FULL_WALK[5][1])
     assert body["stage"] == "contact"
@@ -408,9 +463,7 @@ async def test_selection_advances_the_server_beat_without_calling_the_model(
         {"role": "user", "content": "Got a team"},
         {
             "role": "assistant",
-            "content": (
-                "Got it. What are your opening hours, and which days of the week are you open?"
-            ),
+            "content": "Got it. What days and hours are you open?",
         },
     ]
 
@@ -647,36 +700,6 @@ async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) ->
         "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 409
-
-
-async def test_confirm_accepts_a_corrected_business_name_and_type(
-    client: httpx.AsyncClient,
-) -> None:
-    """W-2: the go-live screen is the last chance to fix a verbatim-taken value.
-
-    The interview's terminal rule stores whatever the owner typed after two
-    unanswered asks, and neither field has an editor once the page is live, so
-    the confirm step reads both back and a correction wins over the draft.
-    """
-    token, tenant_id = await _signup_tenant_admin(client)
-    headers = {"Authorization": f"Bearer {token}"}
-    await _walk_to_confirm(client, token)
-
-    response = await client.post(
-        "/api/onboarding/confirm",
-        json={
-            "slug": _page_slug(tenant_id),
-            "business_name": "Bytefix Repairs",
-            "business_type": "phone repair shop",
-        },
-        headers=headers,
-    )
-    assert response.status_code == 200
-
-    state = await client.get("/api/onboarding/state", headers=headers)
-    draft = state.json()["draft"]
-    assert draft["business_name"] == "Bytefix Repairs"
-    assert draft["business_type"] == "phone repair shop"
 
 
 async def test_confirm_keeps_the_draft_when_no_correction_is_sent(

@@ -6,10 +6,17 @@ from a server-computed directive. Structured extraction (rather than tool
 calls) keeps capture robust on free/edge models that answer in prose; the
 server's completeness gate stays authoritative.
 
-The model writes only an acknowledgment; the server appends the beat's ``ask``
-verbatim (W-2), so the question the owner sees is always the one the beat
-cursor chose. Every turn is persisted - skipping the write let a later turn
-reload an older row and rewind the beat pointer.
+The model writes one warm conversational sentence; the server appends the
+beat's ``ask`` verbatim (W-2), so the question the owner sees is always the one
+the beat cursor chose, and ``_ack`` strips any question the model tacked on.
+Every turn is persisted - skipping the write let a later turn reload an older
+row and rewind the beat pointer.
+
+W-7: the answer to the beat that was asked is judged usable by two judges that
+can each veto - the extractor's ``answered_asked`` verdict and the beat's own
+deterministic ``valid`` - and a junk answer is dropped back out and re-asked
+rather than saved. A beat still unanswered after two asks hands off out loud
+("I'll come back to this") instead of the deferral being silent.
 
 Guardrails: scan_input, price echo check, bounded history. Off-topic/meta
 questions are answered in one line then gently redirected - no escalating
@@ -34,7 +41,7 @@ from app.features.business.offering_candidates import normalize_name
 from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
 from app.onboarding import beats
-from app.onboarding.flow import DraftUpdate, PendingOffering
+from app.onboarding.flow import DraftUpdate, PendingOffering, merge_offerings
 from app.onboarding.tools import save_profile
 
 logger = logging.getLogger("app.onboarding.agent")
@@ -49,40 +56,48 @@ def _ms(started: float) -> float:
 
 @dataclass
 class Directive:
-    """What the reply model is asked to write - an acknowledgment, never a question.
+    """What the reply model is asked to write - the conversational line only.
 
-    W-2: the visible question is the beat's own ``ask``, appended verbatim by
-    the server after whatever this produces. Before W-2 the directive said
-    ``"Ask for: {ask}"`` and let the model phrase the question itself, which is
-    how a beat that was already filled kept getting asked again.
+    W-2 took the question away from the model and appends the beat's own ``ask``
+    verbatim, which is the guarantee that a filled slot can never be re-asked.
+    W-7 keeps that guarantee but gives the model back the *conversational* work:
+    it writes one warm sentence - an acknowledgment, a "that wasn't quite right,
+    let's try again", or a "no problem, later" - and the server still owns which
+    question follows. ``_ack`` strips any question the model tacks on anyway, so
+    the owner never sees two.
+
+    Exactly one of ``reask`` / ``handoff`` / ``meta_answer`` is set on a given
+    turn; ``acknowledged`` may accompany any of them or stand alone.
     """
 
     acknowledged: list[str] = field(default_factory=list)
     meta_answer: str = ""
-    nudge: str = ""
+    reask: str = ""
+    handoff: str = ""
 
     def as_prompt(self) -> str:
         parts: list[str] = []
+        if self.handoff:
+            parts.append(self.handoff)
         if self.acknowledged:
             parts.append(f"Just captured: {', '.join(self.acknowledged)}.")
         if self.meta_answer:
             parts.append(f"Briefly answer: {self.meta_answer}")
-        if self.nudge:
-            parts.append(self.nudge)
+        if self.reask:
+            parts.append(self.reask)
         parts.append(
-            "Write only a short, warm acknowledgment of what the owner just said. "
+            "Write ONE short, warm sentence for this and nothing more. "
             "Do not ask a question - the next question is added after your words."
         )
         return " ".join(parts)
 
 
 _COPILOT = (
-    "You are the owner's Agencx setup assistant. Help a small-business owner describe "
-    "their name, business name, business type, team size, opening hours, what "
-    "they sell, how customers reach them, and their ABN and GST registration. "
-    "Warmly acknowledge what the owner tells you, in wording close to their own. "
-    "You never choose or write the question - the server appends it to your reply. "
-    "Answer meta questions in one line."
+    "You are the owner's Agencx setup assistant, helping a small-business owner "
+    "set up their assistant. Reply in ONE short, warm sentence, in wording close "
+    "to the owner's own. You never choose or write the question - the server "
+    "appends it after your sentence - so never list what is still missing and "
+    "never ask anything yourself."
 )
 
 # C-3: a figure the extractor rounds into the profile becomes a figure the
@@ -106,7 +121,12 @@ _EXTRACT_PROMPT = (
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false. Leave the profile null "
-    "when nothing new was stated. The server chooses the next question."
+    "when nothing new was stated. The server chooses the next question. "
+    "When the conversation shows a question was asked this turn, set "
+    "answered_asked to whether the owner's message is a genuine, plausible "
+    "answer to that exact question: false for gibberish, a refusal, or a value "
+    "that could not really be that field (a random number where a name belongs, "
+    '"asdfgh" as a business type). Set it null when no question was asked.'
 )
 
 
@@ -130,6 +150,9 @@ class OnboardingRecord:
     deferred: list[str] = field(default_factory=list)
     ask_beat: str = ""
     ask_count: int = 0
+    # W-7: a required field that remains unusable after both passes pauses the
+    # interview. It stays unset and the owner explicitly resumes it later.
+    paused_beat: str | None = None
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -157,6 +180,7 @@ class OnboardingRecord:
                 deferred=list(raw.get("deferred", [])),
                 ask_beat=raw.get("ask_beat", ""),
                 ask_count=raw.get("ask_count", 0),
+                paused_beat=raw.get("paused_beat") or None,
             )
         return cls(
             version=3,
@@ -180,6 +204,7 @@ class OnboardingRecord:
             "deferred": self.deferred,
             "ask_beat": self.ask_beat,
             "ask_count": self.ask_count,
+            "paused_beat": self.paused_beat,
         }
 
 
@@ -209,19 +234,15 @@ def _merge_owner_offerings(record: OnboardingRecord, names: list[str]) -> None:
         if name and key not in seen:
             seen.add(key)
             owner.append(PendingOffering(name=name, sources=["owner"]))
-    combined = owner + documents
     merged: dict[str, PendingOffering] = {}
-    for item in combined:
+    for item in owner + documents:
         key = normalize_name(item.name)
         existing = merged.get(key)
-        if existing is None:
-            merged[key] = item.model_copy(deep=True)
-            continue
-        sources = list(dict.fromkeys([*existing.sources, *item.sources]))
-        if "owner" in item.sources:
-            merged[key] = item.model_copy(update={"sources": sources})
-        else:
-            merged[key] = existing.model_copy(update={"sources": sources})
+        # W-7: an owner-typed name and a document candidate for the same thing
+        # combine into one row, with the document's price and description kept.
+        merged[key] = (
+            item.model_copy(deep=True) if existing is None else merge_offerings(existing, item)
+        )
     record.offering_candidates = list(merged.values())
 
 
@@ -283,7 +304,13 @@ def _completion_reply(record: OnboardingRecord) -> str:
 def selection_reply(record: OnboardingRecord) -> str:
     """A deterministic acknowledgement followed by the authoritative next ask."""
     nxt = _advance(record)
-    return f"Got it. {nxt.ask}" if nxt is not None else _completion_reply(record)
+    if nxt is None:
+        record.ask_beat, record.ask_count = "", 0
+        return _completion_reply(record)
+    # The server emitted this question, so its cursor must agree before the
+    # owner's next typed answer is extracted and validated.
+    record.ask_beat, record.ask_count = nxt.key, 1
+    return f"Got it. {nxt.ask}"
 
 
 def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, bool]:
@@ -293,6 +320,8 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     so the SSE state and the REST state never disagree. A completed profile
     passes through the optional ``knowledge`` stage before ``confirm``.
     """
+    if record.paused_beat:
+        return "paused", None, False
     nxt = beats.next_beat(record.draft, record.skipped, record.deferred)
     if nxt is not None:
         return nxt.key, beats.input_spec(nxt), False
@@ -311,44 +340,109 @@ def _advance(record: OnboardingRecord) -> beats.Beat | None:
     return beats.next_beat(record.draft, record.skipped, record.deferred)
 
 
-def _resolve(record: OnboardingRecord, beat: beats.Beat, admin_message: str) -> None:
-    """Close a beat the owner has not answered in two asks.
+def _resolve(record: OnboardingRecord, beat: beats.Beat, admin_message: str) -> str:
+    """Close a beat the owner has not answered in two asks, returning the line
+    the assistant should say as it moves on (empty when there is nothing to say).
 
     A skippable beat takes its default or is dropped. A required beat is
-    deferred on pass one; on pass two there is nowhere left to defer it to, so
-    the owner's own words are taken verbatim - these four fields have no
-    validation, so whatever they typed *is* the answer, and the confirm screen
-    reads the name and type back for correction before anything is published.
+    deferred on pass one. On pass two it pauses the interview with no fallback
+    value, so an unusable answer cannot reach the public profile.
+
+    W-7: the hand-off used to be silent, which read as the assistant losing its
+    place when a deferred beat resurfaced later. It now says so.
     """
+    record.ask_beat = ""
+    record.ask_count = 0
     if beat.optional:
         if beat.default:
             record.draft[beat.key] = beat.default
         else:
             record.skipped.append(beat.key)
-    elif beat.key not in record.deferred:
+        return (
+            f"Tell them warmly, in one short line, that {beat.label} can wait "
+            "and you'll sort it out later."
+        )
+    if beat.key not in record.deferred:
         record.deferred.append(beat.key)
-    elif admin_message.strip():
-        record.draft[beat.key] = admin_message.strip()
-    record.ask_beat = ""
-    record.ask_count = 0
+        return (
+            "Tell them warmly, in one short line, that you'll come back "
+            f"to their {beat.label} in a moment."
+        )
+    record.paused_beat = beat.key
+    return f"I still need your {beat.label} before you can go live."
 
 
-def _nudge(beat: beats.Beat, *, final_pass: bool) -> str:
-    """The extra instruction on a beat's second ask - acknowledgment only."""
-    if beat.optional:
-        return (
-            "The owner has not answered this yet. Say warmly that it can wait, and "
-            'mention they can tap "Skip for now".'
-        )
-    if final_pass:
-        return (
-            "The owner still has not answered this. Say plainly and kindly that you "
-            f"need it to publish their page. Work in this example: {beat.example}."
-        )
-    return (
-        "The owner has not answered this yet. Acknowledge that warmly and work in "
-        f"this example: {beat.example}."
-    )
+def resume_paused_beat(record: OnboardingRecord) -> str:
+    """Re-open the paused required beat with a fresh two-ask allowance."""
+    key = record.paused_beat
+    beat = beats.BEATS.get(key or "")
+    if beat is None or beat.optional or beat.complete(record.draft):
+        raise ValueError("there is no required field waiting to be retried")
+    record.paused_beat = None
+    record.ask_beat, record.ask_count = beat.key, 1
+    return f"Let's try that again. {beat.ask}"
+
+
+# A sentence ends at . ! ? followed by whitespace or end of string.
+_SENTENCE = re.compile(r"[^.!?]*[.!?]+|\S[^.!?]*$")
+
+
+def _ack(text: str) -> str:
+    """Keep the model's acknowledgment, drop any question it tacked on.
+
+    The server appends the beat's own ``ask`` after this, so a model sentence
+    ending in ``?`` would show the owner two questions. W-7 keeps the guarantee
+    W-2 introduced - the question is always server-owned - by stripping the
+    model's question here rather than trusting it not to write one.
+    """
+    stripped = text.strip()
+    kept = [m.group(0).strip() for m in _SENTENCE.finditer(stripped)]
+    kept = [sentence for sentence in kept if sentence and not sentence.rstrip().endswith("?")]
+    return " ".join(kept).strip()
+
+
+# One leading sentence: text up to and including its first run of terminators.
+_LEAD_SENTENCE = re.compile(r"\s*[^.!?]*[.!?]+\s*")
+
+
+def _flush_sentences(pending: str, *, final: bool) -> tuple[list[str], str]:
+    """Pull whole sentences off the front of ``pending`` for live streaming.
+
+    Returns the sentences ready to show (questions dropped - the server owns the
+    question) and whatever tail is left unterminated. With ``final`` the tail is
+    itself resolved: shown if it is a statement, dropped if it is a question.
+    This is what lets W-7 stream the reply live and still guarantee the owner
+    never sees the model's question next to the server's.
+    """
+    out: list[str] = []
+    while True:
+        match = _LEAD_SENTENCE.match(pending)
+        if match is None:
+            break
+        sentence = match.group(0)
+        pending = pending[match.end() :]
+        if not sentence.rstrip().endswith("?"):
+            out.append(sentence)
+    if final and pending.strip():
+        if not pending.rstrip().endswith("?"):
+            out.append(pending)
+        pending = ""
+    return out, pending
+
+
+def _usable(beat: beats.Beat, value: str, *, answered_asked: bool | None) -> bool:
+    """Whether the owner's reply is a genuine answer to ``beat`` (W-7).
+
+    Both judges must agree: the extractor's ``answered_asked`` verdict catches
+    word-shaped nonsense a regex waves through, and the beat's own ``valid``
+    catches a value the model may have written into a field it does not fit.
+    Either one saying no is a veto.
+    """
+    if answered_asked is False:
+        return False
+    if beat.valid is not None and not beat.valid(value):
+        return False
+    return True
 
 
 def _extraction_input(
@@ -469,7 +563,13 @@ async def prepare_turn(
         )
     scan_input(admin_message)
 
-    asked = beats.BEATS.get(record.ask_beat)
+    # The opening question is rendered from the first open beat before any
+    # cursor is persisted. Treat it as asked too, so its first answer receives
+    # the same validation as every later one.
+    asked = beats.BEATS.get(record.ask_beat) or _advance(record)
+    opening_ask = (
+        not record.ask_beat and not record.history and not record.draft and asked is not None
+    )
     extract_started = time.perf_counter()
     update = await provider.extract(
         system_prompt=_EXTRACT_PROMPT,
@@ -498,35 +598,85 @@ async def prepare_turn(
         if not record.draft.get("services") and "services" not in record.skipped:
             record.draft["services"] = ", ".join(item.name for item in record.offering_candidates)
 
-    directive = Directive(acknowledged=acknowledged)
-    if update.off_topic:
-        record.off_topic_count += 1
-        directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
+    # W-7: judge the answer to the beat that was actually asked. A value that is
+    # not usable for that field is dropped back out so the beat stays open, and
+    # the model is told to re-ask it - rather than the interview moving on with
+    # "34234234" saved as a name.
+    rejected: beats.Beat | None = None
+    if asked is not None:
+        value = str(record.draft.get(asked.key, "")).strip()
+        if value and not _usable(asked, value, answered_asked=update.answered_asked):
+            record.draft.pop(asked.key, None)
+            if asked.label in acknowledged:
+                acknowledged.remove(asked.label)
+            rejected = asked
+        elif (
+            not value
+            and update.off_topic
+            and asked.valid is not None
+            and not asked.valid(admin_message)
+        ):
+            # The model called it off-topic, but a message that cannot be this
+            # beat's answer and did not fill anything is a failed answer, not
+            # chit-chat ("34234234" for a name). Challenge it rather than
+            # answering it as a stray question.
+            rejected = asked
+    # A rejection is a failed answer: it counts toward the ask cap and takes the
+    # challenge path, not the off-topic meta path. A genuine off-topic turn (a
+    # real question) still burns no ask.
+    off_topic = update.off_topic and rejected is None
+    on_topic = not off_topic
 
     nxt = _advance(record)
-    # The counter tracks how many times this beat has been *asked*. An
-    # off-topic turn is noise, not a failed answer, so it burns neither ask.
-    on_topic = not update.off_topic
+    # The counter tracks how many times this beat has been *asked*. An off-topic
+    # turn is noise, not a failed answer, so it burns neither ask; a rejected
+    # answer does count, so two junk replies in a row reach the hand-off.
+    handoff = ""
     if nxt is not None and on_topic and nxt.key == record.ask_beat and record.ask_count >= 2:
-        # Rather than ask a third time, close the beat out and move on.
-        _resolve(record, nxt, admin_message)
+        # Asked twice already - rather than ask a third time, close it out and
+        # move on, saying so instead of the beat silently reappearing later.
+        handoff = _resolve(record, nxt, admin_message)
         nxt = _advance(record)
 
-    if nxt is None:
+    if record.paused_beat:
+        record.ask_beat, record.ask_count = "", 0
+    elif nxt is None:
         record.ask_beat, record.ask_count = "", 0
     elif nxt.key != record.ask_beat:
-        record.ask_beat, record.ask_count = nxt.key, 1
+        record.ask_beat = nxt.key
+        # The opening question was already visible before the first request.
+        # A failed opening answer therefore sends the second ask, not the first.
+        record.ask_count = (
+            2 if opening_ask and on_topic and asked is not None and nxt.key == asked.key else 1
+        )
     elif on_topic:
         record.ask_count += 1
 
-    if nxt is not None and record.ask_count >= 2:
-        directive.nudge = _nudge(nxt, final_pass=nxt.key in record.deferred)
+    directive = Directive(acknowledged=acknowledged)
+    if handoff:
+        directive.handoff = handoff
+    elif off_topic:
+        record.off_topic_count += 1
+        directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
+    elif rejected is not None and nxt is not None and nxt.key == rejected.key:
+        directive.reask = (
+            f"Their reply was not a usable {rejected.label}. In one short line say so "
+            f"kindly, e.g. {rejected.example}."
+        )
+    elif nxt is not None and nxt.key == record.ask_beat and record.ask_count >= 2:
+        # Same beat, second ask, nothing captured - nudge with a concrete example.
+        directive.reask = (
+            f"They have not answered this yet. In one short line encourage them, "
+            f"e.g. {nxt.example}."
+        )
 
     state_parts = [
         f"captured={', '.join(sorted(record.draft)) or 'none'}",
         f"ask_for={nxt.key if nxt else 'all captured'}",
         f"ask_count={record.ask_count}",
     ]
+    if rejected is not None:
+        state_parts.append(f"rejected={rejected.key}")
     if record.skipped:
         state_parts.append(f"skipped={', '.join(record.skipped)}")
     if record.deferred:
@@ -534,6 +684,19 @@ async def prepare_turn(
     if directive.meta_answer:
         state_parts.append(f"meta={directive.meta_answer}")
     transcript.info("[onboarding] state: " + "; ".join(state_parts))
+
+    # Every turn is persisted. Skipping the write when a turn collected nothing
+    # used to let the next turn reload an older row and rewind the beat pointer
+    # - the emitted state and the stored record have to agree (W-2).
+    record.history.append({"role": "user", "content": admin_message})
+
+    if record.paused_beat:
+        return TurnPlan(
+            record=record,
+            summary=handoff,
+            reply_msgs=None,
+            off_topic=off_topic,
+        )
 
     reply_msgs: list[ChatMessage] = [
         {"role": "system", "content": _COPILOT},
@@ -549,24 +712,19 @@ async def prepare_turn(
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
     reply_msgs.append({"role": "user", "content": admin_message})
 
-    # Every turn is persisted. Skipping the write when a turn collected nothing
-    # used to let the next turn reload an older row and rewind the beat pointer
-    # - the emitted state and the stored record have to agree (W-2).
-    record.history.append({"role": "user", "content": admin_message})
-
     if nxt is None:
         return TurnPlan(
             record=record,
             summary=_completion_reply(record),
             reply_msgs=None,
-            off_topic=update.off_topic,
+            off_topic=off_topic,
         )
     return TurnPlan(
         record=record,
         summary=None,
         reply_msgs=reply_msgs,
         question=nxt.ask,
-        off_topic=update.off_topic,
+        off_topic=off_topic,
     )
 
 
@@ -587,10 +745,23 @@ async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterato
 
     assert plan.reply_msgs is not None
     stream_started = time.perf_counter()
+    # W-7 streams the model's sentence live, the same way W-2 did - the smooth,
+    # progressive reveal is what a returning founder remembers, and it adds no
+    # latency over the version they liked. The server appends the beat's own
+    # question as a final token; a one-sentence ack cannot be both streamed live
+    # and have a trailing question stripped (its only sentence is the last one),
+    # so the guarantee here is the tight _COPILOT/directive telling the model
+    # never to ask, plus the question always being server-owned.
     full = ""
+    pending = ""
+    shown = ""
     async for delta in provider.chat_stream(plan.reply_msgs):
         full += delta
-        yield ("token", delta)
+        pending += delta
+        sentences, pending = _flush_sentences(pending, final=False)
+        for sentence in sentences:
+            shown += sentence
+            yield ("token", sentence)
     logger.info(
         "onboarding step",
         extra={"step": "reply_compose", "duration_ms": _ms(stream_started), "chars": len(full)},
@@ -601,9 +772,15 @@ async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterato
         plan.reply_msgs.append({"role": "user", "content": "Redraft - drop invented figures."})
         yield ("redraft", "price_echo")
         full = ""
+        pending = ""
+        shown = ""
         async for delta in provider.chat_stream(plan.reply_msgs):
             full += delta
-            yield ("token", delta)
+            pending += delta
+            sentences, pending = _flush_sentences(pending, final=False)
+            for sentence in sentences:
+                shown += sentence
+                yield ("token", sentence)
         logger.info(
             "onboarding step",
             extra={
@@ -612,11 +789,17 @@ async def stream_reply(*, plan: TurnPlan, provider: LLMProvider) -> AsyncIterato
                 "chars": len(full),
             },
         )
+    # Resolve the held tail: a trailing statement is shown, a trailing question
+    # dropped - the server owns the question and appends it next.
+    tail_sentences, _ = _flush_sentences(pending, final=True)
+    for sentence in tail_sentences:
+        shown += sentence
+        yield ("token", sentence)
     if plan.question:
-        tail = f" {plan.question}" if full.strip() else plan.question
-        full += tail
-        yield ("token", tail)
-    transcript.info(f"[onboarding] assistant: {full}")
+        lead = f" {plan.question}" if shown.strip() else plan.question
+        shown += lead
+        yield ("token", lead)
+    transcript.info(f"[onboarding] assistant: {shown}")
 
 
 async def run_turn(
@@ -658,8 +841,9 @@ async def run_turn(
                     "chars": len(reply),
                 },
             )
+        reply = _ack(reply)
         if plan.question:
-            reply = f"{reply.strip()} {plan.question}".strip()
+            reply = f"{reply} {plan.question}".strip()
 
     plan.record.history.append({"role": "assistant", "content": reply})
     transcript.info(f"[onboarding] assistant: {reply}")

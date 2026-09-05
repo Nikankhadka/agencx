@@ -48,6 +48,7 @@ interface StateFields {
   input: InputSpec | null;
   can_confirm: boolean;
   suggested_slug: string | null;
+  paused_beat: string | null;
   offering_candidates?: PendingOffering[];
 }
 
@@ -119,12 +120,12 @@ export default function OnboardingPage() {
   const [stage, setStage] = useState("");
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
+  const [pausedBeat, setPausedBeat] = useState<string | null>(null);
   const [publicSlug, setPublicSlug] = useState("");
-  // W-2: the go-live screen reads these two back because the interview's
-  // terminal rule can take an owner's words verbatim after two unanswered
-  // asks, and neither field has an editor once the page is live.
+  // W-7: the go-live screen confirms only the address. The business name is
+  // read back for reassurance (not editable - it was captured during the
+  // interview), so the page holds the value but no input state for it.
   const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,11 +143,18 @@ export default function OnboardingPage() {
     setStage(fields.stage);
     setInput(fields.input);
     setCanConfirm(fields.can_confirm);
+    setPausedBeat(fields.paused_beat);
     setOwnerOfferings(fields.offering_candidates ?? []);
-    if (fields.can_confirm) {
+    setBusinessName((current) => current || fields.draft.business_name || "");
+    // W-7/W-4 US-1: prefill the address as soon as there is a real suggestion
+    // (business name captured) or the confirm step is reached, on every path -
+    // the upload -> review -> save path flips can_confirm from its own handler
+    // and used to bypass this. Gating on a non-empty suggestion is what avoids
+    // locking the reserved-name fallback ("business" -> "business-page") from an
+    // early event before the name exists. `current || ...` never overwrites
+    // what the owner has typed.
+    if (fields.suggested_slug || fields.can_confirm) {
       setPublicSlug((current) => current || fields.suggested_slug || "business");
-      setBusinessName((current) => current || fields.draft.business_name || "");
-      setBusinessType((current) => current || fields.draft.business_type || "");
     }
   }
 
@@ -359,6 +367,24 @@ export default function OnboardingPage() {
     }
   }
 
+  async function resumePausedBeat() {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const state = await apiFetch<OnboardingState>("/api/onboarding/message", {
+        method: "POST",
+        body: JSON.stringify({ resume: true }),
+      });
+      applyStateFields(state);
+      setMessages(historyToMessages(state.history));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /**
    * Files attached through the pill's "+". Each file gets its own stamp and its
    * own line, uploaded one at a time so the thread reads in order. Knowledge is
@@ -483,11 +509,7 @@ export default function OnboardingPage() {
     try {
       await apiFetch("/api/onboarding/confirm", {
         method: "POST",
-        body: JSON.stringify({
-          slug: publicSlug,
-          business_name: businessName.trim() || undefined,
-          business_type: businessType.trim() || undefined,
-        }),
+        body: JSON.stringify({ slug: publicSlug }),
       });
       setCompleted(true);
       setCanConfirm(false);
@@ -572,20 +594,11 @@ export default function OnboardingPage() {
         <div className="mx-auto w-full max-w-thread">
           {!completed && canConfirm && !reviewing ? (
             <div className="flex flex-col gap-3">
-              <Input
-                label="Business name"
-                value={businessName}
-                onChange={(event) => setBusinessName(event.target.value)}
-                disabled={busy}
-                data-testid="onboarding-business-name"
-              />
-              <Input
-                label="What the business does"
-                value={businessType}
-                onChange={(event) => setBusinessType(event.target.value)}
-                disabled={busy}
-                data-testid="onboarding-business-type"
-              />
+              {businessName ? (
+                <p className="text-meta text-ink-a40" data-testid="onboarding-going-live-as">
+                  Going live as {businessName}.
+                </p>
+              ) : null}
               <Input
                 label="Your business page"
                 value={publicSlug}
@@ -603,6 +616,15 @@ export default function OnboardingPage() {
                 data-testid="onboarding-confirm"
               >
                 Confirm and go live
+              </Button>
+            </div>
+          ) : !completed && pausedBeat ? (
+            <div className="flex flex-col gap-2" data-testid="onboarding-paused">
+              <p className="text-meta text-ink-a40">
+                Finish this field when you are ready to keep setting up your assistant.
+              </p>
+              <Button onClick={() => void resumePausedBeat()} loading={busy}>
+                Try again
               </Button>
             </div>
           ) : !completed && input ? (

@@ -1019,3 +1019,103 @@ images afterward from the Business tab, which `M-2` already supports.
 - [ ] The confirm-time write path and the retrieval path from W-5 need no
       further change to serve these rows.
 - [ ] `make check` green.
+
+---
+
+## W-7: The interview reads like a person, not a form
+
+### Summary
+
+W-2 stopped the re-asking, but it did so by taking all phrasing from the model
+and bolting on machinery (a two-pass deferral surfaced through a "Skip for now"
+chip, a reassuring nudge) to cover the cases a fluent model used to handle on
+its own. On the next walkthrough that machinery read as robotic: a warm "no
+worries" plus several questions at once, a skip chip on the first ask, a chip
+that lingered after tapping, and a go-live screen re-asking for the business
+name and type it already had. W-7 gives the conversational work back to the
+model while keeping W-2's guarantee, and adds the one thing neither version had:
+a server-plus-model check that a reply is actually a usable answer.
+
+### Why
+
+Every symptom traced to a specific W-2 addition (before/after stated to the
+founder per 5.1 before the change):
+
+| | After W-2 | After W-7 |
+|---|---|---|
+| Junk answer ("34234234" as a name) | saved - `Beat.complete` only checks non-empty | challenged in the beat's voice and re-asked; never saved |
+| "No worries" + several questions | `_nudge()` told the model to reassure and give an example; the hours ask was two questions joined by "and" | one short sentence; `_ack` strips any stray question; hours is one question |
+| "Skip for now" chip | on `name`/`services` from the first ask | removed entirely; a beat resolves on the ask cap |
+| A tapped chip lingered | `disabled` only | the chip row unmounts for the in-flight turn |
+| Go-live re-asked name/type | two editable fields | address only, prefilled, with a "Going live as X" read-back |
+| Empty go-live address | `suggested_slug("")` is the truthy reserved fallback `business-page`, locked in on first load | null until a name exists, so the address prefills to the real slug |
+
+### What W-7 keeps from W-2
+
+The two-ask cap and the second-pass deferral are unchanged - they were right;
+what was wrong is that the hand-off was silent, so a deferred beat resurfacing
+later read as the assistant losing its place. It now says "No problem - I'll
+come back to this." out loud. The question is still server-owned (appended
+verbatim), which is the guarantee that a filled slot can never be re-asked.
+If a required beat remains unusable after its second pass, the interview pauses
+with the field unset and a retry action. It never falls back to storing the
+owner's raw words or exposes the go-live action until the field is valid.
+
+### The usability check (two judges, either vetoes)
+
+Each text beat gains `valid` (a deterministic plausibility check - a name needs
+letters, hours need a time or a day, a contact needs an `@` or six digits) and
+`reject`/`example` copy. The extractor gains `answered_asked`, its verdict on
+whether the reply genuinely answered the asked field. A captured value is
+usable only if it has a value **and** the model did not flag it **and** `valid`
+passes. The server floor catches structural junk (`34234234`); the model catches
+word-shaped nonsense (`asdfgh` as a business type). A value the model mislabels
+off-topic is still challenged when it cannot be the beat's answer. On a veto the
+value is dropped back out and the model is told to re-ask that one field.
+
+### User stories
+
+- **US-1** Junk input is challenged by name, not absorbed: "34234234" for a
+  name gets "that doesn't look like a name" and the same question, never saved.
+- **US-2** Replies are one short sentence plus one question - no "no worries",
+  no list of what is still missing, no double question.
+- **US-3** A beat unanswered after two asks hands off out loud and the interview
+  moves on, the deferred beat returning once.
+- **US-4** Only the skip chip is removed; every functional chip (headcount,
+  contact email/phone, ABN, GST) stays, and a tapped chip disappears while the
+  turn is in flight.
+- **US-5** Go-live confirms the address only, prefilled to the real slug, with a
+  "Going live as X" line; name and type are not re-asked.
+- **US-6** The knowledge review shows one card per offering (name and price on a
+  row, description beneath); the document's own offering/price sections are not
+  also shown as raw text, and a document overlaps an owner-typed name by taking
+  the document's price and description.
+- **US-7** A required field that still has no usable answer after both passes
+  pauses the interview. The owner can retry it later, and cannot publish until
+  it is valid.
+
+### Decision on latency
+
+No extra model calls: `answered_asked` rides inside the existing extraction
+call, `valid` is regex, and the reply still streams live (sentence-buffered, so
+a trailing question can be dropped). Same two calls per turn as before W-2.
+
+### Amends W-2
+
+The skip chip and the go-live name/type read-back fields introduced in W-2 are
+removed here; the two-ask cap and the second-pass deferral are kept (only their
+silence is fixed). No `version` bump - the removed `OnboardingRecord` fields
+that remain (`deferred`, `ask_beat`, `ask_count`) read through defaults.
+
+### Definition of done
+
+- [x] Junk input is challenged and never saved (server + model, either vetoes).
+- [x] Replies are one short sentence and one question; hours asks once.
+- [x] The skip chip is gone; every functional chip stays; a tapped chip vanishes.
+- [x] A two-times-unanswered beat hands off out loud, then moves on.
+- [x] Go-live shows the address only, prefilled to the real slug.
+- [x] The review sheet shows one priced card per offering; the document wins an
+      overlap.
+- [x] A final unresolved required beat pauses and can be retried without storing
+      an invalid fallback or allowing publication.
+- [x] `make check` green.

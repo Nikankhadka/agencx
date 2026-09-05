@@ -21,9 +21,12 @@ from app.onboarding.agent import (
     _KNOWLEDGE_OFFER,
     Directive,
     OnboardingRecord,
+    _ack,
     _echo,
+    _usable,
     prepare_turn,
     prepare_url_turn,
+    resume_paused_beat,
     run_turn,
     stream_reply,
 )
@@ -620,7 +623,8 @@ def test_old_string_offerings_load_as_owner_candidates() -> None:
 # --- directive shape -----------------------------------------------------------
 def test_onboarding_voice_is_role_led_and_warm() -> None:
     assert "Agencx setup assistant" in _COPILOT
-    assert "Warmly acknowledge" in _COPILOT
+    # W-7: one short, warm sentence - no field list to read back.
+    assert "ONE short, warm sentence" in _COPILOT
     # W-2: the model no longer chooses or phrases the question.
     assert "never choose or write the question" in _COPILOT
     assert "becomes a reference" in _KNOWLEDGE_OFFER
@@ -628,10 +632,11 @@ def test_onboarding_voice_is_role_led_and_warm() -> None:
 
 def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
     assert beats.BEATS["business_name"].ask == "What does the business go by?"
-    # W-2 US-5: one turn covers both halves of the question.
-    assert beats.BEATS["hours"].ask == (
-        "What are your opening hours, and which days of the week are you open?"
-    )
+    # W-7: the name beat says which name it wants, so it cannot be mistaken for
+    # the business-name question.
+    assert "call you" in beats.BEATS["name"].ask
+    # W-5/US-5 covered both halves; W-7 keeps that in one plain question.
+    assert beats.BEATS["hours"].ask == "What days and hours are you open?"
     assert beats.BEATS["abn"].ask == "Do you have an ABN?"
 
 
@@ -647,8 +652,13 @@ def test_directive_meta_answer() -> None:
 
 
 def test_directive_never_asks_the_model_for_a_question() -> None:
-    """W-2: no directive, however empty, invites the model to compose the ask."""
-    for directive in (Directive(), Directive(nudge="Give an example."), Directive(meta_answer="x")):
+    """W-2/W-7: no directive, however shaped, invites the model to compose the ask."""
+    for directive in (
+        Directive(),
+        Directive(reask="Give an example."),
+        Directive(handoff="Say you'll come back to it."),
+        Directive(meta_answer="x"),
+    ):
         prompt = directive.as_prompt()
         assert "Ask for" not in prompt
         assert "Do not ask a question" in prompt
@@ -749,8 +759,8 @@ def test_a_deferred_beat_returns_only_once_every_other_beat_is_done() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_final_pass_takes_the_owners_words_verbatim() -> None:
-    """W-2 terminal rule: the interview always ends, and confirm reads it back."""
+async def test_the_final_pass_pauses_without_saving_an_unusable_answer() -> None:
+    """W-7 leaves an unresolved required field empty and blocks go-live."""
     provider = _ExtractFake(updates=[{}, {}, {}], replies=["Right."])
     draft = _complete_draft()
     del draft["business_type"]
@@ -761,19 +771,43 @@ async def test_the_final_pass_takes_the_owners_words_verbatim() -> None:
             admin_message="idk just a shop", record=record, provider=provider
         )
 
-    assert record.draft["business_type"] == "idk just a shop"
-    assert request_finalize(record.draft, record.skipped).ok
+    assert "business_type" not in record.draft
+    assert record.paused_beat == "business_type"
+    assert not request_finalize(record.draft, record.skipped).ok
+
+
+def test_resume_paused_beat_restores_the_question_and_two_ask_allowance() -> None:
+    record = OnboardingRecord(
+        draft={"name": "Nikan", "business_name": "Sababa"},
+        deferred=["business_type"],
+        paused_beat="business_type",
+    )
+
+    reply = resume_paused_beat(record)
+
+    assert record.paused_beat is None
+    assert (record.ask_beat, record.ask_count) == ("business_type", 1)
+    assert reply.endswith(beats.BEATS["business_type"].ask)
+
+
+@pytest.mark.asyncio
+async def test_the_opening_question_validates_its_first_answer() -> None:
+    provider = _ExtractFake(
+        updates=[{"profile": {"name": "34234234"}, "answered_asked": True}],
+        replies=["Let's try that again."],
+    )
+
+    record, reply = await run_turn(
+        admin_message="34234234", record=OnboardingRecord(), provider=provider
+    )
+
+    assert "name" not in record.draft
+    assert record.ask_beat == "name"
+    assert record.ask_count == 2
+    assert reply.endswith(beats.BEATS["name"].ask)
 
 
 # --- W-2: skipping --------------------------------------------------------------
-
-
-def test_only_a_skippable_beat_accepts_the_skip_chip() -> None:
-    assert beats.is_skip("services", [beats.SKIP])
-    assert beats.is_skip("name", [beats.SKIP])
-    # A required beat has no skip, however the value is spelled.
-    assert not beats.is_skip("business_name", [beats.SKIP])
-    assert not beats.is_skip("hours", [beats.SKIP])
 
 
 def test_a_skipped_beat_is_never_asked_again_and_does_not_block_go_live() -> None:
@@ -796,7 +830,6 @@ def test_skipping_writes_no_sentinel_into_the_public_profile() -> None:
     assert "services" not in stored
     tagline = profile_tagline(stored) or ""
     assert "skip" not in tagline.lower()
-    assert beats.SKIP not in tagline
 
 
 def test_w2_record_fields_survive_a_round_trip_without_a_version_bump() -> None:
@@ -835,3 +868,209 @@ def test_the_extraction_prompt_shows_how_to_split_a_comma_less_list() -> None:
     """W-2 US-3: "pita coffee and wraps" is three candidates, not one."""
     assert "pita" in _EXTRACT_PROMPT and "wraps" in _EXTRACT_PROMPT
     assert "Split a run-on list" in _EXTRACT_PROMPT
+
+
+# --- W-7: input validation, rejection, and the spoken hand-off -----------------
+
+
+def test_beat_validity_accepts_real_answers_and_rejects_junk() -> None:
+    """W-7: `valid` is the server's half of the two-judge usability check."""
+    assert beats.BEATS["name"].valid("Nikan")  # type: ignore[misc]
+    assert not beats.BEATS["name"].valid("34234234")  # type: ignore[misc]
+    assert beats.BEATS["business_name"].valid("Sababa")  # type: ignore[misc]
+    assert not beats.BEATS["business_name"].valid("9999")  # type: ignore[misc]
+    assert beats.BEATS["hours"].valid("9-5 Mon to Fri")  # type: ignore[misc]
+    assert beats.BEATS["hours"].valid("online, always open")  # type: ignore[misc]
+    assert not beats.BEATS["hours"].valid("asdf")  # type: ignore[misc]
+    assert beats.BEATS["contact"].valid("me@example.com")  # type: ignore[misc]
+    assert beats.BEATS["contact"].valid("0412 345 678")  # type: ignore[misc]
+    assert not beats.BEATS["contact"].valid("yes")  # type: ignore[misc]
+
+
+def test_usable_needs_both_judges() -> None:
+    """Either the LLM verdict or the server check can veto (W-7)."""
+    name = beats.BEATS["name"]
+    assert _usable(name, "Nikan", answered_asked=True)
+    # Server floor: a number is not a name even if the model waved it through.
+    assert not _usable(name, "34234234", answered_asked=True)
+    # LLM catches word-shaped nonsense the regex passes.
+    assert not _usable(beats.BEATS["business_type"], "asdfgh", answered_asked=False)
+    # answered_asked None (no beat asked) does not veto on its own.
+    assert _usable(name, "Nikan", answered_asked=None)
+
+
+def test_ack_keeps_the_statement_and_drops_a_trailing_question() -> None:
+    assert _ack("Nice to meet you, Sam! What's your name?") == "Nice to meet you, Sam!"
+    assert _ack("Got it.") == "Got it."
+    assert _ack("What's your name?") == ""
+
+
+def test_no_beat_offers_a_skip_chip() -> None:
+    """W-7 removed the skip chip; nothing may reintroduce a skip-valued chip."""
+    for beat in beats.BEAT_ORDER:
+        for chip in beats.input_spec(beat).chips:
+            assert chip.value != "__skip__"
+            assert chip.label != "Skip for now"
+
+
+def test_hours_beat_asks_one_question() -> None:
+    assert beats.BEATS["hours"].ask.count("?") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_junk_answer_is_dropped_and_the_beat_is_re_asked() -> None:
+    """W-7: "34234234" for a name is not saved; the same beat is asked again."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"name": "34234234"}}],
+        replies=["Hmm, that doesn't read like a name."],
+    )
+    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    updated, reply = await run_turn(admin_message="34234234", record=record, provider=provider)
+
+    # The value never reaches the draft.
+    assert "name" not in updated.draft
+    # The server re-appends the same beat's own question.
+    assert reply.endswith(beats.BEATS["name"].ask)
+    # The model was told what went wrong (a model-composed reject, per the fork).
+    directive = provider.chat_messages[-1][1]["content"]
+    assert "not a usable your name" in directive
+
+
+@pytest.mark.asyncio
+async def test_word_shaped_nonsense_is_rejected_by_the_llm_verdict() -> None:
+    """The regex passes "asdfgh"; the extractor's verdict is what vetoes it."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_type": "asdfgh"}, "answered_asked": False}],
+        replies=["Let's try that again."],
+    )
+    record = OnboardingRecord(
+        draft={"name": "Nikan", "business_name": "Sababa"},
+        ask_beat="business_type",
+        ask_count=1,
+    )
+    updated, reply = await run_turn(admin_message="asdfgh", record=record, provider=provider)
+
+    assert "business_type" not in updated.draft
+    assert reply.endswith(beats.BEATS["business_type"].ask)
+
+
+@pytest.mark.asyncio
+async def test_a_genuine_answer_is_accepted_and_advances() -> None:
+    provider = _ExtractFake(
+        updates=[{"profile": {"name": "Nikan"}, "answered_asked": True}],
+        replies=["Lovely to meet you, Nikan."],
+    )
+    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    updated, reply = await run_turn(admin_message="Nikan", record=record, provider=provider)
+
+    assert updated.draft["name"] == "Nikan"
+    # It moves on to the next beat rather than re-asking.
+    assert reply.endswith(beats.BEATS["business_name"].ask)
+
+
+@pytest.mark.asyncio
+async def test_two_junk_answers_hand_off_out_loud_to_the_next_beat() -> None:
+    """W-7: after two asks a required beat defers, and the assistant says so."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_name": "@@@@"}}],
+        replies=["No problem at all."],
+    )
+    # Already asked twice; this third junk reply trips the hand-off.
+    record = OnboardingRecord(draft={"name": "Nikan"}, ask_beat="business_name", ask_count=2)
+    updated, reply = await run_turn(admin_message="@@@@", record=record, provider=provider)
+
+    # The required beat is deferred, not dropped, and not saved with junk.
+    assert "business_name" in updated.deferred
+    assert "business_name" not in updated.draft
+    # The next beat is asked, and the deferred beat's question is not repeated.
+    assert reply.endswith(beats.BEATS["business_type"].ask)
+    assert beats.BEATS["business_name"].ask not in reply
+    # The model was handed the hand-off line to phrase.
+    directive = provider.chat_messages[-1][1]["content"]
+    assert "come back" in directive
+
+
+@pytest.mark.asyncio
+async def test_an_off_topic_turn_burns_no_ask() -> None:
+    provider = _ExtractFake(
+        updates=[{"off_topic": True, "meta_reply": "I set up your assistant."}],
+        replies=["Happy to explain."],
+    )
+    record = OnboardingRecord(draft={"name": "Nikan"}, ask_beat="business_name", ask_count=1)
+    updated, _reply = await run_turn(
+        admin_message="what are you?", record=record, provider=provider
+    )
+
+    # The ask counter does not advance on noise.
+    assert updated.ask_count == 1
+    assert "business_name" not in updated.deferred
+
+
+def test_merge_offerings_lets_the_document_win_an_overlap() -> None:
+    """W-7: an owner-typed name and a priced document candidate become one row,
+    keeping the document's price and description; sources record both."""
+    from app.onboarding.flow import merge_offerings
+
+    owner = PendingOffering(name="Flat white", sources=["owner"])
+    document = PendingOffering(
+        name="Flat White", description="Our house blend", price_cents=550, sources=["document"]
+    )
+    merged = merge_offerings(owner, document)
+
+    assert merged.price_cents == 550
+    assert merged.description == "Our house blend"
+    assert merged.name == "Flat White"
+    assert set(merged.sources) == {"owner", "document"}
+
+
+@pytest.mark.asyncio
+async def test_an_owner_name_merges_with_a_document_candidate_keeping_its_price() -> None:
+    provider = _ExtractFake(updates=[{"offering_names": ["Flat white"]}])
+    record = OnboardingRecord(
+        offering_candidates=[
+            PendingOffering(name="Flat White", price_cents=550, sources=["document"])
+        ]
+    )
+    plan = await prepare_turn(admin_message="we do flat white", record=record, provider=provider)
+
+    candidates = plan.record.offering_candidates
+    assert len(candidates) == 1
+    assert candidates[0].price_cents == 550
+    assert set(candidates[0].sources) == {"owner", "document"}
+
+
+@pytest.mark.asyncio
+async def test_junk_the_model_calls_off_topic_is_still_challenged() -> None:
+    """W-7: "34234234" mislabeled off-topic is a failed name answer, not chatter.
+
+    The server catches it (the raw message cannot be a name) and routes the
+    challenge, rather than answering it as a stray question and re-asking blandly.
+    """
+    provider = _ExtractFake(
+        updates=[{"off_topic": True, "meta_reply": "I'm your setup assistant."}],
+        replies=["That doesn't read like a name."],
+    )
+    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    updated, reply = await run_turn(admin_message="34234234", record=record, provider=provider)
+
+    assert "name" not in updated.draft
+    assert reply.endswith(beats.BEATS["name"].ask)
+    # It counts as a failed answer, so the ask advances toward the cap.
+    assert updated.ask_count == 2
+    directive = provider.chat_messages[-1][1]["content"]
+    assert "not a usable your name" in directive
+
+
+@pytest.mark.asyncio
+async def test_a_real_off_topic_question_is_still_answered_not_challenged() -> None:
+    """A genuine question ("what are you?") stays off-topic and burns no ask."""
+    provider = _ExtractFake(
+        updates=[{"off_topic": True, "meta_reply": "I set up your assistant."}],
+        replies=["Happy to explain."],
+    )
+    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    updated, _reply = await run_turn(
+        admin_message="what are you?", record=record, provider=provider
+    )
+
+    assert updated.ask_count == 1  # not burned
