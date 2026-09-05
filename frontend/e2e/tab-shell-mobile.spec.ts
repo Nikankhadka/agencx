@@ -12,6 +12,16 @@ import { MOBILE_WIDTHS, expectNoHorizontalOverflow, expectTapTargets } from "./m
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
+/**
+ * The Chats destination carries a waiting-count badge whose text sits inside
+ * the link and whose count arrives on an interval (W-1), so both the link's
+ * text and its accessible name change from "Chats" to "Chats5" / "Chats, 5
+ * waiting" partway through a run. Matching the destination rather than the
+ * count is what keeps these assertions about the shell instead of about
+ * whatever the seed happens to leave in the queue.
+ */
+const DESTINATIONS = [/^Home\b/, /^Chats\b/, /^Business\b/];
+
 test.describe("tenant app shell on a phone", () => {
 
   test("the bottom tab bar replaces the sidebar and the hamburger", async ({ page, request }) => {
@@ -20,7 +30,11 @@ test.describe("tenant app shell on a phone", () => {
 
     const bar = page.getByRole("navigation", { name: "Main" });
     await expect(bar).toBeVisible();
-    await expect(bar.getByRole("link")).toHaveText(["Home", "Chats", "Business"]);
+    const links = bar.getByRole("link");
+    await expect(links).toHaveCount(DESTINATIONS.length);
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      await expect(links.nth(index)).toHaveAccessibleName(destination);
+    }
 
     await expect(page.getByRole("navigation", { name: "Console" })).toBeHidden();
     await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);

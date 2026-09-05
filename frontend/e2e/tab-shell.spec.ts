@@ -15,6 +15,16 @@ import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
+/**
+ * The Chats destination carries a waiting-count badge whose text sits inside
+ * the link and whose count arrives on an interval (W-1), so both the link's
+ * text and its accessible name change from "Chats" to "Chats5" / "Chats, 5
+ * waiting" partway through a run. Matching the destination rather than the
+ * count is what keeps these assertions about the shell instead of about
+ * whatever the seed happens to leave in the queue.
+ */
+const DESTINATIONS = [/^Home\b/, /^Chats\b/, /^Business\b/];
+
 const HIDDEN_LINKS = ["Conversations", "Escalations", "Pricing", "Dashboards", "Onboarding"];
 
 test.describe("tenant app shell - three destinations", () => {
@@ -25,7 +35,11 @@ test.describe("tenant app shell - three destinations", () => {
 
     const nav = page.getByRole("navigation", { name: "Console" });
     await expect(nav).toBeVisible();
-    await expect(nav.getByRole("link")).toHaveText(["Home", "Chats", "Business"]);
+    const links = nav.getByRole("link");
+    await expect(links).toHaveCount(DESTINATIONS.length);
+    for (const [index, destination] of DESTINATIONS.entries()) {
+      await expect(links.nth(index)).toHaveAccessibleName(destination);
+    }
 
     for (const label of HIDDEN_LINKS) {
       await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
@@ -39,9 +53,9 @@ test.describe("tenant app shell - three destinations", () => {
     const nav = page.getByRole("navigation", { name: "Console" });
     await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 
-    await nav.getByRole("link", { name: "Chats" }).click();
+    await nav.getByRole("link", { name: /^Chats\b/ }).click();
     await page.waitForURL("**/chats");
-    await expect(nav.getByRole("link", { name: "Chats" })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: /^Chats\b/ })).toHaveAttribute("aria-current", "page");
 
     await nav.getByRole("link", { name: "Business" }).click();
     await page.waitForURL("**/business");
