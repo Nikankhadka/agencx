@@ -42,8 +42,8 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [x] W-2: stop the onboarding interview from re-asking a filled slot.
 - [x] W-3: keep the onboarding thread clear and responsive - empty placeholders, stable composer geometry, one pending indicator, animated upload processing, and a proven SSE/ordinary-request transport split.
 - [x] W-4: complete go-live address handling - the suggested slug on every confirm-opening path, actionable field errors, owner-typed addresses preserved, and recoverable network failures.
-- [ ] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together, using the existing context package.
-- [ ] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
+- [x] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together, using the existing context package.
+- [x] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
 - [x] W-7: make the interview read like a person - challenge junk input, drop the
   skip chip, keep replies short, address-only go-live, priced offering cards.
 - [ ] W-8: review a large import without losing information - five-item preview, five-per-page editor, combine/keep-both duplicate decisions, and readable editable knowledge sections.
@@ -134,6 +134,68 @@ dashboard-click prose, and `docker-compose.yml` gained
 hosted needs. Custom SMTP (Brevo) is a separate, still-open gap (above): this
 fix restores the founder's own login, but a real tenant owner receives
 nothing until Brevo is configured.
+
+**W-6 shipped** (2026-09-06, `feat/w-6-offering-extraction`). The founder's PDF
+turned out to be recoverable, and it is now `backend/tests/fixtures/`. Running
+the old `derive()` over it reproduces the report exactly: `"Pocket both run"`,
+`"of wrapped in. For"`, `"Salads are sold individually too, mostly"`. Six pages
+of prose about a Bondi Junction restaurant, ~20 sellable items, in a document
+that is ~80% reviews, FAQ and platform trivia - nothing like the seeded catalogs,
+which are rows the app itself produced.
+
+The fix is a split of labour rather than a better regex: the model identifies
+items, the server counts. That is structural, not instructed. **Stage 0 indexes
+every monetary figure before the model sees a token**, so the set of amounts the
+pipeline can emit is fixed in advance; the extraction schema then has no numeric
+field at all, and for money the model can only return a block id pointing into
+that frozen index. There is nowhere for an invented number to arrive.
+
+Three things the ticket did not anticipate, all found by running the real
+fixture:
+
+- `is_hedged` (built for the chat price gate, used nowhere else) rejects
+  `"around $18"` for free, and a reporting-verb check catches `"another said the
+  $18 plate"`. Two customer reviews price the plate in this document; neither may
+  price the menu.
+- Quotation marks are **not** an attribution signal. The first pass treated them
+  as one and silently suppressed two real menu prices, because this kind of
+  document is full of scare quotes - a `"Pimped Up"` pocket, chips `"described as
+  famous"`. A whole quoted sentence is caught structurally instead.
+- A range whose second half drops the currency mark (`"mostly $10-14"`) is
+  invisible to `extract_monetary_figures`, so a pairwise check between two
+  detected figures reads it as one flat price and puts every salad on the menu at
+  $10. The range check reads forwards from a figure's own text instead.
+
+Blocks are sentence-sized, not paragraph-sized: a prose menu paragraph prices
+several items in a row, and at paragraph granularity every figure looks like a
+competing price for every item in the paragraph.
+
+Because extraction needs a model call it moved to ingest (`documents.offerings`,
+migration 0026); it used to run inside **every read** of every document.
+`derive()` and its helpers are deleted rather than kept as a fallback, so there
+is one extraction path - a failure yields fewer candidates and says so
+(`extraction_status`), never a fall back to first-number parsing.
+
+`merge_offerings` is now the single written statement of offering precedence.
+The browser had reimplemented it with the opposite rule - owner wins, not
+document - so an uploaded price list and a chip-typed name disagreed depending on
+which surface you looked at. `withCombinedOfferings` could not simply be deleted
+as planned: a file uploaded mid-interview posts to the shared knowledge route,
+which does not fold candidates into the onboarding record the way the URL turn
+does. It now applies the server's rule and names it.
+
+Also fixed in passing: `vitest.config.ts` had no `@/` alias, so a unit test could
+only import from modules that happened to use relative paths - which had quietly
+decided which components were testable.
+
+**Still owed: the browser pass.** No LLM key is configured locally, so the real
+model call over the real PDF has not run. Everything either side of it is
+verified end to end - the upload route, structuring, extraction, the jsonb
+column, the API shape and the no-re-extraction-on-read property, in
+`test_knowledge_api.py` - and the resolver is pinned against the real fixture
+text in `test_offering_extraction.py`. What remains unproven is how well the
+model itself identifies items in prose, which is the one part a fake provider
+cannot stand in for.
 
 **Phase 13 (walkthrough fixes) has opened** (`13-walkthrough.md`, 2026-09-04).
 A founder walkthrough of the deployed build found defects across the home
