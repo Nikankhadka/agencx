@@ -35,13 +35,13 @@ from app.onboarding.agent import (
     stream_reply,
 )
 from app.onboarding.flow import (
-    CUSTOM_VOICE_MAX,
     PendingOffering,
     ProfileDraft,
     SourceReference,
     customer_voice_for,
 )
 from app.onboarding.tools import request_finalize, save_profile
+from app.shared.voice import CUSTOM_VOICE_MAX
 from tests.fakes import BaseFakeProvider
 
 # --- fake providers ------------------------------------------------------------

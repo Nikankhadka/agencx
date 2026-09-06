@@ -16,6 +16,8 @@ from unicodedata import normalize
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.shared.voice import CUSTOM_VOICE, CUSTOM_VOICE_MAX, DEFAULT_VOICE_PRESET
+
 
 class ProfileDraft(BaseModel):
     """The lean business profile (PRD spine step 2)."""
@@ -40,17 +42,6 @@ class ProfileDraft(BaseModel):
     # refuses them, so extraction can never put words in the owner's mouth here.
     customer_voice_preset: str = ""
     customer_voice_custom_style: str = ""
-
-
-# W-9 US-7: the four voices the owner chooses between. Expression only - a
-# preset never changes a fact, a price, an escalation, or the assistant's
-# identity, which is why it is a fixed vocabulary and not free prose.
-VOICE_PRESETS: tuple[str, ...] = ("warm_casual", "clear_professional", "direct_concise")
-CUSTOM_VOICE = "custom"
-DEFAULT_VOICE_PRESET = "warm_casual"
-# The owner's own description of the voice, bounded so it stays a description
-# and cannot become a second system prompt.
-CUSTOM_VOICE_MAX = 300
 
 
 def customer_voice_for(profile: ProfileDraft) -> dict[str, str | None]:

@@ -36,9 +36,9 @@ from uuid import UUID
 
 import httpx
 
-from app.onboarding.flow import DEFAULT_VOICE_PRESET
 from app.shared import db
 from app.shared.config import get_settings
+from app.shared.voice import DEFAULT_VOICE_PRESET
 
 INPUTS_DIR = Path(__file__).parent / "tenant2_inputs"
 INTERVIEW_SCRIPT = INPUTS_DIR / "interview-script.md"

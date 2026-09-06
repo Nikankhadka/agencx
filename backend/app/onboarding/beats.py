@@ -42,7 +42,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.onboarding.flow import CUSTOM_VOICE, CUSTOM_VOICE_MAX, VOICE_PRESETS
+from app.shared.voice import CUSTOM_VOICE, CUSTOM_VOICE_MAX, VOICE_PRESETS
 
 WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 
