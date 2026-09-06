@@ -889,6 +889,51 @@ async def test_message_at_confirm_stage_is_conflict(client: httpx.AsyncClient) -
     assert response.status_code == 409
 
 
+async def test_one_assistant_response_is_persisted_per_turn_on_both_paths(
+    client: httpx.AsyncClient,
+) -> None:
+    """W-9 US-5: a turn leaves one user message and one assistant reply behind.
+
+    The duplication bug W-9 fixed was in the reply context, and W-3 split the
+    transport in two - the ordinary request writes the whole turn at the end,
+    the SSE turn writes the draft first and the reply after the stream. Nothing
+    asserted that the two agree on how many assistant messages a turn is worth,
+    so a second write on either path would have gone unnoticed. Driven past both
+    name confirmations on purpose: those turns answer deterministically, and the
+    turn under test is one where the model actually writes the reply.
+    """
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    for text in ("I'm Sam", "yes", "we are Bytefix Repairs", "yes"):
+        body = await _send(client, headers, text=text)
+
+    # The ordinary request path.
+    before = len(body["history"])
+    body = await _send(client, headers, text="we fix phones")
+    added = body["history"][before:]
+    assert [entry["role"] for entry in added] == ["user", "assistant"]
+    assert added[0]["content"] == "we fix phones"
+    assert added[1]["content"]
+
+    # The SSE path, on the next beat of the same interview.
+    before = len(body["history"])
+    async with client.stream(
+        "POST",
+        "/api/onboarding/message/stream",
+        json={"text": "just me and one tech"},
+        headers=headers,
+    ) as resp:
+        assert resp.status_code == 200
+        async for _line in resp.aiter_lines():
+            pass
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    added = state.json()["history"][before:]
+    assert [entry["role"] for entry in added] == ["user", "assistant"]
+    assert added[0]["content"] == "just me and one tech"
+    assert added[1]["content"]
+
+
 async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
