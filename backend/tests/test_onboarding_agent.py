@@ -22,6 +22,7 @@ from app.onboarding.agent import (
     Directive,
     OnboardingRecord,
     _ack,
+    _activation_summary,
     _echo,
     _usable,
     prepare_turn,
@@ -87,23 +88,23 @@ class _ExtractFake(BaseFakeProvider):
 
 
 def test_save_profile_merges_only_non_empty_fields() -> None:
-    draft: dict[str, Any] = {"name": "Sam", "business_name": "Bytefix Repairs"}
+    draft: dict[str, Any] = {"owner_display_name": "Sam", "business_name": "Bytefix Repairs"}
     result = save_profile(draft, ProfileDraft(business_type="phone repair shop"))
 
     assert result["business_type"] == "phone repair shop"
     # An empty field must not blank out what an earlier turn captured.
-    assert result["name"] == "Sam"
+    assert result["owner_display_name"] == "Sam"
     assert result["business_name"] == "Bytefix Repairs"
 
 
 def test_save_profile_accumulates_across_turns() -> None:
     """US-1: the loop saves a partial profile per turn and merges them."""
     draft: dict[str, Any] = {}
-    save_profile(draft, ProfileDraft(name="Sam", business_name="Bytefix Repairs"))
+    save_profile(draft, ProfileDraft(owner_display_name="Sam", business_name="Bytefix Repairs"))
     save_profile(draft, ProfileDraft(hours="Mon-Fri 9-6", contact="555-0100"))
 
     assert draft == {
-        "name": "Sam",
+        "owner_display_name": "Sam",
         "business_name": "Bytefix Repairs",
         "hours": "Mon-Fri 9-6",
         "contact": "555-0100",
@@ -134,7 +135,7 @@ def test_save_profile_only_accepts_an_abn_or_an_explicit_no() -> None:
 
 def _complete_draft() -> dict[str, Any]:
     return {
-        "name": "Sam",
+        "owner_display_name": "Sam",
         "business_name": "Bytefix Repairs",
         "business_type": "phone repair shop",
         "headcount": "just me",
@@ -182,7 +183,7 @@ def test_completeness_gate_passes_when_every_field_present() -> None:
 
 
 def test_completeness_gate_fails_when_fields_missing() -> None:
-    result = request_finalize({"name": "Sam"})
+    result = request_finalize({"owner_display_name": "Sam"})
     assert not result.ok
     assert any("business name" in m for m in result.missing)
     assert any("contact details" in m for m in result.missing)
@@ -191,7 +192,7 @@ def test_completeness_gate_fails_when_fields_missing() -> None:
 @pytest.mark.parametrize(
     ("field", "label"),
     [
-        ("name", "your name"),
+        ("owner_display_name", "your name"),
         ("business_name", "business name"),
         ("business_type", "business type"),
         ("headcount", "team size"),
@@ -242,7 +243,7 @@ def test_from_jsonb_drops_a_pre_o1_nested_draft() -> None:
     v2 = {"version": 2, "draft": {"identity": {"description": "old shop"}}, "completed": False}
     record = OnboardingRecord.from_jsonb(v2)
 
-    assert record.version == 3
+    assert record.version == 4
     assert record.draft == {}
     assert not record.completed
 
@@ -260,7 +261,7 @@ def test_from_jsonb_migrates_the_oldest_format() -> None:
     legacy = {"state": {"draft": {"identity": {"description": "old shop"}}}, "completed": False}
     record = OnboardingRecord.from_jsonb(legacy)
 
-    assert record.version == 3
+    assert record.version == 4
     assert record.draft == {}
 
 
@@ -270,6 +271,56 @@ def test_from_jsonb_reads_v3_format() -> None:
 
     assert record.draft["business_name"] == "Bytefix Repairs"
     assert record.completed
+
+
+def test_a_v3_record_upgrades_to_v4_carrying_every_beat_key() -> None:
+    """W-9: the owner-name beat is renamed in all five places a beat key lives.
+
+    A rename that touched only the draft would strand an interview whose cursor,
+    skip list, deferral list, or pause still said ``name``.
+    """
+    v3 = {
+        "version": 3,
+        "draft": {"name": "Sam", "business_name": "Bytefix Repairs"},
+        "history": [{"role": "user", "content": "I'm Sam"}],
+        "skipped": ["name"],
+        "deferred": ["name"],
+        "ask_beat": "name",
+        "ask_count": 2,
+        "paused_beat": "name",
+        "knowledge_pending": True,
+        "completed": True,
+    }
+    record = OnboardingRecord.from_jsonb(v3)
+
+    assert record.version == 4
+    assert record.draft == {"owner_display_name": "Sam", "business_name": "Bytefix Repairs"}
+    assert record.skipped == ["owner_display_name"]
+    assert record.deferred == ["owner_display_name"]
+    assert record.ask_beat == "owner_display_name"
+    assert record.paused_beat == "owner_display_name"
+    # Everything else is carried forward untouched - progress, transcript, state.
+    assert record.history == [{"role": "user", "content": "I'm Sam"}]
+    assert (record.ask_count, record.knowledge_pending, record.completed) == (2, True, True)
+
+
+def test_a_v3_record_without_the_renamed_beat_is_untouched() -> None:
+    v3 = {"version": 3, "draft": {"business_name": "Bytefix Repairs"}, "ask_beat": "hours"}
+    record = OnboardingRecord.from_jsonb(v3)
+
+    assert record.draft == {"business_name": "Bytefix Repairs"}
+    assert record.ask_beat == "hours"
+
+
+def test_the_go_live_line_never_substitutes_the_owners_name() -> None:
+    """W-9 US-2: the owner's private name is never the public business identity.
+
+    Latent rather than user-visible: this line renders only once every beat is
+    satisfied, and `business_name` is required, so the removed fallback was
+    unreachable from the interview. It is gone all the same.
+    """
+    assert "Sam" not in _activation_summary({"owner_display_name": "Sam"})
+    assert "Bytefix Repairs" in _activation_summary({"business_name": "Bytefix Repairs"})
 
 
 def test_to_jsonb_roundtrips() -> None:
@@ -283,7 +334,7 @@ def test_to_jsonb_roundtrips() -> None:
 def test_resume_replays_persisted_history() -> None:
     """US-4: a returning owner picks up from the persisted thread, nothing re-asked."""
     record = OnboardingRecord(
-        draft={"name": "Sam", "business_name": "Bytefix Repairs"},
+        draft={"owner_display_name": "Sam", "business_name": "Bytefix Repairs"},
         history=[
             {"role": "user", "content": "I'm Sam, we're Bytefix Repairs"},
             {"role": "assistant", "content": "Got it. What kind of business is it?"},
@@ -349,7 +400,7 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
         updates=[{"profile": {"hours": "Mon-Fri 9-6", "contact": "555-0100"}}],
         replies=["Noted."],
     )
-    record = OnboardingRecord(draft={"name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
     _updated, _reply = await run_turn(
         admin_message="we're open Mon-Fri 9-6, call 555-0100", record=record, provider=provider
     )
@@ -362,7 +413,7 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
 async def test_run_turn_uses_the_authoritative_next_beat() -> None:
     """W-2 US-1: the model writes the acknowledgment, the server writes the question."""
     provider = _ExtractFake(updates=[{}], replies=["Sure thing."])
-    record = OnboardingRecord(draft={"name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
     _updated, reply = await run_turn(admin_message="ok go on", record=record, provider=provider)
 
     assert reply == "Sure thing. What does the business go by?"
@@ -406,7 +457,7 @@ async def test_run_turn_off_topic_answers_gently() -> None:
         ],
         replies=["I'm here to help you set up your business. What is your business called?"],
     )
-    record = OnboardingRecord(draft={"name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
     updated, reply = await run_turn(admin_message="who are you", record=record, provider=provider)
 
     # W-2: an off-topic turn is persisted like any other, so the stored record
@@ -431,7 +482,7 @@ async def test_off_topic_turn_does_not_burn_one_of_a_beats_two_asks() -> None:
         replies=["I'm here to help. What is your business called?"],
     )
     record = OnboardingRecord(
-        draft={"name": "Sam"},
+        draft={"owner_display_name": "Sam"},
         history=[
             {"role": "user", "content": "I'm Sam"},
             {"role": "assistant", "content": "Got it."},
@@ -442,7 +493,7 @@ async def test_off_topic_turn_does_not_burn_one_of_a_beats_two_asks() -> None:
 
     assert updated.ask_count == 1
     assert updated.ask_beat == "business_name"
-    assert updated.draft["name"] == "Sam"
+    assert updated.draft["owner_display_name"] == "Sam"
     # The turn is still recorded - only the ask counter is left alone.
     assert len(updated.history) == 4
 
@@ -525,6 +576,89 @@ async def test_stream_reply_price_echo_redrafts() -> None:
     assert len(provider.stream_calls) == 2
 
 
+@pytest.mark.asyncio
+async def test_the_owner_message_reaches_the_model_exactly_once() -> None:
+    """W-9 US-5: the reply context carried the owner's message twice, every turn.
+
+    ``prepare_turn`` appends it to history, the history slice therefore already
+    carries it, and a second append put it in again. Both reply paths read the
+    same list, so both are asserted here - and the fix is the message assembly,
+    not a similarity check over the text (US-5 forbids that).
+    """
+    message = "middle eastern cafe"
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Nikan", "business_name": "Sababa"},
+        history=[
+            {"role": "user", "content": "Sababa"},
+            {"role": "assistant", "content": "Noted. In a few words, what kind of business is it?"},
+        ],
+        ask_beat="business_type",
+        ask_count=1,
+    )
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_type": message}, "answered_asked": True}],
+        replies=["Noted."],
+    )
+    plan = await prepare_turn(admin_message=message, record=record, provider=provider)
+
+    assert plan.reply_msgs is not None
+    assert sum(1 for m in plan.reply_msgs if m["content"] == message) == 1
+
+    # Non-streamed and streamed both consume that one list.
+    await run_turn(
+        admin_message=message,
+        record=OnboardingRecord(ask_beat="business_type", ask_count=1),
+        provider=(non_streamed := _ExtractFake(updates=[{}], replies=["Noted."])),
+    )
+    assert sum(1 for m in non_streamed.chat_messages[0] if m["content"] == message) == 1
+
+    streamed = _ExtractFake(updates=[{}], replies=["Noted."])
+    stream_plan = await prepare_turn(
+        admin_message=message,
+        record=OnboardingRecord(ask_beat="business_type", ask_count=1),
+        provider=streamed,
+    )
+    async for _event in stream_reply(plan=stream_plan, provider=streamed):
+        pass
+    assert sum(1 for m in streamed.stream_calls[0] if m["content"] == message) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_em_dash_in_a_model_reply_becomes_a_plain_dash() -> None:
+    """conventions.md 1 bans the em dash, and the live model emits them anyway.
+
+    Both reply paths normalize, because the founder saw "Got it-open Monday" on
+    the streamed one - the surface a prompt rule alone was supposed to protect.
+    """
+
+    def _turn() -> tuple[_ExtractFake, OnboardingRecord]:
+        provider = _ExtractFake(
+            updates=[{"profile": {"business_name": "Sababa"}, "answered_asked": True}],
+            replies=["Got it\u2014Sababa it is."],
+        )
+        record = OnboardingRecord(
+            draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=1
+        )
+        return provider, record
+
+    provider, record = _turn()
+    _updated, reply = await run_turn(admin_message="Sababa", record=record, provider=provider)
+    assert "\u2014" not in reply
+    assert reply.startswith("Got it - Sababa it is.")
+
+    provider, record = _turn()
+    plan = await prepare_turn(admin_message="Sababa", record=record, provider=provider)
+    streamed = "".join(
+        [
+            payload
+            async for kind, payload in stream_reply(plan=plan, provider=provider)
+            if kind == "token"
+        ]
+    )
+    assert "\u2014" not in streamed
+    assert "Got it - Sababa it is." in streamed
+
+
 # --- URL turn (O-3 site-as-shortcut) -------------------------------------------
 
 
@@ -597,7 +731,7 @@ async def test_prepare_turn_keeps_explicit_offering_names_in_order_without_dupli
     provider = _ExtractFake(
         updates=[
             {
-                "profile": {"name": "Ronin"},
+                "profile": {"owner_display_name": "Ronin"},
                 "offering_names": ["Screen repair", "Battery swap", "screen repair", ""],
             }
         ]
@@ -621,12 +755,40 @@ def test_old_string_offerings_load_as_owner_candidates() -> None:
 
 
 # --- directive shape -----------------------------------------------------------
-def test_onboarding_voice_is_role_led_and_warm() -> None:
+def test_the_copilot_contract_is_sectioned_and_states_every_prohibition() -> None:
+    """W-9 US-5: the rules the live reproduction broke are structural, not phrasing.
+
+    Each assertion below names a failure the founder's own drives produced, so
+    a future rewrite of this prompt cannot quietly drop one of them.
+    """
     assert "Agencx setup assistant" in _COPILOT
-    # W-7: one short, warm sentence - no field list to read back.
-    assert "ONE short, warm sentence" in _COPILOT
-    # W-2: the model no longer chooses or phrases the question.
-    assert "never choose or write the question" in _COPILOT
+    for section in (
+        "# ROLE",
+        "# GOAL",
+        "# SUCCESS CRITERIA",
+        "# CONSTRAINTS",
+        "# CONVERSATION RULES",
+        "# OUTPUT",
+        "# STOP RULES",
+    ):
+        assert section in _COPILOT
+    # W-2: the model neither chooses nor phrases the question.
+    assert "The server writes every question" in _COPILOT
+    assert "Do not ask a question" in _COPILOT
+    # No praise, no fabricated enthusiasm, no "no worries" (findings 2 and 3).
+    assert "No praise" in _COPILOT
+    assert '"no worries"' in _COPILOT
+    # The name under discussion is the owner's (finding 2).
+    assert 'Never write "my name"' in _COPILOT
+    # One sentence, spelled as the owner spelled it (finding 1).
+    assert "One sentence" in _COPILOT
+    assert "character for character" in _COPILOT
+    # C-1: no model-authored money, anywhere, ever.
+    assert "Never state a price" in _COPILOT
+    # I8: no vertical the owner did not name (finding 4).
+    assert "Never name a trade" in _COPILOT
+    # conventions.md 1 (observation 4 of the reproduction).
+    assert "Never use an em dash" in _COPILOT
     assert "becomes a reference" in _KNOWLEDGE_OFFER
 
 
@@ -634,7 +796,7 @@ def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
     assert beats.BEATS["business_name"].ask == "What does the business go by?"
     # W-7: the name beat says which name it wants, so it cannot be mistaken for
     # the business-name question.
-    assert "call you" in beats.BEATS["name"].ask
+    assert "call you" in beats.BEATS["owner_display_name"].ask
     # W-5/US-5 covered both halves; W-7 keeps that in one plain question.
     assert beats.BEATS["hours"].ask == "What days and hours are you open?"
     assert beats.BEATS["abn"].ask == "Do you have an ABN?"
@@ -682,7 +844,7 @@ async def test_a_filled_slot_is_never_re_asked() -> None:
         updates=[{"off_topic": True, "meta_reply": "I'm your setup assistant."}],
         replies=["I'm your setup assistant. What's the name of your business?"],
     )
-    record = _drafted(name="Nikan", business_name="Sababa")
+    record = _drafted(owner_display_name="Nikan", business_name="Sababa")
     _updated, reply = await run_turn(
         admin_message="i already told u", record=record, provider=provider
     )
@@ -699,7 +861,10 @@ async def test_an_off_beat_answer_is_captured_and_the_pending_question_stands() 
         replies=["Pita, coffee and wraps - noted."],
     )
     record = _drafted(
-        name="Nikan", business_name="Sababa", business_type="cafe", headcount="just me"
+        owner_display_name="Nikan",
+        business_name="Sababa",
+        business_type="cafe",
+        headcount="just me",
     )
     updated, reply = await run_turn(
         admin_message="pita coffee wraps and more", record=record, provider=provider
@@ -715,7 +880,7 @@ async def test_an_off_beat_answer_is_captured_and_the_pending_question_stands() 
 async def test_a_skippable_beat_takes_its_default_after_two_asks() -> None:
     """W-2 US-4: team size is read by nothing, so silence resolves to "just me"."""
     provider = _ExtractFake(updates=[{}, {}, {}], replies=["Sure."])
-    record = _drafted(name="Nikan", business_name="Sababa", business_type="cafe")
+    record = _drafted(owner_display_name="Nikan", business_name="Sababa", business_type="cafe")
 
     for _ in range(2):
         record, reply = await run_turn(admin_message="dunno", record=record, provider=provider)
@@ -732,7 +897,7 @@ async def test_a_skippable_beat_takes_its_default_after_two_asks() -> None:
 async def test_a_required_beat_is_deferred_rather_than_asked_a_third_time() -> None:
     """W-2 US-4: the interview keeps moving; the beat comes back at the end."""
     provider = _ExtractFake(updates=[{}, {}, {}], replies=["Sure."])
-    record = _drafted(name="Nikan")
+    record = _drafted(owner_display_name="Nikan")
 
     for _ in range(3):
         record, reply = await run_turn(admin_message="pass", record=record, provider=provider)
@@ -778,7 +943,7 @@ async def test_the_final_pass_pauses_without_saving_an_unusable_answer() -> None
 
 def test_resume_paused_beat_restores_the_question_and_two_ask_allowance() -> None:
     record = OnboardingRecord(
-        draft={"name": "Nikan", "business_name": "Sababa"},
+        draft={"owner_display_name": "Nikan", "business_name": "Sababa"},
         deferred=["business_type"],
         paused_beat="business_type",
     )
@@ -793,7 +958,7 @@ def test_resume_paused_beat_restores_the_question_and_two_ask_allowance() -> Non
 @pytest.mark.asyncio
 async def test_the_opening_question_validates_its_first_answer() -> None:
     provider = _ExtractFake(
-        updates=[{"profile": {"name": "34234234"}, "answered_asked": True}],
+        updates=[{"profile": {"owner_display_name": "34234234"}, "answered_asked": True}],
         replies=["Let's try that again."],
     )
 
@@ -801,10 +966,10 @@ async def test_the_opening_question_validates_its_first_answer() -> None:
         admin_message="34234234", record=OnboardingRecord(), provider=provider
     )
 
-    assert "name" not in record.draft
-    assert record.ask_beat == "name"
+    assert "owner_display_name" not in record.draft
+    assert record.ask_beat == "owner_display_name"
     assert record.ask_count == 2
-    assert reply.endswith(beats.BEATS["name"].ask)
+    assert reply.endswith(beats.BEATS["owner_display_name"].ask)
 
 
 # --- W-2: skipping --------------------------------------------------------------
@@ -835,7 +1000,7 @@ def test_skipping_writes_no_sentinel_into_the_public_profile() -> None:
 def test_w2_record_fields_survive_a_round_trip_without_a_version_bump() -> None:
     """An in-flight interview must not be reset by this ticket's new fields."""
     record = OnboardingRecord(
-        draft={"name": "Sam"},
+        draft={"owner_display_name": "Sam"},
         skipped=["services"],
         deferred=["hours"],
         ask_beat="hours",
@@ -843,21 +1008,21 @@ def test_w2_record_fields_survive_a_round_trip_without_a_version_bump() -> None:
     )
     restored = OnboardingRecord.from_jsonb(record.to_jsonb())
 
-    assert restored.version == 3
+    assert restored.version == 4
     assert (restored.skipped, restored.deferred) == (["services"], ["hours"])
     assert (restored.ask_beat, restored.ask_count) == ("hours", 2)
 
     # A record written before W-2 loads clean rather than crashing.
     legacy = OnboardingRecord.from_jsonb({"version": 3, "draft": {"name": "Sam"}})
     assert legacy.skipped == [] and legacy.deferred == []
-    assert legacy.draft == {"name": "Sam"}
+    assert legacy.draft == {"owner_display_name": "Sam"}
 
 
 @pytest.mark.asyncio
 async def test_a_turn_persists_even_when_extraction_returns_nothing() -> None:
     """W-2: the stored record and the emitted state can never disagree."""
     provider = _ExtractFake(updates=[{}], replies=["Sure."])
-    record = _drafted(name="Sam")
+    record = _drafted(owner_display_name="Sam")
 
     updated, _reply = await run_turn(admin_message="hmm", record=record, provider=provider)
 
@@ -865,9 +1030,16 @@ async def test_a_turn_persists_even_when_extraction_returns_nothing() -> None:
 
 
 def test_the_extraction_prompt_shows_how_to_split_a_comma_less_list() -> None:
-    """W-2 US-3: "pita coffee and wraps" is three candidates, not one."""
-    assert "pita" in _EXTRACT_PROMPT and "wraps" in _EXTRACT_PROMPT
+    """W-2 US-3: "we offer A B and C" is three candidates, not one.
+
+    W-9 I8: the example teaches the split with placeholder items. It used to
+    teach it in one vertical's vocabulary ("pita coffee and wraps"), which is
+    the same leak the services beat's own example had.
+    """
+    assert '["A", "B", "C"]' in _EXTRACT_PROMPT
     assert "Split a run-on list" in _EXTRACT_PROMPT
+    for trade in ("pita", "wraps", "haircut", "dental", "phone repair"):
+        assert trade not in _EXTRACT_PROMPT.lower()
 
 
 # --- W-7: input validation, rejection, and the spoken hand-off -----------------
@@ -875,8 +1047,8 @@ def test_the_extraction_prompt_shows_how_to_split_a_comma_less_list() -> None:
 
 def test_beat_validity_accepts_real_answers_and_rejects_junk() -> None:
     """W-7: `valid` is the server's half of the two-judge usability check."""
-    assert beats.BEATS["name"].valid("Nikan")  # type: ignore[misc]
-    assert not beats.BEATS["name"].valid("34234234")  # type: ignore[misc]
+    assert beats.BEATS["owner_display_name"].valid("Nikan")  # type: ignore[misc]
+    assert not beats.BEATS["owner_display_name"].valid("34234234")  # type: ignore[misc]
     assert beats.BEATS["business_name"].valid("Sababa")  # type: ignore[misc]
     assert not beats.BEATS["business_name"].valid("9999")  # type: ignore[misc]
     assert beats.BEATS["hours"].valid("9-5 Mon to Fri")  # type: ignore[misc]
@@ -889,7 +1061,7 @@ def test_beat_validity_accepts_real_answers_and_rejects_junk() -> None:
 
 def test_usable_needs_both_judges() -> None:
     """Either the LLM verdict or the server check can veto (W-7)."""
-    name = beats.BEATS["name"]
+    name = beats.BEATS["owner_display_name"]
     assert _usable(name, "Nikan", answered_asked=True)
     # Server floor: a number is not a name even if the model waved it through.
     assert not _usable(name, "34234234", answered_asked=True)
@@ -921,19 +1093,22 @@ def test_hours_beat_asks_one_question() -> None:
 async def test_a_junk_answer_is_dropped_and_the_beat_is_re_asked() -> None:
     """W-7: "34234234" for a name is not saved; the same beat is asked again."""
     provider = _ExtractFake(
-        updates=[{"profile": {"name": "34234234"}}],
+        updates=[{"profile": {"owner_display_name": "34234234"}}],
         replies=["Hmm, that doesn't read like a name."],
     )
-    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
     updated, reply = await run_turn(admin_message="34234234", record=record, provider=provider)
 
     # The value never reaches the draft.
-    assert "name" not in updated.draft
+    assert "owner_display_name" not in updated.draft
     # The server re-appends the same beat's own question.
-    assert reply.endswith(beats.BEATS["name"].ask)
-    # The model was told what went wrong (a model-composed reject, per the fork).
-    directive = provider.chat_messages[-1][1]["content"]
-    assert "not a usable your name" in directive
+    assert reply.endswith(beats.BEATS["owner_display_name"].ask)
+    # W-9: the whole reply is the beat's own words - no model call is made, so
+    # there is nothing for a model to embellish the beat's example into.
+    assert reply == (
+        f"{beats.BEATS['owner_display_name'].reject} {beats.BEATS['owner_display_name'].ask}"
+    )
+    assert provider.chat_messages == []
 
 
 @pytest.mark.asyncio
@@ -944,7 +1119,7 @@ async def test_word_shaped_nonsense_is_rejected_by_the_llm_verdict() -> None:
         replies=["Let's try that again."],
     )
     record = OnboardingRecord(
-        draft={"name": "Nikan", "business_name": "Sababa"},
+        draft={"owner_display_name": "Nikan", "business_name": "Sababa"},
         ask_beat="business_type",
         ask_count=1,
     )
@@ -957,13 +1132,13 @@ async def test_word_shaped_nonsense_is_rejected_by_the_llm_verdict() -> None:
 @pytest.mark.asyncio
 async def test_a_genuine_answer_is_accepted_and_advances() -> None:
     provider = _ExtractFake(
-        updates=[{"profile": {"name": "Nikan"}, "answered_asked": True}],
+        updates=[{"profile": {"owner_display_name": "Nikan"}, "answered_asked": True}],
         replies=["Lovely to meet you, Nikan."],
     )
-    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
     updated, reply = await run_turn(admin_message="Nikan", record=record, provider=provider)
 
-    assert updated.draft["name"] == "Nikan"
+    assert updated.draft["owner_display_name"] == "Nikan"
     # It moves on to the next beat rather than re-asking.
     assert reply.endswith(beats.BEATS["business_name"].ask)
 
@@ -976,7 +1151,9 @@ async def test_two_junk_answers_hand_off_out_loud_to_the_next_beat() -> None:
         replies=["No problem at all."],
     )
     # Already asked twice; this third junk reply trips the hand-off.
-    record = OnboardingRecord(draft={"name": "Nikan"}, ask_beat="business_name", ask_count=2)
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=2
+    )
     updated, reply = await run_turn(admin_message="@@@@", record=record, provider=provider)
 
     # The required beat is deferred, not dropped, and not saved with junk.
@@ -996,7 +1173,9 @@ async def test_an_off_topic_turn_burns_no_ask() -> None:
         updates=[{"off_topic": True, "meta_reply": "I set up your assistant."}],
         replies=["Happy to explain."],
     )
-    record = OnboardingRecord(draft={"name": "Nikan"}, ask_beat="business_name", ask_count=1)
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=1
+    )
     updated, _reply = await run_turn(
         admin_message="what are you?", record=record, provider=provider
     )
@@ -1050,15 +1229,16 @@ async def test_junk_the_model_calls_off_topic_is_still_challenged() -> None:
         updates=[{"off_topic": True, "meta_reply": "I'm your setup assistant."}],
         replies=["That doesn't read like a name."],
     )
-    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
     updated, reply = await run_turn(admin_message="34234234", record=record, provider=provider)
 
-    assert "name" not in updated.draft
-    assert reply.endswith(beats.BEATS["name"].ask)
+    assert "owner_display_name" not in updated.draft
+    assert reply.endswith(beats.BEATS["owner_display_name"].ask)
     # It counts as a failed answer, so the ask advances toward the cap.
     assert updated.ask_count == 2
-    directive = provider.chat_messages[-1][1]["content"]
-    assert "not a usable your name" in directive
+    # The challenge is the beat's own reject line, not a model paraphrase of it.
+    assert reply.startswith(beats.BEATS["owner_display_name"].reject)
+    assert provider.chat_messages == []
 
 
 @pytest.mark.asyncio
@@ -1068,7 +1248,7 @@ async def test_a_real_off_topic_question_is_still_answered_not_challenged() -> N
         updates=[{"off_topic": True, "meta_reply": "I set up your assistant."}],
         replies=["Happy to explain."],
     )
-    record = OnboardingRecord(ask_beat="name", ask_count=1)
+    record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
     updated, _reply = await run_turn(
         admin_message="what are you?", record=record, provider=provider
     )

@@ -57,7 +57,7 @@ KNOWLEDGE_DOCS: tuple[tuple[str, str], ...] = (
 # One stage per lean profile field, in beat order (see BEAT_ORDER in
 # app/onboarding/beats.py). These are the keys folded into the draft.
 PROFILE_STAGES: tuple[str, ...] = (
-    "name",
+    "owner_display_name",
     "business_name",
     "business_type",
     "headcount",
@@ -179,7 +179,7 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
                     UUID(signup["tenant_id"]),
                     json.dumps(
                         {
-                            "version": 3,
+                            "version": 4,
                             "draft": draft,
                             "history": [],
                             "off_topic_count": 0,

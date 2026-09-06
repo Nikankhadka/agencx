@@ -29,7 +29,7 @@ TENANT_NAME = "Bytefix Repairs"
 # console, not the interview, so the seed writes the same end-state a real
 # onboarding confirm produces (via _helpers.insert_tenant_core's profile arg).
 BYTEFIX_PROFILE = {
-    "name": "Alex",
+    "owner_display_name": "Alex",
     "business_name": TENANT_NAME,
     "business_type": "phone repair shop",
     "headcount": "4",

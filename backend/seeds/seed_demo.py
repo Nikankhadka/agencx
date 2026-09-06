@@ -75,7 +75,7 @@ LUMIDENT_NAME = "Lumident Dental"
 # _helpers.insert_tenant_core's profile arg) - the demo world lands in the
 # console, not the interview.
 LUMIDENT_PROFILE = {
-    "name": "Dr. Sarah Mitchell",
+    "owner_display_name": "Dr. Sarah Mitchell",
     "business_name": LUMIDENT_NAME,
     "business_type": "family dental practice",
     "headcount": "6",

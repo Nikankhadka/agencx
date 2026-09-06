@@ -18,10 +18,14 @@ deterministic ``valid`` - and a junk answer is dropped back out and re-asked
 rather than saved. A beat still unanswered after two asks hands off out loud
 ("I'll come back to this") instead of the deferral being silent.
 
+W-9: a rejected beat's reply is the beat's own ``reject`` plus the beat's own
+``ask`` - no model call at all, so the retry cannot pick the beat's ``example``
+up and hand it back as a fact about this owner.
+
 Guardrails: scan_input, price echo check, bounded history. Off-topic/meta
 questions are answered in one line then gently redirected - no escalating
 firmness, and they never burn one of a beat's two asks.
-State: {version: 3, draft, history, off_topic_count, completed,
+State: {version: 4, draft, history, off_topic_count, completed,
 knowledge_pending, offering_candidates, skipped, deferred, ask_beat,
 ask_count} in jsonb.
 """
@@ -48,6 +52,7 @@ from app.onboarding.flow import (
     normalize_pending_offerings,
 )
 from app.onboarding.tools import save_profile
+from app.shared.text import plain_dashes
 
 logger = logging.getLogger("app.onboarding.agent")
 transcript = logging.getLogger(TRANSCRIPT_LOGGER_NAME)
@@ -66,10 +71,13 @@ class Directive:
     W-2 took the question away from the model and appends the beat's own ``ask``
     verbatim, which is the guarantee that a filled slot can never be re-asked.
     W-7 keeps that guarantee but gives the model back the *conversational* work:
-    it writes one warm sentence - an acknowledgment, a "that wasn't quite right,
-    let's try again", or a "no problem, later" - and the server still owns which
-    question follows. ``_ack`` strips any question the model tacks on anyway, so
-    the owner never sees two.
+    it writes one warm sentence - an acknowledgment, a nudge, or a "no problem,
+    later" - and the server still owns which question follows. ``_ack`` strips
+    any question the model tacks on anyway, so the owner never sees two.
+
+    W-9 takes the rejection back out of the model's hands: a beat that got an
+    unusable answer is answered by ``beats.Beat.reject`` directly, so no
+    directive here describes one.
 
     Exactly one of ``reask`` / ``handoff`` / ``meta_answer`` is set on a given
     turn; ``acknowledged`` may accompany any of them or stand alone.
@@ -81,29 +89,73 @@ class Directive:
     handoff: str = ""
 
     def as_prompt(self) -> str:
-        parts: list[str] = []
+        """This turn's half of the brief: the goal, and what was captured.
+
+        The standing rules live in ``_COPILOT`` and are not restated here, so
+        the two halves cannot drift into contradicting each other.
+        """
+        parts: list[str] = ["# THIS TURN"]
         if self.handoff:
-            parts.append(self.handoff)
+            parts.append(f"- {self.handoff}")
         if self.acknowledged:
-            parts.append(f"Just captured: {', '.join(self.acknowledged)}.")
+            parts.append(f"- Just captured: {', '.join(self.acknowledged)}.")
         if self.meta_answer:
-            parts.append(f"Briefly answer: {self.meta_answer}")
+            parts.append(f"- Briefly answer: {self.meta_answer}")
         if self.reask:
-            parts.append(self.reask)
+            parts.append(f"- {self.reask}")
+        parts.append("")
+        parts.append("# OUTPUT")
         parts.append(
-            "Write ONE short, warm sentence for this and nothing more. "
-            "Do not ask a question - the next question is added after your words."
+            "One short sentence covering the above and nothing else. Do not ask "
+            "a question - the server appends the question after your words."
         )
-        return " ".join(parts)
+        return "\n".join(parts)
 
 
-_COPILOT = (
-    "You are the owner's Agencx setup assistant, helping a small-business owner "
-    "set up their assistant. Reply in ONE short, warm sentence, in wording close "
-    "to the owner's own. You never choose or write the question - the server "
-    "appends it after your sentence - so never list what is still missing and "
-    "never ask anything yourself."
-)
+# W-9: the standing contract for the onboarding copilot, in explicit sections.
+# Every prohibition here is one the live reproduction actually caught the model
+# doing (praise, "no worries", "my name" for the owner's name, a beat example
+# read back as a fact, em dashes) - none of it is defensive boilerplate.
+_COPILOT = """\
+# ROLE
+You are the Agencx setup assistant, helping a small-business owner set up their
+own assistant. You are talking to the owner, never to their customers.
+
+# GOAL
+Acknowledge what the owner just told you, in one short sentence, so the
+interview reads like a conversation.
+
+# SUCCESS CRITERIA
+- Your sentence uses the owner's own wording where it can.
+- Any value you repeat back is spelled exactly as the owner gave it.
+- The owner is never told what is still missing.
+
+# CONSTRAINTS
+- The server writes every question. You never choose, write, paraphrase, or hint
+  at one.
+- Never list what is still missing and never say what comes next.
+- No praise, no compliments, no enthusiasm about the owner, their answers, or
+  their business. "Great", "love", "perfect", "awesome", "exciting", and
+  "no worries" are all out.
+- Never write "my name". The name under discussion is the owner's, so it is
+  "your name".
+- Never state a price or any other monetary amount, and never round one or work
+  one out.
+- Never name a trade, industry, or business type the owner has not named.
+- Never claim to be a person.
+
+# CONVERSATION RULES
+- One sentence. Plain text. No headings, no bold, no lists.
+- Repeat a captured value character for character.
+- Use a plain dash "-" where you need a dash. Never use an em dash.
+- Do not manufacture an acknowledgement when there is nothing to acknowledge - a
+  brief neutral sentence is enough.
+
+# OUTPUT
+One short sentence and nothing else.
+
+# STOP RULES
+- Do not ask a question. The server appends the question after your words."""
 
 # C-3: a figure the extractor rounds into the profile becomes a figure the
 # customer-facing money gate will bless forever - the profile is one of its
@@ -112,7 +164,7 @@ _COPILOT = (
 _EXTRACT_PROMPT = (
     "You are extracting business information from a small-business owner who is "
     "onboarding their assistant. Read the conversation and update the profile "
-    "with anything new the owner stated: name, business_name, business_type, "
+    "with anything new the owner stated: owner_display_name, business_name, business_type, "
     "headcount, hours, services, contact, abn, gst. Also list offering_names "
     "only when the owner explicitly names individual offerings. Fill only what the owner "
     "actually said - never invent a value. Copy any price or other amount "
@@ -121,8 +173,8 @@ _EXTRACT_PROMPT = (
     'the owner gave, or to "none" if they said they do not have one yet; set '
     'gst to "yes" or "no". Never infer or invent offering names, and never add prices '
     "or descriptions to offering_names. Split a run-on list into one entry per item "
-    'even when it has no commas: "we offer pita coffee and wraps" is offering_names '
-    '["pita", "coffee", "wraps"], not a single entry. '
+    'even when it has no commas: a message of the form "we offer A B and C" is '
+    'offering_names ["A", "B", "C"], not a single entry. '
     "If the message is off-topic (a question about "
     "you, a greeting, or unrelated chat), set off_topic=true and put a one-line "
     "answer in meta_reply. Otherwise set off_topic=false. Leave the profile null "
@@ -135,9 +187,14 @@ _EXTRACT_PROMPT = (
 )
 
 
+# W-9: v3 called the owner's-name beat ``name``; v4 calls it
+# ``owner_display_name`` so it can never stand in for the business's name.
+_V3_BEAT, _V4_BEAT = "name", "owner_display_name"
+
+
 @dataclass
 class OnboardingRecord:
-    version: int = 3
+    version: int = 4
     draft: dict[str, Any] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)
     off_topic_count: int = 0
@@ -163,15 +220,18 @@ class OnboardingRecord:
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
         """Load a record, migrating anything older than v3 to the lean profile.
 
-        v3 is O-1's flat profile. A v1/v2 draft holds the retired nested
-        sections (business/identity/tone/services/...), which share no key with
-        the lean fields, so it is dropped rather than carried as orphan data -
-        an in-flight interview restarts. ``completed`` survives, so a tenant
-        that already went live is never re-interviewed.
+        v3 and v4 are both O-1's flat profile; the only difference is the name
+        of one beat, so a v3 record is carried forward whole and renamed rather
+        than reset. A v1/v2 draft holds the retired nested sections
+        (business/identity/tone/services/...), which share no key with the lean
+        fields, so it is dropped rather than carried as orphan data - an
+        in-flight interview restarts. ``completed`` survives, so a tenant that
+        already went live is never re-interviewed.
         """
-        if raw.get("version") == 3:
-            return cls(
-                version=3,
+        version = raw.get("version")
+        if version in (3, 4):
+            record = cls(
+                version=4,
                 draft=raw.get("draft", {}),
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
@@ -187,14 +247,34 @@ class OnboardingRecord:
                 ask_count=raw.get("ask_count", 0),
                 paused_beat=raw.get("paused_beat") or None,
             )
+            if version == 3:
+                record._rename_owner_name_beat()
+            return record
         return cls(
-            version=3,
+            version=4,
             draft={},
             history=[],
             off_topic_count=0,
             completed=raw.get("completed", False),
             offering_candidates=[],
         )
+
+    def _rename_owner_name_beat(self) -> None:
+        """Carry a v3 record's owner-name beat onto its v4 key.
+
+        Five places store a beat key, not one: the draft, the skip and deferral
+        lists, the ask cursor, and the pause. Renaming only the draft would
+        strand an interview whose cursor still pointed at ``name`` - the beat
+        would be asked again with its answer already on file.
+        """
+        if _V3_BEAT in self.draft:
+            self.draft[_V4_BEAT] = self.draft.pop(_V3_BEAT)
+        self.skipped = [_V4_BEAT if key == _V3_BEAT else key for key in self.skipped]
+        self.deferred = [_V4_BEAT if key == _V3_BEAT else key for key in self.deferred]
+        if self.ask_beat == _V3_BEAT:
+            self.ask_beat = _V4_BEAT
+        if self.paused_beat == _V3_BEAT:
+            self.paused_beat = _V4_BEAT
 
     def to_jsonb(self) -> dict[str, Any]:
         return {
@@ -250,8 +330,9 @@ class TurnPlan:
     """Everything ``prepare_turn`` computed, ready for either the streamed or
     non-streamed reply path.
 
-    ``summary`` is set when the turn completes the profile - the
-    reply is server-synthesized from the draft and never touches the model.
+    ``summary`` is set when the reply is server-synthesized and never touches
+    the model: the turn completed the profile, paused a required beat, or (W-9)
+    rejected the answer to the beat that was asked.
     ``reply_msgs`` is set otherwise and is what the reply path feeds the LLM.
     ``question`` is the next beat's ``ask``, verbatim; the reply path appends
     it after the model's acknowledgment so the model never phrases it (W-2).
@@ -266,7 +347,13 @@ class TurnPlan:
 
 
 def _activation_summary(draft: dict[str, Any]) -> str:
-    name = draft.get("business_name") or draft.get("name")
+    # W-9: the owner's own name used to stand in here when `business_name` was
+    # missing, which is the one place the two names were conflated. It was
+    # latent, never user-visible: this line renders only once every beat is
+    # satisfied, and `business_name` is required, so the fallback could not be
+    # reached from the interview. It is gone anyway - a missing business name is
+    # a deferred required beat, never a silent substitution of a private name.
+    name = draft.get("business_name")
     if name:
         intro = f"Your assistant for {name} is ready to go live."
     else:
@@ -283,6 +370,12 @@ _KNOWLEDGE_OFFER = (
     "becomes a reference I can use when answering your customers, and you can "
     "add more any time from Settings."
 )
+
+
+# What a rejected beat says when it carries no ``reject`` of its own. Every beat
+# with a deterministic ``valid`` check has one; a beat rejected purely on the
+# extractor's verdict may not, and this keeps that reply server-owned too.
+_GENERIC_REJECT = "I didn't quite catch that."
 
 
 def _completion_reply(record: OnboardingRecord) -> str:
@@ -392,9 +485,11 @@ def _ack(text: str) -> str:
     The server appends the beat's own ``ask`` after this, so a model sentence
     ending in ``?`` would show the owner two questions. W-7 keeps the guarantee
     W-2 introduced - the question is always server-owned - by stripping the
-    model's question here rather than trusting it not to write one.
+    model's question here rather than trusting it not to write one. W-9 adds the
+    em-dash normalization on the same seam, for the same reason: a prompt rule
+    the model ignores is not a rule.
     """
-    stripped = text.strip()
+    stripped = plain_dashes(text).strip()
     kept = [m.group(0).strip() for m in _SENTENCE.finditer(stripped)]
     kept = [sentence for sentence in kept if sentence and not sentence.rstrip().endswith("?")]
     return " ".join(kept).strip()
@@ -411,7 +506,11 @@ def _flush_sentences(pending: str, *, final: bool) -> tuple[list[str], str]:
     question) and whatever tail is left unterminated. With ``final`` the tail is
     itself resolved: shown if it is a statement, dropped if it is a question.
     This is what lets W-7 stream the reply live and still guarantee the owner
-    never sees the model's question next to the server's.
+    never sees the model's question next to the server's. Em dashes are
+    normalized on the way out so the streamed and non-streamed paths speak the
+    same copy rule (conventions.md 1). Normalizing a whole sentence rather than
+    the pending buffer is what keeps a dash that straddles two deltas from
+    becoming a double space.
     """
     out: list[str] = []
     while True:
@@ -421,10 +520,10 @@ def _flush_sentences(pending: str, *, final: bool) -> tuple[list[str], str]:
         sentence = match.group(0)
         pending = pending[match.end() :]
         if not sentence.rstrip().endswith("?"):
-            out.append(sentence)
+            out.append(plain_dashes(sentence))
     if final and pending.strip():
         if not pending.rstrip().endswith("?"):
-            out.append(pending)
+            out.append(plain_dashes(pending))
         pending = ""
     return out, pending
 
@@ -652,16 +751,20 @@ async def prepare_turn(
         record.ask_count += 1
 
     directive = Directive(acknowledged=acknowledged)
+    # W-9: a rejected beat is answered entirely by the server. The old path
+    # handed the model "say so kindly, e.g. {example}", and the model read the
+    # example back as this owner's own answer ("No worries at all, Nikan!").
+    # The beat's ``reject`` plus the beat's ``ask`` says the same thing with
+    # nothing left to embellish, and takes a model round trip off the slowest
+    # path in the interview.
+    reject_reply = ""
     if handoff:
         directive.handoff = handoff
     elif off_topic:
         record.off_topic_count += 1
         directive.meta_answer = update.meta_reply or "I'm here to help you set up your business."
     elif rejected is not None and nxt is not None and nxt.key == rejected.key:
-        directive.reask = (
-            f"Their reply was not a usable {rejected.label}. In one short line say so "
-            f"kindly, e.g. {rejected.example}."
-        )
+        reject_reply = f"{rejected.reject or _GENERIC_REJECT} {nxt.ask}"
     elif nxt is not None and nxt.key == record.ask_beat and record.ask_count >= 2:
         # Same beat, second ask, nothing captured - nudge with a concrete example.
         directive.reask = (
@@ -676,6 +779,8 @@ async def prepare_turn(
     ]
     if rejected is not None:
         state_parts.append(f"rejected={rejected.key}")
+    if reject_reply:
+        state_parts.append("reply=deterministic")
     if record.skipped:
         state_parts.append(f"skipped={', '.join(record.skipped)}")
     if record.deferred:
@@ -697,19 +802,25 @@ async def prepare_turn(
             off_topic=off_topic,
         )
 
+    # The rejected-beat reply travels as a summary, the same seam the completion
+    # line already uses: both reply paths render a summary with no model call.
+    if reject_reply:
+        return TurnPlan(
+            record=record,
+            summary=reject_reply,
+            reply_msgs=None,
+            off_topic=off_topic,
+        )
+
     reply_msgs: list[ChatMessage] = [
         {"role": "system", "content": _COPILOT},
-        {
-            "role": "system",
-            "content": (
-                f"Compose reply. {directive.as_prompt()} "
-                "Be conversational, concise. Never invent prices."
-            ),
-        },
+        {"role": "system", "content": directive.as_prompt()},
     ]
+    # The owner's current message is already the last entry in history (appended
+    # above), so this slice carries it. W-9 removed a second append here that
+    # showed the model the same message twice, every turn, on both paths.
     for entry in record.history[-3:]:
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
-    reply_msgs.append({"role": "user", "content": admin_message})
 
     if nxt is None:
         return TurnPlan(

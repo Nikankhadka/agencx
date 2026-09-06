@@ -21,8 +21,11 @@ cap implies.
 
 W-7 adds the missing half: a beat now knows what a *plausible* answer looks
 like (``valid``) and what to say when it does not get one (``reject``). Both
-are deterministic and server-owned, so a junk answer is challenged in the
-beat's own words with no model call at all.
+are deterministic and server-owned. W-9 makes the second half true: until then
+``reject`` was read by nothing and a junk answer went back through the model,
+which embellished the beat's ``example`` into a fact ("No worries at all,
+Nikan!" - the owner addressed by the name beat's own example). A rejected beat
+is now answered in the beat's own words with no model call at all.
 """
 
 from __future__ import annotations
@@ -81,16 +84,19 @@ class Beat:
     """One question in the interview.
 
     W-2 splits the beats in two. A ``optional`` beat is one nothing downstream
-    reads (``name``, ``headcount``) or one the owner can still edit after
+    reads (``owner_display_name``, ``headcount``) or one the owner can still edit after
     go-live (``services`` via Business > What you offer, ``abn``/``gst`` via
     Business > details) - it resolves to its ``default`` or to nothing rather
     than being asked a third time. A required beat has neither property, so it
     is deferred to a second pass instead of being dropped.
 
-    ``example`` is the concrete answer worked into a retry, and ``reject`` is
-    what the beat says when it gets something that cannot be its answer. Both
-    are server-owned strings: W-7 answers a junk turn without a model call at
-    all, so there is nothing in that reply for a model to embellish.
+    ``reject`` is what the beat says when it gets something that cannot be its
+    answer, and it is spoken verbatim: a rejected beat's reply is the beat's own
+    ``reject`` plus the beat's own ``ask``, with no model call at all, so there
+    is nothing in that reply for a model to embellish. ``example`` is the
+    concrete answer worked into the second-ask nudge, which is still
+    model-composed - keep it free of anything a model could read back as a fact
+    about this owner.
 
     ``valid`` is what makes a junk answer junk. ``complete`` only asks whether
     the field is non-empty, which is satisfied by "34234234" as a name; this
@@ -180,14 +186,16 @@ def _gst_complete(draft: dict[str, Any]) -> bool:
 
 BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
-        key="name",
+        key="owner_display_name",
         label="your name",
         # W-7: "What name would you like me to use?" landed right after a
         # sentence about setting the *business* up, and read as a question
         # about the business name. The two name beats now say which is which.
-        ask="First - what should I call you? I'll ask about the business next.",
+        # W-9: the opening line the controller composes says the business comes
+        # next, so this asks one thing and says nothing about what follows.
+        ask="Before we start, what should I call you?",
         kind="text",
-        complete=_complete("name"),
+        complete=_complete("owner_display_name"),
         # Nothing downstream reads the owner's name, and it cannot be guessed,
         # so this is the one beat that skips to a genuine blank.
         optional=True,
@@ -254,7 +262,10 @@ BEAT_ORDER: tuple[Beat, ...] = (
         optional=True,
         valid=_wordish,
         reject="I couldn't read that as something you offer.",
-        example='a short list is plenty - "haircuts, colour, beard trims"',
+        # I8: the example teaches the shape of the answer - a few items, plainly
+        # named - and names no trade, so a cafe is never nudged in a salon's
+        # vocabulary (W-9).
+        example="two or three of the things you do most, in your own words, is plenty",
     ),
     Beat(
         key="contact",

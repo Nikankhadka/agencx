@@ -39,14 +39,18 @@ TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S1
 
 
 def test_empty_onboarding_state_introduces_the_agencx_setup_assistant() -> None:
-    state = response_from_record({"version": 3})
-    assert state["prompt"].startswith("Hi! I'm your Agencx setup assistant.")
+    """W-9: the opening is fixed copy plus the first beat's own ask, verbatim."""
+    state = response_from_record({"version": 4})
+    assert state["prompt"] == (
+        "Hi, I'm the Agencx setup assistant. I'll help set up your business. "
+        "Before we start, what should I call you?"
+    )
 
 
 # One profile field per turn, in beat order. Each update carries only what the
 # owner stated that turn; save_profile merges it into the accumulated draft.
 _FAKE_UPDATES: list[dict[str, object]] = [
-    {"profile": {"name": "Sam"}},
+    {"profile": {"owner_display_name": "Sam"}},
     {"profile": {"business_name": "Bytefix Repairs"}},
     {"profile": {"business_type": "a neighborhood phone repair shop"}},
     {"profile": {"headcount": "just me and one technician"}},
@@ -232,7 +236,7 @@ async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["stage"] == "name"
+    assert body["stage"] == "owner_display_name"
     assert body["completed"] is False
     assert body["draft"] == {}
     assert body["history"] == []
@@ -246,7 +250,7 @@ async def test_paused_required_field_blocks_publish_and_resumes_in_place(
     token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     draft = {
-        "name": "Sam",
+        "owner_display_name": "Sam",
         "business_name": "Bytefix Repairs",
         "headcount": "just me",
         "hours": "Mon-Fri 9-6",
@@ -362,7 +366,7 @@ async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClien
     assert response.status_code == 200
     body = response.json()
     assert body["stage"] == "business_name"
-    assert body["draft"]["name"] == "Sam"
+    assert body["draft"]["owner_display_name"] == "Sam"
 
     resumed = await client.get("/api/onboarding/state", headers=headers)
     assert resumed.json()["stage"] == "business_name"
@@ -376,7 +380,7 @@ async def test_draft_accumulates_across_turns(client: httpx.AsyncClient) -> None
     await _send(client, headers, text="I'm Sam")
     body = await _send(client, headers, text="we are Bytefix Repairs")
 
-    assert body["draft"] == {"name": "Sam", "business_name": "Bytefix Repairs"}
+    assert body["draft"] == {"owner_display_name": "Sam", "business_name": "Bytefix Repairs"}
 
 
 def test_suggested_slug_is_a_shareable_handle() -> None:
@@ -416,7 +420,7 @@ async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClie
     body = state.json()
 
     assert body["stage"] == "headcount"
-    assert body["draft"]["name"] == "Sam"
+    assert body["draft"]["owner_display_name"] == "Sam"
     assert body["draft"]["business_name"] == "Bytefix Repairs"
     user_messages = [m["content"] for m in body["history"] if m["role"] == "user"]
     assert user_messages == ["I'm Sam", "we are Bytefix Repairs", "we fix phones"]
@@ -438,7 +442,7 @@ async def test_off_topic_message_is_not_persisted(client: httpx.AsyncClient) -> 
     state = await client.get("/api/onboarding/state", headers=headers)
     body = state.json()
     assert body["draft"] == {}
-    assert body["stage"] == "name"
+    assert body["stage"] == "owner_display_name"
 
 
 async def test_selection_advances_the_server_beat_without_calling_the_model(
@@ -481,7 +485,7 @@ async def test_selection_rejects_stale_and_invalid_values(client: httpx.AsyncCli
         headers=headers,
     )
     assert stale.status_code == 409
-    assert "current beat is name" in stale.json()["detail"]
+    assert "current beat is owner_display_name" in stale.json()["detail"]
 
     for text in ("I'm Sam", "we are Bytefix Repairs", "we fix phones"):
         await _send(client, headers, text=text)
@@ -604,7 +608,7 @@ async def test_full_flow_confirm_writes_profile(
         "select config->'profile' from tenant_config where tenant_id = $1", tenant_id
     )
     assert json.loads(profile) == {
-        "name": "Sam",
+        "owner_display_name": "Sam",
         "business_name": "Bytefix Repairs",
         "business_type": "a neighborhood phone repair shop",
         "headcount": "just me and one technician",
@@ -803,7 +807,7 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
     state_event = next(e for e in events if e["type"] == "state")
     state_draft = state_event["draft"]
     assert isinstance(state_draft, dict)
-    assert state_draft["name"] == "Sam"
+    assert state_draft["owner_display_name"] == "Sam"
     assert state_event["completed"] is False
     # The SSE state event carries the current beat key, matching /state's shape.
     assert state_event["stage"] == "business_name"

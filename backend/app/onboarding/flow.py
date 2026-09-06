@@ -20,7 +20,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class ProfileDraft(BaseModel):
     """The lean business profile (PRD spine step 2)."""
 
-    name: str = ""
+    # W-9: the owner's own name, private to onboarding and the owner-facing
+    # console. It is never the business's public identity - the two were one
+    # `or` apart in the go-live line before this name said which is which.
+    owner_display_name: str = ""
     business_name: str = ""
     business_type: str = ""
     headcount: str = ""

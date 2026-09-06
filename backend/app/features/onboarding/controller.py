@@ -159,10 +159,12 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
             break
     if not prompt:
         # The opening ends with the first beat's own ask rather than a
-        # paraphrase of it - same seam W-2 closes for every later question.
+        # paraphrase of it - same seam W-2 closes for every later question. W-9
+        # fixes the wording; the composition is unchanged, so the question is
+        # still written once, by the beat.
         prompt = (
-            "Hi! I'm your Agencx setup assistant. I'll help you get your business "
-            f"ready. {beats.BEAT_ORDER[0].ask}"
+            "Hi, I'm the Agencx setup assistant. I'll help set up your business. "
+            f"{beats.BEAT_ORDER[0].ask}"
         )
     return {
         "stage": stage,
