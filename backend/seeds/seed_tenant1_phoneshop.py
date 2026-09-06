@@ -25,6 +25,23 @@ from seeds import _helpers
 SLUG = "bytefix"
 TENANT_NAME = "Bytefix Repairs"
 
+# The O-1 profile the tenant is pre-onboarded with: the demo world lands in the
+# console, not the interview, so the seed writes the same end-state a real
+# onboarding confirm produces (via _helpers.insert_tenant_core's profile arg).
+BYTEFIX_PROFILE = {
+    "name": "Alex",
+    "business_name": TENANT_NAME,
+    "business_type": "phone repair shop",
+    "headcount": "4",
+    "hours": "Monday to Friday 9am to 6pm, Saturday 10am to 2pm",
+    "services": (
+        "Phone and laptop repairs, screen replacements, battery replacements, data recovery"
+    ),
+    "contact": "owner@bytefix.dev",
+    "abn": "none",
+    "gst": "no",
+}
+
 # --- offerings: phones, accessories, tiered repair services (~15) -----------
 
 CATALOG_ITEMS: list[tuple[str, str, int | None, str | None]] = [
@@ -243,6 +260,8 @@ async def _seed_core(tenant_id: UUID) -> None:
                 ],
             }
         },
+        business_name=TENANT_NAME,
+        profile=BYTEFIX_PROFILE,
         enabled_tools=[
             "search_knowledge",
             "recommend_items",

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DEMO_USERS, getAccessToken, loginAsTenantAdmin } from "./auth-helpers";
+import { getAccessToken, loginInChat } from "./auth-helpers";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -23,13 +23,15 @@ test("pasting a link reads the site and reads it back", async ({
   page,
   request,
 }) => {
-  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  // A fresh (never-onboarded) owner: the demo tenants are seeded already
+  // onboarded, and this flow needs the interview to be live.
+  await loginInChat(page, request, `o3-${Date.now()}@founder.dev`);
 
   const thread = page.getByTestId("onboarding-thread");
   await expect(thread).toBeVisible();
 
   // The thread is the tenant's stored history, so a re-run against the same
-  // demo tenant starts with the previous run's read-back already in it. Count
+  // tenant would start with the previous run's read-back already in it. Count
   // what is there first and assert this turn ADDS one - "a read-back is
   // visible" would be satisfied by a stale line, and once there were two it
   // failed strict mode outright.

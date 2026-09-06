@@ -33,7 +33,7 @@ from app.onboarding.agent import (
     selection_reply,
     stream_reply,
 )
-from app.onboarding.flow import PendingOffering, ProfileDraft, merge_offerings
+from app.onboarding.flow import PendingOffering, ProfileDraft, merge_offerings, system_prompt_for
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
@@ -512,15 +512,7 @@ async def confirm(
     # orphan sections) are ignored rather than rejected.
     profile = ProfileDraft.model_validate(draft)
     public_slug = validate_slug(slug or suggested_slug(profile.business_name))
-    # business_type is the owner's own free text, so it gets its own sentence
-    # rather than an apposition - "Bytefix Repairs, phone repair shop" and
-    # "Northgate Family Dental, A three-chair practice..." both read badly.
-    system_prompt = (
-        f"You are the assistant for {profile.business_name}. "
-        f"About the business: {profile.business_type.rstrip('.')}. "
-        "Answer only from the business's own material; when the answer isn't "
-        "there, say so and offer to have the owner follow up."
-    )
+    system_prompt = system_prompt_for(profile.business_name, profile.business_type)
     onboarding.completed = True
     try:
         await service.apply_confirmation(

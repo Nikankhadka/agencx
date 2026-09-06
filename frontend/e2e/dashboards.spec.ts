@@ -28,8 +28,9 @@ test.describe("tenant dashboards (unlinked, still serving)", () => {
 
   test("Dashboards nav link is absent from the console sidebar", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
-    // Login lands on /onboarding, which renders chrome-free - assert on a page
-    // that still HAS the sidebar, or this passes without proving anything.
+    // Login lands in the console chrome-free only after the tenant goes live;
+    // assert on a page that always HAS the sidebar, or this passes without
+    // proving anything.
     await page.goto("/knowledge");
     await expect(page.getByRole("navigation", { name: "Console" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Dashboards" })).toHaveCount(0);

@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 
 from app.ingestion.pipeline import ingest_offerings, process_document
 from app.llm.embedder import Embedder
+from app.onboarding.agent import OnboardingRecord
+from app.onboarding.flow import ProfileDraft, system_prompt_for
 from app.shared import db
 from app.shared.storage import document_key, get_storage
 
@@ -59,19 +61,40 @@ async def insert_tenant_core(
     brand: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     enabled_tools: list[str] | None = None,
+    business_name: str | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> None:
     """The service-context tenants + tenant_config insert every seed starts with.
 
     ``enabled_tools`` is only included when given - the column's lean default
     (D-2) is the honest value for a tenant that never opted into the commerce
     tools, and writing it explicitly would blur that signal.
+
+    ``profile`` pre-onboards the tenant: when given, the tenants row gains its
+    ``business_name`` and the tenant_config row is written exactly as a real
+    onboarding confirm leaves it (system_prompt from the profile, ``profile``
+    and a completed ``onboarding`` record in ``config``), so a seeded demo
+    tenant never shows the interview. Built from the same dataclasses the
+    confirm path uses - no duplicated shape to drift.
     """
+    merged_config = dict(config or {})
+    if profile is not None:
+        business_name = business_name or profile.get("business_name")
+        merged_config["profile"] = ProfileDraft(**profile).model_dump()
+        merged_config["onboarding"] = OnboardingRecord(draft=profile, completed=True).to_jsonb()
+        if not system_prompt and profile.get("business_type"):
+            system_prompt = system_prompt_for(
+                business_name or name, profile.get("business_type", "")
+            )
+
     async with db.tenant_context(None, "service") as conn:
         await conn.execute(
-            "insert into tenants (id, slug, name, status) values ($1, $2, $3, 'active')",
+            "insert into tenants (id, slug, name, business_name, status) "
+            "values ($1, $2, $3, $4, 'active')",
             tenant_id,
             slug,
             name,
+            business_name,
         )
         if enabled_tools is None:
             await conn.execute(
@@ -81,7 +104,7 @@ async def insert_tenant_core(
                 system_prompt,
                 tone,
                 json.dumps(brand) if brand is not None else "{}",
-                json.dumps(config) if config is not None else "{}",
+                json.dumps(merged_config),
             )
         else:
             await conn.execute(
@@ -92,7 +115,7 @@ async def insert_tenant_core(
                 system_prompt,
                 tone,
                 json.dumps(brand) if brand is not None else "{}",
-                json.dumps(config) if config is not None else "{}",
+                json.dumps(merged_config),
                 json.dumps(enabled_tools),
             )
 

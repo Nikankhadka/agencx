@@ -33,7 +33,7 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
       await route.continue();
     });
 
-    const email = "owner@bytefix.dev";
+    const email = `provision-${Date.now()}@founder.dev`;
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill(email);
     await page.getByRole("button", { name: "Send" }).click();
@@ -56,8 +56,13 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
     test(`login as ${user.email}`, async ({ page, request }) => {
       await loginAsTenantAdmin(page, request, user);
 
-      // The admin console shell is the post-login destination.
-      await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
+      // The admin console shell is the post-login destination: the demo
+      // tenants are seeded already-onboarded, so login lands on Home - the
+      // interview only shows for a tenant that has not gone live.
+      await expect(page).toHaveURL(/\/home$/);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(
+        /Good (morning|afternoon|evening),/,
+      );
     });
 
     test(`signed-in session resumes into the console from /login (${user.email})`, async ({
@@ -66,10 +71,14 @@ test.describe("tenant-admin login-in-chat (app host)", () => {
     }) => {
       await loginAsTenantAdmin(page, request, user);
 
-      // A signed-in admin hitting /login is redirected straight into the console.
+      // A signed-in admin hitting /login is redirected straight into the
+      // console: /login -> /onboarding -> /home (an onboarded tenant leaves
+      // the interview immediately).
       await page.goto("/login");
-      await page.waitForURL("**/onboarding");
-      await expect(page.getByRole("log", { name: "Onboarding conversation" })).toBeVisible();
+      await page.waitForURL(/\/home$/);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(
+        /Good (morning|afternoon|evening),/,
+      );
     });
 
     test(`sign out returns to the login chat without a reload (${user.email})`, async ({

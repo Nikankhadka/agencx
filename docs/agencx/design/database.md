@@ -519,7 +519,10 @@ this.
 
 - `seed_tenant1_phoneshop.py` - Tenant 1 (anchor): slug `bytefix`, config (tone,
   tax), ~15 categorized offerings, ~12 pricing_rules, ~20 mock orders, knowledge
-  docs via the real ingestion pipeline.
+  docs via the real ingestion pipeline. Seeded already-onboarded: `business_name`,
+  persona `system_prompt`, and a completed `config->'onboarding'` record + `profile`
+  written exactly as the confirm flow leaves them, so the demo tenant skips the
+  interview.
 - `seed_tenant2_dental.py` - Tenant 2 (generalization proof): created only
   through the conversational onboarding flow + uploads; holds raw input
   documents and the interview script, and one deliberate direct
@@ -528,11 +531,13 @@ this.
   the leakage test.
 - `seed_injection_probe.py` - one throwaway tenant with poisoned knowledge for
   the injection eval.
-- `seed_demo.py` - the demo world: both anchor tenants, GoTrue auth users,
-  membership (`users` owners + the founder's `platform_admins` row), and
-  conversations/tool calls/cost logs/escalations.
+- `seed_demo.py` - the demo world: both anchor tenants (each pre-onboarded like
+  tenant 1), GoTrue auth users, membership (`users` owners + the founder's
+  `platform_admins` row), and conversations/tool calls/cost logs/escalations.
 - `_helpers.py` - shared pool/wipe/tenant-core/commerce/knowledge helpers the
-  direct-DB seeds use (F-3).
+  direct-DB seeds use (F-3). `insert_tenant_core`'s `profile` argument writes
+  the pre-onboarded end-state from the same onboarding dataclasses the confirm
+  path uses.
 
 Agencx adds the Sababa anchor seed in O-3/O-4 work (menu + catering-rate + FAQ
 documents through the real upload + ingestion path), aligned with the reference
