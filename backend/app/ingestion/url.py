@@ -34,7 +34,7 @@ import asyncio
 import ipaddress
 import re
 import socket
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -44,6 +44,8 @@ _TIMEOUT = httpx.Timeout(10.0)
 _OPERATION_TIMEOUT_S = 10.0
 _MAX_BODY_BYTES = 2 * 1024 * 1024
 _MAX_REDIRECTS = 3
+
+AllowedTarget = tuple[str, int]
 
 # A current desktop Chrome string. Sent verbatim rather than built from a
 # version constant: it is one literal that either matches a real browser or
@@ -89,7 +91,11 @@ def _verify_peer(response: httpx.Response, selected: str) -> None:
 
 
 async def _public_addresses(
-    host: str, port: int, resolver: Callable[[str, int], Sequence[str]]
+    host: str,
+    port: int,
+    resolver: Callable[[str, int], Sequence[str]],
+    *,
+    allow_private: bool = False,
 ) -> list[str]:
     try:
         addresses = [str(_normalize_ip(host))]
@@ -103,14 +109,16 @@ async def _public_addresses(
             address = _normalize_ip(value)
         except ValueError as exc:
             raise ValueError("URL resolved to an invalid network address") from exc
-        if not address.is_global or address.is_multicast:
+        if (not allow_private and not address.is_global) or address.is_multicast:
             raise ValueError("URL resolves to a blocked network address")
         normalized.append(str(address))
     return normalized
 
 
 async def _target(
-    url: str, resolver: Callable[[str, int], Sequence[str]]
+    url: str,
+    resolver: Callable[[str, int], Sequence[str]],
+    allowed_targets: Collection[AllowedTarget] = (),
 ) -> tuple[str, str, int, list[str]]:
     try:
         parsed = urlparse(url)
@@ -124,9 +132,12 @@ async def _target(
         port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
     except ValueError as exc:
         raise ValueError("URL has an invalid port") from exc
-    if port not in (80, 443):
+    allow_private = (parsed.hostname.casefold(), port) in allowed_targets
+    if port not in (80, 443) and not allow_private:
         raise ValueError("URL port must be 80 or 443")
-    addresses = await _public_addresses(parsed.hostname, port, resolver)
+    addresses = await _public_addresses(
+        parsed.hostname, port, resolver, allow_private=allow_private
+    )
     return parsed.scheme.lower(), parsed.hostname, port, addresses
 
 
@@ -135,6 +146,7 @@ async def fetch_page(
     *,
     client: httpx.AsyncClient | None = None,
     resolver: Callable[[str, int], Sequence[str]] | None = None,
+    allowed_targets: Collection[AllowedTarget] = (),
 ) -> bytes:
     """Fetch ``url`` and return the raw response body.
 
@@ -149,9 +161,9 @@ async def fetch_page(
                 follow_redirects=False, timeout=_TIMEOUT, headers=_HEADERS, trust_env=False
             ) as owned:
                 async with asyncio.timeout(_OPERATION_TIMEOUT_S):
-                    return await _get_bounded(owned, url, resolver)
+                    return await _get_bounded(owned, url, resolver, allowed_targets)
         async with asyncio.timeout(_OPERATION_TIMEOUT_S):
-            return await _get_bounded(client, url, resolver)
+            return await _get_bounded(client, url, resolver, allowed_targets)
     except TimeoutError as exc:
         raise ValueError("could not read this URL (timeout)") from exc
 
@@ -160,10 +172,11 @@ async def _get_bounded(
     client: httpx.AsyncClient,
     url: str,
     resolver: Callable[[str, int], Sequence[str]],
+    allowed_targets: Collection[AllowedTarget] = (),
 ) -> bytes:
     current = url
     for redirect in range(_MAX_REDIRECTS + 1):
-        scheme, host, port, addresses = await _target(current, resolver)
+        scheme, host, port, addresses = await _target(current, resolver, allowed_targets)
         selected = addresses[0]
         parsed = urlparse(current)
         bound_netloc = f"[{selected}]:{port}" if ":" in selected else f"{selected}:{port}"

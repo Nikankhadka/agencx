@@ -3,8 +3,8 @@
 A file or a scraped page arrives as one undifferentiated wall of text. Before it
 answers anything, one model call reorganises it under a fixed set of headings so
 the owner can read what their assistant learned, correct it, and only then save
-it. The headings are the same for every business - a butcher and a dental clinic
-both get "What we offer" - so nothing here branches on a vertical (I8).
+it. The groups are the same for every business, so nothing here branches on a
+vertical (I8). Offerings are extracted separately into catalog-review candidates.
 
 The model reorganises; it never authors. Two guards hold that line:
 
@@ -25,17 +25,13 @@ import re
 from collections import Counter
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.llm.provider import LLMProvider
 from app.pricing.validation_gate import extract_monetary_figures
 
 logger = logging.getLogger("app.knowledge.structuring")
 
-# ponytail: one call over the head of the document. A long PDF keeps its tail
-# unstructured (appended verbatim as its own section) rather than being cut or
-# split into many calls - section-by-section structuring is the upgrade path if
-# real sources turn out to be long.
 STRUCTURE_MAX_CHARS = 12_000
 
 _PROMPT = (
@@ -44,31 +40,62 @@ _PROMPT = (
     "owner's own words and every number exactly as written. Never invent, "
     "summarise away, round, or calculate anything - especially prices. Leave a "
     "field empty when the text says nothing about it, and put anything that fits "
-    "nowhere else in `other`. Write plain sentences or short lines, no markdown."
+    "nowhere else in `other`. Keep offerings and prices out of these fields: "
+    "they are reviewed in a separate catalog pass. "
+    "Write plain sentences or short lines, no markdown."
 )
 
 
 class StructuredKnowledge(BaseModel):
     """The fixed, vertical-neutral skeleton the model fills."""
 
-    about: str = Field(default="", description="What the business is, in a sentence or two")
-    offerings: str = Field(default="", description="Services or products offered")
-    prices: str = Field(default="", description="Prices exactly as the source states them")
-    hours: str = Field(default="", description="Opening hours or availability")
-    location_contact: str = Field(default="", description="Where they are and how to reach them")
-    policies: str = Field(default="", description="Booking, delivery, returns, warranty, payment")
-    other: str = Field(default="", description="Anything else the source states")
+    business_overview: list[str] = Field(
+        default_factory=list, description="What the business is, in a sentence or two"
+    )
+    hours: list[str] = Field(default_factory=list, description="Opening hours or availability")
+    location: list[str] = Field(default_factory=list, description="Where they are")
+    contact: list[str] = Field(default_factory=list, description="How to contact them")
+    policies: list[str] = Field(
+        default_factory=list, description="Booking, delivery, returns, warranty, payment"
+    )
+    other: list[str] = Field(default_factory=list, description="Anything else the source states")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_pre_w8_fields(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        if "business_overview" not in value and "about" in value:
+            value["business_overview"] = value["about"]
+        if "location" not in value and "location_contact" in value:
+            value["location"] = value["location_contact"]
+        return value
+
+    @field_validator(
+        "business_overview",
+        "hours",
+        "location",
+        "contact",
+        "policies",
+        "other",
+        mode="before",
+    )
+    @classmethod
+    def _accept_legacy_strings(cls, value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value.strip() else []
+        return value or []
 
 
 # Field -> the heading the owner sees. Order is the reading order of the page.
-_HEADINGS: tuple[tuple[str, str], ...] = (
-    ("about", "About"),
-    ("offerings", "What we offer"),
-    ("prices", "Prices"),
-    ("hours", "Hours"),
-    ("location_contact", "Location and contact"),
-    ("policies", "Policies"),
-    ("other", "Other details"),
+_HEADINGS: tuple[tuple[str, str, str], ...] = (
+    ("business_overview", "Business overview", "business_overview"),
+    ("hours", "Hours", "hours"),
+    ("location", "Location", "location"),
+    ("contact", "Contact", "other"),
+    ("policies", "Policies", "other"),
+    ("other", "Other information", "other"),
 )
 
 # The heading used when the text is kept exactly as it arrived - the model call
@@ -91,6 +118,8 @@ def render_sections(sections: list[dict[str, Any]]) -> str:
         f"{section['heading']}\n{section['body']}".strip()
         for section in sections
         if str(section.get("body", "")).strip()
+        and str(section.get("heading", "")).casefold()
+        not in {"what we offer", "prices", AS_WRITTEN.casefold()}
     )
 
 
@@ -107,9 +136,9 @@ def figures_preserved(source: str, produced: str) -> bool:
 
 def _sections_from(structured: StructuredKnowledge) -> list[dict[str, str]]:
     return [
-        {"heading": heading, "body": value.strip()}
-        for field, heading in _HEADINGS
-        if (value := getattr(structured, field)).strip()
+        {"heading": heading, "body": "\n".join(value).strip(), "kind": kind}
+        for field, heading, kind in _HEADINGS
+        if (value := getattr(structured, field))
     ]
 
 
@@ -123,26 +152,63 @@ async def structure_document(raw_text: str, *, provider: LLMProvider) -> list[di
     text = clean_text(raw_text)
     if not text:
         return []
-    head, tail = text[:STRUCTURE_MAX_CHARS], text[STRUCTURE_MAX_CHARS:]
+    merged: dict[str, list[str]] = {heading: [] for _, heading, _ in _HEADINGS}
+    as_written: list[str] = []
+    for segment in segments(text):
+        try:
+            structured = await provider.extract(
+                system_prompt=_PROMPT, user_input=segment, schema=StructuredKnowledge
+            )
+            sections = _sections_from(structured)
+            rendered = render_sections(sections)
+            if not sections or not figures_preserved(segment, rendered):
+                raise ValueError("structured segment failed validation")
+        except Exception:
+            logger.warning("structuring segment failed, keeping source text", exc_info=True)
+            as_written.append(segment)
+            continue
+        for section in sections:
+            merged[section["heading"]].append(section["body"])
 
-    try:
-        structured = await provider.extract(
-            system_prompt=_PROMPT, user_input=head, schema=StructuredKnowledge
-        )
-    except Exception:
-        logger.warning("structuring failed, keeping the source text", exc_info=True)
-        return _as_written(text)
+    result = [
+        {"heading": heading, "body": "\n".join(merged[heading]).strip(), "kind": kind}
+        for _, heading, kind in _HEADINGS
+        if merged[heading]
+    ]
+    if as_written:
+        result.append({"heading": AS_WRITTEN, "body": "\n\n".join(as_written), "kind": "other"})
+    return result or _as_written(text)
 
-    sections = _sections_from(structured)
-    if not sections:
-        return _as_written(text)
-    if not figures_preserved(head, render_sections(sections)):
-        logger.warning("structuring produced a figure absent from the source - discarded")
-        return _as_written(text)
-    if tail.strip():
-        sections.append({"heading": f"{AS_WRITTEN} (continued)", "body": tail.strip()})
-    return sections
+
+def segments(text: str) -> list[str]:
+    """Split on source line boundaries while keeping each model input bounded.
+
+    Shared with W-6's offering extraction so both passes cut a document the same
+    way and a block maps back to the segment it was read in."""
+    chunks: list[str] = []
+    current: list[str] = []
+    size = 0
+    for line in text.splitlines(keepends=True):
+        if current and size + len(line) > STRUCTURE_MAX_CHARS:
+            chunks.append("".join(current).strip())
+            current = []
+            size = 0
+        if len(line) > STRUCTURE_MAX_CHARS:
+            if current:
+                chunks.append("".join(current).strip())
+                current = []
+                size = 0
+            chunks.extend(
+                line[index : index + STRUCTURE_MAX_CHARS].strip()
+                for index in range(0, len(line), STRUCTURE_MAX_CHARS)
+            )
+        else:
+            current.append(line)
+            size += len(line)
+    if current:
+        chunks.append("".join(current).strip())
+    return [chunk for chunk in chunks if chunk]
 
 
 def _as_written(text: str) -> list[dict[str, str]]:
-    return [{"heading": AS_WRITTEN, "body": text}]
+    return [{"heading": AS_WRITTEN, "body": text, "kind": "other"}]

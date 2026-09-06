@@ -271,6 +271,18 @@ async def test_fetch_page_rejects_credentials_and_disallowed_ports(url: str, mat
         await fetch_page(url, resolver=_test_resolver)
 
 
+async def test_fetch_page_allows_explicit_fixture_target() -> None:
+    target = await url_ingestion._target(
+        "http://frontend:3000/fixture",
+        _test_resolver,
+        {("frontend", 3000)},
+    )
+    assert target[:3] == ("http", "frontend", 3000)
+
+    with pytest.raises(ValueError, match="port"):
+        await url_ingestion._target("http://frontend:3000/fixture", _test_resolver)
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -571,7 +583,12 @@ async def _make_tenant(superuser_conn: asyncpg.Connection[Any]) -> uuid.UUID:
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
-    async def fake_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def fake_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         return html
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)

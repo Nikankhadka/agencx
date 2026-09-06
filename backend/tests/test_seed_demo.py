@@ -30,6 +30,7 @@ from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
 from seeds import seed_demo
+from seeds.seed_tenant1_phoneshop import BYTEFIX_PROFILE
 from seeds.seed_tenant1_phoneshop import SLUG as BYTEFIX_SLUG
 from tests.conftest import _app_dsn_for
 from tests.fakes import ZeroEmbedder
@@ -108,20 +109,37 @@ async def test_both_tenants_exist_with_data(
 
     lumident_catalog_n = len(seed_demo.LUMIDENT_CATALOG)
     lumident_rules_n = len(seed_demo.LUMIDENT_PRICING_RULES)
-    for tenant_id, slug, catalog_n, rules_n in [
-        (bytefix_id, BYTEFIX_SLUG, 15, 12),
-        (lumident_id, seed_demo.LUMIDENT_SLUG, lumident_catalog_n, lumident_rules_n),
+    for tenant_id, slug, catalog_n, rules_n, profile in [
+        (bytefix_id, BYTEFIX_SLUG, 15, 12, BYTEFIX_PROFILE),
+        (
+            lumident_id,
+            seed_demo.LUMIDENT_SLUG,
+            lumident_catalog_n,
+            lumident_rules_n,
+            seed_demo.LUMIDENT_PROFILE,
+        ),
     ]:
         row = await superuser_conn.fetchrow(
-            "select slug, name from tenants where id = $1", tenant_id
+            "select slug, name, business_name from tenants where id = $1", tenant_id
         )
         assert row is not None
         assert row["slug"] == slug
+        assert row["business_name"] == row["name"]  # pre-onboarded, not NULL
 
-        config = await superuser_conn.fetchval(
-            "select config from tenant_config where tenant_id = $1", tenant_id
+        config_row = await superuser_conn.fetchrow(
+            "select system_prompt, config from tenant_config where tenant_id = $1",
+            tenant_id,
         )
-        assert config is not None  # tenant_config row exists
+        assert config_row is not None  # tenant_config row exists
+        config = json.loads(config_row["config"])
+
+        # Pre-onboarded: the demo world skips the interview, so the seed writes
+        # the same end-state a real confirm leaves behind.
+        assert row["name"] in config_row["system_prompt"]
+        assert config["onboarding"]["completed"] is True
+        assert config["onboarding"]["version"] == 3
+        assert config["onboarding"]["draft"] == profile
+        assert config["profile"] == profile
 
         assert (
             await superuser_conn.fetchval(

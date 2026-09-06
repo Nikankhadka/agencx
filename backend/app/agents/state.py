@@ -47,6 +47,14 @@ class AgentState(TypedDict):
     # allowed set is built from the material the turn actually saw, and the
     # profile is the one piece of that which is never a retrieved chunk.
     owner_material: NotRequired[str]
+    # W-5: the confirmed offering catalog as it went into the turn's prompt.
+    # State-borne for the same reason as owner_material above: price_gate and
+    # inspection both re-enter draft on a redraft, and draft has no context
+    # package of its own at that point - only what the agent node already put
+    # in state on its first pass through. Recomputing it at the draft call site
+    # would mean re-fetching the package there too, which is exactly the extra
+    # catalog query this ticket rules out.
+    offerings_text: NotRequired[str]
     # T-021 reasoning-inspection gate: violations text fed back to the
     # producing specialist on redraft, whether the one allowed redraft was
     # already spent, the gate's routing decision, and a marker a specialist

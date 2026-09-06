@@ -8,15 +8,18 @@ known state.
 Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
 
 1. Bytefix (Tenant 1) via ``seed_tenant1_phoneshop.seed`` - its existing
-   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs).
+   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs). Both tenants
+   are seeded already-onboarded (profile + business_name + persona + completed
+   onboarding record), so the demo world lands in the console, not the
+   interview.
 2. Three GoTrue auth users (find-or-create by email), via an injected
    ``create_auth_user`` callable so tests run GoTrue-free with deterministic
    UUIDs. The default calls the GoTrue Admin API (POST /auth/v1/admin/users
    with a service_role bearer, email_confirm=true).
-3. Lumident Dental (Tenant 2, slug ``lumident``, config only - pure demo
-   data, explicitly NOT the T-037 generalization proof which has its own
-   ticket). Distinct brand accent + dental-language customer config, ~8
-   catalog items, ~6 pricing rules, ~6 appointment orders, 2 knowledge docs.
+3. Lumident Dental (Tenant 2, slug ``lumident``, pure demo data, explicitly
+   NOT the T-037 generalization proof which has its own ticket). Distinct
+   brand accent + dental-language customer config, ~8 catalog items, ~6
+   pricing rules, ~6 appointment orders, 2 knowledge docs.
 4. Membership rows: ``users`` (role='owner') for each tenant's owner;
    ``platform_admins`` for the founder. Tenant wipe cascades users;
    platform_admins is delete-then-insert by user_id for idempotency.
@@ -67,6 +70,21 @@ DEMO_PASSWORD = "wren-demo"
 # Lumident (Tenant 2) - a dental practice. Pure demo data.
 LUMIDENT_SLUG = "lumident"
 LUMIDENT_NAME = "Lumident Dental"
+
+# Pre-onboarded profile (same end-state as a real confirm, written by
+# _helpers.insert_tenant_core's profile arg) - the demo world lands in the
+# console, not the interview.
+LUMIDENT_PROFILE = {
+    "name": "Dr. Sarah Mitchell",
+    "business_name": LUMIDENT_NAME,
+    "business_type": "family dental practice",
+    "headcount": "6",
+    "hours": "Monday to Friday 8am to 5pm, Saturday 9am to 12pm",
+    "services": "General dentistry, cleanings, fillings, crowns",
+    "contact": "owner@lumident.dev",
+    "abn": "none",
+    "gst": "no",
+}
 
 LUMIDENT_CATALOG: list[tuple[str, str, int | None, str | None]] = [
     (
@@ -288,6 +306,8 @@ async def _seed_lumident_core() -> UUID:
                 ],
             }
         },
+        business_name=LUMIDENT_NAME,
+        profile=LUMIDENT_PROFILE,
     )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:

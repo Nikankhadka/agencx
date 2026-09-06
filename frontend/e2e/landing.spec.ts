@@ -22,9 +22,10 @@ test.describe("bare host (was marketing, now login-in-chat)", () => {
   test("can log in from the bare host", async ({ page, request }) => {
     await page.goto(`${APEX}/`);
     await loginInChat(page, request, "owner@bytefix.dev");
-    await expect(
-      page.getByRole("log", { name: "Onboarding conversation" }),
-    ).toBeVisible();
+    // The demo tenant is seeded already-onboarded, so login lands on Home.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      /Good (morning|afternoon|evening),/,
+    );
   });
 
   test("a tenant slug path resolves to the customer surface", async ({ page }) => {

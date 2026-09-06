@@ -270,3 +270,90 @@ async def test_list_empty_for_fresh_tenant(client: httpx.AsyncClient) -> None:
     response = await client.get("/api/knowledge", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# W-6: offering extraction runs at ingest, is stored, and is read back
+# ---------------------------------------------------------------------------
+
+
+class _MenuProvider:
+    """Stands in for the model on both ingest passes.
+
+    ``StructuredKnowledge`` and ``ExtractedOfferings`` are told apart by a field
+    only the first has. The extraction half returns what the real one is
+    constrained to return - verbatim spans and a block id, never a number - so
+    this test exercises the whole ingest path with the model's contribution
+    shaped exactly as it is in production.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def extract(self, *, system_prompt: str, user_input: str, schema: Any) -> Any:
+        self.calls += 1
+        if "about" in schema.model_fields:
+            return schema.model_validate({"offerings": ["Hot Chips"], "prices": ["Hot Chips $10"]})
+        block = next(
+            (line.split("]")[0].lstrip("[") for line in user_input.splitlines() if "$10." in line),
+            "",
+        )
+        return schema.model_validate(
+            {"offerings": [{"name_quote": "Hot Chips", "price_block": block}]}
+        )
+
+    async def chat(self, messages: Any) -> str:  # pragma: no cover - unused
+        return ""
+
+    async def chat_stream(self, messages: Any) -> Any:  # pragma: no cover - unused
+        yield ""
+
+
+async def test_upload_stores_offering_candidates_and_reads_them_back(
+    client: httpx.AsyncClient,
+) -> None:
+    """W-6: candidates are extracted once at ingest, stored, and read back.
+
+    The predecessor recomputed them inside every read by splitting section lines
+    at their first monetary figure. Extraction now costs a model call, so this
+    pins both halves: the candidate survives the round trip through the new
+    column and the API, and listing documents does not re-run the model.
+    """
+    from app.llm.dependency import get_llm_provider
+
+    provider = _MenuProvider()
+    app.dependency_overrides[get_llm_provider] = lambda: provider
+    try:
+        token = await _signup_tenant_admin(client)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = await client.post(
+            "/api/knowledge/drafts/upload",
+            headers=headers,
+            files={"file": ("menu.md", b"Hot Chips are $10.\n", "text/markdown")},
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["status"] == "draft"
+        assert body["extraction_status"] == "full"
+        candidate = body["offering_candidates"][0]
+        assert candidate["name"] == "Hot Chips"
+        assert candidate["candidate_id"].startswith("off_")
+        assert candidate["source_references"] == [
+            {
+                "block": "b0",
+                "excerpt": "Hot Chips are $10.",
+                "supported_fields": ["name", "price"],
+            }
+        ]
+
+        after_ingest = provider.calls
+        listed = await client.get("/api/knowledge/records", headers=headers)
+        assert listed.status_code == 200
+        # Listing must not re-run extraction - that was the old behaviour, and
+        # it now costs a model call per document per read.
+        assert provider.calls == after_ingest
+        record = next(item for item in listed.json() if item["id"] == body["id"])
+        assert record["offering_candidates"] == body["offering_candidates"]
+        assert record["extraction_status"] == "full"
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)

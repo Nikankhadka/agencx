@@ -7,6 +7,8 @@ export interface SheetProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Knowledge review is a document on desktop, while every other sheet stays mobile-first. */
+  desktop?: boolean;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -22,7 +24,7 @@ const FOCUSABLE_SELECTOR =
  * Always rendered in the DOM (toggling `inert`), never conditionally
  * unmounted, so the slide transition has something to animate between.
  */
-export function Sheet({ open, onClose, title, children }: SheetProps) {
+export function Sheet({ open, onClose, title, children, desktop = false }: SheetProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -89,6 +91,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
         tabIndex={-1}
         className={[
           "absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-[28px] bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet",
+          desktop ? "sm:inset-y-8 sm:mx-auto sm:max-w-[48rem] sm:rounded-card" : "",
           "transition-transform duration-(--duration-push) ease-push",
           open ? "translate-y-0" : "translate-y-full",
         ].join(" ")}

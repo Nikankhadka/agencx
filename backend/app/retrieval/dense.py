@@ -27,29 +27,25 @@ async def dense_search(
     query_embedding: list[float],
     limit: int = DEFAULT_LIMIT,
     metadata_kind: str | None = None,
+    exclude_metadata_kind: str | None = None,
 ) -> list[RetrievedChunk]:
-    """``metadata_kind`` scopes results to chunks whose ``metadata.kind``
-    matches exactly (T-015: the Recommendation Agent searches only
-    ``catalog_item`` chunks, never prose)."""
-    if metadata_kind is None:
-        rows = await conn.fetch(
-            "select id, content, metadata, 1 - (embedding <=> $2) as score "
-            "from knowledge_chunks where tenant_id = $1 "
-            "order by embedding <=> $2 limit $3",
-            tenant_id,
-            query_embedding,
-            limit,
-        )
-    else:
-        rows = await conn.fetch(
-            "select id, content, metadata, 1 - (embedding <=> $2) as score "
-            "from knowledge_chunks where tenant_id = $1 and metadata->>'kind' = $4 "
-            "order by embedding <=> $2 limit $3",
-            tenant_id,
-            query_embedding,
-            limit,
-            metadata_kind,
-        )
+    """Search by embedding with optional include and exclude kind filters.
+
+    Both filters are applied in SQL before ``limit`` so excluded catalog rows
+    cannot displace relevant prose candidates.
+    """
+    rows = await conn.fetch(
+        "select id, content, metadata, 1 - (embedding <=> $2) as score "
+        "from knowledge_chunks where tenant_id = $1 "
+        "and ($4::text is null or metadata->>'kind' = $4) "
+        "and ($5::text is null or coalesce(metadata->>'kind', '') <> $5) "
+        "order by embedding <=> $2 limit $3",
+        tenant_id,
+        query_embedding,
+        limit,
+        metadata_kind,
+        exclude_metadata_kind,
+    )
     return [
         RetrievedChunk(
             id=row["id"],

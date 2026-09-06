@@ -89,6 +89,13 @@ See `.agents/map.md` for the full generated file map.
 - **Hard rule - domain-agnostic:** no code branches on a business vertical, anywhere; all vertical behavior lives in `tenant_config` and uploaded knowledge. Tenant 2 onboarding by config alone is the proof.
 - Anything architecturally consequential not already decided in the docs gets flagged to the founder, not silently decided mid-build.
 
+## Branch cleanup
+
+After a temporary branch merges into `development` or `staging` and the target
+push succeeds, delete the source branch locally and on origin, then check out
+the target. Keep `development` and `staging`. Preserve unique commits and dirty
+worktrees before deleting any branch.
+
 ## Memory
 
 Session-learned facts (decisions, gotchas, conventions discovered) live in `.agents/memory.md` - read it at the start of a session.

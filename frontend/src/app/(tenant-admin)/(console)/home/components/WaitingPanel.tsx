@@ -18,9 +18,8 @@ import type { WaitingRow } from "../lib/brief";
  * prototype - the row idiom below is the chats screen's `.chat-row`
  * (name / time / preview). The count pill is a solid `--color-highlight`
  * fill (the prototype's actual amber, `--amber-400`) with dark text, not
- * `Badge`'s pale-wash "warning" tone (`--amber-500`, a muted holdover
- * from the prior system, not the prototype) - `--amber-500` reads brown at
- * text weight and fails 4.5:1 against its own subtle background (3.17:1),
+ * `Badge`'s pale-wash "warning" tone (`--amber-500`, the pale warning
+ * yellow) - too light for text at weight or a saturated fill,
  * where dark text on the solid `--amber-400` fill clears 8.6:1. It is also
  * the same token the Chats-list per-row attention dot already uses for
  * "wants the owner", so the notification count and the notification dot
@@ -31,8 +30,6 @@ import type { WaitingRow } from "../lib/brief";
  * "which one do they mean" step.
  */
 
-const COLLAPSED_ROWS = 3;
-
 function pluralHeadline(n: number): string {
   return n === 1 ? "1 customer is waiting for you" : `${n} customers are waiting for you`;
 }
@@ -42,8 +39,8 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
 
   if (rows.length === 0) return null;
 
-  const visible = expanded ? rows : rows.slice(0, COLLAPSED_ROWS);
-  const hasMore = rows.length > COLLAPSED_ROWS;
+  const hasMore = rows.length > 3;
+  const fitsAtLarge = rows.length <= 5;
 
   return (
     <article
@@ -58,11 +55,14 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
       </div>
 
       <div
+        data-testid="waiting-panel-rows"
         className={
-          expanded ? "max-h-[288px] overflow-y-auto lg:max-h-[432px]" : undefined
+          expanded
+            ? "max-h-[288px] overflow-y-auto lg:max-h-[432px]"
+            : "max-h-[216px] overflow-y-auto lg:max-h-[360px]"
         }
       >
-        {visible.map((row) => (
+        {rows.map((row) => (
           <Link
             key={row.id}
             href={`/chats/${row.id}`}
@@ -92,7 +92,7 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
           type="button"
           data-testid="waiting-panel-toggle"
           onClick={() => setExpanded((value) => !value)}
-          className="block w-full border-t border-hairline px-[18px] py-2.5 text-center text-chip text-accent active:bg-surface-sunken"
+          className={`block w-full border-t border-hairline px-[18px] py-2.5 text-center text-chip text-accent active:bg-surface-sunken${fitsAtLarge ? " lg:hidden" : ""}`}
         >
           {expanded ? "Show fewer" : `Show all ${rows.length}`}
         </button>

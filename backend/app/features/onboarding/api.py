@@ -22,12 +22,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.features.knowledge.api import KnowledgeRecord
+from app.features.knowledge.models import KnowledgeSection
 from app.features.onboarding import controller
 from app.features.tenants.slug import validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
+from app.onboarding.flow import PendingOffering
 from app.shared import auth
 from app.shared.errors import request_id
 from app.shared.limits import LimitTimeout
@@ -47,6 +50,8 @@ class OnboardingStateResponse(BaseModel):
     input: InputSpec | None
     can_confirm: bool
     suggested_slug: str | None
+    offering_candidates: list[PendingOffering]
+    paused_beat: str | None
 
 
 class SelectionPayload(BaseModel):
@@ -57,11 +62,12 @@ class SelectionPayload(BaseModel):
 class OnboardingMessageRequest(BaseModel):
     text: str | None = None
     selection: SelectionPayload | None = None
+    resume: bool = False
 
     @model_validator(mode="after")
     def _exactly_one_of_text_or_selection(self) -> OnboardingMessageRequest:
-        if (self.text is None) == (self.selection is None):
-            raise ValueError("provide exactly one of 'text' or 'selection'")
+        if sum((self.text is not None, self.selection is not None, self.resume)) != 1:
+            raise ValueError("provide exactly one of 'text', 'selection', or 'resume'")
         return self
 
 
@@ -71,12 +77,25 @@ class OnboardingConfirmResponse(BaseModel):
 
 
 class OnboardingConfirmRequest(BaseModel):
+    # W-7: the go-live screen confirms the public address only. Name and type
+    # were captured (and validated) during the interview; the founder asked not
+    # to re-confirm details already given, so this carries just the slug.
     slug: str | None = Field(default=None, min_length=3, max_length=40)
 
     @field_validator("slug")
     @classmethod
     def _check_slug(cls, value: str | None) -> str | None:
         return value if value is None else validate_slug(value)
+
+
+class OnboardingKnowledgeRequest(BaseModel):
+    sections: list[KnowledgeSection] = Field(default_factory=list)
+    offerings: list[PendingOffering] = Field(default_factory=list)
+
+
+class OnboardingKnowledgeResponse(BaseModel):
+    record: KnowledgeRecord
+    offering_candidates: list[PendingOffering]
 
 
 @router.get("/state", response_model=OnboardingStateResponse)
@@ -87,6 +106,25 @@ async def get_state(
     return OnboardingStateResponse(**record)
 
 
+@router.put("/knowledge/{document_id}", response_model=OnboardingKnowledgeResponse)
+async def save_onboarding_knowledge(
+    document_id: UUID,
+    body: OnboardingKnowledgeRequest,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> OnboardingKnowledgeResponse:
+    record, offerings = await controller.save_onboarding_knowledge(
+        tenant_id=admin.tenant_id,
+        document_id=document_id,
+        sections=[section.model_dump() for section in body.sections],
+        offerings=body.offerings,
+        embedder=embedder,
+    )
+    return OnboardingKnowledgeResponse(
+        record=KnowledgeRecord(**record), offering_candidates=offerings
+    )
+
+
 @router.post("/message", response_model=OnboardingStateResponse)
 async def post_message(
     body: OnboardingMessageRequest,
@@ -94,6 +132,9 @@ async def post_message(
     provider: Annotated[LLMProvider, Depends(get_llm_provider)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingStateResponse:
+    if body.resume:
+        record_data = await controller.run_resume(tenant_id=admin.tenant_id)
+        return OnboardingStateResponse(**controller.response_from_record(record_data))
     if body.selection is not None:
         record_data = await controller.run_selection(
             tenant_id=admin.tenant_id,
@@ -181,6 +222,8 @@ async def confirm(
     embedder: Annotated[Embedder | None, Depends(get_embedder_dependency)] = None,
 ) -> OnboardingConfirmResponse:
     result = await controller.confirm(
-        tenant_id=admin.tenant_id, slug=body.slug if body else None, embedder=embedder
+        tenant_id=admin.tenant_id,
+        slug=body.slug if body else None,
+        embedder=embedder,
     )
     return OnboardingConfirmResponse(**result)

@@ -35,16 +35,16 @@ describe("waitingRows", () => {
     expect(waitingRows([conversation({ needs_attention: false })])).toEqual([]);
   });
 
-  it("falls back when the customer has no name", () => {
+  it("falls back to the conversation's short reference when there is no name", () => {
     const rows = waitingRows([conversation({ needs_attention: true })]);
-    expect(rows[0]!.name).toBe("A customer");
+    expect(rows[0]!.name).toBe("#C1");
   });
 
   it("shows a placeholder line before the async summary lands", () => {
     const rows = waitingRows([
       conversation({ needs_attention: true, pending_summary: null }),
     ]);
-    expect(rows[0]!.summary).toBe("The owner's assistant is preparing a summary.");
+    expect(rows[0]!.summary).toBe("A summary is being prepared.");
   });
 
   it("sorts oldest escalation first", () => {

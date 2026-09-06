@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import type { ConversationSummary } from "@/lib/api-schemas";
-import { relativeTime } from "@/lib/format";
+import { customerLabel, relativeTime } from "@/lib/format";
 
 /**
  * C-6 Chats: every customer conversation, and which ones want the owner.
@@ -19,8 +19,11 @@ import { relativeTime } from "@/lib/format";
  * so triage happens here rather than by opening four threads.
  *
  * Ported from agencx-prototype-v6.html's `chats` screen: filter row, `chat-row`
- * with name / time / status dot / preview, and the search bar. Mounted
- * chrome-free until E-1 builds the tab bar to hold it.
+ * with name / time / status / preview, and the search bar. Mounted chrome-free
+ * until E-1 builds the tab bar to hold it. Two departures from the prototype,
+ * both because it only ever mocked named customers: the row falls back to the
+ * conversation's short reference rather than a literal "Customer" every row
+ * shares, and the amber attention dot is a labelled pill.
  */
 
 type Filter = "all" | "action" | "unread";
@@ -30,10 +33,6 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "action", label: "Action needed" },
   { id: "unread", label: "Unread" },
 ];
-
-function displayName(row: ConversationSummary): string {
-  return row.customer_ref?.trim() || "Customer";
-}
 
 /**
  * The line under the name. The assistant's summary of what the customer wants
@@ -64,7 +63,7 @@ export default function ChatsPage() {
     const needle = search.trim().toLowerCase();
     if (!needle) return byFilter;
     return byFilter.filter((row) =>
-      `${displayName(row)} ${previewOf(row)}`.toLowerCase().includes(needle)
+      `${customerLabel(row.customer_ref, row.id)} ${previewOf(row)}`.toLowerCase().includes(needle)
     );
   }, [query.data, filter, search]);
 
@@ -145,21 +144,30 @@ export default function ChatsPage() {
             className="w-full border-b border-hairline px-5 py-3.5 text-left active:bg-surface-sunken"
           >
             <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="truncate text-body font-medium text-text">{displayName(row)}</span>
+              <span className="min-w-0 truncate text-body font-medium text-text">
+                {customerLabel(row.customer_ref, row.id)}
+              </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-footnote text-text-secondary">
                   {relativeTime(row.last_activity_at ?? row.created_at)}
                 </span>
-                {/* Amber = the assistant asked for you. Crimson = it is
-                    handling this itself. Nothing = nothing pending. */}
+                {/* "Action needed" in words, reading exactly like the filter
+                    chip above that selects for it - a bare amber dot named the
+                    state to nobody. Crimson dot = the assistant is handling it
+                    itself. Nothing = nothing pending. */}
                 {row.needs_attention ? (
                   <span
-                    data-testid="dot-attention"
-                    aria-label="Needs you"
-                    className="size-[7px] rounded-full bg-highlight"
-                  />
+                    data-testid="row-attention"
+                    className="rounded-full bg-highlight px-2 py-0.5 text-badge font-semibold text-text"
+                  >
+                    Action needed
+                  </span>
                 ) : row.status === "open" ? (
-                  <span aria-label="Being handled for you" className="size-[7px] rounded-full bg-accent" />
+                  <span
+                    role="img"
+                    aria-label="Being handled for you"
+                    className="size-[7px] rounded-full bg-accent"
+                  />
                 ) : null}
               </span>
             </div>

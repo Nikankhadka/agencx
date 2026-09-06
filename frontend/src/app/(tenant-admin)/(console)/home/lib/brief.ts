@@ -1,4 +1,5 @@
 import type { ConversationSummary } from "@/lib/api-schemas";
+import { customerLabel } from "@/lib/format";
 import {
   sourceLabel,
   type KnowledgeRecord,
@@ -46,7 +47,7 @@ function plural(n: number, one: string, many: string): string {
 /** Shown for the seconds before the async escalation summariser lands its
  * result - never a reason-code map, since the summariser is what makes those
  * unnecessary. */
-const SUMMARY_PENDING = "The owner's assistant is preparing a summary.";
+const SUMMARY_PENDING = "A summary is being prepared.";
 
 /**
  * Every customer waiting on the owner, oldest escalation first - the
@@ -60,7 +61,7 @@ export function waitingRows(conversations: ConversationSummary[]): WaitingRow[] 
     .filter((row) => row.needs_attention)
     .map((row) => ({
       id: row.id,
-      name: row.customer_ref?.trim() || "A customer",
+      name: customerLabel(row.customer_ref, row.id),
       summary: row.pending_summary?.trim() || SUMMARY_PENDING,
       since: row.pending_since ?? row.last_activity_at ?? row.created_at,
     }))

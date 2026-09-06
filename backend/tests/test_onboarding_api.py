@@ -21,11 +21,13 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.onboarding import service as onboarding_service
 from app.features.onboarding.controller import _find_url, response_from_record
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
+from app.onboarding.agent import OnboardingRecord
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -189,8 +191,15 @@ async def _send(
     *,
     text: str | None = None,
     selection: dict[str, object] | None = None,
+    resume: bool = False,
 ) -> dict[str, Any]:
-    payload: dict[str, object] = {"text": text} if text is not None else {"selection": selection}
+    payload: dict[str, object] = (
+        {"text": text}
+        if text is not None
+        else {"selection": selection}
+        if selection is not None
+        else {"resume": resume}
+    )
     response = await client.post("/api/onboarding/message", json=payload, headers=headers)
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()
@@ -229,6 +238,52 @@ async def test_fresh_tenant_starts_at_name(client: httpx.AsyncClient) -> None:
     assert body["history"] == []
     assert body["can_confirm"] is False
     assert body["input"]["kind"] == "text"
+
+
+async def test_paused_required_field_blocks_publish_and_resumes_in_place(
+    client: httpx.AsyncClient,
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    draft = {
+        "name": "Sam",
+        "business_name": "Bytefix Repairs",
+        "headcount": "just me",
+        "hours": "Mon-Fri 9-6",
+        "services": "screen repairs",
+        "contact": "555-0100",
+        "abn": "none",
+    }
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft=draft,
+            deferred=["business_type"],
+            paused_beat="business_type",
+        ).to_jsonb(),
+    )
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    assert state.status_code == 200
+    assert state.json()["stage"] == "paused"
+    assert state.json()["paused_beat"] == "business_type"
+    assert state.json()["can_confirm"] is False
+
+    blocked = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
+    assert blocked.status_code == 409
+    assert "paused" in blocked.json()["detail"]
+
+    resumed = await _send(client, headers, resume=True)
+    assert resumed["stage"] == "business_type"
+    assert resumed["paused_beat"] is None
+    assert resumed["history"][-1]["content"].endswith(
+        "In a few words, what kind of business is it?"
+    )
+
+    duplicate = await client.post("/api/onboarding/message", json={"resume": True}, headers=headers)
+    assert duplicate.status_code == 409
 
 
 async def test_every_beat_still_accepts_typed_text(client: httpx.AsyncClient) -> None:
@@ -270,7 +325,12 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     await _send(client, headers, text=_FULL_WALK[3][1])
     body = await _send(client, headers, text=_FULL_WALK[4][1])
     assert body["stage"] == "services"
-    assert body["input"]["chips"] == []
+    # W-7: the skip chip is gone; the beat resolves on its own after two asks,
+    # and the catalog is editable later at Business > What you offer.
+    assert labels(body) == []
+    # W-3: a non-chipped beat's placeholder is blank - the assistant's question
+    # already in the thread is the context carrier, not a repeated placeholder.
+    assert body["input"]["placeholder"] == ""
 
     body = await _send(client, headers, text=_FULL_WALK[5][1])
     assert body["stage"] == "contact"
@@ -404,7 +464,10 @@ async def test_selection_advances_the_server_beat_without_calling_the_model(
     assert body["draft"]["headcount"] == "got a team"
     assert body["history"][-2:] == [
         {"role": "user", "content": "Got a team"},
-        {"role": "assistant", "content": "Got it. When are you open?"},
+        {
+            "role": "assistant",
+            "content": "Got it. What days and hours are you open?",
+        },
     ]
 
 
@@ -575,12 +638,90 @@ async def test_confirm_writes_no_catalog_or_pricing_rows(
     assert rules == 0
 
 
+async def test_confirm_reconciles_reviewed_offerings_once(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    await _walk_to_confirm(client, token)
+
+    await superuser_conn.execute(
+        "insert into offerings (tenant_id, name, description, price_cents, position) "
+        "values ($1, 'coffee', 'Old description', 300, 0)",
+        tenant_id,
+    )
+    onboarding = await superuser_conn.fetchval(
+        "select config->'onboarding' from tenant_config where tenant_id = $1", tenant_id
+    )
+    record = json.loads(onboarding)
+    record["offering_candidates"] = [
+        {
+            "name": "Coffee",
+            "description": "Freshly brewed",
+            "price_cents": 450,
+            "sources": ["owner", "document"],
+        },
+        {
+            "name": "Pita bowls",
+            "description": "A filling lunch",
+            "price_cents": 1200,
+            "sources": ["document"],
+        },
+    ]
+    await superuser_conn.execute(
+        "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true) "
+        "where tenant_id = $1",
+        tenant_id,
+        json.dumps(record),
+    )
+
+    response = await client.post(
+        "/api/onboarding/confirm",
+        json={"slug": _page_slug(tenant_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200, response.text
+
+    rows = await superuser_conn.fetch(
+        "select name, description, price_cents from offerings "
+        "where tenant_id = $1 and active order by position",
+        tenant_id,
+    )
+    assert [dict(row) for row in rows] == [
+        {"name": "Coffee", "description": "Freshly brewed", "price_cents": 450},
+        {"name": "Pita bowls", "description": "A filling lunch", "price_cents": 1200},
+    ]
+    catalog = await superuser_conn.fetchrow(
+        "select status from documents where tenant_id = $1 and doc_type = 'catalog'", tenant_id
+    )
+    assert catalog is not None
+    assert catalog["status"] == "ready"
+
+
 async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     response = await client.post(
         "/api/onboarding/confirm", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 409
+
+
+async def test_confirm_keeps_the_draft_when_no_correction_is_sent(
+    client: httpx.AsyncClient,
+) -> None:
+    """An owner who changes nothing must not blank either field."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_to_confirm(client, token)
+    before = (await client.get("/api/onboarding/state", headers=headers)).json()["draft"]
+
+    response = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
+    assert response.status_code == 200
+
+    after = (await client.get("/api/onboarding/state", headers=headers)).json()["draft"]
+    assert after["business_name"] == before["business_name"]
+    assert after["business_type"] == before["business_type"]
 
 
 async def test_double_confirm_is_conflict(client: httpx.AsyncClient) -> None:
@@ -705,7 +846,12 @@ def uploads_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
-    async def fake_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def fake_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         return html
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
@@ -741,14 +887,14 @@ async def test_url_message_scrapes_ingests_and_reads_back(
     assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
     assert any("Here's what I've got from your site" in m for m in assistant_msgs)
 
-    # The site became a ready 'website' document.
+    # The site remains an unread draft until the owner reviews it.
     doc = await superuser_conn.fetchrow(
         "select doc_type, status, filename from documents where tenant_id = $1",
         tenant_id,
     )
     assert doc is not None
     assert doc["doc_type"] == "website"
-    assert doc["status"] == "ready"
+    assert doc["status"] == "draft"
     assert doc["filename"] == "https://bytefix.example.com"
 
 
@@ -759,7 +905,12 @@ async def test_url_message_scrape_failure_falls_back(
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
 
-    async def fail_fetch(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def fail_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         raise ValueError("no extractable content at this URL")
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", fail_fetch)
@@ -785,7 +936,12 @@ async def test_url_message_survives_an_unreachable_host(
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
 
-    async def unreachable(url: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+    async def unreachable(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
         raise ValueError("could not read this URL (ConnectError)")
 
     monkeypatch.setattr("app.features.knowledge.service.fetch_page", unreachable)

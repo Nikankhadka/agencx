@@ -62,6 +62,10 @@ Plans and chat replies follow Tier A, plus:
 
 - Never add an agent name (Claude, Claude Code, or otherwise) as a co-author on commits.
 - Commit messages describe what changed and why, in plain language.
+- After a temporary branch merges into `development` or `staging` and the target
+  is pushed successfully, delete the source branch locally and on origin, then
+  check out the target. Never delete `development` or `staging`; preserve any
+  unique commits and dirty worktrees before cleanup.
 
 ## 3. Auto-generated files
 
@@ -78,6 +82,10 @@ Per the Architecture Doc's closing note: anything not already decided in these d
 ## 5. Bug-fix protocol
 
 Before writing a fix for any bug (during the 30-day build or in the post-launch "next sprint" iteration loop), first reproduce it in an end-to-end setting as close as possible to how a real end user would hit it - through the actual customer chat surface or the tenant admin console, not a unit test or a direct API call, unless the bug is already known to be isolated at that layer. Reproducing it for real is what confirms the fix addresses the actual problem rather than a guessed-at symptom.
+
+### 5.1 Flow-change confirmation
+
+A change to a working user-facing flow - the onboarding interview script or beat order, the chat routing between fast and hybrid paths, the publish/confirm sequence, or any other multi-turn behavior a user has already exercised successfully - is flagged to the founder before it is made, with the current behavior and the proposed behavior both stated. This applies even when the change is a refactor that is not intended to alter behavior: intent and actual behavior have diverged before in this codebase (the onboarding beat-versus-paraphrase seam W-2 closes is the concrete example), and the flag is what catches that divergence before a user does.
 
 ## 6. End-to-end testing and UI standard
 

@@ -8,6 +8,15 @@ export interface CommandPillProps {
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
   placeholder?: string;
+  /**
+   * W-3: onboarding beats now leave `placeholder` blank by default (the
+   * in-thread question carries the context), which would otherwise strip the
+   * textarea's only accessible name. This is that name's static replacement -
+   * FieldPill's callers pass their own `aria-label`; this one is the same idea
+   * with a sensible default, since most CommandPill callers have nothing more
+   * specific to say than "the answer goes here".
+   */
+  ariaLabel?: string;
   disabled?: boolean;
   /** Streaming a reply - swap the send circle for a Stop square. */
   busy?: boolean;
@@ -44,6 +53,7 @@ export function CommandPill({
   onChange,
   onSubmit,
   placeholder,
+  ariaLabel = "Your answer",
   disabled,
   busy,
   onStop,
@@ -103,6 +113,7 @@ export function CommandPill({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         disabled={disabled}
         rows={1}
         className="max-h-24 min-h-6 flex-1 resize-none bg-transparent text-prose text-text placeholder:text-ink-a40 outline-none disabled:opacity-50"

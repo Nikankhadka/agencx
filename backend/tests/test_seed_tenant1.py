@@ -18,7 +18,14 @@ import pytest
 import pytest_asyncio
 
 from app.shared import db
-from seeds.seed_tenant1_phoneshop import CATALOG_ITEMS, PRICING_RULES, SLUG, seed
+from seeds.seed_tenant1_phoneshop import (
+    BYTEFIX_PROFILE,
+    CATALOG_ITEMS,
+    PRICING_RULES,
+    SLUG,
+    TENANT_NAME,
+    seed,
+)
 from tests.conftest import _app_dsn_for
 from tests.fakes import ZeroEmbedder
 
@@ -80,6 +87,33 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
         "select count(*) from offerings where tenant_id = $1", first_id
     )
     assert leftover_catalog == 0  # cascaded away with the first tenant
+
+
+async def test_seed_pre_onboards_the_tenant(
+    app_pool: None, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """The seed writes the same end-state a real onboarding confirm leaves.
+
+    The demo world lands in the console, not the interview, so the tenant is
+    born with a completed onboarding record, a profile, a business_name, and a
+    persona - exactly the four rows the confirm write path produces.
+    """
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    row = await superuser_conn.fetchrow(
+        "select t.business_name, c.system_prompt, c.config "
+        "from tenants t join tenant_config c on c.tenant_id = t.id where t.id = $1",
+        tenant_id,
+    )
+    assert row is not None
+    assert row["business_name"] == TENANT_NAME
+    assert "Bytefix Repairs" in row["system_prompt"]
+
+    config = json.loads(row["config"])
+    assert config["onboarding"]["completed"] is True
+    assert config["onboarding"]["version"] == 3
+    assert config["onboarding"]["draft"] == BYTEFIX_PROFILE
+    assert config["profile"] == BYTEFIX_PROFILE
 
 
 async def test_lean_default_and_tenant_one_opt_in(

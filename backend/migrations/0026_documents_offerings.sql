@@ -1,0 +1,23 @@
+-- 0026_documents_offerings.sql - W-6: offering candidates extracted from the
+-- whole document, computed once at ingest.
+--
+-- Candidates used to be re-derived on every read by splitting each line of two
+-- fixed headings at its first monetary figure. That produced sentence fragments
+-- ("Bowl is", "Pocket both run") from prose sources and never carried a
+-- description. The replacement reads the whole document through a model call, so
+-- it cannot run per read: the result is computed during ingestion and stored
+-- here.
+--
+-- Shape: {"status": "full" | "partial" | "failed", "candidates": [PendingOffering, ...]}.
+-- `status` distinguishes a fully extracted document from one the model could only
+-- partly read, so the review sheet can say so instead of showing a truncated list
+-- that looks complete.
+--
+-- Null on rows ingested before this, which are extracted on first view rather
+-- than backfilled - the work needs a model call per document and nothing reads
+-- the column until someone opens the review screen. Same policy as `structured`
+-- in 0019.
+--
+-- No RLS or grant statement is needed: both are table-level and adding a column
+-- changes neither.
+alter table documents add column offerings jsonb;

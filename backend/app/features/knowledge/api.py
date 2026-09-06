@@ -9,7 +9,7 @@ so a crafted filename can never escape the tenant's upload directory.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
@@ -17,9 +17,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from pydantic import BaseModel
 
 from app.features.knowledge import controller
+from app.features.knowledge.models import KnowledgeSection
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding.flow import PendingOffering
 from app.shared import auth
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
@@ -44,28 +46,26 @@ class UrlIngestRequest(BaseModel):
     url: str
 
 
-class Section(BaseModel):
-    """One readable block of a document: a fixed heading and the owner's text."""
-
-    heading: str
-    body: str
-
-
 class KnowledgeRecord(DocumentResponse):
     """A document as the knowledge screen reads it - the row plus its sections."""
 
-    sections: list[Section]
-    offering_candidates: list[dict[str, object]] = []
+    sections: list[KnowledgeSection]
+    offering_candidates: list[PendingOffering] = []
+    # W-6: how completely the document could be read. "partial" and "failed" mean
+    # the candidate list is not the whole document, and the review sheet says so
+    # rather than presenting a truncated list as if it were complete. "pending"
+    # is a row ingested before extraction existed, filled in on first view.
+    extraction_status: Literal["full", "partial", "failed", "pending"] = "pending"
 
 
-class ConfirmedOffering(BaseModel):
-    name: str
-    price_cents: int | None = None
+class SourceDetail(BaseModel):
+    text: str
+    is_fallback: bool
 
 
 class SaveRecordRequest(BaseModel):
-    sections: list[Section]
-    offerings: list[ConfirmedOffering] = []
+    sections: list[KnowledgeSection] = []
+    offerings: list[PendingOffering] = []
     accept_price_changes: bool = False
 
 
@@ -218,6 +218,15 @@ async def get_record(
         tenant_id=admin.tenant_id, document_id=document_id, provider=provider
     )
     return KnowledgeRecord(**row)
+
+
+@router.get("/records/{document_id}/source", response_model=SourceDetail)
+async def get_source_detail(
+    document_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> SourceDetail:
+    detail = await controller.source_detail(tenant_id=admin.tenant_id, document_id=document_id)
+    return SourceDetail(text=str(detail["text"]), is_fallback=bool(detail["is_fallback"]))
 
 
 @router.put("/records/{document_id}", response_model=KnowledgeRecord)

@@ -13,6 +13,7 @@ import json
 import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import replace
 from typing import Any
 
 import asyncpg
@@ -21,7 +22,7 @@ import pytest_asyncio
 
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
-from app.llm.provider import ChatMessage, ToolSpec, ToolTurn
+from app.llm.provider import ChatMessage, SchemaT, ToolCall, ToolSpec, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from app.services import context_package
@@ -80,6 +81,7 @@ async def _seed_tenant(
     *,
     contents: tuple[str, ...] = ("We are open weekdays 9-5.",),
     profile: dict[str, str] | None = None,
+    offerings: tuple[tuple[str, str, int | None], ...] = (),
 ) -> uuid.UUID:
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Package Test Co') returning id",
@@ -109,6 +111,17 @@ async def _seed_tenant(
                 [0.0] * EMBEDDING_DIM,
                 json.dumps({"source": "faq.md", "chunk_index": index, "kind": "prose"}),
             )
+    for position, (name, description, price_cents) in enumerate(offerings):
+        await conn.execute(
+            "insert into offerings "
+            "(tenant_id, name, description, price_cents, position) "
+            "values ($1, $2, $3, $4, $5)",
+            tenant_id,
+            name,
+            description,
+            price_cents,
+            position,
+        )
     return tenant_id
 
 
@@ -151,6 +164,80 @@ async def test_package_carries_prompt_profile_and_corpus(
     assert package.fast_path is True
     assert [c.content for c in package.chunks] == ["We are open weekdays 9-5."]
     assert "Mon-Fri 9-5" in package.profile_text()
+
+
+async def test_package_carries_active_offerings_in_storefront_order(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=(),
+        offerings=(
+            ("Coffee", "Freshly brewed", 350),
+            ("Pita bowls", "Choose your filling", None),
+        ),
+    )
+    await superuser_conn.execute(
+        "insert into offerings (tenant_id, name, description, price_cents, position, active) "
+        "values ($1, 'Retired special', '', 999, 0, false)",
+        tenant_id,
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        package = await build_package(conn, tenant_id)
+
+    assert [offering.name for offering in package.offerings] == ["Coffee", "Pita bowls"]
+    assert package.offerings_text() == (
+        "Current confirmed offerings:\n"
+        "- Coffee: Freshly brewed ($3.50)\n"
+        "- Pita bowls: Choose your filling"
+    )
+    assert package.owner_material().endswith(package.offerings_text())
+
+
+async def test_hybrid_package_also_carries_active_offerings(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        offerings=(("Coffee", "Freshly brewed", 350),),
+    )
+    original = os.environ.get("CORPUS_FAST_PATH_MAX_TOKENS")
+    os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = "1"
+    get_settings.cache_clear()
+    try:
+        async with db.tenant_context(tenant_id, "customer") as conn:
+            package = await build_package(conn, tenant_id)
+    finally:
+        if original is None:
+            os.environ.pop("CORPUS_FAST_PATH_MAX_TOKENS", None)
+        else:
+            os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = original
+        get_settings.cache_clear()
+
+    assert package.fast_path is False
+    assert package.offerings[0].name == "Coffee"
+    assert "Coffee: Freshly brewed ($3.50)" in package.offerings_text()
+
+
+async def test_offering_change_invalidates_the_cached_package(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn, contents=(), offerings=(("Coffee", "Freshly brewed", 350),)
+    )
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await get_package(conn, tenant_id)
+
+    await superuser_conn.execute(
+        "update offerings set price_cents = 400 where tenant_id = $1", tenant_id
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after = await get_package(conn, tenant_id)
+
+    assert after is not before
+    assert after.offerings[0].price_cents == 400
 
 
 async def test_package_without_a_profile_still_assembles(
@@ -302,6 +389,34 @@ async def test_fast_path_prompt_carries_the_corpus_and_drops_the_search_tool(
     assert "create_escalation" in provider.tool_calls_offered[0]
 
 
+async def test_fast_path_prompt_lists_the_complete_confirmed_catalog(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=("Our menu may change seasonally.",),
+        offerings=(("Coffee", "Freshly brewed", 350), ("Pita bowls", "", 1200)),
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = RecordingProvider(answer="We offer coffee and pita bowls.")
+
+    await build_graph().ainvoke(
+        _initial_state(tenant_id, conversation_id, "What do you offer?"),
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=provider,
+            embedder=ZeroEmbedder(),
+            reranker=PassthroughReranker(),
+        ),
+    )
+
+    system = provider.tool_call_messages[0][0]["content"]
+    assert "Current confirmed offerings:" in system
+    assert "Coffee: Freshly brewed ($3.50)" in system
+    assert "Pita bowls ($12.00)" in system
+    assert "Our menu may change seasonally." in system
+
+
 async def test_fast_path_answer_still_passes_through_inspection(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
@@ -357,3 +472,165 @@ async def test_corpus_over_budget_keeps_the_search_tool(
 
     assert "search_knowledge" in provider.tool_calls_offered[0]
     assert "We are open weekdays 9-5." not in provider.tool_call_messages[0][0]["content"]
+
+
+# --- W-5: answer from confirmed offerings and knowledge together ---------------
+
+
+class HighScoreReranker(Reranker):
+    """A reranker that scores every candidate well above the search_knowledge
+    relevance floor (T-044's ``_REFUSAL_SCORE_THRESHOLD``). Real reranked
+    scores would work too, but a single-chunk corpus never earns more than one
+    RRF contribution per ranked list, which sits below that floor - a real
+    reranker would legitimately treat that as too weak to answer from, which
+    is not what these tests are checking."""
+
+    async def rerank(
+        self, *, query: str, candidates: list[RetrievedChunk], top_k: int
+    ) -> list[RetrievedChunk]:
+        return [replace(chunk, score=1.0) for chunk in candidates[:top_k]]
+
+
+def _search_knowledge_turns(query: str, answer: str) -> list[ToolTurn]:
+    call = ToolCall(id="call_s", name="search_knowledge", args={"query": query})
+    return [
+        ToolTurn(tool_calls=[call]),
+        ToolTurn(text=answer, tool_calls=[]),
+    ]
+
+
+async def test_hybrid_knowledge_answer_carries_the_confirmed_offerings(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """W-5: on the hybrid path, a search_knowledge turn's draft prompt must
+    carry the confirmed catalog alongside the retrieved chunks - today
+    ``_build_knowledge_prompt`` only ever sees ``retrieved_chunks``, so this
+    assertion is false before the fix."""
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=("We are open weekdays 9-5.",),
+        offerings=(("Coffee", "Freshly brewed", 350),),
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=_search_knowledge_turns(
+            "hours", "We open weekdays 9-5 and also sell Coffee [1]."
+        ),
+        extract_route="knowledge",
+    )
+    original = os.environ.get("CORPUS_FAST_PATH_MAX_TOKENS")
+    os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = "1"
+    get_settings.cache_clear()
+    context_package.clear_cache()
+    try:
+        await build_graph().ainvoke(
+            _initial_state(tenant_id, conversation_id, "When are you open and what do you sell?"),
+            context=GraphContext(
+                tenant_id=tenant_id,
+                provider=provider,
+                embedder=ZeroEmbedder(),
+                reranker=HighScoreReranker(),
+            ),
+        )
+    finally:
+        if original is None:
+            os.environ.pop("CORPUS_FAST_PATH_MAX_TOKENS", None)
+        else:
+            os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = original
+        get_settings.cache_clear()
+
+    assert provider.draft_prompts
+    draft_prompt = provider.draft_prompts[0]
+    assert "Current confirmed offerings:" in draft_prompt
+    assert "Coffee" in draft_prompt
+
+
+async def test_fast_path_prompt_no_longer_sequences_catalog_before_detail(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Sibling to test_fast_path_prompt_lists_the_complete_confirmed_catalog:
+    that test only asserts the catalog content is present, which must stay
+    true. This asserts the sequencing instruction that caused the two-step
+    answer (catalog first, detail only on a second, more insistent question)
+    is gone."""
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=("Our menu may change seasonally.",),
+        offerings=(("Coffee", "Freshly brewed", 350), ("Pita bowls", "", 1200)),
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = RecordingProvider(answer="We offer coffee and pita bowls.")
+
+    await build_graph().ainvoke(
+        _initial_state(tenant_id, conversation_id, "What do you offer?"),
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=provider,
+            embedder=ZeroEmbedder(),
+            reranker=PassthroughReranker(),
+        ),
+    )
+
+    system = provider.tool_call_messages[0][0]["content"]
+    assert "Current confirmed offerings:" in system  # unchanged: catalog still authoritative
+    assert "before offering to share more detail" not in system
+
+
+class GroundingSensitiveProvider(RecordingProvider):
+    """Unlike the base fake's ``extract()``, which always hands back a
+    passing ``InspectionVerdicts`` regardless of what it was given, this
+    provider's grounding verdict actually depends on whether ``must_ground``
+    appears in the judge's context - the exact thing W-5 part C's
+    ``_provenance_text`` fix controls. Before that fix, a fast-path answer
+    naming a confirmed offering has no supporting text in the judge's prompt
+    (catalog chunks are excluded from retrieval by design), so this fails;
+    after the fix, the offerings block is there and it passes.
+    """
+
+    def __init__(self, answer: str, must_ground: str) -> None:
+        super().__init__(answer=answer)
+        self._must_ground = must_ground
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        if "grounding" in schema.model_fields:
+            grounded = self._must_ground in system_prompt
+            return schema.model_validate(
+                {"grounding": {"passed": grounded, "reason": "" if grounded else "not grounded"}}
+            )
+        return await super().extract(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
+
+
+async def test_fast_path_answer_naming_offering_and_knowledge_detail_does_not_escalate(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """W-5 part C regression: a single reply naming both a confirmed offering
+    and a knowledge-chunk-only detail must clear the grounding check, not
+    escalate for lack of provenance the catalog chunk never carries."""
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=("We are open weekdays 9-5.",),
+        offerings=(("Coffee", "Freshly brewed", 350),),
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = GroundingSensitiveProvider(
+        answer="We serve Coffee, and we're open weekdays 9-5 [1].",
+        must_ground="Coffee",
+    )
+
+    final_state = await build_graph().ainvoke(
+        _initial_state(tenant_id, conversation_id, "What do you offer and when are you open?"),
+        context=GraphContext(
+            tenant_id=tenant_id,
+            provider=provider,
+            embedder=ZeroEmbedder(),
+            reranker=PassthroughReranker(),
+        ),
+    )
+
+    assert final_state["escalated"] is False
+    assert final_state["inspection_decision"] == "ok"
+    assert final_state["inspection"]["grounding"]["passed"] is True

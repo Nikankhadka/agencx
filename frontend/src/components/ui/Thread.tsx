@@ -142,8 +142,11 @@ export function TypingLine() {
  * says what is being read.
  */
 export function ProcessingLine({ children }: { children: ReactNode }) {
+  // W-3: no role="status" here - this renders inside Thread's own role="log"
+  // (page.tsx), and that enclosing log already announces it (see the
+  // nested-live-region note on Thread above).
   return (
-    <p role="status" className="animate-rise-fast mt-3 text-proc italic text-ink-a35">
+    <p className="animate-rise-fast mt-3 text-proc italic text-ink-a35">
       {children}
     </p>
   );

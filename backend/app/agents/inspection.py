@@ -137,22 +137,35 @@ def _provenance_text(state: AgentState) -> str:
         # A grounding check cannot be run against material the judge cannot
         # read, and the size is bounded either way - five chunks on the hybrid
         # path, and O-4's token budget on the fast path.
-        return "\n".join(f"- {chunk['content']}" for chunk in state["retrieved_chunks"])
-    engine_quote = state["engine_quote"]
-    if engine_quote:
-        # Quoting's own selections are id/quantity only (no name/description
-        # - see the agent node's SelectionChoice) - the engine's persisted line
-        # items are the real provenance for what the draft should reference.
-        return "\n".join(
-            f"- {item['label']} x{item['quantity']}" for item in engine_quote["line_items"]
-        )
-    if state["selections"]:
-        return "\n".join(
-            f"- {selection.get('name') or selection.get('rule_code', '')}: "
-            f"{selection.get('description', '')}"
-            for selection in state["selections"]
-        )
-    return "(no retrieved context)"
+        base = "\n".join(f"- {chunk['content']}" for chunk in state["retrieved_chunks"])
+    else:
+        engine_quote = state["engine_quote"]
+        if engine_quote:
+            # Quoting's own selections are id/quantity only (no name/description
+            # - see the agent node's SelectionChoice) - the engine's persisted
+            # line items are the real provenance for what the draft should
+            # reference.
+            base = "\n".join(
+                f"- {item['label']} x{item['quantity']}" for item in engine_quote["line_items"]
+            )
+        elif state["selections"]:
+            base = "\n".join(
+                f"- {selection.get('name') or selection.get('rule_code', '')}: "
+                f"{selection.get('description', '')}"
+                for selection in state["selections"]
+            )
+        else:
+            base = "(no retrieved context)"
+    # W-5: catalog rows are deliberately excluded from ``retrieved_chunks`` on
+    # both paths (whole_corpus and the search_knowledge retrieval both filter
+    # out catalog_item chunks), so a draft that names a confirmed offering
+    # alongside a knowledge fact has no supporting text here unless the
+    # offerings are appended too - without this, the grounding judge would
+    # fail an answer that is doing exactly what W-5 asks for.
+    offerings_text = state.get("offerings_text")
+    if offerings_text:
+        base = f"{base}\n\n{offerings_text}"
+    return base
 
 
 async def run(state: AgentState) -> dict[str, Any]:

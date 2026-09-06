@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.features.business.media import Cloudinary, MediaUploadError, UploadedMedia, classify_url
+from app.features.business.offering_candidates import normalize_name
 from app.ingestion.pipeline import ingest_offerings
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder
@@ -127,7 +128,7 @@ async def create_offerings_batch(
     existing_rows = await conn.fetch(
         "select name from offerings where tenant_id = $1 and active", tenant_id
     )
-    existing = {str(row["name"]).strip().casefold() for row in existing_rows}
+    existing = {normalize_name(str(row["name"])) for row in existing_rows}
     existing_categories = sorted(
         {
             str(row["category"]).strip()
@@ -151,7 +152,7 @@ async def create_offerings_batch(
     rows: list[dict[str, Any]] = []
     for item in offerings:
         name = str(item.get("name", "")).strip()
-        key = name.casefold()
+        key = normalize_name(name)
         if not name or key in existing:
             continue
         category = str(item.get("category") or "").strip() or None
@@ -181,6 +182,66 @@ async def create_offerings_batch(
     if rows:
         await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
     return rows
+
+
+async def reconcile_offerings_batch(
+    *,
+    conn: db.AppConnection,
+    tenant_id: UUID,
+    offerings: list[dict[str, Any]],
+    embedder: Embedder,
+) -> None:
+    """Apply the reviewed catalog in one transaction and rebuild it once."""
+    keys: set[str] = set()
+    for item in offerings:
+        key = normalize_name(str(item.get("name", "")))
+        if not key or key in keys:
+            raise ValueError("duplicate offering name")
+        keys.add(key)
+
+    existing_rows = await conn.fetch(
+        "select id, name from offerings where tenant_id = $1 and active", tenant_id
+    )
+    existing = {normalize_name(str(row["name"])): row for row in existing_rows}
+    position = await conn.fetchval(
+        "select coalesce(max(position) + 1, 0) from offerings where tenant_id = $1", tenant_id
+    )
+    changed = False
+    for item in offerings:
+        name = str(item.get("name", "")).strip()
+        key = normalize_name(name)
+        values = (name, str(item.get("description", "")), item.get("price_cents"))
+        row = existing.get(key)
+        if row is not None:
+            await conn.execute(
+                "update offerings set name = $3, description = $4, price_cents = $5 "
+                "where tenant_id = $1 and id = $2",
+                tenant_id,
+                row["id"],
+                *values,
+            )
+        else:
+            inserted = await conn.fetchrow(
+                "insert into offerings (tenant_id, name, description, price_cents, position) "
+                "values ($1, $2, $3, $4, $5) returning id, name",
+                tenant_id,
+                *values,
+                position,
+            )
+            if inserted is not None:
+                existing[key] = inserted
+                position += 1
+        changed = True
+    if changed:
+        await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+        catalog = await conn.fetchrow(
+            "select status, error from documents "
+            "where tenant_id = $1 and doc_type = 'catalog' "
+            "order by uploaded_at desc limit 1",
+            tenant_id,
+        )
+        if catalog is not None and catalog["status"] == "failed":
+            raise ValueError(str(catalog["error"] or "catalog rebuild failed"))
 
 
 async def update_offering(

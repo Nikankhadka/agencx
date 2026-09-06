@@ -24,30 +24,27 @@ async def sparse_search(
     query: str,
     limit: int = DEFAULT_LIMIT,
     metadata_kind: str | None = None,
+    exclude_metadata_kind: str | None = None,
 ) -> list[RetrievedChunk]:
-    if metadata_kind is None:
-        rows = await conn.fetch(
-            "select id, content, metadata, "
-            "ts_rank(tsv, websearch_to_tsquery('english', $2)) as score "
-            "from knowledge_chunks where tenant_id = $1 "
-            "and tsv @@ websearch_to_tsquery('english', $2) "
-            "order by score desc limit $3",
-            tenant_id,
-            query,
-            limit,
-        )
-    else:
-        rows = await conn.fetch(
-            "select id, content, metadata, "
-            "ts_rank(tsv, websearch_to_tsquery('english', $2)) as score "
-            "from knowledge_chunks where tenant_id = $1 and metadata->>'kind' = $4 "
-            "and tsv @@ websearch_to_tsquery('english', $2) "
-            "order by score desc limit $3",
-            tenant_id,
-            query,
-            limit,
-            metadata_kind,
-        )
+    """Full-text search with optional include and exclude kind filters.
+
+    Filtering happens before ``limit`` so catalog projections cannot displace
+    relevant prose candidates in general knowledge retrieval.
+    """
+    rows = await conn.fetch(
+        "select id, content, metadata, "
+        "ts_rank(tsv, websearch_to_tsquery('english', $2)) as score "
+        "from knowledge_chunks where tenant_id = $1 "
+        "and tsv @@ websearch_to_tsquery('english', $2) "
+        "and ($4::text is null or metadata->>'kind' = $4) "
+        "and ($5::text is null or coalesce(metadata->>'kind', '') <> $5) "
+        "order by score desc limit $3",
+        tenant_id,
+        query,
+        limit,
+        metadata_kind,
+        exclude_metadata_kind,
+    )
     return [
         RetrievedChunk(
             id=row["id"],

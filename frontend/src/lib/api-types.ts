@@ -172,6 +172,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/knowledge/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Onboarding Knowledge */
+        put: operations["save_onboarding_knowledge_api_onboarding_knowledge__document_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/message": {
         parameters: {
             query?: never;
@@ -369,6 +386,23 @@ export interface paths {
         post?: never;
         /** Delete Record */
         delete: operations["delete_record_api_knowledge_records__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/records/{document_id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source Detail */
+        get: operations["get_source_detail_api_knowledge_records__document_id__source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -950,13 +984,6 @@ export interface components {
             /** Widget */
             widget?: ("text" | "chips" | "masked" | "cta" | "phone") | null;
         };
-        /** ConfirmedOffering */
-        ConfirmedOffering: {
-            /** Name */
-            name: string;
-            /** Price Cents */
-            price_cents?: number | null;
-        };
         /** ConversationDetail */
         ConversationDetail: {
             /**
@@ -1185,14 +1212,34 @@ export interface components {
             /** Error */
             error: string | null;
             /** Sections */
-            sections: components["schemas"]["Section"][];
+            sections: components["schemas"]["KnowledgeSection"][];
             /**
              * Offering Candidates
              * @default []
              */
-            offering_candidates: {
-                [key: string]: unknown;
-            }[];
+            offering_candidates: components["schemas"]["PendingOffering"][];
+            /**
+             * Extraction Status
+             * @default pending
+             * @enum {string}
+             */
+            extraction_status: "full" | "partial" | "failed" | "pending";
+        };
+        /**
+         * KnowledgeSection
+         * @description One readable group in an owner's reviewed document.
+         *
+         *     Old documents used arbitrary headings. Reading them through this model gives
+         *     them the structured shape without an eager data migration; their next save
+         *     writes the normalized form back to ``documents.structured``.
+         */
+        KnowledgeSection: {
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
+            /** Kind */
+            kind?: ("business_overview" | "hours" | "location" | "other") | null;
         };
         /**
          * LinksUpdate
@@ -1318,11 +1365,29 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** OnboardingKnowledgeRequest */
+        OnboardingKnowledgeRequest: {
+            /** Sections */
+            sections?: components["schemas"]["KnowledgeSection"][];
+            /** Offerings */
+            offerings?: components["schemas"]["PendingOffering"][];
+        };
+        /** OnboardingKnowledgeResponse */
+        OnboardingKnowledgeResponse: {
+            record: components["schemas"]["KnowledgeRecord"];
+            /** Offering Candidates */
+            offering_candidates: components["schemas"]["PendingOffering"][];
+        };
         /** OnboardingMessageRequest */
         OnboardingMessageRequest: {
             /** Text */
             text?: string | null;
             selection?: components["schemas"]["SelectionPayload"] | null;
+            /**
+             * Resume
+             * @default false
+             */
+            resume: boolean;
         };
         /** OnboardingStateResponse */
         OnboardingStateResponse: {
@@ -1345,6 +1410,48 @@ export interface components {
             can_confirm: boolean;
             /** Suggested Slug */
             suggested_slug: string | null;
+            /** Offering Candidates */
+            offering_candidates: components["schemas"]["PendingOffering"][];
+            /** Paused Beat */
+            paused_beat: string | null;
+        };
+        /**
+         * PendingOffering
+         * @description An offering waiting for owner review before it reaches the catalog.
+         */
+        PendingOffering: {
+            /** Name */
+            name: string;
+            /**
+             * Candidate Id
+             * @default
+             */
+            candidate_id: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Price Cents */
+            price_cents?: number | null;
+            /** Sources */
+            sources?: ("owner" | "document")[];
+            /** Source References */
+            source_references?: components["schemas"]["SourceReference"][];
+            /**
+             * Price Note
+             * @default
+             */
+            price_note: string;
+            /**
+             * Needs Review
+             * @default false
+             */
+            needs_review: boolean;
+            /** Possible Matches */
+            possible_matches?: string[];
+            /** Price Options */
+            price_options?: number[];
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -1451,28 +1558,21 @@ export interface components {
         };
         /** SaveRecordRequest */
         SaveRecordRequest: {
-            /** Sections */
-            sections: components["schemas"]["Section"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["KnowledgeSection"][];
             /**
              * Offerings
              * @default []
              */
-            offerings: components["schemas"]["ConfirmedOffering"][];
+            offerings: components["schemas"]["PendingOffering"][];
             /**
              * Accept Price Changes
              * @default false
              */
             accept_price_changes: boolean;
-        };
-        /**
-         * Section
-         * @description One readable block of a document: a fixed heading and the owner's text.
-         */
-        Section: {
-            /** Heading */
-            heading: string;
-            /** Body */
-            body: string;
         };
         /** SelectionPayload */
         SelectionPayload: {
@@ -1480,6 +1580,25 @@ export interface components {
             beat: string;
             /** Values */
             values?: string[];
+        };
+        /** SourceDetail */
+        SourceDetail: {
+            /** Text */
+            text: string;
+            /** Is Fallback */
+            is_fallback: boolean;
+        };
+        /**
+         * SourceReference
+         * @description Verbatim evidence supporting a candidate field in its source.
+         */
+        SourceReference: {
+            /** Block */
+            block: string;
+            /** Excerpt */
+            excerpt: string;
+            /** Supported Fields */
+            supported_fields?: ("name" | "description" | "price")[];
         };
         /** StorefrontResponse */
         StorefrontResponse: {
@@ -2017,6 +2136,50 @@ export interface operations {
             };
         };
     };
+    save_onboarding_knowledge_api_onboarding_knowledge__document_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingKnowledgeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingKnowledgeResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     post_message_api_onboarding_message_post: {
         parameters: {
             query?: never;
@@ -2510,6 +2673,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_source_detail_api_knowledge_records__document_id__source_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceDetail"];
+                };
             };
             /** @description Validation failed */
             422: {

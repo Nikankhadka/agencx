@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DEMO_USERS, getAccessToken, loginAsTenantAdmin } from "./auth-helpers";
+import { getAccessToken, loginInChat } from "./auth-helpers";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -23,13 +23,15 @@ test("pasting a link reads the site and reads it back", async ({
   page,
   request,
 }) => {
-  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  // A fresh (never-onboarded) owner: the demo tenants are seeded already
+  // onboarded, and this flow needs the interview to be live.
+  await loginInChat(page, request, `o3-${Date.now()}@founder.dev`);
 
   const thread = page.getByTestId("onboarding-thread");
   await expect(thread).toBeVisible();
 
   // The thread is the tenant's stored history, so a re-run against the same
-  // demo tenant starts with the previous run's read-back already in it. Count
+  // tenant would start with the previous run's read-back already in it. Count
   // what is there first and assert this turn ADDS one - "a read-back is
   // visible" would be satisfied by a stale line, and once there were two it
   // failed strict mode outright.
@@ -52,12 +54,12 @@ test("pasting a link reads the site and reads it back", async ({
   // "couldn't pin down the details" when it stated none.
   await expect(readBack).toHaveCount(before + 1, { timeout: 90_000 });
   await expect(readBack.last()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Review your information" })).toBeVisible();
   // ...and the stamp it replaces is gone.
   await expect(thread.getByText(/Reading your site/)).toHaveCount(0);
   await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
 
-  // The site is now a ready `website` document, so the assistant can answer
-  // from it - the read-back alone would not prove the ingest ran.
+  // The site is an unread `website` draft until the owner accepts the review.
   const token = await getAccessToken(page);
   const docs = await request.get(`${BACKEND_URL}/api/knowledge`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -74,5 +76,11 @@ test("pasting a link reads the site and reads it back", async ({
     "the pasted URL should be stored as a website document",
   ).toBeTruthy();
   expect(site?.doc_type).toBe("website");
-  expect(site?.status).toBe("ready");
+  expect(site?.status).toBe("draft");
+
+  await page
+    .getByRole("dialog", { name: "Review your information" })
+    .getByTestId("onboarding-knowledge-discard")
+    .click();
+  await expect(page.getByRole("dialog", { name: "Review your information" })).toBeHidden();
 });

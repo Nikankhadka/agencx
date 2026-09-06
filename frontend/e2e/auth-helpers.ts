@@ -110,6 +110,11 @@ export async function fetchOtpCode(request: APIRequestContext, email: string): P
  * fetched. The login page's own "Wrong email?" escape re-arms the email phase
  * with the address still in the pill, so a retry goes through real UI rather
  * than reloading (a reload could race the session redirect).
+ *
+ * The landing after a successful login is either /onboarding (a tenant that
+ * has not gone live yet) or /home (an already-onboarded tenant - the
+ * onboarding page redirects there immediately), so both are accepted as
+ * success.
  */
 export async function loginInChat(
   page: Page,
@@ -127,7 +132,7 @@ export async function loginInChat(
       await page.getByLabel(`Digit ${i + 1}`).fill(code[i]);
     }
     const landed = await page
-      .waitForURL("**/onboarding", { timeout: 10_000 })
+      .waitForURL(/\/(onboarding|home)/, { timeout: 10_000 })
       .then(() => true)
       .catch(() => false);
     if (landed) return;
@@ -135,12 +140,13 @@ export async function loginInChat(
     await page.getByRole("button", { name: "Send" }).click();
     await page.getByLabel("Digit 1").waitFor({ timeout: 10_000 });
   }
-  await page.waitForURL("**/onboarding");
+  await page.waitForURL(/\/(onboarding|home)/);
 }
 
 /**
  * Log in as a tenant-admin user (login-in-chat), then verify the post-login
- * redirect into the admin console shell at /onboarding.
+ * redirect into the admin console shell (onboarding for a tenant that has not
+ * gone live, home for one already onboarded).
  */
 export async function loginAsTenantAdmin(
   page: Page,

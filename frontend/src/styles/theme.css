@@ -7,7 +7,7 @@
  *  - Components use LAYER 2 (semantic) or LAYER 3 (component) tokens, never LAYER 1 primitives.
  *  - Tenant branding and future themes are variable overrides, never component changes.
  *
- * Palette: Material 3 style tonal role ramps (primary crimson, secondary teal,
+ * Palette: Material 3 style tonal role ramps (primary crimson, secondary cyan,
  * tertiary green, error, neutral + neutral-variant). Ramp step numbers are M3
  * tones (higher = lighter); Layer 2 selects tones per role and per theme.
  */
@@ -26,9 +26,9 @@
   --primary-90: #FFD9DC;
   --primary-95: #FFECEE;
 
-  /* secondary - teal (info role) */
+  /* secondary - cyan (info role) */
   --secondary-30: #004F53;
-  --secondary-40: #00696D;
+  --secondary-40: #00CAD1;
   --secondary-80: #4DD9E2;
   --secondary-90: #8EEFF4;
 
@@ -49,14 +49,14 @@
   --amber-100: #F7EEDC;
   --amber-300: #D9B36A;
   --amber-400: #F5A623; /* prototype notification dot / rating / overdue */
-  --amber-500: #B07C24;
+  --amber-500: #EFD96B;
 
-  /* neutral - surface + text stack (warm-leaning greys) */
+  /* neutral - surface steps (white) + text stack (warm greys) */
   --neutral-100: #FFFFFF;
-  --neutral-98:  #FCF9F8;
-  --neutral-96:  #F6F3F2;
-  --neutral-94:  #F0EDED;
-  --neutral-92:  #EAE7E7;
+  --neutral-98:  #FFFFFF;
+  --neutral-96:  #FFFFFF;
+  --neutral-94:  #FFFFFF;
+  --neutral-92:  #FFFFFF;
   --neutral-90:  #E5E2E1;
   --neutral-10:  #1A1A18;
 
@@ -267,7 +267,7 @@
   --color-bubble-out: var(--primary-40);        /* outgoing (owner/customer) - filled */
   --color-bubble-in: var(--neutral-94);         /* incoming assistant - light neutral */
   --color-bubble-agent-in: var(--primary-95);   /* incoming human agent - light crimson */
-  --color-highlight: var(--amber-300);          /* notification dot / rating / overdue - a lighter yellow than --color-warning's amber-500, and legible as dark-text-on-solid-fill (8.8:1) where amber-500-as-text reads brown at 3.17:1 */
+  --color-highlight: var(--amber-400);          /* prototype notification dot / rating / overdue - legible as dark-text-on-solid-fill (8.6:1), where the pale warning amber-500 (#EFD96B) fails as text or a solid fill */
 }
 
 /* Dark mode overrides are disabled for now. See git history for the full dark

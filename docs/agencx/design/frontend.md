@@ -3,7 +3,7 @@
 The implementation truth for UI. The pixel standard of
 `docs/agencx/design/conventions.md`
 section 6 applies to everything here. Design language: **Material 3 tonal
-clarity** - warm-leaning neutrals, a **crimson primary** with teal and green
+clarity** - white surfaces, a **crimson primary** with cyan and green
 functional accents, generous whitespace, Plus Jakarta Sans throughout (D17).
 
 The system below is the shipped Wren frontend carried forward; the Agencx
@@ -44,7 +44,7 @@ Rules:
 ## 2. Theme file (`frontend/src/styles/theme.css`)
 
 Layer 1 is a Material 3 tonal ramp set: each role (primary crimson, secondary
-teal, tertiary green, error, neutral) is a ramp of tone steps (higher number =
+cyan, tertiary green, error, neutral) is a ramp of tone steps (higher number =
 lighter); Layer 2 picks a tone per role and per theme. Dark mode is a
 systematic derivation (lighter tone of the same ramp), not a parallel palette.
 
@@ -70,11 +70,11 @@ routed through the semantic tokens (Layer 2) and the `Badge` `STATUS_TONE` map:
   resolved, active, delivered, confirmed.
 - **Red** (`--color-danger`): cancelled, declined, failed, suspended, rejected,
   refunded, error.
-- **Amber** (`--color-warning`): pending, warning, overdue, in-progress,
-  provisioning, processing, claimed, escalated, outstanding.
-- **Neutral / info** (grey, or `--color-info` where a distinct info colour is
-  wanted): open, sent, draft, neutral - any status without a clear
-  good/bad/pending charge.
+- **Amber** (`--color-warning`, shipped `#EFD96B`): pending, warning, overdue,
+  in-progress, provisioning, processing, claimed, escalated, outstanding.
+- **Neutral / info** (grey, or `--color-info` - shipped cyan `#00CAD1` -
+  where a distinct info colour is wanted): open, sent, draft, neutral - any
+  status without a clear good/bad/pending charge.
 
 When a screen needs a status the component maps the status string to a tone via
 `toneForStatus` (Badge.tsx) - never a hardcoded hex. Unknown/tenant-defined
@@ -303,6 +303,18 @@ idiom (18px radius, tip at the top) and the onboarding thread's idiom (bare pros
 plus a 20px owner bubble tipped bottom-right) are different designs in the
 prototype. Do not unify them.
 
+**Phase 13, W-3 (planned, `13-walkthrough.md`):** the onboarding composer and
+pending states are refined without changing this idiom - text-input
+placeholders become empty by default (label plus the in-thread question remain
+the context carriers), the composer's baseline height is stabilized across
+beat changes while typed growth is kept, the thinking-dots row becomes the sole
+pending indicator (the "Answering…" status line is removed; the status line
+becomes the error slot only), and a processing upload animates in the existing
+motion vocabulary with an explicit success or failure and a recovery path. No
+fabricated percentage progress and no queues/workers/background polling are
+added. Typed answers use SSE; chip, resume, and upload use ordinary requests -
+proven by a browser network trace.
+
 **Email in a chat composer (O-5; extraction moved client-side 2026-08-28, D23).**
 The client gate on the login pill is *liveness only* - it arms the send circle
 when the text contains something address-shaped, so "it's sam@shop.com" is
@@ -450,6 +462,19 @@ interview asks, with the control the interview asks it with.
 | Failed | The reason in place, plus retry (re-runs the ingest over the stored text) |
 | Tool toggles | Enabled-tools section (D-3); toggling updates `tenant_config.enabled_tools` |
 
+**Phase 13, W-8 (`13-walkthrough.md`):** the shared review sheet presents a
+read-first document. Offerings appear first, initially capped at five cards
+with a total, and "Review all N" opens a five-per-page editor keyed by stable
+candidate identity. Editing, additions, removals, and duplicate decisions stay
+in one review state, so Save sends every retained offering rather than only the
+visible page. A possible duplicate remains separate unless its owner selects
+"Keep both" or confirms a previewed combine, with an explicit price choice for
+a conflict. Business overview, hours, location, and named other-information
+subsections render as document content and edit inline. Saved sources use the
+same expandable renderer. Original extracted source is an owner-only,
+on-demand region, never customer retrieval. No rich-text editor dependency or
+replacement wizard is used.
+
 ### S3 - Public page (anonymous, per-tenant slug)
 
 Centered column (max ~720px), tenant logo + display name header. No auth. The
@@ -466,6 +491,13 @@ question"; the rest of the storefront remains informational.
 
 The address is the owner's own: M-4 lets them choose it at go-live rather than
 keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).
+**Phase 13, W-4 (planned):** every path that reaches confirmation - initial
+load, ordinary answers, optional-knowledge skip, review save, review discard,
+and reload - provides the suggested address; invalid, reserved, and taken
+slugs are actionable field errors (including the backend's own validation
+remaining authoritative); a business-name correction refreshes the suggestion
+only until the owner edits the address; and network failures preserve the
+entered address so a retry succeeds without restarting onboarding.
 
 | State | Spec |
 |---|---|
