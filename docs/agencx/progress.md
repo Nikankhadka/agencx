@@ -51,9 +51,13 @@ Detailed records live in [`spec/completed/`](spec/completed/).
   confirmation, corrections from any beat, offering operations, a code-owned
   customer-agent contract applied to every prose route, and structured customer
   voice. Built on `feat/w-9-agent-contract`; 12 of 13 Definition-of-done boxes
-  ticked. Open only on the gate box - `make eval` is unmeasured against a
-  provider quota, and `make ci` and `make test-e2e` have not been run against
-  the final branch state.
+  ticked. Open only on the gate box, and only on one gate in it: `make ci` (940
+  backend tests, 110 frontend, 3 of 3 import contracts, a clean production
+  build), `make test-e2e` (105 passing across both Playwright projects), and
+  `make eval-skip-llm` are all green against the final branch state. `make eval`
+  is unmeasured, twice, because the free-tier provider quota is exhausted rather
+  than because anything failed - see the ticket's Record for what that run does
+  and does not prove.
 - [ ] W-10: drop `tenant_config.system_prompt` and `.tone` and their last
   writers, after W-9 is verified in production
   ([`spec/active/14-schema-drop.md`](spec/active/14-schema-drop.md)).

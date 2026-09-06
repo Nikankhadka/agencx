@@ -2170,6 +2170,43 @@ about a name the owner types; a `business_name` recovered from a website scrape
 rides the O-3 read-back instead of the confirmation chip. Accepted as scope,
 not fixed here.
 
+#### The live eval gate is unmeasured, and what that leaves open
+
+`make eval` was attempted twice, after phase 2 and again against the final
+branch state. Both runs failed the same way and for the same reason, which is
+quota rather than code: Groq answered `429 ... tokens per day (TPD): Limit
+200000, Used 197445` for `openai/gpt-oss-120b` while the Google primary leg sat
+in its own rate-limit retry ladder, so `generation_eval`, `injection_eval`, and
+on the second run `trajectory_eval` errored instead of scoring. The day's
+free-tier budget went on the phase 0 reproduction drives and the first attempt.
+
+What that leaves proven and unproven:
+
+- Proven, on both runs: `money_guardrail_eval`, `leakage_eval`, and
+  `retrieval_eval` PASS. Those are the three deterministic absolute gates, and
+  they include the money guardrail.
+- Not proven: the three provider-backed regression gates. The
+  `tool_correctness: 0.611` the first run recorded is not a measurement of
+  anything - it was scored while provider calls were failing, and it carries no
+  baseline, because `run_gate` reads the two most recent `eval_runs` rows and
+  the re-seed left one.
+- Re-run `make eval` once the daily window resets. Until it measures, the
+  gate box stays unticked and this ticket stays in `spec/active/`.
+
+**One eval failure was diagnosed and is not a regression.** The second run shows
+`SelectionError: malformed catalog item id: 'tempered-glass-screen-protector'`
+from [`pricing/engine.py:110`](../../../../backend/app/pricing/engine.py#L110):
+the model passed a slugified offering name where the quoting tool wanted a
+catalog item id. That is pre-existing, not something this ticket caused.
+`format_offerings`
+([context_package.py:208-221](../../../../backend/app/services/context_package.py#L208-L221))
+puts an offering's name, description, and price into the prompt and never its
+id, and this branch does not change that function, so the model has never had an
+id to pass. The failure is also the money invariant working rather than leaking:
+the pricing engine refused the malformed selection instead of pricing it, and
+`money_guardrail_eval` passed on the same run. Worth its own ticket; not this
+one's to fix.
+
 #### Defects the reproduction found that this ticket had not named
 
 The phase 0 drive ([`evidence/w-9-reproduction.md`](../evidence/w-9-reproduction.md),
