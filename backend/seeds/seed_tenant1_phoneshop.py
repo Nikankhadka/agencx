@@ -40,6 +40,10 @@ BYTEFIX_PROFILE = {
     "contact": "owner@bytefix.dev",
     "abn": "none",
     "gst": "no",
+    # W-9: the voice beat is part of the interview now, so a pre-onboarded
+    # tenant carries the same end-state a real confirm leaves behind.
+    "customer_voice_preset": "warm_casual",
+    "customer_voice_custom_style": "",
 }
 
 # --- offerings: phones, accessories, tiered repair services (~15) -----------

@@ -7,6 +7,7 @@ echo check, and record migration to v3.
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -25,13 +26,21 @@ from app.onboarding.agent import (
     _activation_summary,
     _echo,
     _usable,
+    confirm_pending_name,
     prepare_turn,
     prepare_url_turn,
+    progress,
     resume_paused_beat,
     run_turn,
     stream_reply,
 )
-from app.onboarding.flow import PendingOffering, ProfileDraft
+from app.onboarding.flow import (
+    CUSTOM_VOICE_MAX,
+    PendingOffering,
+    ProfileDraft,
+    SourceReference,
+    customer_voice_for,
+)
 from app.onboarding.tools import request_finalize, save_profile
 from tests.fakes import BaseFakeProvider
 
@@ -144,6 +153,9 @@ def _complete_draft() -> dict[str, Any]:
         "contact": "555-0100",
         "abn": "51 824 753 556",
         "gst": "yes",
+        # W-9: the voice beat sits between `services` and `contact`, and it is
+        # answered like any other beat before the interview is complete.
+        "customer_voice_preset": "warm_casual",
     }
 
 
@@ -380,18 +392,26 @@ async def test_run_turn_extracts_from_a_complex_message() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_turn_extracts_business_name() -> None:
+async def test_run_turn_proposes_a_business_name_before_it_persists_one() -> None:
+    """W-9 US-1: a name is shown back and confirmed, never written on sight."""
     provider = _ExtractFake(
         updates=[{"profile": {"business_name": "Bytefix Repairs"}}],
         replies=["Got it - Bytefix Repairs!"],
     )
-    record = OnboardingRecord()
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
     updated, reply = await run_turn(
         admin_message="we are called Bytefix Repairs", record=record, provider=provider
     )
 
-    assert updated.draft["business_name"] == "Bytefix Repairs"
-    assert "Bytefix Repairs" in reply
+    assert "business_name" not in updated.draft
+    assert updated.pending_name == {
+        "target": "business_name",
+        "raw": "we are called Bytefix Repairs",
+        "proposal": "Bytefix Repairs",
+    }
+    # The proposal is the server's own words, so the model cannot embellish it.
+    assert reply == 'I have "Bytefix Repairs". Is that right?'
+    assert provider.chat_messages == []
 
 
 @pytest.mark.asyncio
@@ -508,11 +528,14 @@ async def test_run_turn_price_echo_triggers_redraft() -> None:
             "Got it, I've captured what you do.",
         ],
     )
-    record = OnboardingRecord()
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Sam", "business_name": "Bytefix Repairs"},
+        ask_beat="business_type",
+        ask_count=1,
+    )
     updated, reply = await run_turn(admin_message="we fix phones", record=record, provider=provider)
 
     assert updated.draft["business_type"] == "phone repair shop"
-    assert "captured" in reply.lower()
     assert "$199" not in reply
 
 
@@ -633,11 +656,13 @@ async def test_an_em_dash_in_a_model_reply_becomes_a_plain_dash() -> None:
 
     def _turn() -> tuple[_ExtractFake, OnboardingRecord]:
         provider = _ExtractFake(
-            updates=[{"profile": {"business_name": "Sababa"}, "answered_asked": True}],
+            updates=[{"profile": {"business_type": "Sababa"}, "answered_asked": True}],
             replies=["Got it\u2014Sababa it is."],
         )
         record = OnboardingRecord(
-            draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=1
+            draft={"owner_display_name": "Nikan", "business_name": "Sababa"},
+            ask_beat="business_type",
+            ask_count=1,
         )
         return provider, record
 
@@ -803,8 +828,15 @@ def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
 
 
 def test_directive_as_prompt_with_acknowledged() -> None:
-    prompt = Directive(acknowledged=["business name"]).as_prompt()
+    """W-9 US-6: the brief carries the captured value, not just its label.
+
+    The model cannot repeat a spelling it was never shown, and the reply check
+    that enforces the spelling has nothing to check against either.
+    """
+    prompt = Directive(acknowledged=[("business name", "Sababa")]).as_prompt()
     assert "business name" in prompt
+    assert '"Sababa"' in prompt
+    assert "Repeat each value exactly" in prompt
     assert "Do not ask a question" in prompt
 
 
@@ -1038,8 +1070,12 @@ def test_the_extraction_prompt_shows_how_to_split_a_comma_less_list() -> None:
     """
     assert '["A", "B", "C"]' in _EXTRACT_PROMPT
     assert "Split a run-on list" in _EXTRACT_PROMPT
-    for trade in ("pita", "wraps", "haircut", "dental", "phone repair"):
-        assert trade not in _EXTRACT_PROMPT.lower()
+    # Whole words only: "capitalization" contains "pita", and the rule that
+    # protects the owner's own capitalization is exactly what this prompt gained.
+    words = set(re.findall(r"[a-z]+", _EXTRACT_PROMPT.lower()))
+    for trade in ("pita", "wraps", "haircut", "haircuts", "dental"):
+        assert trade not in words
+    assert "phone repair" not in _EXTRACT_PROMPT.lower()
 
 
 # --- W-7: input validation, rejection, and the spoken hand-off -----------------
@@ -1137,6 +1173,10 @@ async def test_a_genuine_answer_is_accepted_and_advances() -> None:
     )
     record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
     updated, reply = await run_turn(admin_message="Nikan", record=record, provider=provider)
+
+    # W-9: a usable name is proposed first; agreeing is what advances the beat.
+    assert reply == 'I have "Nikan". Is that right?'
+    updated, reply = await run_turn(admin_message="yes", record=updated, provider=provider)
 
     assert updated.draft["owner_display_name"] == "Nikan"
     # It moves on to the next beat rather than re-asking.
@@ -1254,3 +1294,541 @@ async def test_a_real_off_topic_question_is_still_answered_not_challenged() -> N
     )
 
     assert updated.ask_count == 1  # not burned
+
+
+# --- W-9: name confirmation, corrections, offerings, voice, reply check --------
+
+
+def _draft_up_to(key: str) -> dict[str, Any]:
+    """A draft holding every beat before ``key``, so ``key`` is what is asked."""
+    complete = _complete_draft()
+    draft: dict[str, Any] = {}
+    for beat in beats.BEAT_ORDER:
+        if beat.key == key:
+            return draft
+        draft[beat.key] = complete[beat.key]
+    raise AssertionError(f"{key} is not a beat")
+
+
+@pytest.mark.asyncio
+async def test_a_confirmed_name_is_assigned_never_concatenated() -> None:
+    """W-9 US-1, the founder's `sababa` fixture: `sababa` confirmed is `sababa`.
+
+    The raw input sits beside the proposal as evidence of what was typed. The
+    reproduction's ``Sababasababa`` is what appending one to the other looks
+    like, so the commit path is asserted to assign.
+    """
+    record = OnboardingRecord(
+        pending_name={"target": "owner_display_name", "raw": "sababa", "proposal": "sababa"}
+    )
+
+    assert confirm_pending_name(record) == "sababa"
+    assert record.draft["owner_display_name"] == "sababa"
+    assert record.pending_name is None
+
+
+@pytest.mark.asyncio
+async def test_a_typed_reply_to_a_proposal_is_a_new_proposal_not_a_rejection() -> None:
+    """W-9 US-1: correcting the spelling proposes the correction, and costs
+    nothing at the beat that is waiting."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"owner_display_name": "Sababa"}, "answered_asked": True}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        pending_name={"target": "owner_display_name", "raw": "sababa", "proposal": "sababa"},
+        ask_beat="owner_display_name",
+        ask_count=1,
+    )
+    updated, reply = await run_turn(admin_message="Sababa", record=record, provider=provider)
+
+    assert updated.pending_name is not None
+    assert updated.pending_name["proposal"] == "Sababa"
+    assert "owner_display_name" not in updated.draft
+    assert reply == 'I have "Sababa". Is that right?'
+    assert (updated.ask_beat, updated.ask_count) == ("owner_display_name", 1)
+    # The extractor is told what is waiting, so a respelling is not read as an
+    # answer to some other field.
+    assert 'owner_display_name = "sababa"' in provider.extract_inputs[0]
+
+
+def test_a_pending_proposal_survives_a_reload() -> None:
+    """W-9 US-1: reloading mid-confirmation resumes the same proposal."""
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Sam"},
+        pending_name={
+            "target": "business_name",
+            "raw": "we are sababa",
+            "proposal": "Sababa",
+        },
+    )
+    restored = OnboardingRecord.from_jsonb(record.to_jsonb())
+
+    assert restored.pending_name == record.pending_name
+    stage, spec, can_confirm = progress(restored)
+    assert (stage, can_confirm) == ("business_name", False)
+    assert spec is not None
+    assert [chip.label for chip in spec.chips] == ["Yes"]
+
+
+def test_a_v3_record_carries_no_proposal_and_a_v4_one_round_trips() -> None:
+    assert OnboardingRecord.from_jsonb({"version": 3, "draft": {}}).pending_name is None
+    assert OnboardingRecord.from_jsonb({"version": 4, "pending_name": {}}).pending_name is None
+
+
+@pytest.mark.asyncio
+async def test_junk_never_becomes_the_public_identity_without_a_yes() -> None:
+    """W-9 US-1, the founder's `21 ej2nek2ne2ken1e` fixture.
+
+    It contains a word, so the server's own `valid` waves it through - which is
+    exactly why confirmation, not a stricter regex, is the interception point.
+    In the reproduction it became the business name, the go-live read-back, and
+    the suggested address `agencx.app/21-ej2nek2ne2ken1e`.
+    """
+    junk = "21 ej2nek2ne2ken1e"
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_name": junk}, "answered_asked": True}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=1
+    )
+    updated, reply = await run_turn(admin_message=junk, record=record, provider=provider)
+
+    assert "business_name" not in updated.draft
+    assert reply == f'I have "{junk}". Is that right?'
+    assert junk not in _activation_summary(updated.draft)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "asked",
+    ["headcount", "hours", "services", "customer_voice_preset", "contact", "abn", "gst"],
+)
+async def test_a_correction_applies_from_whatever_beat_is_on_screen(asked: str) -> None:
+    """W-9 US-3: a correction is not an answer to the pending question.
+
+    The reproduction's `middle eastern cafe`, typed while the headcount beat was
+    pending, landed nowhere at all - not in a field, not in the reply.
+    """
+    provider = _ExtractFake(
+        updates=[
+            {
+                "corrections": [
+                    {
+                        "field": "business_type",
+                        "value": "middle eastern cafe",
+                        "raw": "middle eastern cafe",
+                        "normalization": "none",
+                    }
+                ]
+            }
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(draft=_draft_up_to(asked), ask_beat=asked, ask_count=1)
+    updated, reply = await run_turn(
+        admin_message="middle eastern cafe", record=record, provider=provider
+    )
+
+    assert updated.draft["business_type"] == "middle eastern cafe"
+    # The pending question keeps both its place and its remaining attempt.
+    assert (updated.ask_beat, updated.ask_count) == (asked, 1)
+    # And the corrected value is read back once, so it can be corrected again.
+    assert "middle eastern cafe" in reply
+    # An accepted correction is part of the record a reload restores.
+    assert OnboardingRecord.from_jsonb(updated.to_jsonb()).draft["business_type"] == (
+        "middle eastern cafe"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_invalid_correction_keeps_the_previous_value() -> None:
+    """W-9 US-3: the value already on file beats one the server cannot read."""
+    provider = _ExtractFake(
+        updates=[{"corrections": [{"field": "contact", "value": "yes", "raw": "yes"}]}],
+        replies=["Noted."],
+    )
+    draft = _draft_up_to("abn")
+    record = OnboardingRecord(draft=dict(draft), ask_beat="abn", ask_count=1)
+    updated, _reply = await run_turn(admin_message="yes", record=record, provider=provider)
+
+    assert updated.draft["contact"] == draft["contact"]
+    assert (updated.ask_beat, updated.ask_count) == ("abn", 1)
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_answer_restores_what_it_overwrote() -> None:
+    """W-9 US-3: the rejection path used to pop a value with no memory of what
+    it replaced, so a bad overwrite destroyed a good answer."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"hours": "asdf"}, "answered_asked": False}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("services") | {"hours": "Mon-Fri 9-6"},
+        ask_beat="hours",
+        ask_count=1,
+    )
+    updated, _reply = await run_turn(admin_message="asdf", record=record, provider=provider)
+
+    assert updated.draft["hours"] == "Mon-Fri 9-6"
+
+
+@pytest.mark.asyncio
+async def test_an_ambiguous_name_correction_is_asked_about_not_guessed() -> None:
+    """W-9 US-2: "change the name" with both names on file asks which."""
+    provider = _ExtractFake(
+        updates=[{"corrections": [{"field": "unresolved_name", "value": ""}]}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft={"owner_display_name": "Sam", "business_name": "Bytefix Repairs"},
+        ask_beat="business_type",
+        ask_count=1,
+    )
+    updated, reply = await run_turn(
+        admin_message="change the name", record=record, provider=provider
+    )
+
+    assert reply.endswith("Which name should I change - your own, or the business's?")
+    assert updated.draft["owner_display_name"] == "Sam"
+    assert updated.draft["business_name"] == "Bytefix Repairs"
+    # No model composed that question, and nothing was guessed at.
+    assert provider.chat_messages == []
+
+
+@pytest.mark.asyncio
+async def test_an_unambiguous_name_correction_resolves_and_is_confirmed() -> None:
+    """With only one name on file there is nothing to disambiguate - but the
+    correction is still a proposal, not a write."""
+    provider = _ExtractFake(
+        updates=[
+            {"corrections": [{"field": "unresolved_name", "value": "Sababa Cafe", "raw": "sababa"}]}
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft={"business_name": "Sababa"}, ask_beat="business_type", ask_count=1
+    )
+    updated, reply = await run_turn(
+        admin_message="change the name to sababa cafe", record=record, provider=provider
+    )
+
+    assert reply == 'I have "Sababa Cafe". Is that right?'
+    assert updated.draft["business_name"] == "Sababa"
+    assert confirm_pending_name(updated) == "Sababa Cafe"
+    assert updated.draft["business_name"] == "Sababa Cafe"
+
+
+def _priced_candidate() -> PendingOffering:
+    return PendingOffering(
+        name="Screen repair",
+        description="Aftermarket screen, same day",
+        price_cents=12900,
+        sources=["document"],
+        source_references=[
+            SourceReference(
+                block="b1", excerpt="Screen repair - same day", supported_fields=["name"]
+            )
+        ],
+        price_note="from",
+        needs_review=True,
+        price_options=[12900, 17900],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("operation", "expected"),
+    [
+        ({"op": "add", "name": "Battery swap"}, ["Screen repair", "Battery swap"]),
+        (
+            {"op": "rename", "name": "Screen repair", "new_name": "Screen replacement"},
+            ["Screen replacement"],
+        ),
+        ({"op": "remove", "name": "Screen repair"}, []),
+        (
+            {"op": "replace", "name": "Screen repair", "new_name": "Back glass repair"},
+            ["Back glass repair"],
+        ),
+    ],
+)
+async def test_the_four_offering_operations_are_distinct(
+    operation: dict[str, str], expected: list[str]
+) -> None:
+    """W-9 US-4: add, rename, remove and replace each mean their own thing."""
+    provider = _ExtractFake(updates=[{"offering_ops": [operation]}], replies=["Noted."])
+    record = OnboardingRecord(
+        draft=_draft_up_to("customer_voice_preset"),
+        offering_candidates=[_priced_candidate()],
+        ask_beat="customer_voice_preset",
+        ask_count=1,
+    )
+    updated, _reply = await run_turn(
+        admin_message="change what we offer", record=record, provider=provider
+    )
+
+    assert [item.name for item in updated.offering_candidates] == expected
+
+
+@pytest.mark.asyncio
+async def test_a_rename_preserves_every_provenance_field() -> None:
+    """W-9 US-4: a rename changes the name. W-6's provenance survives it."""
+    original = _priced_candidate()
+    provider = _ExtractFake(
+        updates=[
+            {
+                "offering_ops": [
+                    {"op": "rename", "name": "Screen repair", "new_name": "Screen replacement"}
+                ]
+            }
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("customer_voice_preset"),
+        offering_candidates=[original],
+        ask_beat="customer_voice_preset",
+        ask_count=1,
+    )
+    updated, _reply = await run_turn(
+        admin_message="call it a screen replacement", record=record, provider=provider
+    )
+
+    renamed = updated.offering_candidates[0]
+    assert renamed.name == "Screen replacement"
+    assert renamed.model_dump(exclude={"name"}) == original.model_dump(exclude={"name"})
+
+
+@pytest.mark.asyncio
+async def test_an_offering_edit_costs_no_attempt_at_the_pending_question() -> None:
+    provider = _ExtractFake(
+        updates=[{"offering_ops": [{"op": "remove", "name": "Screen repair"}]}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("contact"),
+        offering_candidates=[_priced_candidate()],
+        ask_beat="contact",
+        ask_count=1,
+    )
+    updated, _reply = await run_turn(
+        admin_message="drop the screen repair", record=record, provider=provider
+    )
+
+    assert (updated.ask_beat, updated.ask_count) == ("contact", 1)
+
+
+# --- W-9 US-5: the deterministic reply check ----------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("bad_reply", "why"),
+    [
+        ("I'm a real person, so I'll take care of that.", "claims to be a person"),
+        ("Your AI assistant has that noted.", "names itself an AI"),
+        ("It's just me running the shop.", "answers the question about to be asked"),
+        ("my name is noted.", "inverts the pronoun"),
+        ("That runs about $99.", "states an amount"),
+        ("Noted, a phone shop.", "does not repeat the captured spelling"),
+    ],
+)
+async def test_a_reply_that_fails_the_check_is_replaced_by_the_server(
+    bad_reply: str, why: str
+) -> None:
+    """W-9 US-5: every one of these is a failure the reproduction produced or
+    the ticket names. The replacement is the server's own words - the model is
+    never asked again, so W-7's latency decision stands."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_type": "phone repair shop"}, "answered_asked": True}],
+        replies=[bad_reply, bad_reply],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("business_type"), ask_beat="business_type", ask_count=1
+    )
+    _updated, reply = await run_turn(
+        admin_message="we fix phones", record=record, provider=provider
+    )
+
+    assert reply == (
+        "Got business type: phone repair shop. Is it just you, or do you work with a team?"
+    ), why
+    # One reply call, or two when the price echo guard redrafted - never more.
+    assert len(provider.chat_messages) <= 2
+
+
+@pytest.mark.asyncio
+async def test_a_reply_that_passes_the_check_is_kept_verbatim() -> None:
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_type": "phone repair shop"}, "answered_asked": True}],
+        replies=["Noted, a phone repair shop."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("business_type"), ask_beat="business_type", ask_count=1
+    )
+    _updated, reply = await run_turn(
+        admin_message="we fix phones", record=record, provider=provider
+    )
+
+    assert reply == "Noted, a phone repair shop. Is it just you, or do you work with a team?"
+
+
+@pytest.mark.asyncio
+async def test_the_streamed_path_retracts_a_reply_that_fails_the_check() -> None:
+    """The streamed surface uses the redraft event it already has, and the
+    replacement is server-composed rather than a second model pass."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_type": "phone repair shop"}, "answered_asked": True}],
+        replies=["It's just me running the shop."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("business_type"), ask_beat="business_type", ask_count=1
+    )
+    plan = await prepare_turn(admin_message="we fix phones", record=record, provider=provider)
+    events = [event async for event in stream_reply(plan=plan, provider=provider)]
+
+    assert ("redraft", "reply_check") in events
+    shown = "".join(payload for kind, payload in events if kind == "token")
+    assert shown.endswith(
+        "Got business type: phone repair shop. Is it just you, or do you work with a team?"
+    )
+    assert len(provider.stream_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_beat_reads_back_what_it_did_capture() -> None:
+    """W-9: failing the pending beat and volunteering something else in one
+    message must not lose the something else - one acknowledgement, no model."""
+    provider = _ExtractFake(
+        updates=[
+            {
+                "profile": {"hours": "@@@@"},
+                "corrections": [
+                    {"field": "business_type", "value": "middle eastern cafe", "raw": "cafe"}
+                ],
+                "answered_asked": False,
+            }
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(draft=_draft_up_to("hours"), ask_beat="hours", ask_count=1)
+    _updated, reply = await run_turn(
+        admin_message="@@@@ - we're a middle eastern cafe", record=record, provider=provider
+    )
+
+    assert reply == (
+        "Got business type: middle eastern cafe. I couldn't read that as opening hours. "
+        "What days and hours are you open?"
+    )
+    assert provider.chat_messages == []
+
+
+# --- W-9 US-7: the voice beat -------------------------------------------------
+
+
+def test_the_voice_beat_follows_services_and_offers_four_chips() -> None:
+    order = [beat.key for beat in beats.BEAT_ORDER]
+    assert order[order.index("services") + 1] == "customer_voice_preset"
+
+    beat = beats.BEATS["customer_voice_preset"]
+    assert [chip.value for chip in beat.chips] == [
+        "warm_casual",
+        "clear_professional",
+        "direct_concise",
+        "custom",
+    ]
+    # The fourth swaps the composer instead of answering by itself.
+    assert [chip.widget for chip in beat.chips] == [None, None, None, "text"]
+    # I8: nothing in the question or its chips names a trade.
+    assert "sound" in beat.ask
+
+
+def test_a_voice_preset_and_a_custom_description_are_validated_server_side() -> None:
+    draft: dict[str, Any] = {}
+    assert beats.apply_selection(draft, "customer_voice_preset", ["clear_professional"]) == (
+        "Clear and professional"
+    )
+    assert draft == {"customer_voice_preset": "clear_professional"}
+
+    described = "plain and unhurried, like talking over the counter"
+    assert beats.apply_selection(draft, "customer_voice_preset", [described]) == described
+    assert draft["customer_voice_preset"] == "custom"
+    assert draft["customer_voice_custom_style"] == described
+
+    # Choosing a preset afterwards clears the description it replaces.
+    beats.apply_selection(draft, "customer_voice_preset", ["direct_concise"])
+    assert "customer_voice_custom_style" not in draft
+
+    # Bounded, so a voice cannot become a second system prompt.
+    with pytest.raises(ValueError, match="valid answer"):
+        beats.apply_selection(draft, "customer_voice_preset", ["x" * (CUSTOM_VOICE_MAX + 1)])
+    # Tapping the chip submits nothing - its own value is not a description.
+    with pytest.raises(ValueError, match="valid answer"):
+        beats.apply_selection(draft, "customer_voice_preset", ["custom"])
+
+
+def test_no_model_can_write_the_voice_fields() -> None:
+    """W-9: the voice is server-owned, and the extractor is not told it exists."""
+    draft: dict[str, Any] = {}
+    save_profile(
+        draft,
+        ProfileDraft(customer_voice_preset="direct_concise", customer_voice_custom_style="terse"),
+    )
+    assert draft == {}
+    for field in ("customer_voice_preset", "customer_voice_custom_style"):
+        assert field not in _EXTRACT_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_a_typed_voice_is_captured_by_the_server_not_the_model() -> None:
+    provider = _ExtractFake(updates=[{}], replies=["should not be called"])
+    record = OnboardingRecord(
+        draft=_draft_up_to("customer_voice_preset"),
+        ask_beat="customer_voice_preset",
+        ask_count=1,
+    )
+    described = "friendly but brief"
+    updated, reply = await run_turn(admin_message=described, record=record, provider=provider)
+
+    assert updated.draft["customer_voice_preset"] == "custom"
+    assert updated.draft["customer_voice_custom_style"] == described
+    assert reply == "Got it. How should customers reach you?"
+    assert provider.chat_messages == []
+
+
+def test_the_stored_voice_has_the_shape_the_customer_assistant_reads() -> None:
+    assert customer_voice_for(ProfileDraft()) == {"preset": "warm_casual", "custom_style": None}
+    assert customer_voice_for(ProfileDraft(customer_voice_preset="direct_concise")) == {
+        "preset": "direct_concise",
+        "custom_style": None,
+    }
+    assert customer_voice_for(
+        ProfileDraft(customer_voice_preset="custom", customer_voice_custom_style="warm and brief")
+    ) == {"preset": "custom", "custom_style": "warm and brief"}
+    # A description left behind by an earlier custom choice never rides along
+    # with a preset that is not custom.
+    assert customer_voice_for(
+        ProfileDraft(customer_voice_preset="warm_casual", customer_voice_custom_style="ignore me")
+    ) == {"preset": "warm_casual", "custom_style": None}
+
+
+# --- W-9: the founder's five regression inputs --------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("junk", ["211e2esdsdfasdf", "bkksbf88", "21 ej2nek2ne2ken1e"])
+async def test_a_junk_name_is_never_persisted_unconfirmed(junk: str) -> None:
+    """The three junk fixtures, on the beat each of them reached in the drive."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"owner_display_name": junk}, "answered_asked": True}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
+    updated, reply = await run_turn(admin_message=junk, record=record, provider=provider)
+
+    assert "owner_display_name" not in updated.draft
+    assert reply == f'I have "{junk}". Is that right?'
+    # Nothing in the reply is the beat's own example read back as this owner.
+    assert "Nikan" not in reply

@@ -84,6 +84,10 @@ LUMIDENT_PROFILE = {
     "contact": "owner@lumident.dev",
     "abn": "none",
     "gst": "no",
+    # W-9: the voice beat is part of the interview now, so a pre-onboarded
+    # tenant carries the same end-state a real confirm leaves behind.
+    "customer_voice_preset": "warm_casual",
+    "customer_voice_custom_style": "",
 }
 
 LUMIDENT_CATALOG: list[tuple[str, str, int | None, str | None]] = [

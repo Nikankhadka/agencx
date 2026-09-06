@@ -26,6 +26,11 @@ are deterministic and server-owned. W-9 makes the second half true: until then
 which embellished the beat's ``example`` into a fact ("No worries at all,
 Nikan!" - the owner addressed by the name beat's own example). A rejected beat
 is now answered in the beat's own words with no model call at all.
+
+W-9 also adds the voice beat - which of four voices the public assistant speaks
+in - as one more chip beat. Its fourth chip swaps the composer to a text widget
+for the owner's own bounded description, and every answer is validated here, so
+no model ever chooses how the business sounds to its customers.
 """
 
 from __future__ import annotations
@@ -36,6 +41,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from app.onboarding.flow import CUSTOM_VOICE, CUSTOM_VOICE_MAX, VOICE_PRESETS
 
 WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 
@@ -268,6 +275,29 @@ BEAT_ORDER: tuple[Beat, ...] = (
         example="two or three of the things you do most, in your own words, is plenty",
     ),
     Beat(
+        key="customer_voice_preset",
+        label="assistant voice",
+        # I8: the question is about wording, warmth and pacing - never about
+        # what the business does - so it is the same question for every trade.
+        ask="How should your assistant sound to customers?",
+        kind="text",
+        complete=_complete("customer_voice_preset"),
+        chips=(
+            ChipSpec(label="Warm and casual", value=VOICE_PRESETS[0]),
+            ChipSpec(label="Clear and professional", value=VOICE_PRESETS[1]),
+            ChipSpec(label="Direct and concise", value=VOICE_PRESETS[2]),
+            # The fourth chip answers nothing on its own: it swaps the composer
+            # to a text widget and the owner's own description is what gets
+            # sent, bounded so a voice cannot become a second system prompt.
+            ChipSpec(label="Describe it myself", value=CUSTOM_VOICE, dashed=True, widget="text"),
+        ),
+        # Editable after go-live at Business > details, and the first preset is
+        # what an unanswered voice resolves to, so it never blocks the interview.
+        optional=True,
+        default=VOICE_PRESETS[0],
+        example="pick one, or describe the voice in your own words",
+    ),
+    Beat(
         key="contact",
         label="contact details",
         ask="How should customers reach you?",
@@ -385,7 +415,30 @@ def apply_selection(draft: dict[str, Any], key: str, values: list[str]) -> str:
     if key == "gst" and value in labels:
         draft[key] = "yes" if value == "yes" else "no"
         return labels[value]
+    if key == "customer_voice_preset":
+        # W-9: a preset is one of a fixed vocabulary; anything else the owner
+        # sends on this beat is their own bounded description of the voice. The
+        # custom chip's own value is reserved - tapping it swaps the composer
+        # and submits nothing, so arriving here it is not a description.
+        if value in labels:
+            draft[key] = value
+            draft.pop("customer_voice_custom_style", None)
+            return labels[value]
+        if value != CUSTOM_VOICE and 0 < len(value) <= CUSTOM_VOICE_MAX:
+            draft[key] = CUSTOM_VOICE
+            draft["customer_voice_custom_style"] = value
+            return value
     raise ValueError("select one valid answer")
+
+
+# W-9 US-1: what the composer offers while a name waits to be confirmed. One
+# chip commits the proposal; typing past it is a new proposal, never a
+# rejection, which is why the pill stays and the placeholder still invites it.
+NAME_CONFIRM_INPUT = InputSpec(
+    kind="text",
+    placeholder=CHIPPED_PLACEHOLDER,
+    chips=[ChipSpec(label="Yes", value="yes")],
+)
 
 
 # The optional website/documents ask (see agent._completion_reply) is not a

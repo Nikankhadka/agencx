@@ -35,6 +35,36 @@ class ProfileDraft(BaseModel):
     # a distinct value from "not asked yet", which is the empty string.
     abn: str = ""
     gst: str = ""
+    # W-9: how the public assistant sounds. Server-owned - the voice beat's own
+    # chips write these through `beats.apply_selection`, and `tools.save_profile`
+    # refuses them, so extraction can never put words in the owner's mouth here.
+    customer_voice_preset: str = ""
+    customer_voice_custom_style: str = ""
+
+
+# W-9 US-7: the four voices the owner chooses between. Expression only - a
+# preset never changes a fact, a price, an escalation, or the assistant's
+# identity, which is why it is a fixed vocabulary and not free prose.
+VOICE_PRESETS: tuple[str, ...] = ("warm_casual", "clear_professional", "direct_concise")
+CUSTOM_VOICE = "custom"
+DEFAULT_VOICE_PRESET = "warm_casual"
+# The owner's own description of the voice, bounded so it stays a description
+# and cannot become a second system prompt.
+CUSTOM_VOICE_MAX = 300
+
+
+def customer_voice_for(profile: ProfileDraft) -> dict[str, str | None]:
+    """The structured voice a confirmed tenant stores at ``config->customer_voice``.
+
+    One shape, written here and read by the customer assistant: a preset key and
+    (only for ``custom``) the owner's bounded description. An owner who never
+    reached the voice beat takes the same default the beat itself resolves to.
+    """
+    preset = profile.customer_voice_preset or DEFAULT_VOICE_PRESET
+    style = profile.customer_voice_custom_style.strip()[:CUSTOM_VOICE_MAX]
+    if preset != CUSTOM_VOICE:
+        style = ""
+    return {"preset": preset, "custom_style": style or None}
 
 
 def system_prompt_for(business_name: str, business_type: str) -> str:
@@ -54,18 +84,74 @@ def system_prompt_for(business_name: str, business_type: str) -> str:
     )
 
 
+# W-9 US-3: what a correction can target. ``unresolved_name`` is not a field -
+# it is how the extractor says "they asked me to change the name and I cannot
+# tell which one", so the server asks one deterministic clarification instead of
+# guessing between the owner's name and the business's.
+CorrectionTarget = Literal[
+    "owner_display_name",
+    "business_name",
+    "business_type",
+    "headcount",
+    "hours",
+    "services",
+    "contact",
+    "abn",
+    "gst",
+    "unresolved_name",
+]
+
+UNRESOLVED_NAME = "unresolved_name"
+
+
+class FieldCorrection(BaseModel):
+    """One already-captured field the owner corrected, from any beat.
+
+    ``raw`` keeps the owner's own words as the evidence behind ``value``, so a
+    correction the server later rejects can still be read back honestly, and
+    ``normalization`` says how much the extractor changed on the way (US-6: a
+    name, a brand, an identifier, or an amount is never quietly tidied).
+    """
+
+    field: CorrectionTarget
+    value: str = Field(default="", max_length=2000)
+    raw: str = Field(default="", max_length=2000)
+    normalization: Literal["none", "spelling", "spacing", "capitalization"] = "none"
+
+
+class OfferingOperation(BaseModel):
+    """W-9 US-4: one explicit edit to the offering list.
+
+    ``rename`` keeps the same item under a new name, so every W-6 provenance
+    field survives it; ``replace`` swaps one item for a different one and
+    therefore starts that item's provenance over.
+    """
+
+    op: Literal["add", "rename", "remove", "replace"]
+    name: str = Field(min_length=1, max_length=200)
+    new_name: str = Field(default="", max_length=200)
+
+
 class DraftUpdate(BaseModel):
     """Per-turn structured extraction result: what the owner stated this turn.
 
     Transient - never persisted. Any non-null ``profile`` field is merged into
     the accumulated draft by ``save_profile``; ``off_topic`` / ``meta_reply``
     drive the reply directive. The server's current beat owns the next question.
+
+    W-9 adds the two things an owner does that are not answers to the pending
+    question: correcting a field captured earlier, and editing the offering
+    list. Neither carries a number - W-6's frozen-money discipline is
+    unconditional, so no schema in this file has a numeric field the model
+    fills in.
     """
 
     off_topic: bool = False
     profile: ProfileDraft | None = None
     meta_reply: str | None = None
     offering_names: list[str] | None = None
+    corrections: list[FieldCorrection] | None = None
+    offering_ops: list[OfferingOperation] | None = None
     # W-7: the extractor's verdict on whether this reply is a genuine, plausible
     # answer to the field that was asked this turn. Paired with the server's own
     # deterministic `Beat.valid` check - either may veto - so a word-shaped

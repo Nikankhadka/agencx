@@ -36,6 +36,7 @@ from uuid import UUID
 
 import httpx
 
+from app.onboarding.flow import DEFAULT_VOICE_PRESET
 from app.shared import db
 from app.shared.config import get_settings
 
@@ -98,6 +99,10 @@ def _build_draft_from_answers(answers: dict[str, str]) -> dict[str, Any]:
     """
     draft = {stage: answers[stage].strip() for stage in PROFILE_STAGES}
     draft["business_name"] = draft["business_name"] or TENANT_NAME
+    # W-9: the voice beat is answered by tapping a chip, not by free text, so
+    # the script has no stage for it - the pre-populated draft takes the same
+    # value an unanswered voice beat resolves to. Nothing dental about it (I8).
+    draft["customer_voice_preset"] = DEFAULT_VOICE_PRESET
     return draft
 
 
