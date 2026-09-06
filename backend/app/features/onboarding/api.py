@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.features.knowledge.api import KnowledgeRecord
+from app.features.knowledge.models import KnowledgeSection
 from app.features.onboarding import controller
 from app.features.tenants.slug import validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
@@ -87,13 +88,8 @@ class OnboardingConfirmRequest(BaseModel):
         return value if value is None else validate_slug(value)
 
 
-class KnowledgeSection(BaseModel):
-    heading: str = Field(min_length=1, max_length=120)
-    body: str = Field(min_length=1, max_length=20_000)
-
-
 class OnboardingKnowledgeRequest(BaseModel):
-    sections: list[KnowledgeSection] = Field(min_length=1)
+    sections: list[KnowledgeSection] = Field(default_factory=list)
     offerings: list[PendingOffering] = Field(default_factory=list)
 
 

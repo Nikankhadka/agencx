@@ -15,6 +15,7 @@ from fastapi import HTTPException, status
 from app.features.knowledge import service
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.shared import db
 
 
 async def list_documents(*, tenant_id: UUID) -> list[dict[str, Any]]:
@@ -145,6 +146,21 @@ async def get_record(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
     return row
+
+
+async def source_detail(*, tenant_id: UUID, document_id: UUID) -> dict[str, object]:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        filename = await conn.fetchval(
+            "select filename from documents where id = $1 and tenant_id = $2",
+            document_id,
+            tenant_id,
+        )
+    if filename is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    text, is_fallback = await service.source_text(
+        tenant_id=tenant_id, filename=str(filename), document_id=document_id
+    )
+    return {"text": text, "is_fallback": is_fallback}
 
 
 async def save_record(

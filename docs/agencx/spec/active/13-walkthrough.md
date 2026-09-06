@@ -36,7 +36,7 @@ tickets, in build order: W-1 and W-2 shipped, W-5 precedes W-6 so the reported
 chat bug closes before the document-extraction feature builds on top of it,
 W-7 shipped after W-6, and W-8 and W-9 extend the review sheet and the
 interview that the earlier tickets touched. W-1, W-2, W-7 are delivered;
-W-3 through W-6, W-8, and W-9 are open specifications.
+W-3 through W-6 and W-9 are open specifications. W-8 is delivered.
 
 Dependencies between the refined and new tickets (requested later work links
 to the behavior it refines instead of duplicating its acceptance criteria):
@@ -1634,22 +1634,22 @@ sheet/collapse vocabulary.
 
 ### Definition of done
 
-- [ ] Up to five offering cards preview with the total count; "Review all"
+- [x] Up to five offering cards preview with the total count; "Review all"
       opens the five-per-page editor.
-- [ ] Edits, removals, additions, and review decisions survive paging; newly
+- [x] Edits, removals, additions, and review decisions survive paging; newly
       added items are revealed; removing the final item pages validly; stable
       identities prevent cross-item edit drift.
-- [ ] Saving includes all retained offerings; paging and previewing never
+- [x] Saving includes all retained offerings; paging and previewing never
       publish; existing save/discard/go-live boundaries hold; off-page errors
       are discoverable with a direct route.
-- [ ] Possible duplicates render as decisions (combine or keep both) with the
+- [x] Possible duplicates render as decisions (combine or keep both) with the
       retained values shown, explicit conflict price choice, and no implied
       unconfirmed merge.
-- [ ] Knowledge sections stay readable and editable, preserving factual
+- [x] Knowledge sections stay readable and editable, preserving factual
       distinctions; a collapsed source-detail view keeps unrepresented details
       accessible.
 - [ ] Keyboard and mobile behavior verified alongside desktop.
-- [ ] `make check` green.
+- [x] `make check` green.
 
 ---
 

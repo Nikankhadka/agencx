@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toWorkingOffering } from "./ReviewSheet";
+import { offeringPage, offeringPageCount, pageForOffering, toWorkingOffering } from "./ReviewSheet";
 import type { ReviewOffering } from "./types";
 
 /**
@@ -63,5 +63,24 @@ describe("toWorkingOffering", () => {
       sources: ["owner"],
     });
     expect(working).toMatchObject({ priceNote: "", possibleMatches: [], priceOptions: [] });
+  });
+});
+
+describe("offering pagination", () => {
+  it.each([
+    [0, 1],
+    [5, 1],
+    [6, 2],
+    [40, 8],
+    [51, 11],
+  ])("uses five offerings per page for %i offerings", (count, pages) => {
+    expect(offeringPageCount(count)).toBe(pages);
+  });
+
+  it("keeps the sixth offering on its own editor page", () => {
+    const offerings = Array.from({ length: 6 }, (_, index) => `offering-${index + 1}`);
+    expect(offeringPage(offerings, 0)).toEqual(offerings.slice(0, 5));
+    expect(offeringPage(offerings, 1)).toEqual(["offering-6"]);
+    expect(pageForOffering(5)).toBe(1);
   });
 });

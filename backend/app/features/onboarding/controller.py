@@ -465,6 +465,7 @@ async def save_onboarding_knowledge(
         tenant_id=tenant_id,
         document_id=document_id,
         sections=sections,
+        offerings=[item.model_dump() for item in offerings],
         embedder=embedder,
     )
     if record is None:

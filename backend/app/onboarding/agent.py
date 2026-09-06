@@ -41,7 +41,12 @@ from app.features.business.offering_candidates import normalize_name
 from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
 from app.onboarding import beats
-from app.onboarding.flow import DraftUpdate, PendingOffering, merge_offerings
+from app.onboarding.flow import (
+    DraftUpdate,
+    PendingOffering,
+    merge_offerings,
+    normalize_pending_offerings,
+)
 from app.onboarding.tools import save_profile
 
 logger = logging.getLogger("app.onboarding.agent")
@@ -210,13 +215,7 @@ class OnboardingRecord:
 
 def _load_offerings(raw: Any) -> list[PendingOffering]:
     offerings: list[PendingOffering] = []
-    for item in raw if isinstance(raw, list) else []:
-        try:
-            offering = PendingOffering.model_validate(
-                {"name": item, "sources": ["owner"]} if isinstance(item, str) else item
-            )
-        except (TypeError, ValueError):
-            continue
+    for offering in normalize_pending_offerings(raw):
         if normalize_name(offering.name) not in {
             normalize_name(existing.name) for existing in offerings
         }:

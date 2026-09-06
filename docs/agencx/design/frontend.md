@@ -462,16 +462,18 @@ interview asks, with the control the interview asks it with.
 | Failed | The reason in place, plus retry (re-runs the ingest over the stored text) |
 | Tool toggles | Enabled-tools section (D-3); toggling updates `tenant_config.enabled_tools` |
 
-**Phase 13, W-8 (planned, `13-walkthrough.md`):** the review sheet is
-extended for large imports - up to five offering cards preview with the total
-retained count, a "Review all" editor with five offerings per page, stable
-candidate identities so edits do not migrate across paging, saving that
-includes all retained offerings on unvisited pages, and possible-duplicate
-decisions ("Combine" / "Keep both") that require an explicit price choice on a
-conflict and never imply an unconfirmed merge. The knowledge sections keep
-their order and formatting that preserves exceptions, conditions, locations,
-and units, with a collapsed source-detail view for unrepresented details. No
-rich-text editor dependency, no lossy summary, no replacement wizard.
+**Phase 13, W-8 (`13-walkthrough.md`):** the shared review sheet presents a
+read-first document. Offerings appear first, initially capped at five cards
+with a total, and "Review all N" opens a five-per-page editor keyed by stable
+candidate identity. Editing, additions, removals, and duplicate decisions stay
+in one review state, so Save sends every retained offering rather than only the
+visible page. A possible duplicate remains separate unless its owner selects
+"Keep both" or confirms a previewed combine, with an explicit price choice for
+a conflict. Business overview, hours, location, and named other-information
+subsections render as document content and edit inline. Saved sources use the
+same expandable renderer. Original extracted source is an owner-only,
+on-demand region, never customer retrieval. No rich-text editor dependency or
+replacement wizard is used.
 
 ### S3 - Public page (anonymous, per-tenant slug)
 

@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.features.business.offering_candidates import normalize_name
 from app.features.business.service import create_offerings_batch
+from app.features.knowledge.models import normalize_sections
 from app.features.knowledge.offering_extraction import extract_offerings
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
@@ -28,6 +29,7 @@ from app.ingestion.pipeline import ingest_offerings, process_document
 from app.ingestion.url import AllowedTarget, extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding.flow import normalize_pending_offerings
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.storage import document_key, get_storage
@@ -75,6 +77,11 @@ async def upload_document(
     column, then run the ingestion pipeline to completion. Returns the
     resulting row."""
     await get_storage().put(document_key(tenant_id, document_id, extension), body)
+    await _save_original_text(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        text=await run_in_threadpool(extract_text, body, extension),
+    )
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await conn.execute(
@@ -138,6 +145,7 @@ async def ingest_website(
     URL this tenant already ingested returns the existing row untouched.
     """
     await get_storage().put(document_key(tenant_id, document_id, ".txt"), text.encode("utf-8"))
+    await _save_original_text(tenant_id=tenant_id, document_id=document_id, text=text)
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         existing = await conn.fetchrow(
@@ -226,10 +234,14 @@ def _record(row: Any) -> dict[str, Any]:
     """
     record = dict(row)
     raw = record.pop("structured", None)
-    record["sections"] = json.loads(raw) if isinstance(raw, str) else (raw or [])
+    sections = json.loads(raw) if isinstance(raw, str) else (raw or [])
+    record["sections"] = normalize_sections(sections)
     stored = record.pop("offerings", None)
     extraction = json.loads(stored) if isinstance(stored, str) else stored
-    record["offering_candidates"] = (extraction or {}).get("candidates", [])
+    record["offering_candidates"] = [
+        item.model_dump()
+        for item in normalize_pending_offerings((extraction or {}).get("candidates", []))
+    ]
     # Null on a row ingested before this column existed; get_record extracts it
     # on first view, the same way it backfills `sections`.
     record["extraction_status"] = (extraction or {}).get("status", "pending")
@@ -299,6 +311,7 @@ async def draft_from_upload(
     """
     await get_storage().put(document_key(tenant_id, document_id, extension), body)
     raw_text = await run_in_threadpool(extract_text, body, extension)
+    await _save_original_text(tenant_id=tenant_id, document_id=document_id, text=raw_text)
     sections = await structure_document(raw_text, provider=provider)
     return await _insert_draft(
         tenant_id=tenant_id,
@@ -353,6 +366,7 @@ async def draft_from_url_text(
         )
     target = existing or document_id
     await get_storage().put(document_key(tenant_id, target, ".txt"), text.encode("utf-8"))
+    await _save_original_text(tenant_id=tenant_id, document_id=target, text=text)
 
     extraction = await _extraction(text, provider=provider)
     if existing is None:
@@ -394,6 +408,7 @@ async def save_record(
     The assistant answers from what the owner saved, not from the original
     scrape - an edit here is the correction, not a note beside it.
     """
+    sections = normalize_sections(sections)
     keys: set[str] = set()
     for offering in offerings:
         key = normalize_name(str(offering.get("name", "")))
@@ -437,15 +452,33 @@ async def save_record(
             embedder=embedder,
             source=source,
         )
-        updated_prices = False
+        updated_existing = False
         for change in changes:
             await conn.execute(
-                "update offerings set price_cents = $3 where tenant_id = $1 and id = $2",
+                "update offerings set description = $3, price_cents = $4 "
+                "where tenant_id = $1 and id = $2",
                 tenant_id,
                 existing[normalize_name(change["name"])]["id"],
+                str(
+                    next(item for item in offerings if item.get("name") == change["name"]).get(
+                        "description", ""
+                    )
+                ),
                 change["proposed_price_cents"],
             )
-            updated_prices = True
+            updated_existing = True
+        for offering in offerings:
+            row = existing.get(normalize_name(str(offering.get("name", ""))))
+            if row is not None and not any(
+                change["name"] == offering["name"] for change in changes
+            ):
+                await conn.execute(
+                    "update offerings set description = $3 where tenant_id = $1 and id = $2",
+                    tenant_id,
+                    row["id"],
+                    str(offering.get("description", "")),
+                )
+                updated_existing = True
         created = (
             await create_offerings_batch(
                 conn=conn, tenant_id=tenant_id, offerings=offerings, embedder=embedder
@@ -453,8 +486,13 @@ async def save_record(
             if offerings
             else []
         )
-        if updated_prices and not created:
+        if updated_existing and not created:
             await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
+        await conn.execute(
+            "update documents set offerings = $2 where id = $1",
+            document_id,
+            json.dumps({"status": "full", "candidates": offerings}),
+        )
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", document_id
         )
@@ -471,7 +509,8 @@ async def _publish_record(
     source: str,
 ) -> None:
     """Publish reviewed sections and rebuild only this document's chunks."""
-    text = render_sections([dict(section) for section in sections])
+    sections = normalize_sections(sections)
+    text = render_sections(sections)
     await get_storage().put(document_key(tenant_id, document_id, ".txt"), text.encode("utf-8"))
     await conn.execute(
         "update documents set structured = $2 where id = $1",
@@ -498,6 +537,7 @@ async def publish_record(
     tenant_id: UUID,
     document_id: UUID,
     sections: list[dict[str, str]],
+    offerings: list[dict[str, Any]] | None = None,
     embedder: Embedder,
 ) -> dict[str, Any] | None:
     """Publish reviewed knowledge without touching the offerings table."""
@@ -517,6 +557,12 @@ async def publish_record(
             embedder=embedder,
             source=source,
         )
+        if offerings is not None:
+            await conn.execute(
+                "update documents set offerings = $2 where id = $1",
+                document_id,
+                json.dumps({"status": "full", "candidates": offerings}),
+            )
         row = await conn.fetchrow(
             f"select {_RECORD_COLUMNS} from documents where id = $1", document_id
         )
@@ -545,7 +591,7 @@ async def get_record(
         record.pop("uploaded_at", None)
         if record["sections"] and record["extraction_status"] != "pending":
             return record
-        text = await _stored_text(
+        text = await _source_text_for_processing(
             tenant_id=tenant_id, filename=row["filename"], document_id=document_id
         )
         if not text:
@@ -577,6 +623,37 @@ async def _stored_text(*, tenant_id: UUID, filename: str, document_id: UUID) -> 
         if body is not None:
             return extract_text(body, ext)
     return ""
+
+
+async def _save_original_text(*, tenant_id: UUID, document_id: UUID, text: str) -> None:
+    """Store extracted source independently of the reviewed retrieval text."""
+    await get_storage().put(
+        document_key(tenant_id, document_id, ".source.txt"), text.encode("utf-8")
+    )
+
+
+async def _source_text_for_processing(*, tenant_id: UUID, filename: str, document_id: UUID) -> str:
+    original = await get_storage().get(document_key(tenant_id, document_id, ".source.txt"))
+    if original is not None:
+        return original.decode("utf-8", errors="replace")
+    return await _stored_text(tenant_id=tenant_id, filename=filename, document_id=document_id)
+
+
+async def source_text(*, tenant_id: UUID, filename: str, document_id: UUID) -> tuple[str, bool]:
+    """Return original extracted text, or a clearly marked legacy fallback."""
+    original = await get_storage().get(document_key(tenant_id, document_id, ".source.txt"))
+    if original is not None:
+        return original.decode("utf-8", errors="replace"), False
+    # Pre-W-8 rows did not retain source text separately. Their saved owner
+    # review is the only honest fallback, rather than implying it is original.
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        structured = await conn.fetchval(
+            "select structured from documents where id = $1 and tenant_id = $2",
+            document_id,
+            tenant_id,
+        )
+    sections = json.loads(structured) if isinstance(structured, str) else (structured or [])
+    return render_sections(normalize_sections(sections)), True
 
 
 async def delete_record(*, tenant_id: UUID, document_id: UUID) -> bool:

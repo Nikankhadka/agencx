@@ -46,10 +46,10 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [x] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
 - [x] W-7: make the interview read like a person - challenge junk input, drop the
   skip chip, keep replies short, address-only go-live, priced offering cards.
-- [ ] W-8: review a large import without losing information - five-item preview, five-per-page editor, combine/keep-both duplicate decisions, and readable editable knowledge sections.
+- [x] W-8: review a large import without losing information - shared structured document review, five-item preview and editor pages, explicit duplicate decisions, owner-only source evidence, and catalog-only offering publication.
 - [ ] W-9: correct captured information conversationally - conservative wording cleanup, explicit corrections on any beat, offering correction operations, and a single acknowledgement for a captured or corrected name.
 
-**Phase 13 specification amended 2026-09-05** (`docs/phase13-walkthrough-refinement`): a second walkthrough round and its planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase introduction to nine tickets. This is a specification update, not implementation delivery. W-1, W-2, and W-7 remain shipped with their records preserved; W-3 through W-6, W-8, and W-9 keep their software delivery statuses open, and no runtime fix is claimed from the repository scans.
+**Phase 13 specification amended 2026-09-05** (`docs/phase13-walkthrough-refinement`): a second walkthrough round and its planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase introduction to nine tickets. W-1, W-2, W-7, and W-8 are shipped; W-3 through W-6 and W-9 retain their software delivery statuses open.
 
 ## Known gaps and deliberate deferrals
 

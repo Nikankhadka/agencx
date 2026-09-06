@@ -45,13 +45,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.features.business.offering_candidates import normalize_name
 from app.features.knowledge.structuring import clean_text, segments
 from app.llm.provider import LLMProvider
-from app.onboarding.flow import PendingOffering, merge_offerings
+from app.onboarding.flow import PendingOffering, SourceReference, merge_offerings
 from app.pricing.validation_gate import MonetaryFigure, extract_monetary_figures, is_hedged
 
 logger = logging.getLogger("app.knowledge.offering_extraction")
@@ -358,9 +359,7 @@ def _segment_blocks(index: DocumentIndex) -> list[list[SourceBlock]]:
     return grouped or ([index.blocks] if index.blocks else [])
 
 
-async def _identify(
-    blocks: list[SourceBlock], *, provider: LLMProvider
-) -> list[ExtractedOffering]:
+async def _identify(blocks: list[SourceBlock], *, provider: LLMProvider) -> list[ExtractedOffering]:
     """Stage 2. One model call over one segment, block ids included."""
     numbered = "\n".join(f"[{item.id}] {item.text}" for item in blocks)
     result = await provider.extract(
@@ -394,9 +393,38 @@ def _resolve(
                 price_note=price_note,
                 needs_review=needs_review,
                 sources=["document"],
+                source_references=_source_references(candidate, name, description, index),
             )
         )
     return resolved
+
+
+def _source_references(
+    candidate: ExtractedOffering, name: str, description: str, index: DocumentIndex
+) -> list[SourceReference]:
+    """Keep the verified blocks that support the candidate on the wire."""
+    fields_by_block: dict[str, set[Literal["name", "description", "price"]]] = {}
+    supported_quotes: tuple[tuple[Literal["name", "description", "price"], str], ...] = (
+        ("name", name),
+        ("description", description),
+    )
+    for supported_field, quote in supported_quotes:
+        if quote:
+            block = next(
+                (item for item in index.blocks if _find_position(item.text, quote) >= 0), None
+            )
+            if block is not None:
+                fields_by_block.setdefault(block.id, set()).add(supported_field)
+    if candidate.price_block and (block := index.block(candidate.price_block)) is not None:
+        fields_by_block.setdefault(block.id, set()).add("price")
+    return [
+        SourceReference(
+            block=block_id,
+            excerpt=index.block(block_id).text[:2000],  # type: ignore[union-attr]
+            supported_fields=sorted(fields),
+        )
+        for block_id, fields in fields_by_block.items()
+    ]
 
 
 def _compose_name(candidate: ExtractedOffering, *, segment_text: str) -> str | None:
@@ -567,7 +595,7 @@ def _attach_possible_matches(candidates: list[PendingOffering]) -> None:
     """
     for first, second in ((a, b) for a in candidates for b in candidates if a is not b):
         if _is_possible_match(first.name, second.name):
-            first.possible_matches = sorted({*first.possible_matches, second.name})
+            first.possible_matches = sorted({*first.possible_matches, second.candidate_id})
 
 
 def _is_possible_match(left: str, right: str) -> bool:
@@ -601,4 +629,3 @@ def _close(left: str, right: str) -> bool:
             )
         previous = current
     return previous[-1] <= 1
-

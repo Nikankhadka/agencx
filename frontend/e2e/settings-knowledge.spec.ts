@@ -32,7 +32,8 @@ test("a pasted link is read back as sections, then saved", async ({
   // The review sheet opens with the page processed into readable sections.
   const sheet = page.getByRole("dialog", { name: "Read this back" });
   await expect(sheet).toBeVisible({ timeout: 90_000 });
-  const sections = sheet.getByRole("textbox");
+  await sheet.getByRole("button", { name: "Edit" }).first().click();
+  const sections = sheet.getByRole("textbox", { name: /details/ });
   await expect(sections.first()).toBeVisible();
   const before = await sections.first().inputValue();
   expect(before.length).toBeGreaterThan(0);
@@ -41,12 +42,14 @@ test("a pasted link is read back as sections, then saved", async ({
   await sections.first().fill(EDITED);
   await page.getByTestId("knowledge-save").click();
 
-  await expect(sheet).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByTestId("knowledge-save")).toHaveCount(0, { timeout: 30_000 });
 
   // The saved text is now what the assistant knows, and it says so. Scoped to
   // this record: the demo tenant may already carry others.
   const saved = page.locator("article").filter({ hasText: EDITED });
   await expect(saved).toBeVisible({ timeout: 30_000 });
+  await saved.getByText("View reviewed document").click();
+  await expect(saved.getByText(EDITED)).toBeVisible();
   await expect(saved.getByText("Answering from this")).toBeVisible();
   await expect(page.getByTestId("knowledge-error")).toHaveCount(0);
 

@@ -1,19 +1,28 @@
 export interface KnowledgeSection {
   heading: string;
   body: string;
+  kind?: "business_overview" | "hours" | "location" | "other";
+}
+
+export interface SourceReference {
+  block: string;
+  excerpt: string;
+  supported_fields: ("name" | "description" | "price")[];
 }
 
 export interface PendingOffering {
+  candidate_id?: string;
   name: string;
   description: string;
   price_cents: number | null;
   sources: ("owner" | "document")[];
+  source_references?: SourceReference[];
   /** W-6: the source's own wording for a price the row cannot hold - a range, a
    *  "from" price, a rate - shown instead of a number picked out of it. */
   price_note?: string;
   /** W-6: this candidate needs a decision before it is right. */
   needs_review?: boolean;
-  /** W-6: names that might be this same item, never merged automatically. */
+  /** W-8: ids that might be this same item, never merged automatically. */
   possible_matches?: string[];
   /** W-6: competing amounts when two sources price one item differently. */
   price_options?: number[];
@@ -38,6 +47,11 @@ export interface KnowledgeRecord {
   sections: KnowledgeSection[];
   offering_candidates?: ReviewOffering[];
   extraction_status?: ExtractionStatus;
+}
+
+export interface SourceDetail {
+  text: string;
+  is_fallback: boolean;
 }
 
 export function sourceLabel(record: KnowledgeRecord): string {

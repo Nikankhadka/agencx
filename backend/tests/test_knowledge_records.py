@@ -32,6 +32,7 @@ from app.features.knowledge.structuring import (
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT
 from app.main import app
+from app.onboarding.flow import normalize_pending_offerings
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
@@ -90,8 +91,8 @@ async def test_structure_document_returns_only_the_sections_the_source_filled() 
     )
     sections = await structure_document(_SOURCE, provider=provider)
 
-    assert [section["heading"] for section in sections] == ["About", "Prices", "Hours"]
-    assert sections[1]["body"].startswith("Screen replacement $89")
+    assert [section["heading"] for section in sections] == ["Business overview", "Hours"]
+    assert sections[0]["kind"] == "business_overview"
 
 
 async def test_structure_document_keeps_the_source_when_a_figure_is_invented() -> None:
@@ -109,7 +110,7 @@ async def test_structure_document_allows_dropping_a_figure() -> None:
     provider = StructuringFake({"prices": "Screen replacement $89."})
     sections = await structure_document(_SOURCE, provider=provider)
 
-    assert [section["heading"] for section in sections] == ["Prices"]
+    assert [section["heading"] for section in sections] == [AS_WRITTEN]
 
 
 async def test_structure_document_keeps_the_source_when_the_model_fails() -> None:
@@ -144,7 +145,19 @@ def test_render_sections_drops_empty_bodies() -> None:
 def test_structured_knowledge_defaults_every_field_to_empty() -> None:
     """A model that answers with one field must not fail validation - an empty
     field means 'the source says nothing about this'."""
-    assert StructuredKnowledge.model_validate({"about": "A shop."}).prices == []
+    structured = StructuredKnowledge.model_validate({"about": "A shop."})
+    assert structured.business_overview == ["A shop."]
+    assert structured.hours == []
+
+
+def test_legacy_candidate_match_names_normalize_to_stable_ids() -> None:
+    candidates = normalize_pending_offerings(
+        [
+            {"name": "coffe", "possible_matches": ["coffee drinks"]},
+            {"name": "coffee drinks"},
+        ]
+    )
+    assert candidates[0].possible_matches == [candidates[1].candidate_id]
 
 
 async def test_long_documents_are_structured_in_bounded_segments() -> None:
@@ -231,7 +244,7 @@ async def test_draft_is_readable_but_answers_nothing(
     draft = await _upload_draft(client, headers)
 
     assert draft["status"] == "draft"
-    assert [section["heading"] for section in draft["sections"]] == ["About", "Hours"]
+    assert [section["heading"] for section in draft["sections"]] == ["Business overview", "Hours"]
 
     # Nothing is embedded until the owner saves, so retrieval cannot see it.
     chunks = await superuser_conn.fetchval(
@@ -263,6 +276,70 @@ async def test_saving_the_reviewed_sections_makes_them_answerable(
     )
     assert contents, "saving must chunk and embed the reviewed text"
     assert "Monday to Saturday" in " ".join(row["content"] for row in contents)
+
+
+@pytest.mark.db
+async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    headers = await _signup_tenant_admin(client)
+    draft = await _upload_draft(client, headers)
+    offering = {
+        "candidate_id": "off_reviewed_coffee",
+        "name": "Coffee",
+        "description": "House blend, served with oat milk on request.",
+        "price_cents": 500,
+        "sources": ["document", "owner"],
+        "source_references": [
+            {
+                "block": "b3",
+                "excerpt": "Coffee is $5 and oat milk is available.",
+                "supported_fields": ["name", "description", "price"],
+            }
+        ],
+        "possible_matches": [],
+        "price_note": "",
+        "needs_review": False,
+        "price_options": [],
+    }
+    saved = await client.put(
+        f"/api/knowledge/records/{draft['id']}",
+        headers=headers,
+        json={"sections": draft["sections"], "offerings": [offering]},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["offering_candidates"] == [offering]
+
+    source = await client.get(f"/api/knowledge/records/{draft['id']}/source", headers=headers)
+    assert source.status_code == 200, source.text
+    assert source.json() == {"text": _SOURCE, "is_fallback": False}
+
+
+@pytest.mark.db
+async def test_legacy_source_endpoint_marks_saved_review_as_a_fallback(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    headers = await _signup_tenant_admin(client)
+    uploaded = await client.post(
+        "/api/knowledge/upload",
+        headers=headers,
+        files={"file": ("legacy.txt", _SOURCE.encode("utf-8"), "text/plain")},
+        data={"doc_type": "other"},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    document_id = uploaded.json()["id"]
+    tenant_id = await superuser_conn.fetchval(
+        "select tenant_id from documents where id = $1", uuid.UUID(document_id)
+    )
+    (uploads_tmp / str(tenant_id) / f"{document_id}.source.txt").unlink()
+    await client.get(f"/api/knowledge/records/{document_id}", headers=headers)
+
+    source = await client.get(f"/api/knowledge/records/{document_id}/source", headers=headers)
+    assert source.status_code == 200, source.text
+    assert source.json()["is_fallback"] is True
+    assert "A phone and laptop repair shop." in source.json()["text"]
 
 
 @pytest.mark.db
@@ -354,7 +431,7 @@ async def test_offering_price_change_requires_explicit_confirmation(
     assert created.status_code == 201, created.text
 
     draft = await _upload_draft(client, headers)
-    sections = [{"heading": "Prices", "body": "Screen replacement $89"}]
+    sections = [{"heading": "Business overview", "body": "Phone repairs while you wait."}]
     payload = {
         "sections": sections,
         "offerings": [{"name": "Screen replacement", "price_cents": 8900}],
@@ -387,7 +464,7 @@ async def test_records_list_carries_the_sections(
     rows = response.json()
     assert len(rows) == 1
     assert rows[0]["filename"] == "about-us.txt"
-    assert [section["heading"] for section in rows[0]["sections"]] == ["About", "Hours"]
+    assert [section["heading"] for section in rows[0]["sections"]] == ["Business overview", "Hours"]
 
 
 @pytest.mark.db
@@ -408,7 +485,10 @@ async def test_a_document_ingested_before_this_screen_is_structured_on_first_vie
 
     response = await client.get(f"/api/knowledge/records/{document_id}", headers=headers)
     assert response.status_code == 200
-    assert [section["heading"] for section in response.json()["sections"]] == ["About", "Hours"]
+    assert [section["heading"] for section in response.json()["sections"]] == [
+        "Business overview",
+        "Hours",
+    ]
 
     # Structured once: the second read comes back from the stored column.
     again = await client.get(f"/api/knowledge/records/{document_id}", headers=headers)

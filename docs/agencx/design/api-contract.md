@@ -32,18 +32,14 @@ SSE failures after a stream starts use an `error` event containing `code`, safe
 The generated frontend OpenAPI types are refreshed with `npm run gen:types` and
 checked without writing with `npm run gen:types -- --check`.
 
-## Planned extensions (Phase 13, not yet implemented)
+## Knowledge review contract (Phase 13, W-8)
 
 The Phase 13 refinements (`spec/active/13-walkthrough.md`, amended 2026-09-05)
-define the minimum contract extensions the onboarding and knowledge-review
-flows will need. These are **planned contracts**: none is implemented or
-advertised until its ticket ships, and the endpoint shapes above stay
-authoritative until then.
+define the contract used by onboarding and later knowledge review.
 
 - **Draft offering identity, description, provenance, and source references.**
-  `PendingOffering` today carries name, description, price, and sources
-  (`backend/app/onboarding/flow.py`). The planned shape adds a stable
-  per-candidate identity, explicit provenance, and references to the source
+  `PendingOffering` carries a stable opaque `candidate_id`, description, price,
+  provenance, and references to the source
   blocks that support the name, description, and price, so edits cannot
   migrate between items and every figure resolves deterministically (W-6,
   W-8).
@@ -61,6 +57,9 @@ authoritative until then.
 - **Consistent candidate merge behavior across client and server.** One shared
   precedence policy is applied by both sides; the wire shape documents it
   rather than letting the two disagree (W-6).
+- **Original source evidence.** `GET /api/knowledge/records/{document_id}/source`
+  is owner-only and returns extracted original source text on demand. A legacy
+  record returns its saved reviewed text with `is_fallback: true`.
 - **Correction semantics through the existing onboarding message/update
   boundaries.** A turn that corrects previously captured fields is expressed
   through the existing onboarding message/update shapes; no new correction

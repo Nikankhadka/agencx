@@ -391,6 +391,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/records/{document_id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source Detail */
+        get: operations["get_source_detail_api_knowledge_records__document_id__source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/business/page": {
         parameters: {
             query?: never;
@@ -967,13 +984,6 @@ export interface components {
             /** Widget */
             widget?: ("text" | "chips" | "masked" | "cta" | "phone") | null;
         };
-        /** ConfirmedOffering */
-        ConfirmedOffering: {
-            /** Name */
-            name: string;
-            /** Price Cents */
-            price_cents?: number | null;
-        };
         /** ConversationDetail */
         ConversationDetail: {
             /**
@@ -1202,21 +1212,34 @@ export interface components {
             /** Error */
             error: string | null;
             /** Sections */
-            sections: components["schemas"]["Section"][];
+            sections: components["schemas"]["KnowledgeSection"][];
             /**
              * Offering Candidates
              * @default []
              */
-            offering_candidates: {
-                [key: string]: unknown;
-            }[];
+            offering_candidates: components["schemas"]["PendingOffering"][];
+            /**
+             * Extraction Status
+             * @default pending
+             * @enum {string}
+             */
+            extraction_status: "full" | "partial" | "failed" | "pending";
         };
-        /** KnowledgeSection */
+        /**
+         * KnowledgeSection
+         * @description One readable group in an owner's reviewed document.
+         *
+         *     Old documents used arbitrary headings. Reading them through this model gives
+         *     them the structured shape without an eager data migration; their next save
+         *     writes the normalized form back to ``documents.structured``.
+         */
         KnowledgeSection: {
             /** Heading */
             heading: string;
             /** Body */
             body: string;
+            /** Kind */
+            kind?: ("business_overview" | "hours" | "location" | "other") | null;
         };
         /**
          * LinksUpdate
@@ -1345,7 +1368,7 @@ export interface components {
         /** OnboardingKnowledgeRequest */
         OnboardingKnowledgeRequest: {
             /** Sections */
-            sections: components["schemas"]["KnowledgeSection"][];
+            sections?: components["schemas"]["KnowledgeSection"][];
             /** Offerings */
             offerings?: components["schemas"]["PendingOffering"][];
         };
@@ -1400,6 +1423,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Candidate Id
+             * @default
+             */
+            candidate_id: string;
+            /**
              * Description
              * @default
              */
@@ -1408,6 +1436,22 @@ export interface components {
             price_cents?: number | null;
             /** Sources */
             sources?: ("owner" | "document")[];
+            /** Source References */
+            source_references?: components["schemas"]["SourceReference"][];
+            /**
+             * Price Note
+             * @default
+             */
+            price_note: string;
+            /**
+             * Needs Review
+             * @default false
+             */
+            needs_review: boolean;
+            /** Possible Matches */
+            possible_matches?: string[];
+            /** Price Options */
+            price_options?: number[];
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -1514,28 +1558,21 @@ export interface components {
         };
         /** SaveRecordRequest */
         SaveRecordRequest: {
-            /** Sections */
-            sections: components["schemas"]["Section"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["KnowledgeSection"][];
             /**
              * Offerings
              * @default []
              */
-            offerings: components["schemas"]["ConfirmedOffering"][];
+            offerings: components["schemas"]["PendingOffering"][];
             /**
              * Accept Price Changes
              * @default false
              */
             accept_price_changes: boolean;
-        };
-        /**
-         * Section
-         * @description One readable block of a document: a fixed heading and the owner's text.
-         */
-        Section: {
-            /** Heading */
-            heading: string;
-            /** Body */
-            body: string;
         };
         /** SelectionPayload */
         SelectionPayload: {
@@ -1543,6 +1580,25 @@ export interface components {
             beat: string;
             /** Values */
             values?: string[];
+        };
+        /** SourceDetail */
+        SourceDetail: {
+            /** Text */
+            text: string;
+            /** Is Fallback */
+            is_fallback: boolean;
+        };
+        /**
+         * SourceReference
+         * @description Verbatim evidence supporting a candidate field in its source.
+         */
+        SourceReference: {
+            /** Block */
+            block: string;
+            /** Excerpt */
+            excerpt: string;
+            /** Supported Fields */
+            supported_fields?: ("name" | "description" | "price")[];
         };
         /** StorefrontResponse */
         StorefrontResponse: {
@@ -2617,6 +2673,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_source_detail_api_knowledge_records__document_id__source_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceDetail"];
+                };
             };
             /** @description Validation failed */
             422: {

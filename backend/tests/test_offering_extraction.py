@@ -152,9 +152,7 @@ async def test_a_price_from_a_review_never_becomes_an_offering_price() -> None:
 def test_hedged_and_attributed_figures_are_flagged_at_index_time(
     index: extraction.DocumentIndex,
 ) -> None:
-    by_context = {
-        figure.start: figure for figure in index.figures if figure.cents == 1800
-    }
+    by_context = {figure.start: figure for figure in index.figures if figure.cents == 1800}
     assert by_context, "fixture no longer contains the $18 review prices"
     assert all(figure.hedged or figure.attributed for figure in by_context.values())
 
@@ -200,16 +198,14 @@ Half plate - $17.50
 """
 
 
-async def resolve_in(
-    source: str, offerings: list[dict[str, str]]
-) -> dict[str, PendingOffering]:
+async def resolve_in(source: str, offerings: list[dict[str, str]]) -> dict[str, PendingOffering]:
     candidates, _ = await extract_offerings(source, provider=IdentifyFake(offerings))
     return {item.name: item for item in candidates}
 
 
 @pytest.mark.asyncio
 async def test_a_bare_size_is_joined_to_the_item_it_is_a_size_of() -> None:
-    """"Half plate" names a variant, not a thing - on this menu it could be half
+    """ "Half plate" names a variant, not a thing - on this menu it could be half
     a chicken plate or half a gyro plate. It is only usable once bound to the
     item, and the server composes the name from two verified spans; the model
     never writes the joined string."""
@@ -264,7 +260,7 @@ async def test_a_single_flat_price_resolves() -> None:
 
 @pytest.mark.asyncio
 async def test_two_items_sharing_one_range_stay_two_flagged_rows() -> None:
-    """"The Plate and Pita Pocket both run $20-$30" - two separately named
+    """ "The Plate and Pita Pocket both run $20-$30" - two separately named
     items, one range. Neither gets a number picked out of the range, both keep
     the source's wording, and no composite fragment is created."""
     index = index_document(SOURCE)
@@ -284,7 +280,7 @@ async def test_two_items_sharing_one_range_stay_two_flagged_rows() -> None:
 
 @pytest.mark.asyncio
 async def test_a_range_whose_second_half_drops_the_currency_mark_is_still_a_range() -> None:
-    """"mostly $10-14" - the extractor only ever sees "$10", so a check that
+    """ "mostly $10-14" - the extractor only ever sees "$10", so a check that
     compared two detected figures would read this as one flat price and put
     every salad on the menu at $10."""
     index = index_document(SOURCE)
@@ -310,7 +306,7 @@ async def test_an_absent_price_is_not_the_same_as_an_ambiguous_one() -> None:
 
 @pytest.mark.asyncio
 async def test_neighbouring_items_in_one_sentence_keep_their_own_prices() -> None:
-    """"Hot Chips ($10...) and Six Falafel ($10.90...)" - the nearest figure
+    """ "Hot Chips ($10...) and Six Falafel ($10.90...)" - the nearest figure
     wins, but only because no other item's name sits between them."""
     index = index_document(SOURCE)
     resolved = await resolve(

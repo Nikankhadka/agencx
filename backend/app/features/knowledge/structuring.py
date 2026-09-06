@@ -3,8 +3,8 @@
 A file or a scraped page arrives as one undifferentiated wall of text. Before it
 answers anything, one model call reorganises it under a fixed set of headings so
 the owner can read what their assistant learned, correct it, and only then save
-it. The headings are the same for every business - a butcher and a dental clinic
-both get "What we offer" - so nothing here branches on a vertical (I8).
+it. The groups are the same for every business, so nothing here branches on a
+vertical (I8). Offerings are extracted separately into catalog-review candidates.
 
 The model reorganises; it never authors. Two guards hold that line:
 
@@ -25,7 +25,7 @@ import re
 from collections import Counter
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.llm.provider import LLMProvider
 from app.pricing.validation_gate import extract_monetary_figures
@@ -40,7 +40,8 @@ _PROMPT = (
     "owner's own words and every number exactly as written. Never invent, "
     "summarise away, round, or calculate anything - especially prices. Leave a "
     "field empty when the text says nothing about it, and put anything that fits "
-    "nowhere else in `other`. Return one offering or price entry per list item. "
+    "nowhere else in `other`. Keep offerings and prices out of these fields: "
+    "they are reviewed in a separate catalog pass. "
     "Write plain sentences or short lines, no markdown."
 )
 
@@ -48,30 +49,34 @@ _PROMPT = (
 class StructuredKnowledge(BaseModel):
     """The fixed, vertical-neutral skeleton the model fills."""
 
-    about: list[str] = Field(
+    business_overview: list[str] = Field(
         default_factory=list, description="What the business is, in a sentence or two"
     )
-    offerings: list[str] = Field(
-        default_factory=list, description="One service or product per item"
-    )
-    prices: list[str] = Field(
-        default_factory=list, description="One source-preserving price entry per item"
-    )
     hours: list[str] = Field(default_factory=list, description="Opening hours or availability")
-    location_contact: list[str] = Field(
-        default_factory=list, description="Where they are and how to reach them"
-    )
+    location: list[str] = Field(default_factory=list, description="Where they are")
+    contact: list[str] = Field(default_factory=list, description="How to contact them")
     policies: list[str] = Field(
         default_factory=list, description="Booking, delivery, returns, warranty, payment"
     )
     other: list[str] = Field(default_factory=list, description="Anything else the source states")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_pre_w8_fields(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        if "business_overview" not in value and "about" in value:
+            value["business_overview"] = value["about"]
+        if "location" not in value and "location_contact" in value:
+            value["location"] = value["location_contact"]
+        return value
+
     @field_validator(
-        "about",
-        "offerings",
-        "prices",
+        "business_overview",
         "hours",
-        "location_contact",
+        "location",
+        "contact",
         "policies",
         "other",
         mode="before",
@@ -84,14 +89,13 @@ class StructuredKnowledge(BaseModel):
 
 
 # Field -> the heading the owner sees. Order is the reading order of the page.
-_HEADINGS: tuple[tuple[str, str], ...] = (
-    ("about", "About"),
-    ("offerings", "What we offer"),
-    ("prices", "Prices"),
-    ("hours", "Hours"),
-    ("location_contact", "Location and contact"),
-    ("policies", "Policies"),
-    ("other", "Other details"),
+_HEADINGS: tuple[tuple[str, str, str], ...] = (
+    ("business_overview", "Business overview", "business_overview"),
+    ("hours", "Hours", "hours"),
+    ("location", "Location", "location"),
+    ("contact", "Contact", "other"),
+    ("policies", "Policies", "other"),
+    ("other", "Other information", "other"),
 )
 
 # The heading used when the text is kept exactly as it arrived - the model call
@@ -114,6 +118,8 @@ def render_sections(sections: list[dict[str, Any]]) -> str:
         f"{section['heading']}\n{section['body']}".strip()
         for section in sections
         if str(section.get("body", "")).strip()
+        and str(section.get("heading", "")).casefold()
+        not in {"what we offer", "prices", AS_WRITTEN.casefold()}
     )
 
 
@@ -130,8 +136,8 @@ def figures_preserved(source: str, produced: str) -> bool:
 
 def _sections_from(structured: StructuredKnowledge) -> list[dict[str, str]]:
     return [
-        {"heading": heading, "body": "\n".join(value).strip()}
-        for field, heading in _HEADINGS
+        {"heading": heading, "body": "\n".join(value).strip(), "kind": kind}
+        for field, heading, kind in _HEADINGS
         if (value := getattr(structured, field))
     ]
 
@@ -146,7 +152,7 @@ async def structure_document(raw_text: str, *, provider: LLMProvider) -> list[di
     text = clean_text(raw_text)
     if not text:
         return []
-    merged: dict[str, list[str]] = {heading: [] for _, heading in _HEADINGS}
+    merged: dict[str, list[str]] = {heading: [] for _, heading, _ in _HEADINGS}
     as_written: list[str] = []
     for segment in segments(text):
         try:
@@ -165,12 +171,12 @@ async def structure_document(raw_text: str, *, provider: LLMProvider) -> list[di
             merged[section["heading"]].append(section["body"])
 
     result = [
-        {"heading": heading, "body": "\n".join(merged[heading]).strip()}
-        for _, heading in _HEADINGS
+        {"heading": heading, "body": "\n".join(merged[heading]).strip(), "kind": kind}
+        for _, heading, kind in _HEADINGS
         if merged[heading]
     ]
     if as_written:
-        result.append({"heading": AS_WRITTEN, "body": "\n\n".join(as_written)})
+        result.append({"heading": AS_WRITTEN, "body": "\n\n".join(as_written), "kind": "other"})
     return result or _as_written(text)
 
 
@@ -205,4 +211,4 @@ def segments(text: str) -> list[str]:
 
 
 def _as_written(text: str) -> list[dict[str, str]]:
-    return [{"heading": AS_WRITTEN, "body": text}]
+    return [{"heading": AS_WRITTEN, "body": text, "kind": "other"}]

@@ -5,7 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS, describeUpload } from "@/lib/onboarding";
-import { ReviewSheet } from "./components/ReviewSheet";
+import { KnowledgeDocument, ReviewSheet } from "./components/ReviewSheet";
 import {
   sourceLabel,
   statusLine,
@@ -113,7 +113,7 @@ export default function KnowledgePage() {
         method: "PUT",
         body: JSON.stringify({
           sections,
-          offerings: offerings.map(({ name, price_cents }) => ({ name, price_cents })),
+          offerings,
           accept_price_changes: acceptPriceChanges,
         }),
       });
@@ -345,16 +345,12 @@ export default function KnowledgePage() {
                     </div>
                   </div>
 
-                  {record.sections.map((section) => (
-                    <div key={section.heading} className="mt-3.5">
-                      <h4 className="text-field-label font-medium uppercase text-ink-a40">
-                        {section.heading}
-                      </h4>
-                      <p className="mt-1.5 whitespace-pre-line break-words text-prose text-text">
-                        {section.body}
-                      </p>
-                    </div>
-                  ))}
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-action font-medium text-accent">
+                      View reviewed document
+                    </summary>
+                    <KnowledgeDocument sections={record.sections} />
+                  </details>
                 </article>
               ))}
             </div>

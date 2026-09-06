@@ -10,9 +10,11 @@ boundary stays with the customer assistant and the pricing engine).
 
 from __future__ import annotations
 
+from hashlib import sha256
 from typing import Literal
+from unicodedata import normalize
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ProfileDraft(BaseModel):
@@ -57,9 +59,14 @@ class PendingOffering(BaseModel):
     """An offering waiting for owner review before it reaches the catalog."""
 
     name: str = Field(min_length=1, max_length=200)
+    # A deterministic opaque id lets the review UI key edits by the candidate,
+    # not its mutable name or list position. Existing drafts get this on read
+    # and persist it the next time the owner saves.
+    candidate_id: str = Field(default="", max_length=80)
     description: str = Field(default="", max_length=2000)
     price_cents: int | None = Field(default=None, ge=0)
     sources: list[Literal["owner", "document"]] = Field(default_factory=list, validate_default=True)
+    source_references: list[SourceReference] = Field(default_factory=list)
     # W-6: a price the offering row cannot represent - a range, a "from" price,
     # a rate - kept as the source's own wording so the owner sees what the
     # document actually said instead of a number picked out of it.
@@ -69,8 +76,8 @@ class PendingOffering(BaseModel):
     # merely because a price is absent, which is an ordinary thing for a source
     # to be silent about.
     needs_review: bool = False
-    # W-6: names that might be this same item ("coffe" / "coffee drinks"), never
-    # merged automatically. W-8 turns these into a combine/keep-both choice.
+    # W-8: ids of candidates that might be this same item. They are never
+    # merged automatically; the owner can keep both or combine explicitly.
     possible_matches: list[str] = Field(default_factory=list)
     # W-6: the competing amounts when two sources price one item differently.
     # The owner picks; nothing here decides for them.
@@ -88,6 +95,52 @@ class PendingOffering(BaseModel):
     @classmethod
     def _require_source(cls, value: list[str]) -> list[str]:
         return list(dict.fromkeys(value)) or ["owner"]
+
+    @model_validator(mode="after")
+    def _default_candidate_id(self) -> PendingOffering:
+        if not self.candidate_id:
+            self.candidate_id = stable_candidate_id(self.name)
+        return self
+
+
+class SourceReference(BaseModel):
+    """Verbatim evidence supporting a candidate field in its source."""
+
+    block: str = Field(min_length=1, max_length=80)
+    excerpt: str = Field(min_length=1, max_length=2000)
+    supported_fields: list[Literal["name", "description", "price"]] = Field(default_factory=list)
+
+
+def stable_candidate_id(name: str) -> str:
+    """Stable opaque ids for extracted and legacy candidates alike."""
+    normalized = " ".join(normalize("NFKC", name).casefold().split())
+    return f"off_{sha256(normalized.encode()).hexdigest()[:20]}"
+
+
+def normalize_pending_offerings(raw: object) -> list[PendingOffering]:
+    """Read legacy candidates into the current identity-based wire shape."""
+    offerings: list[PendingOffering] = []
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            offerings.append(
+                PendingOffering.model_validate(
+                    {"name": item, "sources": ["owner"]} if isinstance(item, str) else item
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+    by_name = {" ".join(item.name.casefold().split()): item.candidate_id for item in offerings}
+    return [
+        item.model_copy(
+            update={
+                "possible_matches": [
+                    by_name.get(" ".join(match.casefold().split()), match)
+                    for match in item.possible_matches
+                ]
+            }
+        )
+        for item in offerings
+    ]
 
 
 def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> PendingOffering:
@@ -129,9 +182,16 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
     conflicting = sorted({*offered, *existing.price_options, *incoming.price_options})
     return PendingOffering(
         name=name,
+        candidate_id=document.candidate_id if document else existing.candidate_id,
         description=description,
         price_cents=price_cents,
         sources=sources,
+        source_references=list(
+            {
+                (reference.block, reference.excerpt, tuple(reference.supported_fields)): reference
+                for reference in [*existing.source_references, *incoming.source_references]
+            }.values()
+        ),
         price_note=next((item.price_note for item in preferred if item.price_note), ""),
         needs_review=existing.needs_review or incoming.needs_review,
         possible_matches=sorted({*existing.possible_matches, *incoming.possible_matches}),

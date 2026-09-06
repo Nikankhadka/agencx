@@ -272,7 +272,6 @@ async def test_list_empty_for_fresh_tenant(client: httpx.AsyncClient) -> None:
     assert response.json() == []
 
 
-
 # ---------------------------------------------------------------------------
 # W-6: offering extraction runs at ingest, is stored, and is read back
 # ---------------------------------------------------------------------------
@@ -336,16 +335,14 @@ async def test_upload_stores_offering_candidates_and_reads_them_back(
         body = response.json()
         assert body["status"] == "draft"
         assert body["extraction_status"] == "full"
-        assert body["offering_candidates"] == [
+        candidate = body["offering_candidates"][0]
+        assert candidate["name"] == "Hot Chips"
+        assert candidate["candidate_id"].startswith("off_")
+        assert candidate["source_references"] == [
             {
-                "name": "Hot Chips",
-                "description": "",
-                "price_cents": 1000,
-                "sources": ["document"],
-                "price_note": "",
-                "needs_review": False,
-                "possible_matches": [],
-                "price_options": [],
+                "block": "b0",
+                "excerpt": "Hot Chips are $10.",
+                "supported_fields": ["name", "price"],
             }
         ]
 
