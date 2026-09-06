@@ -47,9 +47,19 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 - [x] W-7: make the interview read like a person - challenge junk input, drop the
   skip chip, keep replies short, address-only go-live, priced offering cards.
 - [x] W-8: review a large import without losing information - shared structured document review, five-item preview and editor pages, explicit duplicate decisions, owner-only source evidence, and catalog-only offering publication.
-- [ ] W-9: correct captured information conversationally - conservative wording cleanup, explicit corrections on any beat, offering correction operations, and a single acknowledgement for a captured or corrected name.
+- [ ] W-9: the definitive onboarding and customer-assistant contract - name confirmation, corrections from any beat, offering operations, a code-owned customer-agent contract applied to every prose route, and structured customer voice.
 
-**Phase 13 specification amended 2026-09-05** (`docs/phase13-walkthrough-refinement`): a second walkthrough round and its planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase introduction to nine tickets. W-1, W-2, W-7, and W-8 are shipped; W-3 through W-6 and W-9 retain their software delivery statuses open.
+**Phase 13 specification amended twice.** 2026-09-05
+(`docs/phase13-walkthrough-refinement`): a second walkthrough round and its
+planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase
+introduction to nine tickets. 2026-09-06: W-9 was rewritten into the phase's
+single authoritative closing ticket (Amendment 3 in `13-walkthrough.md`), and
+this file's own status line is corrected here - **W-1 through W-8 are all
+shipped; W-9 is the only ticket in Phase 13 still open.** The prior line above
+this one claimed W-3 through W-6 were still open after they had already
+shipped; that was this file drifting behind the spec, not a real regression -
+see `13-walkthrough.md`'s corrected intro and W-6's now-ticked Definition of
+done for the record.
 
 ## Known gaps and deliberate deferrals
 
@@ -304,7 +314,7 @@ stubs the unnamed case the seed cannot produce.
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
-| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-9 (W-1, W-2, W-5, W-7 delivered; amended 2026-09-05) |
+| [`spec/active/13-walkthrough.md`](spec/active/13-walkthrough.md) | Open | W-1 through W-8 delivered; W-9 open (amended 2026-09-06, Amendment 3) |
 | [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |
 | [`docs/archive/phase1-complete/`](../archive/phase1-complete/) | Historical | Completed R-1 and R-2 records |
 

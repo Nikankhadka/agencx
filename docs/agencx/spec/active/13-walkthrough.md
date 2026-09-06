@@ -1,9 +1,12 @@
-> This file was amended 2026-09-05 to fold a second walkthrough round and the
-> planning that followed it into the phase. The amendment record starts at
-> [Amendment 2: onboarding completion and refinement (2026-09-05)](#amendment-2-onboarding-completion-and-refinement-2026-09-05).
-> Shipped tickets keep their checked criteria and commit evidence; the new and
-> refined tickets below are specifications, with implementation and software
-> delivery statuses left open.
+> This file was amended twice: 2026-09-05 folded a second walkthrough round
+> and its planning into the phase (record starts at
+> [Amendment 2](#amendment-2-onboarding-completion-and-refinement-2026-09-05));
+> 2026-09-06 rewrote W-9 into the single authoritative onboarding and
+> customer-assistant contract ticket and corrected stale delivery-status
+> language left over from the first amendment (record starts at
+> [Amendment 3](#amendment-3-the-agent-contract-2026-09-06)). W-1 through W-8
+> are shipped and their records, checked criteria, and commit evidence are
+> preserved below unchanged; W-9 is the phase's sole open ticket.
 
 # Phase 13: walkthrough fixes (W)
 
@@ -35,8 +38,10 @@ Ticket id prefix `W-` (Walkthrough), unused elsewhere in the ticket set. Nine
 tickets, in build order: W-1 and W-2 shipped, W-5 precedes W-6 so the reported
 chat bug closes before the document-extraction feature builds on top of it,
 W-7 shipped after W-6, and W-8 and W-9 extend the review sheet and the
-interview that the earlier tickets touched. W-1, W-2, W-7 are delivered;
-W-3 through W-6 and W-9 are open specifications. W-8 is delivered.
+interview that the earlier tickets touched. **W-1 through W-8 are all
+delivered; W-9 is the only open ticket in this phase** (corrected 2026-09-06 -
+`progress.md` had drifted to claim W-3 through W-6 were still open after they
+shipped).
 
 Dependencies between the refined and new tickets (requested later work links
 to the behavior it refines instead of duplicating its acceptance criteria):
@@ -149,7 +154,97 @@ acceptance criteria:
 | Offering names, descriptions, source-backed prices, duplicate proposals | [W-6](#w-6-extract-accurate-offerings-from-the-complete-source) |
 | Five-item preview, pagination, editing, duplicate decisions | [W-8](#w-8-review-a-large-import-without-losing-information) |
 | Readable, editable knowledge sections | [W-8](#w-8-review-a-large-import-without-losing-information) |
-| Repeated names, conservative wording cleanup, conversational corrections | [W-9](#w-9-correct-captured-information-conversationally) |
+| Repeated names, conservative wording cleanup, conversational corrections, the customer-assistant contract and voice | [W-9](#w-9-definitive-onboarding-and-customer-assistant-contract) |
+
+---
+
+## Amendment 3: the agent contract (2026-09-06)
+
+A founder request expanded the open W-9 ticket from a narrow correction fix
+into the phase's closing ticket: a definitive contract for both the onboarding
+assistant and the public customer assistant, replacing per-tenant prompt prose
+with a code-owned contract, adding structured customer voice, and correcting
+onboarding's name-capture behavior end to end. This amendment is the evidence
+and definitions record for that ticket; W-9 itself references it rather than
+restating it, the same relationship Amendment 2's tickets have to Amendment 2.
+
+### Why this became one ticket instead of several
+
+W-1 through W-8 are all shipped (corrected above); W-9 was the phase's only
+open ticket, so there was no other open plan to merge it with. But the
+expansion touches behavior five shipped tickets delivered - W-2's beat
+resolution, W-5's dual-source grounding, W-6's provenance and frozen-price
+extraction, W-7's junk-input challenge and reply discipline, W-8's review
+boundaries - so the risk was never "which plan to merge," it was landing a
+large prompt-and-schema change without silently regressing five already-closed
+tickets. The amendment records, once, exactly what is preserved and what
+changes, so the ticket itself can point at one table instead of five
+scattered warnings.
+
+| Shipped ticket | Preserved | Changed by W-9 |
+|---|---|---|
+| W-2 (`f2db993`) two-ask cap, server-owned question, deferral/pause | the cap, the second pass, pause-and-retry, the verbatim server question | extraction schema gains corrections, offering operations, and evidence fields; the `name` beat becomes `owner_display_name` |
+| W-7 (`cd10f6e`) junk challenge, one-sentence replies, address-only go-live | both judges (server `valid` + model `answered_asked`), the veto, the no-extra-model-call latency decision, the go-live shape | the services-beat retry example becomes domain-neutral; `_COPILOT` and `Directive.as_prompt()` gain explicit Role/Goal/Constraints/Output/Stop structure |
+| W-5 (`fix/w-5-combined-grounding`) dual-source grounding | `offerings_text` set on both agent-node return paths; the grounding judge's provenance text still includes offerings | tenant prose is replaced by the code-owned contract; the biggest regression risk in the ticket, called out explicitly in its Guardrails |
+| W-6 (`feat/w-6-offering-extraction`) provenance, frozen money index | every provenance/source field on `PendingOffering`; `merge_offerings` stays the single precedence statement; no extraction schema ever gains a numeric field | explicit add/rename/remove/replace operations added on top, reusing the same update boundary |
+| W-8 (`fc11883`) review sheet, paging, duplicate decisions | the review sheet, paging, and duplicate-decision UI, untouched | its one open Definition-of-done box (keyboard and mobile verification) is closed by this ticket's own editor testing, not reopened |
+| W-3 SSE vs ordinary-request split | the transport split itself | asserted, not changed: one persisted assistant response on both paths |
+| W-4 go-live address | the address-only confirm screen | the owner/business name conflation at `agent.py:269` (the go-live line falls back to the owner's name as a business name) is fixed as part of the `owner_display_name` rename |
+
+### Agent contract and persona definitions
+
+An agent contract is: identity and role, goal and success criteria, authority
+and available tools, business knowledge, hard constraints, conversation
+behavior, and escalation/stop rules. Persona is expression only - warmth,
+formality, pacing, vocabulary, terminology, limited emoji - and cannot change
+facts, policy, tools, identity, pricing, safety, or escalation behavior. This
+follows the same behavior/persona split as
+[OpenAI's prompting guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.5),
+[Decagon's layered guardrail model](https://decagon.ai/blog/designing-layered-guardrails-for-reliable-ai-agents),
+and [Sierra's voice-persona separation](https://sierra.ai/de/blog/introducing-voice-personas):
+behavioral policy is code-owned and structurally enforced where the stakes are
+highest (money, identity, escalation); expressive persona is tenant-configured
+data that rides in afterward at lower authority.
+
+Two names, kept distinct throughout this ticket because the code today
+conflates them (`agent.py:269`):
+
+- **`owner_display_name`** - private, tenant-level, used only in onboarding and
+  owner-facing pages. Never customer-visible.
+- **`business_name`** - the public business identity, used everywhere the
+  customer assistant and the storefront speak.
+
+### Copy-rule amendment
+
+[`prd.md` section 13](../../prd.md#13-copy-rules) reads "Never say 'AI',
+'agent', 'automated' or 'assistant' in user-facing copy." That rule predates
+both mandated opening lines below, which name "assistant" as the surface's own
+identity, and is amended for both surfaces as of this ticket:
+
+- "assistant" may name the surface, on owner onboarding copy and customer chat
+  copy alike.
+- "AI", "agent", "automated", and "virtual" stay out of routine copy on both
+  surfaces.
+- A direct question about whether the surface is human or AI is answered
+  honestly - the exemption above is about the noun used in routine copy, not a
+  license to mislead when asked outright.
+
+### Deterministic openings (flow-change, flagged per conventions.md 5.1)
+
+| Surface | Before | After |
+|---|---|---|
+| Onboarding | "Hi! I'm your Agencx setup assistant. I'll help you get your business ..." ([controller.py:164](../../../../backend/app/features/onboarding/controller.py#L164)), then the `name` beat's own ask | "Hi, I'm the Agencx setup assistant. I'll help set up your business. Before we start, what should I call you?" |
+| Customer chat | `greeting ?? "Hi! How can I help you with {name} today?"` ([CustomerChat.tsx:76](../../../../frontend/src/app/[slug]/CustomerChat.tsx#L76)) | "Hi, I'm [Business]'s assistant. How can I help today?" - fixed, composed first; any configured welcome message is optional following content, normalized so it never doubles the greeting |
+
+### Regression inputs
+
+Carried forward as the ticket's fixture set, taken from the founder's own
+reports: `211e2esdsdfasdf`, `bkksbf88`, `21 ej2nek2ne2ken1e`, `sababa`,
+`middle eastern cafe`. The concrete failure each must not reproduce: `sababa`
+must never become `Sababasababa`; no assistant defers "my name" to later; no
+subjective praise for "middle eastern cafe"; a cafe onboarding never sees
+salon terminology (the services-beat retry example this ticket makes
+domain-neutral).
 
 ---
 
@@ -1339,27 +1434,42 @@ W-8.
 
 ### Definition of done
 
-- [ ] Offerings described anywhere in a whole-business document - lists,
+- [x] Offerings described anywhere in a whole-business document - lists,
       table-derived text, prose, and mixed formatting - are extracted as
       reviewable candidates with correct names.
-- [ ] Each candidate carries a source-supported description (or none when the
+- [x] Each candidate carries a source-supported description (or none when the
       source provides none).
-- [ ] Every price is derived deterministically from quoted, source-resolved
+- [x] Every price is derived deterministically from quoted, source-resolved
       references bound to the correct item; no extraction schema has a
       model-fillable numeric price field; an amount's mere presence in the
       document never binds it to an item.
-- [ ] Complex and conflicting prices are preserved with context and marked for
+- [x] Complex and conflicting prices are preserved with context and marked for
       review, never flattened or invented.
-- [ ] Repeated evidence is reconciled under one shared precedence policy
+- [x] Repeated evidence is reconciled under one shared precedence policy
       without silent merges or conflicts.
-- [ ] Extraction runs during ingestion for every caller; failures preserve
+- [x] Extraction runs during ingestion for every caller; failures preserve
       usable knowledge and source context instead of unsafe first-number
       parsing.
-- [ ] The review sheet shows name, description, and price together for
+- [x] The review sheet shows name, description, and price together for
       document-sourced candidates.
-- [ ] The confirm-time write path and the retrieval path from W-5 need no
+- [x] The confirm-time write path and the retrieval path from W-5 need no
       further change to serve these rows.
-- [ ] `make check` green.
+- [x] `make check` green.
+
+Shipped `feat/w-6-offering-extraction` (2026-09-06). Full record in
+`progress.md`'s "W-6 shipped" entry: Stage 0 indexes every monetary figure
+before the model sees a token, so the extraction schema has no numeric field
+at all and money can only reference that frozen index; extraction moved to
+ingest (`documents.offerings`, migration 0026) so it runs once per document
+instead of on every read; `derive()` and its regex-based helpers are deleted,
+leaving one extraction path. Verified against the founder's own PDF, recovered
+as `backend/tests/fixtures/`. Still owed at the time of shipping: a browser
+pass with a live model configured locally (everything either side of the model
+call is verified end to end against the real fixture text).
+
+**Checkboxes above corrected 2026-09-06** - this section had shipped without
+its own Definition of done being ticked, which is what left `progress.md` and
+this file's own header disagreeing about W-6's status.
 
 ---
 
@@ -1652,158 +1762,386 @@ sheet/collapse vocabulary.
 - [x] `make check` green.
 
 ---
-
-## W-9: Correct captured information conversationally
+## W-9: Definitive onboarding and customer-assistant contract
 
 ### Summary
 
-Add a ticket covering wording cleanup, explicit corrections, and repeated
-acknowledgements in the onboarding conversation. The scan's central finding is
-that the reply context currently includes the latest owner message twice
-([agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713)):
-`record.history.append({...admin_message})` (line 691) runs before
-`reply_msgs` is built, whose `record.history[-3:]` loop (lines 711-712)
-includes that just-appended message, and then `admin_message` is appended again
-(line 713). The relationship between that duplication and the reported
-duplicated names is a runtime hypothesis pending browser reproduction.
+The single authoritative ticket for the phase's closing work: correct
+onboarding's name-capture and correction behavior end to end, restructure both
+onboarding and customer prompts into code-owned contracts with tenant data
+riding in at lower authority, add structured customer voice configuration,
+and retire the free-text `tenant_config.system_prompt`/`tone` columns from
+every read path (their drop is a follow-up ticket - see Migration below).
+Evidence, the agent-contract and persona definitions, the copy-rule amendment,
+and the table of exactly what this ticket preserves versus changes in W-2,
+W-5, W-6, W-7, and W-8 all live in
+[Amendment 3](#amendment-3-the-agent-contract-2026-09-06); this ticket
+references that record rather than restating it.
 
 ### Why
 
-The walkthrough reported names appearing twice and wording that captured
-mistakes as facts. The repository scan confirmed the double-message reply
-context and that there is no mechanism for the owner to correct a captured
-field conversationally during another beat. Today a correction is treated as
-answering the pending question (or as off-topic), not as an edit to an
-already-captured field, so a wrong business name or description cannot be
-fixed in the interview without a re-ask or a hand rewrite.
+The repository scan behind Amendment 2 confirmed the reply-context duplication
+(`agent.py:690` appends the owner's message to history, then the `[-3:]` slice
+at 710-711 always includes it, then line 712 appends it a second time - every
+turn, both paths) but stopped short of a fix. Separately, the founder's own
+walkthrough transcripts show a name-confusion pattern this ticket exists to
+close: the owner's typed name silently becoming a business-name fallback
+(`agent.py:269`), spelling variants persisting uncorrected across turns, and no
+way to correct a captured field without re-triggering the beat that captured
+it. On the customer side, three of six prose routes never saw the tenant's
+configured prompt at all
+([draft_node.py](../../../../backend/app/agents/draft_node.py) - conversation,
+recommendation, and quoting are code-only today), the same
+`system_prompt`/`tone` pair is read by three independent, only-partly-cached
+call sites, and the prompt-leakage eval's canary is planted directly in the
+column this ticket retires from every read path.
 
 ### User stories
 
-#### US-1 Conservative wording cleanup
+#### US-1 The name I give is confirmed before it's kept
 
-As a business owner, clear spelling mistakes in ordinary words are corrected
-using the existing model call, while my name, brand names, identifiers,
-contact details, and money are preserved unless I explicitly correct them.
+As a business owner, when I type my name or my business's name, I see the
+model's proposed spelling/spacing/capitalization and a Yes action before
+either is persisted; a typed reply is a new correction, not a rejection of the
+proposal, and an unusual but explicitly confirmed name is accepted unless it
+violates a storage or safety limit.
 
-- Clear ordinary spelling and wording corrections are applied through the
-  existing extraction call - for example, an obvious coffee typo when the
-  context supports it.
-- Personal names, brand names, intentional capitalization, identifiers,
-  contact details, and monetary text are preserved unless explicitly
-  corrected.
-- Ambiguous input is preserved, not guessed.
-- The change is read back clearly so the owner can correct it.
+- The raw input is preserved as evidence alongside the visible proposal.
+- Explicit confirmation is required before either `owner_display_name` or
+  `business_name` is persisted.
+- `sababa` confirmed stays `sababa` - never a concatenation onto the raw value
+  (`Sababasababa`).
+- Reloading mid-confirmation resumes the same pending proposal.
 
-#### US-2 Explicit corrections during any beat
+#### US-2 My name and my business's name are never confused
 
-As a business owner, when I correct a field I already answered - regardless of
-which question is currently being asked - the correction is applied, validated,
-and persisted, and does not count as a failed attempt at the pending question.
+As a business owner, the assistant never uses my own name as a stand-in for my
+business's name, and asks me which one I mean when a correction is ambiguous.
 
-- Corrections to previously captured fields are accepted during any onboarding
-  beat.
-- Owner name is distinguished from business name; a focused clarification is
-  asked when the correction target is ambiguous.
-- Every changed field is validated, not only the field currently being
-  requested.
-- The previous valid value is kept when a correction is invalid.
-- Unrelated fields and interview progress are preserved.
-- A correction does not count as a failed attempt to answer the pending
-  question.
-- Accepted corrections persist across reload and into the eventual confirmed
-  profile.
+- `_activation_summary`'s fallback (`agent.py:269`,
+  `business_name or name`) is removed; a missing `business_name` is a
+  deferred required beat, never a silent substitution.
+- "Change the name" with both names on file asks a focused clarification
+  before applying anything.
+- `owner_display_name` never reaches the customer-facing prompt
+  (`_PROFILE_LABELS`, [context_package.py:57-64](../../../../backend/app/services/context_package.py#L57-L64),
+  stays exclusive of it).
 
-#### US-3 Offering corrections are explicit operations
+#### US-3 A correction works from any beat, without losing my place
 
-As a business owner, adding, renaming, removing, and explicitly replacing
-offerings are distinct operations, and renaming one leaves its siblings,
-description, price, and provenance intact.
+As a business owner, correcting something I already answered - regardless of
+which question is currently on screen - is applied, validated, and persisted,
+and does not cost me an attempt at the question I'm actually being asked.
 
-- Adding, renaming, removing, and explicitly replacing offerings are handled
-  distinctly.
-- Renaming an offering preserves its siblings, description, prices, and
-  relevant provenance.
-- Existing update mechanisms are reused; the walkthrough's description of an
-  update as a "tool call" does not restore an obsolete tool loop.
+- A correction to a previously captured field is recognized as a correction,
+  not an answer to the pending question, and does not touch `ask_count`
+  bookkeeping ([agent.py:640-652](../../../../backend/app/onboarding/agent.py#L640-L652)).
+  This applies during every beat, not only the beat that first captured the
+  field.
+- An invalid correction keeps the previous valid value; unrelated fields and
+  interview progress are untouched.
+- Accepted corrections survive reload and land in the confirmed profile.
+- A genuinely off-beat fact volunteered mid-question is still captured without
+  derailing the current beat - the capability W-2 built stays intact.
 
-#### US-4 One acknowledgement, one response, consistent spelling
+#### US-4 Offering edits are operations, not a rewrite
 
-As a business owner, when I give or correct a name, I see one acknowledgement
-of the captured or corrected name with consistent spelling, one assistant
-response, and one occurrence of my message in the conversation.
+As a business owner, adding, renaming, removing, and explicitly replacing an
+offering are distinct actions; renaming one leaves its siblings, description,
+price, and provenance untouched.
 
-- One occurrence of the current owner message in the constructed reply context.
-- One assistant response in the displayed and persisted conversation.
-- One acknowledgement of the captured or corrected name, with consistent
-  spelling.
-- Regression coverage for both SSE and ordinary-response paths.
+- Reuses `merge_offerings` ([flow.py:78-99](../../../../backend/app/onboarding/flow.py#L78-L99))
+  as the single precedence statement W-6 established - no second rule is
+  added anywhere.
+- Every W-6 provenance/source field survives a rename.
+- The walkthrough's description of an update as a "tool call" does not bring
+  back an obsolete tool loop.
+
+#### US-5 One acknowledgement, one question, one message
+
+As a business owner, giving or correcting a name produces one acknowledgement
+with consistent spelling, one assistant response, and my own message appears
+exactly once in what the model sees.
+
+- `reply_msgs` carries the current owner message once, on both the streamed
+  and non-streamed paths.
+- No subjective praise, fabricated enthusiasm, "no worries", or ambiguous "my
+  name" phrasing - `_COPILOT` and `Directive.as_prompt()` are restructured
+  into Role/Goal/Success Criteria/Constraints/Conversation Rules/Output/Stop
+  Rules to make these prohibitions structural, not incidental phrasing.
+- No generic text deduplicator is added - the fix is the message-assembly bug,
+  not a string-similarity patch that could eat legitimate repeated words.
+
+#### US-6 Conservative wording cleanup
+
+As a business owner, clear spelling mistakes in ordinary words are fixed
+through the existing extraction call, while my name, brand names,
+capitalization, identifiers, contact details, and money are left alone unless
+I explicitly correct them.
+
+- No second "cleanup" model call - routed through the existing `DraftUpdate`
+  extraction.
+- Ambiguous input is preserved, never guessed.
+- Every cleaned value is read back once so it can be corrected.
+
+#### US-7 The customer assistant speaks with one contract, in my chosen voice
+
+As a business owner, I pick how the public assistant sounds (warm and casual,
+clear and professional, direct and concise, or my own description up to 300
+characters), and that choice changes tone only - never facts, pricing,
+escalation, tool behavior, or identity.
+
+- All six customer prose routes (direct conversation, knowledge,
+  recommendation, quote explanation, redraft, refusal/handoff) run the same
+  code-owned contract with tenant data appended after it as lower-authority
+  input - three of six ([draft_node.py](../../../../backend/app/agents/draft_node.py)'s
+  conversation/recommendation/quoting) currently skip the tenant prompt
+  entirely, which this ticket ends by making all six consistent.
+- A hostile custom-voice string cannot override the money guardrail,
+  grounding, identity, or escalation rules - verified with an adversarial
+  fixture in the ticket's tests, not asserted by inspection alone.
+- Saving voice configuration bumps `tenant_config.updated_at`, which the
+  existing `knowledge_version` mechanism already turns into a cache
+  invalidation for the agent prompt - no new invalidation path needed there.
+  The greeting is a separate case; see Technical spec.
+
+#### US-8 The customer assistant identifies itself honestly, without over-claiming
+
+As a customer, the assistant introduces itself as the business's assistant,
+never impersonates an employee or says "we" for something only a person could
+do, and tells me the truth if I ask whether it's human or AI.
+
+- Deterministic opening: "Hi, I'm [Business]'s assistant. How can I help
+  today?" - "I" only for the assistant's own capabilities; the business is
+  named or called "the team" for anything a person did.
+- Answers first, then one relevant next step when useful - no manufactured
+  urgency, no unrelated upsell.
+- Genuine frustration is acknowledged once, then the assistant moves to
+  solving the problem.
+- A missing answer states the gap and offers follow-up; a human handoff is
+  created only when requested or accepted, never assumed.
+
+### Design reference
+
+No new customer-facing screen beyond the voice editor, which follows the ABN
+sheet's own visual pattern
+([`AbnSheet.tsx`](../../../../frontend/src/app/(tenant-admin)/(console)/business/details/components/AbnSheet.tsx))
+rather than a new prototype screen - a `Chip` group for the four presets, the
+fourth opening a bounded text field, `role="alert"` for validation, keyed on
+current values so an abandoned edit discards on close. The onboarding thread
+itself gains no new screen; the name-confirmation Yes action is a chip on the
+existing thread, following the vocabulary the existing chip beats already use
+(`apply_selection`, [beats.py:355-377](../../../../backend/app/onboarding/beats.py#L355-L377)).
 
 ### Technical spec
 
-- **Conservative cleanup.** Route clear ordinary spelling/wording corrections
-  through the existing extraction call used for capture; do not add a second
-  "cleanup" call. Instruct the model to preserve personal names, brand names,
-  intentional capitalization, identifiers, contact details, and monetary text
-  unless explicitly corrected, and to preserve ambiguous input rather than
-  guessing. Read back changed values so the owner can correct them.
-- **Explicit corrections.** Extend the existing message/update boundary so a
-  turn that corrects a previously captured field is recognized as a correction
-  rather than an answer to the pending question. Distinguish owner name from
-  business name, ask a focused clarification when the correction target is
-  ambiguous, validate every changed field, keep the previous valid value when
-  a correction is invalid, preserve unrelated fields and interview progress,
-  and never count a correction as a failed attempt. Persist accepted
-  corrections across reload and into the confirmed profile.
-- **Offering corrections.** Distinguish adding, renaming, removing, and
-  explicitly replacing offerings, reusing the existing update mechanisms that
-  W-6 and W-8 extend. Renaming preserves siblings, description, prices, and
-  provenance. Do not restore an obsolete tool loop merely because the
-  walkthrough describes an update as a "tool call".
-- **Repeated acknowledgements.** Fix the shared mechanism that includes the
-  latest owner message twice in the reply context
-  ([agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713)).
-  Before the fix is verified, reproduce the duplication through the browser
-  with owner and business names. After the fix, assert one occurrence of the
-  current owner message in the constructed reply context, one assistant
-  response in the displayed and persisted conversation, and one
-  acknowledgement of the captured or corrected name with consistent spelling.
-  Do not add a generic text deduplicator that could remove legitimate repeated
-  words.
+**Onboarding record.** Bump `OnboardingRecord.version` from the literal `3` to
+`4` ([agent.py:140,172,201](../../../../backend/app/onboarding/agent.py#L140)).
+The existing `from_jsonb` branch drops any record that isn't exactly v3
+([agent.py:162-197](../../../../backend/app/onboarding/agent.py#L162-L197)) -
+add a v3-to-v4 upgrade that renames `draft["name"]` to
+`draft["owner_display_name"]` and carries every other field forward untouched
+(`history`, `offering_candidates`, `skipped`, `deferred`, `ask_beat`,
+`ask_count`, `paused_beat`). This is a genuine version bump, unlike W-2's
+fields which were deliberately added without one because their absence already
+read as "fresh" (`agent.py:181-183`) - a rename cannot rely on that trick.
+Rename propagates to `flow.py:23` (`ProfileDraft`), `beats.py:182-197` (the
+beat key and its ask text), and the confirm write
+(`controller.py:513-523` → `service.py:78-85`).
+
+Add pending-name-confirmation state: raw input, the visible proposal, and
+which name it targets. The rejection path already pops a bad value back out of
+the draft with no memory of what it replaced
+([agent.py:608](../../../../backend/app/onboarding/agent.py#L608)) - that seam
+is where "keep the previous valid value on an invalid correction" attaches.
+
+**Extraction schema.** `DraftUpdate`
+([flow.py:54-72](../../../../backend/app/onboarding/flow.py#L54-L72)) gains
+correction targets, offering `add | rename | remove | replace` operations, raw
+evidence, and normalization type, alongside the existing `answered_asked`
+(W-7). No schema anywhere gains a numeric field - W-6's frozen-money-index
+discipline is unconditional.
+
+**Prompt restructuring.** `_COPILOT`
+([agent.py:100-106](../../../../backend/app/onboarding/agent.py#L100-L106))
+and `Directive.as_prompt()` (83-97) become Role/Goal/Success
+Criteria/Constraints/Conversation Rules/Output/Stop Rules. Fix the message
+duplication at [agent.py:690,710-712](../../../../backend/app/onboarding/agent.py#L690)
+so the owner's current message appears exactly once in `reply_msgs`, on both
+`stream_reply` and `run_turn`. Wire up `Beat.reject`
+([beats.py:116](../../../../backend/app/onboarding/beats.py#L116), populated
+on six beats, read by nothing today) as the deterministic reply-validation
+fallback text, and fix the stale module docstring
+([beats.py:22-25](../../../../backend/app/onboarding/beats.py#L22-L25)) that
+already claims this exists. Replace the salon-flavored services-beat example
+([beats.py:257](../../../../backend/app/onboarding/beats.py#L257)) with
+domain-neutral guidance. Add the voice beat as a chip beat after `services` in
+`BEAT_ORDER`, validated server-side through `apply_selection` with no model
+call, matching every other chip beat.
+
+**Deterministic reply validation.** A post-generation check for identity
+statements, single-question output, captured-value inclusion, monetary
+claims, and pronoun inversion, reusing `_ack` (389-400, non-streamed only) and
+`_flush_sentences` (407-429, streamed) rather than adding a parallel
+mechanism. On failure: a deterministic acknowledgement plus the server-owned
+question - no additional live model call, preserving W-7's latency decision.
+
+**Customer contract.** Retire three independent, inconsistent readers of
+`system_prompt`/`tone` - `context_package.py:121` (cached),
+`draft_node.py:206-213` (per-turn DB read), `inspection.py:209-215` (per-turn
+DB read) - behind one code-owned contract module applied to all six prose
+routes (`agent_node.py`'s one-call turn, and `draft_node.py`'s conversation,
+knowledge, recommendation, quoting, redraft). Tenant profile, offerings,
+knowledge, and the new structured voice ride in after the contract as
+lower-authority data; tool-specific instructions stay in the `ToolSpec`
+descriptions ([agent_node.py:364-408](../../../../backend/app/agents/agent_node.py#L364-L408)),
+not in prompt prose (`_TOOL_GUIDANCE`'s own comment at 64-73 already explains
+why a per-tool bullet list was removed - it is not reintroduced here).
+Deterministic strings (`REFUSAL_MESSAGE`, the order-status templates,
+`HANDOFF_MESSAGE`, `GATE_ESCALATION_MESSAGE`, `ESCALATION_MESSAGE`,
+`MONEY_GUIDANCE`) are unchanged.
+
+**Structured voice config.**
+
+```json
+{
+  "customer_voice": {
+    "preset": "warm_casual | clear_professional | direct_concise | custom",
+    "custom_style": "string or null"
+  }
+}
+```
+
+Lands in `config->customer_voice`. Migration backfills from the existing
+`tone` column: `friendly` → `warm_casual`, `professional` →
+`clear_professional`, a direct/concise equivalent → `direct_concise`, any
+other non-empty value → bounded `custom_style`, missing → `warm_casual`. The
+migration only backfills and stops application code reading the old columns -
+it does not drop them (see Migration below).
+
+**Greeting.** The fixed identity greeting composes first; any configured
+`config->customer.greeting` becomes optional following content, normalized so
+the two never double up. This is a frontend change
+([CustomerChat.tsx:74-77](../../../../frontend/src/app/[slug]/CustomerChat.tsx#L74-L77))
+plus a second invalidation path: the greeting travels through
+`/api/tenants/resolve`'s own 60-second slug cache
+([tenants/service.py:145-165](../../../../backend/app/features/tenants/service.py#L145-L165)),
+which is separate from `knowledge_version` - a voice or greeting write must
+call `invalidate_slug_cache` directly, not rely on the version bump alone.
+
+**Voice editor.** Follows the ABN pattern end to end:
+`PROFILE_FIELDS`/`write_profile`
+([business/service.py:721,741-764](../../../../backend/app/features/business/service.py#L721))
+extended with the voice fields, a `ProfileUpdate` extension with
+`extra="forbid"` ([business/api.py:276-342](../../../../backend/app/features/business/api.py#L276-L342)),
+generated types via `npm run gen:types`, aliased in `api-schemas.ts` (the R-3
+direction) rather than hand-declared, and a sheet modeled on `AbnSheet.tsx`.
+
+**Prompt-leak canary.** `check_prompt_leak`
+([inspection.py:98-106](../../../../backend/app/agents/inspection.py#L98-L106))
+currently substring-matches against `tenant_config.system_prompt` lines; it is
+re-pointed at the code-owned contract text, which is a stable, testable set of
+lines rather than free tenant prose. `LEAK_MARKER =
+"SYSPROMPT-LEAK-MARKER"` ([seed_injection_probe.py:41-47](../../../../backend/seeds/seed_injection_probe.py#L41-L47)),
+scored by eight cases in `injection_set.jsonl`, moves into the contract render
+path so those cases keep their teeth. The judge prompt's "matches the stated
+tone" clause ([inspection.py:236,245](../../../../backend/app/agents/inspection.py#L236))
+is dropped - tone-as-prose no longer reaches the judge; tone/praise/concision
+quality checks live only in transcript evaluations (below), never in a
+production turn.
+
+### Migration
+
+`tenant_config.system_prompt` and `.tone` are **not dropped by this ticket.**
+This ships as: backfill `customer_voice`, stop every application code path
+from reading the two columns, keep the columns and their seed writes in place.
+A separate, small follow-up ticket drops them after production verification -
+the same shape as
+[`0025_schema_cleanup.sql:33`](../../../../backend/migrations/0025_schema_cleanup.sql#L33)
+dropping `escalation_threshold`. This resolves a genuine conflict in the
+original request between "deliver as one commit" and "deploy
+forward-compatible code before the destructive migration" - a single
+squash-merge cannot do both, so the destructive half moves to its own ticket.
 
 ### Tests
 
-- E2E / manual: reproduce the reported duplicated names using owner and
-  business names through the real onboarding surface before changing the reply
-  context fix.
-- Backend: the constructed reply context contains one occurrence of the
-  current owner message, for both SSE and ordinary-response paths.
-- Backend: an explicit correction to a previously captured field during another
-  beat is applied, validated, persisted, and does not count as a failed
-  attempt; an invalid correction keeps the previous value; unrelated fields and
-  progress are preserved; the correction survives reload into the confirmed
-  profile.
-- Backend/frontend: owner name vs business name disambiguation, focused
-  clarification for an ambiguous target.
-- Backend: the shared corrections fix does not add a generic text
-  deduplicator.
-- Fixture-driven: controlled fixtures with explicit expected results for
-  deterministic regression tests.
+- **Reproduce first** (conventions.md 5): the supplied transcript, driven
+  through the real onboarding UI via `make demo`, screenshots kept as
+  regression evidence, before any fix lands.
+- Regression fixtures: `211e2esdsdfasdf`, `bkksbf88`, `21 ej2nek2ne2ken1e`,
+  `sababa`, `middle eastern cafe` - `sababa` confirmed never becomes
+  `Sababasababa`; no "my name" deferral language; no subjective praise for
+  "middle eastern cafe"; no salon terminology in a cafe onboarding.
+- Corrections during every beat; invalid corrections keep the prior value;
+  off-beat facts still capture without derailing the current beat; all four
+  offering operations; owner/business-name disambiguation on an ambiguous
+  correction target.
+- `reply_msgs` contains the current owner message exactly once, asserted
+  directly (no test does this today -
+  [test_onboarding_agent.py:483](../../../../backend/tests/test_onboarding_agent.py#L483)
+  only checks it's `None`) - on both SSE and non-streamed paths, both
+  persisting exactly one assistant response.
+- Every customer prose route against the same identity/behavior contract;
+  voice presets change expression only; an adversarial custom-voice fixture
+  cannot override grounding, pricing, identity, escalation, or tool rules.
+- Customer disclosure (honest answer to a direct human/AI question), sales
+  restraint, frustration handling, missing-information follow-up, handoff
+  consent, citations, plain-text output, prompt injection, deterministic
+  pricing.
+- Migration: existing v3 onboarding records and legacy `tone` values migrate
+  without losing history, progress, or confirmed data; `customer_voice` is
+  populated per the backfill rule.
+- Update tests pinned to the old signatures:
+  [`test_money_prompt.py:60-71`](../../../../backend/tests/test_money_prompt.py#L60-L71)
+  (positional `tenant_prompt`/`tone` args),
+  [`test_onboarding_api.py:586-594`](../../../../backend/tests/test_onboarding_api.py#L586-L594)
+  (asserts `tone == "friendly"` post-confirm), `test_context_package.py`'s
+  `package.system_prompt`/`tone` assertions, and confirm `test_schema_audit.py`
+  / `test_migrations.py:44,57` stay green through the backfill migration.
+- Single-turn and multi-turn transcript simulations in
+  `tenant1_trajectory.jsonl` / `trajectory_eval.py`, deterministic terminal
+  state plus provider-backed persona checks behind the existing `--skip-llm`
+  split.
+- Voice editor: persistence, validation, keyboard access, responsive layout,
+  and next-turn activation (both the agent-prompt path via
+  `knowledge_version` and the greeting path via `invalidate_slug_cache`).
+- Keyboard and mobile verification for the voice editor closes W-8's one
+  remaining open Definition-of-done box.
+- No generic text deduplicator is added as part of the message-duplication
+  fix.
 
 ### Definition of done
 
-- [ ] Clear spelling/wording corrections use the existing extraction call;
-      names, brands, identifiers, contacts, and money are preserved unless
-      explicitly corrected; ambiguous input is not guessed; changes are read
-      back.
-- [ ] Corrections to captured fields are accepted during any beat, validated,
-      persisted across reload and into the confirmed profile, and never count
-      as a failed attempt.
-- [ ] Offering corrections (add, rename, remove, explicit replace) are
-      distinct; renaming preserves siblings, description, price, and
-      provenance; no obsolete tool loop is restored.
-- [ ] The reply context holds one occurrence of the current owner message,
-      one displayed and persisted assistant response, and one acknowledgement
-      of the captured or corrected name - reproduced in the browser first,
-      and covered on both SSE and ordinary-response paths.
-- [ ] No generic text deduplicator is added.
-- [ ] `make check` green.
+- [ ] Onboarding record migrates v3 to v4; `owner_display_name` replaces
+      `name` everywhere, with history and progress preserved.
+- [ ] A typed name shows a visible proposal and requires explicit Yes before
+      persisting; a typed reply is a new correction; unusual confirmed names
+      are accepted unless they violate storage/safety limits.
+- [ ] Owner name and business name are never confused; the `agent.py:269`
+      fallback is removed; ambiguous correction targets are clarified.
+- [ ] Corrections apply from any beat, validate every changed field, keep the
+      prior value on an invalid correction, never cost an attempt at the
+      pending question, and persist across reload into the confirmed profile.
+- [ ] Offering add/rename/remove/replace are distinct operations reusing
+      `merge_offerings`; a rename preserves siblings, description, price, and
+      provenance.
+- [ ] `reply_msgs` carries the owner's current message exactly once; one
+      assistant response is persisted on both SSE and non-streamed paths; one
+      acknowledgement with consistent spelling.
+- [ ] Clear wording cleanup runs through the existing extraction call; names,
+      brands, identifiers, contacts, and money are preserved unless explicitly
+      corrected; ambiguous input is never guessed.
+- [ ] All six customer prose routes run the same code-owned contract; a
+      structured `customer_voice` config changes expression only and cannot
+      override grounding, pricing, identity, escalation, or tools.
+- [ ] The deterministic customer opening composes first; a configured welcome
+      is optional following content, never a duplicate greeting.
+- [ ] `tenant_config.system_prompt`/`.tone` are backfilled into
+      `customer_voice` and read by no application code path; the columns
+      themselves are not dropped (follow-up ticket).
+- [ ] The prompt-leak canary and its eight `injection_set.jsonl` cases keep
+      their teeth against the code-owned contract.
+- [ ] W-8's keyboard/mobile Definition-of-done box is closed.
+- [ ] `make check`, `make ci`, `make test-e2e`, and `make eval-skip-llm` are
+      green; `make eval` is green where a provider is configured.
+
