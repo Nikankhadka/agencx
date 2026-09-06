@@ -7,40 +7,11 @@
  * still be unusable in a hand, so it is checked where it actually lives.
  */
 
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
-import { expectNoHorizontalOverflow } from "./mobile-helpers";
+import { expectNoHorizontalOverflow, expectTapTargets } from "./mobile-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
-
-/**
- * `expectTapTargets` from mobile-helpers scans the whole page, and this screen
- * has a control that fails it: `ScreenTopbar`'s Back button renders at the
- * prototype's 36px `--size-icon-btn`, under the 44px floor
- * design/frontend.md:633 sets, on all seven console screens that carry a
- * topbar. That is a real defect and it is reported as one - it is not the
- * voice sheet's, and fixing it moves a shared component's alignment on seven
- * screens, so it is not silently patched here either. This scans the sheet,
- * which is what this spec is actually about.
- */
-async function expectSheetTapTargets(sheet: Locator, minPx = 44): Promise<void> {
-  const undersized = await sheet.evaluate((panel: HTMLElement, min: number) => {
-    const controls = panel.querySelectorAll<HTMLElement>(
-      "button, [role='button'], input, select, textarea",
-    );
-    return Array.from(controls)
-      .filter((el) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return false;
-        return rect.height < min;
-      })
-      .map((el) => ({
-        label: el.getAttribute("aria-label") ?? el.textContent?.trim().slice(0, 40) ?? "",
-        height: Math.round(el.getBoundingClientRect().height),
-      }));
-  }, minPx);
-  expect(undersized, "every control in the sheet must be >= 44px tall").toEqual([]);
-}
 
 test("the voice sheet is usable at phone width, by touch", async ({ page, request }) => {
   await loginAsTenantAdmin(page, request, BYTEFIX);
@@ -71,8 +42,9 @@ test("the voice sheet is usable at phone width, by touch", async ({ page, reques
   expect(Math.round(panel.x)).toBeGreaterThanOrEqual(0);
   expect(Math.round(panel.x + panel.width)).toBeLessThanOrEqual(viewport.width);
 
-  // Every control in the sheet, the four voice chips included, is tappable.
-  await expectSheetTapTargets(sheet);
+  // Every control on the screen, the four voice chips and the topbar's own
+  // back button included, is a real tap target.
+  await expectTapTargets(page);
   for (const preset of ["warm_casual", "clear_professional", "direct_concise", "custom"]) {
     const chip = page.getByTestId(`voice-${preset}`);
     const box = (await chip.boundingBox())!;
@@ -87,7 +59,7 @@ test("the voice sheet is usable at phone width, by touch", async ({ page, reques
   await expect(style).toBeVisible();
   await style.fill("Calm and reassuring, never pushy.");
   await expectNoHorizontalOverflow(page);
-  await expectSheetTapTargets(sheet);
+  await expectTapTargets(page);
 
   // And the whole round trip works by touch alone.
   await page.getByTestId("voice-save").tap();
