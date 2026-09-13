@@ -133,11 +133,7 @@ async def _seed_tenant_with_chunk(
         "Chat Test Co",
         status,
     )
-    await conn.execute(
-        "insert into tenant_config (tenant_id, system_prompt, tone) values ($1, $2, 'friendly')",
-        tenant_id,
-        "You help customers of Chat Test Co.",
-    )
+    await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
     document_id = await conn.fetchval(
         "insert into documents (tenant_id, filename, doc_type, status) "
         "values ($1, 'faq.md', 'faq', 'ready') returning id",

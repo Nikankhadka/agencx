@@ -36,11 +36,12 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 
 - [ ] R-3: audit success schemas and explicit unknown-field policies.
 - [ ] R-4: complete founder judge calibration and record additional production-smoke evidence.
-- [ ] **The provider-backed `make eval` gate has now failed three times on free-tier
+- [ ] **The provider-backed `make eval` gate has now failed four times on free-tier
   quota and has never produced a valid baseline.** This is a capacity problem, not a
   code problem: the deterministic gates pass and the LLM legs crash on a 429 rather
   than regressing. Closing it needs a paid provider tier or an eval slice that fits
-  inside 200k tokens per day. Carried forward from W-9.
+  inside 200k tokens per day. Carried forward from W-9, most recently hit again
+  during W-10 (2026-09-13).
 - [ ] R-5: decide and validate backups/restore, error tracking, E2E-in-CI, and dependency scanning.
 - [ ] Add the GitHub `VERCEL_TOKEN` secret so registry cleanup can run. The local Vercel token is not a repository secret.
 - [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
@@ -59,9 +60,16 @@ Detailed records live in [`spec/completed/`](spec/completed/).
   voice, deterministic basket pricing, structured catalog responses, and
   non-terminal handoff. Closed out 2026-09-08 on `test/w-9-closeout` by writing
   the verification Amendment 4's delivery evidence had claimed but not shipped.
-- [ ] W-10: drop `tenant_config.system_prompt` and `.tone` and their last
-  writers, after W-9 is verified in production
-  ([`spec/active/14-schema-drop.md`](spec/active/14-schema-drop.md)).
+- [x] W-10: drop `tenant_config.system_prompt` and `.tone` and their last
+  writers ([`spec/completed/14-schema-drop.md`](spec/completed/14-schema-drop.md)).
+  All three preconditions were checked before starting: W-9 is deployed to
+  production and has served a real customer turn from the deployed build;
+  `select count(*) from tenant_config where not (config ? 'customer_voice')`
+  returned 0 against the production database, so `0027`'s backfill reached every
+  row; and a production database backup exists with a known restore path.
+  `system_prompt_for` deleted along with both seed writers and the probe seed's
+  duplicate leak-marker copy - the marker now reaches the prompt only through
+  `app/agents/contract.py`. Migration `0029` drops both columns.
 - [x] W-13: keep the six-digit email OTP contract aligned across local and
   hosted Auth configuration; inspect hosted `mailer_otp_length` before any
   change and verify a fresh real login
@@ -414,11 +422,11 @@ measurement, because the import contract forbids `app.services` from importing
 `app.agents`; a test that imports both fails the moment the contract outgrows
 it.
 
-`tenant_config.system_prompt` and `.tone` are read by no application code after
-this ticket, but the columns and their seed writes are still in place. Dropping
-them is W-10 (`spec/active/14-schema-drop.md`), deliberately its own ticket
-because one squash-merge cannot both deploy forward-compatible code and run the
-destructive migration after it is verified.
+`tenant_config.system_prompt` and `.tone` were read by no application code after
+this ticket, and their columns and seed writes stayed in place until W-10 dropped
+them (`spec/completed/14-schema-drop.md`), deliberately its own ticket because one
+squash-merge cannot both deploy forward-compatible code and run the destructive
+migration after it is verified.
 
 **W-9 closed out** (2026-09-08, `test/w-9-closeout`). The prior session recorded
 the six open Amendment 4 boxes as "verification, not unwritten code". That was
@@ -475,6 +483,60 @@ they are deliberately untested rather than faked by scripting a provider into
 the answer. **A deterministic contact-channel gate is the natural follow-up if
 the founder wants that clause enforced rather than instructed.**
 
+**W-10 shipped** (2026-09-13, `chore/w-10-schema-drop`). All three preconditions
+were checked before starting: W-9 is deployed to production and has served a
+real customer turn from the deployed build; `select count(*) from tenant_config
+where not (config ? 'customer_voice')` returned 0 against the production
+database, confirming `0027`'s backfill reached every row; and a production
+database backup exists with a known restore path.
+
+The ticket's own Tests section named only "the existing confirm test" and the
+four seed runs, but dropping two columns that a running application still
+inserts into breaks anything that names them in raw SQL. A grep the ticket
+didn't do found seven test files doing exactly that
+(`test_onboarding_api.py`, `test_seed_demo.py`, `test_seed_tenant1.py`,
+`test_agent_contract.py`, `test_context_package.py`, `test_chat_api.py`,
+`test_inspection.py`), plus an eighth (`test_agent_contract.py`'s marker test)
+that imported the deleted `SYSTEM_PROMPT` constant by name. All eight needed
+companion fixes - not scope creep, just what `make check` staying green
+actually requires. Two of the seed-persona assertions were rewritten rather
+than deleted: they existed to prove the seed's end-state matched a real
+confirm, and after the drop the part of that end-state application code
+actually reads is `config->customer_voice`, so that's what they assert now.
+
+The order matters more than the diff. Production still runs W-9 code that
+writes `system_prompt` on every onboarding confirm, and the `development`
+preview shares the same production Supabase database - there's only one - so
+`0029` could not be applied until both `development` and `staging` carried the
+new, column-independent code. Deploy first, migrate second; the reverse order
+500s every `POST /api/onboarding/confirm`.
+
+`system_prompt_for` (`app/onboarding/flow.py`) is deleted outright rather than
+left unused. `seed_injection_probe.py`'s duplicate copy of the leak marker -
+written through `system_prompt` "so the probe tenant matches every other
+seeded tenant," per its own W-9 comment - is gone too; the eight
+`injection_set.jsonl` prompt-leak cases now score against a marker that reaches
+the model through exactly one path, `app/agents/contract.py`, instead of two
+copies that could have drifted apart.
+
+Verification: 1007 backend tests and 219 frontend tests green, `make check`,
+`make ci`, and `make eval-skip-llm` all green, all four seeds
+(`seed_demo`, `seed_tenant1_phoneshop`, `seed_leakage_pair`,
+`seed_injection_probe`) run clean against the migrated schema, and the full
+137-case Playwright suite passed against a real onboarding confirm through the
+UI. `make eval` failed a fourth time on the same Groq free-tier TPD quota
+(`200000` daily tokens, `199007` used) documented above under "What's next" -
+the three deterministic gates (`money_guardrail_eval`, `leakage_eval`,
+`retrieval_eval`) passed and the three provider-backed legs errored on the 429,
+not a metric regression. No injection baseline exists yet for this code; the
+honest substitute evidence is `test_agent_contract.py::test_leak_marker_rides_in_the_contract_render_path`
+(the marker still reaches every rendered contract) and
+`test_injection_eval.py`'s dataset tests (the eight cases are intact). This
+remains a capacity gap, not something W-10 introduced or could have closed.
+Production: migration `0029` applied <FILL: date>, `schema_migrations` count
+<FILL: before>→<FILL: after>, and a real onboarding confirm plus one customer
+chat turn verified on the live origin post-migration.
+
 **Chats-list row identity is unticketed UI polish** (founder request,
 2026-09-06, `fix/chats-row-identity`). Every row on the owner's Chats list read
 "Customer", because the web chat surface never captures a name - `chat/service.py`
@@ -513,7 +575,7 @@ stubs the unnamed case the seed cannot produce.
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
 | [`spec/completed/13-walkthrough.md`](spec/completed/13-walkthrough.md) | Complete | W-1 through W-9 delivered and verified |
-| [`spec/active/14-schema-drop.md`](spec/active/14-schema-drop.md) | Open | W-10, blocked on W-9 production verification |
+| [`spec/completed/14-schema-drop.md`](spec/completed/14-schema-drop.md) | Complete | W-10 delivered; migration `0029` applied to production |
 | [`spec/completed/15-document-review.md`](spec/completed/15-document-review.md) | Complete | W-11a, W-11b, W-11c delivered and verified |
 | [`spec/completed/16-auth-otp-reliability.md`](spec/completed/16-auth-otp-reliability.md) | Complete | W-12, W-13 delivered and hosted-verified |
 | [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |

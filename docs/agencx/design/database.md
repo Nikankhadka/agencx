@@ -155,8 +155,6 @@ row, migration 0014), `platform_admin_all`, `service_signup_insert`.
 ```sql
 create table tenant_config (
   tenant_id             uuid primary key references tenants(id) on delete cascade,
-  system_prompt         text not null default '',  -- RETIRED, see below
-  tone                  text not null default 'friendly',  -- RETIRED, see below
   enabled_tools         jsonb not null default '[...]',   -- the per-tenant tool set (D-1)
   brand                 jsonb not null default '{}',   -- {"accent":"#RRGGBB","logo_url":...,"display_name":...}
   config                jsonb not null default '{}',   -- onboarding business/hours/services/tax fields (written by the confirm flow)
@@ -164,13 +162,13 @@ create table tenant_config (
 );
 ```
 
-**RETIRED (W-9):** `system_prompt` and `tone` are written by the confirm path
-and the seeds but read by no application code. What the customer assistant is
-told about itself is now `app/agents/contract.py`, one code-owned contract on
-every prose route, and how it sounds is the structured `config->customer_voice`
+**DROPPED (W-9 retired, W-10 dropped, migration `0029`):** `system_prompt` and
+`tone` no longer exist. What the customer assistant is told about itself is
+`app/agents/contract.py`, one code-owned contract on every prose route, and how
+it sounds is the structured `config->customer_voice`
 (`{"preset": ..., "custom_style": ...}`) that migration `0027` back-filled from
-`tone`. Both columns are dropped by W-10
-(`docs/agencx/spec/active/14-schema-drop.md`), not by `0027`.
+`tone` before `0029` removed it
+(`docs/agencx/spec/completed/14-schema-drop.md`).
 
 **CHANGING (D-1, D-2):** `enabled_tools` defaults to the full advanced set today
 (`["search_knowledge","recommend_items","lookup_order_or_ticket","get_quote_inputs","create_escalation"]`).
@@ -274,9 +272,9 @@ create table documents (
 
 Migration `0028` adds `failure_stage` (`structure`, `extract`, or `embed`),
 `failure_retryable`, and `failed_at` for processing failures. Migration `0030`
-(with `0029` reserved for W-10) adds `documents_failure_metadata_check`: rows
-that are not `failed` must keep all three failure fields null. Failed rows can
-have incomplete metadata so legacy rows remain valid without a risky backfill.
+adds `documents_failure_metadata_check`: rows that are not `failed` must keep
+all three failure fields null. Failed rows can have incomplete metadata so
+legacy rows remain valid without a risky backfill.
 
 `website` (migration 0015) carries the URL-scrape ingest path, wired by O-3.
 
@@ -522,7 +520,7 @@ applied in order by a plain runner (no heavy framework):
 0026_documents_offerings.sql  documents.offerings - candidates extracted once at ingest, not re-derived per read (W-6)
 0027_customer_voice.sql    back-fills config->customer_voice from the tone column (W-9); drops no column
 0028_document_failure_metadata.sql  documents failure_stage, failure_retryable, failed_at (W-11a)
-0029 (reserved, not yet created)  W-10's retired tenant_config column drop
+0029_drop_tenant_prompt_columns.sql  drops the retired tenant_config.system_prompt and tone (W-10)
 0030_document_failure_metadata_check.sql  keeps failure metadata null on non-failed rows, legacy-safe (W-11a correction)
 ```
 

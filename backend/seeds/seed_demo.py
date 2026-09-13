@@ -294,7 +294,6 @@ async def _seed_lumident_core() -> UUID:
         tenant_id=tenant_id,
         slug=LUMIDENT_SLUG,
         name=LUMIDENT_NAME,
-        tone="professional",
         brand={"display_name": LUMIDENT_NAME, "accent": "#2C7A7B"},
         config={
             "customer": {

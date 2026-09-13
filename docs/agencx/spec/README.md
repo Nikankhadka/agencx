@@ -33,7 +33,6 @@ Active phase files contain unresolved tickets only:
 |---|---|
 | [`active/08-deferred.md`](active/08-deferred.md) | B-2, D-1, D-3 |
 | [`active/12-refinement.md`](active/12-refinement.md) | R-3, R-4, R-5 |
-| [`active/14-schema-drop.md`](active/14-schema-drop.md) | W-10 |
 
 Completed phase files preserve the detailed records for shipped work:
 
@@ -50,6 +49,7 @@ Completed phase files preserve the detailed records for shipped work:
 | [`completed/10-deploy.md`](completed/10-deploy.md) | Deployment |
 | [`completed/11-offerings-media.md`](completed/11-offerings-media.md) | Offerings and media |
 | [`completed/13-walkthrough.md`](completed/13-walkthrough.md) | Walkthrough fixes |
+| [`completed/14-schema-drop.md`](completed/14-schema-drop.md) | Schema drop |
 | [`completed/15-document-review.md`](completed/15-document-review.md) | Document review and privacy workflow |
 | [`completed/16-auth-otp-reliability.md`](completed/16-auth-otp-reliability.md) | Authentication OTP reliability |
 
