@@ -121,7 +121,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
   all forms. `theme.test.ts` re-pinned with a gradient-stop AA check; the
    storefront e2e accent pin updated to Rausch; the v6 prototype recolored
    color-only; D26 recorded superseding D25.
-- [ ] UX consistency ([`spec/active/15-ux-consistency.md`](spec/active/15-ux-consistency.md)):
+- [ ] UX consistency ([`spec/completed/15-ux-consistency.md`](spec/completed/15-ux-consistency.md)):
   unify all navs on the mobile accent idiom via `navTone()`, add pointer
   cursor plus hover/press feedback to every button, ask destructive removes,
   hand-back, and sign-out through a shared `ConfirmDialog`/`useConfirm`,

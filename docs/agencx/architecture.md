@@ -392,7 +392,7 @@ in `spec/` adapt, gate, hide, or extend - they do not rebuild.
 | Tenancy + auth | `app/shared/auth.py`, migrations, `resolve_tenant_slug()`, Supabase | Kept (O-2 adds login-in-chat on the tenant surface) |
 | Onboarding | `app/onboarding/agent.py` (`run_turn` / `TurnDirective`, `extract()` DraftUpdate pattern, completeness gate) | Kept (O-1: one tool to save profile fields + LLM turn loop) |
 | Knowledge | upload endpoint + storage, `app/ingestion/` (chunker, embedder, pipeline), `app/retrieval/` | Kept; O-3 adds the URL scrape path + document upload; O-4 adds the whole-corpus fast path + threshold |
-| Agents | `app/agents/` (graph, supervisor, knowledge, escalation, inspection, price_gate, spotlight) | Re-cut: D-1/D-2 build tools from the tenant enabled set; the graph becomes supervisor-with-tools (P-1..P-5 land the new flow) |
+| Agents | `app/agents/` (graph, supervisor, knowledge, escalation, inspection, price_gate, spotlight) | Re-cut: D-1/D-2 build tools from the tenant enabled set; the graph becomes supervisor-with-tools (P-1..P-5 land the new flow, F-1 deletes the fixed specialist node modules so the live path is agent plus draft plus price_gate plus inspection) |
 | Money | pricing engine (`app/pricing/engine.py`), `price_gate.py` | Kept; C-1..C-4 loosen the allowed figure set to include verbatim owner material; engine output stays a source only for quote-enabled tenants |
 | Eval | `evals/` (retrieval, generation, trajectory, injection, leakage, run_gate) | Kept; G-1 re-cuts the case set for the lean toolset |
 | Observability | `app/observability/{cost,tracing}.py`, Langfuse | Kept |
