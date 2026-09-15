@@ -22,9 +22,9 @@ const BASE = [
 ].join(" ");
 
 const VARIANT_CLASSES = {
-  solid: "text-accent-active px-[14px] hover:bg-accent-a07",
+  solid: "text-accent-active px-4 hover:bg-accent-a07",
   dashed: "border-dashed text-accent-active px-4 hover:bg-accent-a07",
-  sent: "pointer-events-none border-accent-a16 text-ink-a40 px-[14px]",
+  sent: "pointer-events-none border-accent-a16 text-ink-a40 px-4",
 } as const;
 
 /**

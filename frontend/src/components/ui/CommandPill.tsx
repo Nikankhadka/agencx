@@ -89,7 +89,7 @@ export function CommandPill({
       className={[
         "command-pill flex items-end gap-2 rounded-pill bg-surface shadow-pill",
         // .plain-pill sits taller than .cmd-pill and has no left affordance.
-        field ? "py-3.5 pl-5 pr-[9px]" : "py-[11px] pl-[18px] pr-[10px]",
+        field ? "py-4 pl-5 pr-2" : "py-3 pl-4 pr-2",
       ].join(" ")}
     >
       {/* `.pill-plus`: a 22px hit box around an 18px glyph. Hidden (not just
@@ -101,7 +101,7 @@ export function CommandPill({
           type="button"
           onClick={onAttach}
           aria-label="Attach"
-          className="mb-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
+          className="mb-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
         >
           <Icon name="add" size={18} />
         </button>

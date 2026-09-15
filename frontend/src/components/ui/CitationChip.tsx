@@ -27,14 +27,14 @@ export function CitationChip({ citation }: CitationChipProps) {
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-subtle px-1 text-[10px] font-medium text-accent-active transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
+        className="mx-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-subtle px-1 text-badge font-medium text-accent-active transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
       >
         {citation.index}
       </button>
       {open ? (
         <span
           role="tooltip"
-          className="absolute bottom-full left-1/2 z-10 mb-1 w-48 -translate-x-1/2 rounded-md border border-border bg-surface p-2 text-left text-footnote shadow-2"
+          className="absolute bottom-full left-1/2 z-10 mb-1 w-48 -translate-x-1/2 rounded-md border border-border bg-surface p-2 text-left text-footnote shadow-popover"
         >
           <span className="block font-medium text-text">{citation.source}</span>
           <span className="block text-text-secondary">{citation.snippet}</span>

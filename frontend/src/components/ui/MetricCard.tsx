@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Card } from "./Card";
 import { Icon, type IconName } from "./Icon";
 
 export interface MetricCardProps {
@@ -29,7 +30,7 @@ export interface MetricCardProps {
  */
 export function MetricCard({ label, value, loading, error, icon, trend, footer }: MetricCardProps) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 shadow-card transition-shadow hover:shadow-2">
+    <Card padding="roomy" className="shadow-card transition-shadow hover:shadow-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-body-sm font-medium text-text-secondary">{label}</p>
         {icon ? (
@@ -59,6 +60,6 @@ export function MetricCard({ label, value, loading, error, icon, trend, footer }
         </>
       )}
       {footer ? <div className="mt-4">{footer}</div> : null}
-    </div>
+    </Card>
   );
 }

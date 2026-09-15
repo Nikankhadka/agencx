@@ -85,7 +85,7 @@ export function ChatBubble({
 
   return (
     <div
-      className={`max-w-[85%] px-4 py-2.5 text-body-sm leading-relaxed ${RADIUS_CLASSES[perspective][role]} ${ROLE_CLASSES[perspective][role]}`}
+      className={`max-w-[85%] px-4 py-3 text-bubble ${RADIUS_CLASSES[perspective][role]} ${ROLE_CLASSES[perspective][role]}`}
     >
       {role === "human_agent" && perspective === "customer" ? (
         <p className="mb-1 text-footnote font-medium text-accent-active">{senderLabel}</p>

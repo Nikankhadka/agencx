@@ -90,7 +90,7 @@ export function Sheet({ open, onClose, title, children, desktop = false }: Sheet
         aria-labelledby={titleId}
         tabIndex={-1}
         className={[
-          "absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-[28px] bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet",
+          "absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet",
           desktop ? "sm:inset-y-8 sm:mx-auto sm:max-w-[48rem] sm:rounded-card" : "",
           "transition-transform duration-(--duration-push) ease-push",
           open

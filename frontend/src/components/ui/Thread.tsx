@@ -101,7 +101,7 @@ export function AgentLine({
       {streaming ? (
         <span
           aria-hidden="true"
-          className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-text align-middle"
+          className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-text align-middle"
         />
       ) : null}
     </p>
@@ -117,7 +117,7 @@ export function AgentLine({
  */
 export function OwnerBubble({ children }: { children: ReactNode }) {
   return (
-    <div className="animate-rise-fast mt-thread-gap max-w-[78%] self-end break-words rounded-[var(--radius-bubble-lg)_var(--radius-bubble-lg)_var(--radius-bubble-tip)_var(--radius-bubble-lg)] bg-bubble-out px-4 py-2.5 text-bubble text-text-inverse">
+    <div className="animate-rise-fast mt-thread-gap max-w-[78%] self-end break-words rounded-[var(--radius-bubble-lg)_var(--radius-bubble-lg)_var(--radius-bubble-tip)_var(--radius-bubble-lg)] bg-bubble-out px-4 py-3 text-bubble text-text-inverse">
       {children}
     </div>
   );
@@ -157,7 +157,7 @@ export function ProcessingLine({ children }: { children: ReactNode }) {
 /** A centered system stamp (`.sys-pill`) - "Code sent to ...", state changes. */
 export function ThreadPill({ children }: { children: ReactNode }) {
   return (
-    <p className="animate-rise mt-thread-gap self-center whitespace-nowrap rounded-chip bg-ink-a05 px-3.5 py-[5px] text-meta text-ink-a40">
+    <p className="animate-rise mt-thread-gap self-center whitespace-nowrap rounded-chip bg-ink-a05 px-3 py-1 text-meta text-ink-a40">
       {children}
     </p>
   );
