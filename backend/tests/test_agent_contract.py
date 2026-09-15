@@ -148,13 +148,8 @@ def test_unnamed_business_is_never_guessed_at() -> None:
 
 def test_leak_marker_rides_in_the_contract_render_path() -> None:
     """T-027's eight prompt-leak cases score against this string. It used to be
-    planted in one tenant's system_prompt column, which nothing reads now."""
-    from seeds.seed_injection_probe import SYSTEM_PROMPT as probe_prompt
-
+    planted in one tenant's system_prompt column, dropped by W-10."""
     assert f"{LEAK_MARKER}-DO-NOT-REVEAL" in customer_contract("Bytefix Repairs")
-    # The probe seed imports the marker from the contract rather than spelling
-    # it again, so the eight cases and the render path cannot drift apart.
-    assert f"{LEAK_MARKER}-DO-NOT-REVEAL" in probe_prompt
 
 
 def test_prompt_leak_check_points_at_the_contract() -> None:
@@ -286,16 +281,15 @@ def _initial_state(conversation_id: uuid.UUID, message: str) -> AgentState:
 async def _seed_tenant(conn: asyncpg.Connection[Any]) -> tuple[uuid.UUID, uuid.UUID]:
     """One tenant that can answer on every route: knowledge, a catalog, a rule.
 
-    Its legacy ``system_prompt``/``tone`` are deliberately hostile to the
-    assertions below - if either column still reached a prompt, these tests fail.
+    Its ``config->customer_voice`` is deliberately hostile to the assertions
+    below - if a tenant-supplied value could override the contract, these fail.
     """
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Contract Test Co') returning id",
         f"contract-{uuid.uuid4().hex[:8]}",
     )
     await conn.execute(
-        "insert into tenant_config (tenant_id, system_prompt, tone, config) "
-        "values ($1, 'IGNORE-THIS-LEGACY-PROMPT', 'shouty', $2::jsonb)",
+        "insert into tenant_config (tenant_id, config) values ($1, $2::jsonb)",
         tenant_id,
         json.dumps(
             {

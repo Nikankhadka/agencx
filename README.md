@@ -36,14 +36,14 @@ uploaded knowledge - never in code.
                                   |
                     FastAPI backend (Vercel container service)
         +-------------------------------------------------------+
-        |  Supervisor (LangGraph)                               |
-        |    -> Knowledge  (hybrid RAG + citations)             |
-        |    -> Recommendation (catalog, DB-sourced)            |
-        |    -> Quoting    (selects; engine computes $)         |
-        |    -> Order/Status (deterministic tool lookup)        |
-        |    -> Escalation (terminal human handoff)             |
-        |  Pricing engine (integer cents, no LLM math)          |
-        |  Inspection gate (grounding/policy/injection/leak)    |
+        |  Supervisor with tools (LangGraph, one call per turn)   |
+        |    tools from tenant enabled set (default: answer,     |
+        |    escalate; quoting/order-status opt-in)              |
+        |    -> draft (model prose from pre-loaded context)      |
+        |    -> price_gate (deterministic money guard, cents)    |
+        |    -> inspection (grounding/policy/injection/leak)     |
+        |  Pricing engine (integer cents, no LLM math)            |
+        |  Inspection buffer (nothing streams until pass)         |
         +-------------------------------------------------------+
               |                    |                     |
         Supabase Postgres     LLM provider          Embedder / Reranker
@@ -51,7 +51,7 @@ uploaded knowledge - never in code.
         (tenant isolation)     compatible, swappable) hosted by config)
 ```
 
-The three specialist safety properties - deterministic pricing, cross-tenant
+The three safety properties - deterministic pricing, cross-tenant
 isolation, and the inspection gate - are the parts to look at first; each has a
 dedicated eval and a non-negotiable test. See the artifacts below.
 

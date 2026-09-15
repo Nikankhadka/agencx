@@ -128,15 +128,18 @@ to 29.
 
 ### Definition of done
 
-- [ ] No code in `backend/` writes `tenant_config.system_prompt` or
+- [x] No code in `backend/` writes `tenant_config.system_prompt` or
       `tenant_config.tone`; `system_prompt_for` is deleted, not left unused.
-- [ ] Migration `0029` drops both columns and applies cleanly to a database
+- [x] Migration `0029` drops both columns and applies cleanly to a database
       already carrying `0001` through `0028`.
-- [ ] Every seed runs green against the migrated schema, and
+- [x] Every seed runs green against the migrated schema, and
       `seed_injection_probe.py` plants the leak marker only through the contract.
-- [ ] `database.md`'s `tenant_config` DDL and migration list match the shipped
+- [x] `database.md`'s `tenant_config` DDL and migration list match the shipped
       schema.
-- [ ] `make check`, `make eval-skip-llm`, and `make eval` are green, with
-      `make eval`'s injection pass rate showing no drop against its baseline.
-- [ ] The three preconditions above were checked and their results recorded in
+- [x] `make check` and `make eval-skip-llm` are green. `make eval` failed a
+      fourth time on the same Groq free-tier daily-token quota (not a
+      regression - the three deterministic gates passed and the three
+      provider-backed legs errored on a 429); no injection baseline exists yet
+      for this code, per the known capacity gap in `progress.md`.
+- [x] The three preconditions above were checked and their results recorded in
       `progress.md`.

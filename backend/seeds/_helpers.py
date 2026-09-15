@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 from app.ingestion.pipeline import ingest_offerings, process_document
 from app.llm.embedder import Embedder
 from app.onboarding.agent import OnboardingRecord
-from app.onboarding.flow import ProfileDraft, customer_voice_for, system_prompt_for
+from app.onboarding.flow import ProfileDraft, customer_voice_for
 from app.shared import db
 from app.shared.storage import document_key, get_storage
 
@@ -56,8 +56,6 @@ async def insert_tenant_core(
     tenant_id: UUID,
     slug: str,
     name: str,
-    system_prompt: str = "",
-    tone: str = "friendly",
     brand: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     enabled_tools: list[str] | None = None,
@@ -72,10 +70,10 @@ async def insert_tenant_core(
 
     ``profile`` pre-onboards the tenant: when given, the tenants row gains its
     ``business_name`` and the tenant_config row is written exactly as a real
-    onboarding confirm leaves it (system_prompt from the profile, ``profile``,
-    ``customer_voice`` and a completed ``onboarding`` record in ``config``), so a
-    seeded demo tenant never shows the interview. Built from the same dataclasses
-    the confirm path uses - no duplicated shape to drift.
+    onboarding confirm leaves it (``profile``, ``customer_voice`` and a
+    completed ``onboarding`` record in ``config``), so a seeded demo tenant
+    never shows the interview. Built from the same dataclasses the confirm
+    path uses - no duplicated shape to drift.
     """
     merged_config = dict(config or {})
     if profile is not None:
@@ -84,10 +82,6 @@ async def insert_tenant_core(
         merged_config["profile"] = draft.model_dump()
         merged_config["customer_voice"] = customer_voice_for(draft)
         merged_config["onboarding"] = OnboardingRecord(draft=profile, completed=True).to_jsonb()
-        if not system_prompt and profile.get("business_type"):
-            system_prompt = system_prompt_for(
-                business_name or name, profile.get("business_type", "")
-            )
 
     async with db.tenant_context(None, "service") as conn:
         await conn.execute(
@@ -100,22 +94,16 @@ async def insert_tenant_core(
         )
         if enabled_tools is None:
             await conn.execute(
-                "insert into tenant_config (tenant_id, system_prompt, tone, brand, config) "
-                "values ($1, $2, $3, $4, $5)",
+                "insert into tenant_config (tenant_id, brand, config) values ($1, $2, $3)",
                 tenant_id,
-                system_prompt,
-                tone,
                 json.dumps(brand) if brand is not None else "{}",
                 json.dumps(merged_config),
             )
         else:
             await conn.execute(
-                "insert into tenant_config "
-                "(tenant_id, system_prompt, tone, brand, config, enabled_tools) "
-                "values ($1, $2, $3, $4, $5, $6)",
+                "insert into tenant_config (tenant_id, brand, config, enabled_tools) "
+                "values ($1, $2, $3, $4)",
                 tenant_id,
-                system_prompt,
-                tone,
                 json.dumps(brand) if brand is not None else "{}",
                 json.dumps(merged_config),
                 json.dumps(enabled_tools),

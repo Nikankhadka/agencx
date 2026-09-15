@@ -60,23 +60,6 @@ def customer_voice_for(profile: ProfileDraft) -> dict[str, str | None]:
     return {"preset": preset, "custom_style": style or None}
 
 
-def system_prompt_for(business_name: str, business_type: str) -> str:
-    """The persona a confirmed tenant's assistant runs under.
-
-    ``business_type`` is the owner's own free text, so it gets its own sentence
-    rather than an apposition - "Bytefix Repairs, phone repair shop" and
-    "Northgate Family Dental, A three-chair practice..." both read badly. Used
-    by the confirm write path and by the seeds that pre-onboard a demo tenant,
-    so both produce byte-identical prompts.
-    """
-    return (
-        f"You are the assistant for {business_name}. "
-        f"About the business: {business_type.rstrip('.')}. "
-        "Answer only from the business's own material; when the answer isn't "
-        "there, say so and offer to have the owner follow up."
-    )
-
-
 # W-9 US-3: what a correction can target. ``unresolved_name`` is not a field -
 # it is how the extractor says "they asked me to change the name and I cannot
 # tell which one", so the server asks one deterministic clarification instead of

@@ -239,7 +239,6 @@ async def _seed_core(tenant_id: UUID) -> None:
         tenant_id=tenant_id,
         slug=SLUG,
         name=TENANT_NAME,
-        tone="friendly",
         # D-2: stated, not inherited. Reference tenant 1 is where the
         # commerce tools get demonstrated, so it opts into all of them -
         # the lean column default (search + escalate) would leave the

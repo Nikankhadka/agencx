@@ -64,10 +64,11 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # ticket - the columns themselves are dropped by a later ticket, not this one;
     # 0028 adds W-11's documents.failure_stage/failure_retryable/failed_at, so a
     # processing failure that used to vanish into a 422 is now a retryable row;
-    # 0030 keeps that metadata off non-failed rows without requiring a legacy
-    # failed row to be backfilled. 0029 is reserved for W-10; the runner applies
-    # this later filename in order and tolerates the gap.
-    assert len(on_disk) == 29, "expected migrations 0001-0028 and 0030"
+    # 0029 (W-10) drops the retired tenant_config.system_prompt and .tone
+    # columns, once W-9's reader removal and 0027's customer_voice backfill were
+    # verified in production; 0030 keeps that failure metadata off non-failed
+    # rows without requiring a legacy failed row to be backfilled.
+    assert len(on_disk) == 30, "expected migrations 0001-0030"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

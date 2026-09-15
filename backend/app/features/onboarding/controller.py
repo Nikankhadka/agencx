@@ -40,7 +40,6 @@ from app.onboarding.flow import (
     ProfileDraft,
     customer_voice_for,
     merge_offerings,
-    system_prompt_for,
 )
 from app.onboarding.tools import request_finalize
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
@@ -664,12 +663,10 @@ async def confirm(
     # orphan sections) are ignored rather than rejected.
     profile = ProfileDraft.model_validate(draft)
     public_slug = validate_slug(slug or suggested_slug(profile.business_name))
-    system_prompt = system_prompt_for(profile.business_name, profile.business_type)
     onboarding.completed = True
     try:
         await service.apply_confirmation(
             tenant_id=tenant_id,
-            system_prompt=system_prompt,
             business_name=profile.business_name,
             slug=public_slug,
             profile=profile.model_dump(),

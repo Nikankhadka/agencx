@@ -56,7 +56,6 @@ async def save_record(*, tenant_id: UUID, record: dict[str, Any]) -> None:
 async def apply_confirmation(
     *,
     tenant_id: UUID,
-    system_prompt: str,
     business_name: str,
     slug: str,
     profile: dict[str, Any],
@@ -68,27 +67,24 @@ async def apply_confirmation(
     """Persist what confirm() computed in one atomic transaction.
 
     O-1 captures a business profile, not a priced catalog: onboarding no longer
-    writes offerings or pricing_rules, and the columns it used to set from
-    the interview (tone, payment_processing_mode) keep
-    their schema defaults until a screen edits them. Priced answers come from
-    the owner's uploaded material instead (C-1).
+    writes offerings or pricing_rules, and `payment_processing_mode` keeps its
+    schema default until a screen edits it. Priced answers come from the owner's
+    uploaded material instead (C-1).
 
-    W-9 adds ``customer_voice`` beside ``profile``: the structured voice the
+    W-9 writes ``customer_voice`` beside ``profile``: the structured voice the
     customer assistant speaks in, written in the same transaction so a confirmed
-    tenant is never live without one. The free-text ``tone`` column is left
-    exactly as it was - retiring it is its own ticket.
+    tenant is never live without one. W-10 dropped the free-text
+    ``system_prompt``/``tone`` columns this used to set alongside them.
     """
     old_slug: str | None = None
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         old_slug = await conn.fetchval("select slug from tenants where id = $1", tenant_id)
         await conn.execute(
-            "update tenant_config set system_prompt=$2, "
-            "config = jsonb_set("
-            "jsonb_set(config, '{profile}', $3::jsonb, true), "
-            "'{customer_voice}', $4::jsonb, true), "
+            "update tenant_config set config = jsonb_set("
+            "jsonb_set(config, '{profile}', $2::jsonb, true), "
+            "'{customer_voice}', $3::jsonb, true), "
             "updated_at=now() where tenant_id=$1",
             tenant_id,
-            system_prompt,
             json.dumps(profile),
             json.dumps(customer_voice),
         )

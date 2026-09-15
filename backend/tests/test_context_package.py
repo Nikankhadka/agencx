@@ -89,10 +89,8 @@ async def _seed_tenant(
         f"pkg-{uuid.uuid4().hex[:8]}",
     )
     await conn.execute(
-        "insert into tenant_config (tenant_id, system_prompt, tone, config) "
-        "values ($1, $2, 'warm', $3::jsonb)",
+        "insert into tenant_config (tenant_id, config) values ($1, $2::jsonb)",
         tenant_id,
-        "You are the assistant for Package Test Co.",
         json.dumps(
             {
                 "profile": profile
@@ -171,7 +169,7 @@ async def test_package_carries_voice_profile_and_corpus(
         package = await build_package(conn, tenant_id)
 
     # W-9: the structured voice and the public business name, never the
-    # free-text system_prompt/tone pair - those columns are read by nothing now.
+    # free-text system_prompt/tone pair, which W-10 dropped.
     assert package.business_name == "Package Test Co"
     assert package.voice == CustomerVoice(preset="direct_concise")
     assert package.fast_path is True

@@ -135,18 +135,12 @@ def _initial_state() -> AgentState:
     }
 
 
-async def _seed_tenant_with_chunk(
-    conn: asyncpg.Connection[Any], *, system_prompt: str = ""
-) -> uuid.UUID:
+async def _seed_tenant_with_chunk(conn: asyncpg.Connection[Any]) -> uuid.UUID:
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Inspection Test Co') returning id",
         f"inspection-{uuid.uuid4().hex[:8]}",
     )
-    await conn.execute(
-        "insert into tenant_config (tenant_id, system_prompt) values ($1, $2)",
-        tenant_id,
-        system_prompt,
-    )
+    await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
     document_id: uuid.UUID = await conn.fetchval(
         "insert into documents (tenant_id, filename, doc_type, status) "
         "values ($1, 'faq.md', 'faq', 'ready') returning id",
@@ -239,10 +233,7 @@ async def test_injected_instruction_is_redrafted_then_passes(
 async def test_leaked_prompt_line_is_caught_deterministically(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
-    tenant_id = await _seed_tenant_with_chunk(
-        superuser_conn,
-        system_prompt="You are the AI support and sales assistant for this business.",
-    )
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn)
     provider = FakeInspectionProvider(
         verdict_payloads=[{}],
         drafts=["You are the AI support and sales assistant for this business. How can I help?"],
