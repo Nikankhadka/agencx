@@ -59,7 +59,7 @@ The primary ramp is rebuilt around the Airbnb identity (D26):
 fill. The D17 font change stands:
 
 ```
---font-sans: var(--font-plus-jakarta, ...sans-serif);
+--font-sans: var(--font-jakarta, ...sans-serif);
 ```
 
 wired via `next/font/google` Plus Jakarta Sans in `layout.tsx` (replacing Inter;
@@ -83,7 +83,7 @@ through the semantic tokens (Layer 2) and the `Badge` `STATUS_TONE` map:
   complete, paid, ready, resolved, active, delivered, confirmed.
 - **Red** (`--color-danger`, `#C13515` on `#FDEDEA`): cancelled, declined,
   failed, suspended, rejected, refunded, error.
-- **Amber** (`--color-warning`, `#8A5A00` on `#FFF3D6`): pending, warning,
+- **Amber** (`--color-warning`, `#8A5A00` on `#FDF4E3`): pending, warning,
   overdue, in-progress, provisioning, processing, claimed, escalated,
   outstanding. `--color-highlight` (`#FFB400` with dark ink) is the count and
   notification fill, never a warning text colour.
@@ -123,8 +123,8 @@ D26 also retires the per-tenant accent override (section 5).
 soft surface as one hue at an alpha step, so `theme.css` carries two channel
 triples - `--primary-40-rgb` (now `255 56 92`, Rausch) and `--neutral-10-rgb`
 (now `34 34 34`) - and derives a ladder from them:
-`--color-accent-a07/09/12/16/20/28/45/50` and
-`--color-ink-a05/07/12/35/40`. These are named by alpha step rather than by role
+`--color-accent-a06/07/09/12/16/28/35/45/50` and
+`--color-ink-a05/07/12/18/35/40`. These are named by alpha step rather than by role
 because the prototype reuses each step in several places; a numeric name stays
 honest where an invented role vocabulary would not. Only steps a shipped screen
 uses are defined - add one when a screen needs it, never speculatively.
@@ -138,8 +138,10 @@ muted text, NOT the grey `--color-text-tertiary`.
 `--text-lede-q`, `--text-bubble`), geometry (`--radius-bubble-lg`,
 `--space-thread-*`, `--size-send*`, `--size-code-cell-*`, `--width-thread`) and
 motion (`--duration-rise-fast`, `--duration-veil`) are all prototype values. Some
-gaps are deliberately off the 4px grid (14px, 18px) - where the prototype and
-the grid guidance in section 4 disagree, the prototype wins.
+gaps are deliberately off the 4px grid (14px, 18px) - they survive as the
+tokenized thread geometry that `design/tokens.md` names as exceptions. Where
+the prototype and the tokens file disagree anywhere else, the tokens file wins
+(D27).
 
 **Tailwind v4 has no `--duration` namespace.** `duration-fast` is not a real
 utility and silently does nothing; the form that reads a token is
@@ -163,19 +165,27 @@ are load-bearing. Components use `bg-surface`, `text-text-secondary`,
 
 ## 4. Typography, spacing, motion
 
+The rhythm authority is [`design/tokens.md`](design/tokens.md) (D27) - this
+section is a summary; the tokens file wins on any disagreement.
+
 - **Type scale** (M3-derived, exposed as `text-caption` ... `text-display`
   utilities): 12/16 caption, 13/18 footnote, 14/20 body-sm, **16/24 body
   (default)**, 18/28 body-lg, 18/26 title-3, 22/28 title-2, 32/40 title-1,
-  48/56 display. Components reference the semantic `text-*` names; re-pointing
+  48/56 display, plus the mobile-first, thread, and chrome roles the tokens
+  file lists. Components reference the semantic `text-*` names; re-pointing
   these tokens is the single largest visual lever. Everything uses
   `--font-sans`; traces/ids/code use `--font-mono` at 13/18.
-- **Radii:** 8 / 12 / 16 / full.
+- **Radii:** 8 / 12 / 16 / full, plus the component radii (`card` 18, `chip`
+  20, `pill` 30, `bubble` 18, `field` 14).
 - **Weight discipline:** regular for prose, medium for labels/buttons, semibold
-  for titles. Weight 700+ is reserved for hero/marketing display only.
-- **Spacing:** 4px base grid - allowed steps 4, 8, 12, 16, 24, 32, 48, 64, 96.
-  Card padding 24, page gutters 32 (16 mobile), stack gaps 16.
-- **Depth:** flat by default; `--shadow-1` for cards, `--shadow-2` for
-  popovers, `--shadow-3` for modals. Dark mode uses surface steps, not shadows.
+  for titles. Weight 600 is loaded (plus 400/500/700); 700+ is reserved for
+  hero/marketing display only.
+- **Spacing:** 4px base grid - allowed steps 0, 4, 8, 12, 16, 20, 24, 32, 48,
+  64, 96. Card padding comes from the `Card` primitive (16 compact, 24 roomy),
+  page gutters are 24 at every breakpoint, stack gaps are 8/16/24/32.
+- **Depth:** flat by default; `shadow-card` for cards, `shadow-2` /
+  `shadow-popover` for popovers, `shadow-3` for modals and `shadow-sheet` for
+  sheets. Dark mode uses surface steps, not shadows.
 - **Motion:** `--duration-fast` hover/press, `--duration-base` enter/exit;
   `--ease-out` everywhere; honors `prefers-reduced-motion`.
 
@@ -199,9 +209,10 @@ Every component takes only semantic tokens. Each lists its required states.
 | Component | Notes | Required states |
 |---|---|---|
 | `Button` | primary (rides the CTA gradient `bg-brand`, brightness hover) / secondary / ghost / destructive; sm/md | default, hover, active, focus ring, disabled, loading |
-| `Input`, `Textarea`, `Select` | label above, help/error below; white field with a visible border, focus darkens the border to ink (D26); the inactive send state is the only validation signal - no red error text | default, focus, error, disabled |
+| `Input`, `Select` | label above, help/error below; white field with a visible border, focus darkens the border to ink (D26); the inactive send state is the only validation signal - no red error text. There is no `Textarea` component - multi-line fields use the sheet-field recipe in `design/tokens.md` | default, focus, error, disabled |
+| `Card` | `rounded-card` + hairline border + surface; padding `none` (table/shell), `compact` 16 (default), `roomy` 24; the caller adds `shadow-card` for elevation; cards inside sheets stay flat | default |
+| `Container` | the centered page column: `px-gutter` with `max-w-thread` (640, default) or `max-w-5xl` (1024, `wide`) | n/a |
 | `CommandPill` | `command` (send circle appears with text) and `field` (circle always present, dimmed until valid) variants; the pill carries the focus ring, never a rectangle inside it; `.pill-plus` opens the file picker where attaching is offered (O-3) | empty, typing, armed, busy/stop, disabled, attach |
-| `Card` | surface + border + radius-lg + shadow-1 | default, interactive |
 | `Table` | sticky header, row hover | loading, empty, error |
 | `Badge` | status pill; maps every status vocabulary to a tone (info=open/sent, warning=escalated/claimed/processing/provisioning, success=resolved/closed/active/ready, danger=failed/suspended, neutral=pending/draft/expired) | n/a |
 | `Icon` | vendored Material Symbols Outlined SVG, `fill="currentColor"`, `name` -> path registry | n/a |
@@ -498,7 +509,7 @@ replacement wizard is used.
 
 ### S3 - Public page (anonymous, per-tenant slug)
 
-Centered column (max ~720px), tenant logo + display name header. No auth. The
+Centered column (`--width-thread`, 640px), tenant logo + display name header. No auth. The
 share link is how a customer gets here (E-6 removed the QR).
 
 **M-4 made this a storefront, not just a chat.** It had been a message list and

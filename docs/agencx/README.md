@@ -17,6 +17,7 @@ under `docs/archive/` (indexed there) and is not maintained.
 | [`design/decisions.md`](design/decisions.md) | Why was it built this way? The decision ledger and ADRs, old and new |
 | [`design/database.md`](design/database.md) | The schema: tables, roles, RLS, migrations, seeds |
 | [`design/frontend.md`](design/frontend.md) | The UI: design system, tokens, components, the three screens and their states |
+| [`design/tokens.md`](design/tokens.md) | The rhythm: spacing scale, type roles, layout recipes, and the CI guard |
 | [`spec/`](spec/) | The tickets: every piece of change work with detailed user stories, acceptance criteria, and done definitions |
 | [`running.md`](running.md) | How do I run it? Setup, logins, which command needs which service, troubleshooting |
 | [`deploy.md`](deploy.md) | How do I ship it? The free production stack (one Vercel project, two container services, + Supabase), founder steps, env vars, CI/CD |
