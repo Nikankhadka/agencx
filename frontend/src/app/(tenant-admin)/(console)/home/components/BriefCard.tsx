@@ -11,22 +11,22 @@ export function BriefCard({ item }: { item: BriefItem }) {
   return (
     <article
       data-testid={`brief-card-${item.kind}`}
-      className="mt-4 animate-rise rounded-card border border-hairline bg-surface px-[18px] py-4 shadow-card"
+      className="mt-4 animate-rise rounded-card border border-hairline bg-surface p-4 shadow-card"
     >
       <p className="mb-3 text-card-hl font-medium text-text">{item.headline}</p>
-      <div className={`flex flex-wrap gap-2${item.note ? " mb-2.5" : ""}`}>
+      <div className={`flex flex-wrap gap-2${item.note ? " mb-3" : ""}`}>
         {item.chips.map((chip) => (
           <Link
             key={chip.label}
             href={chip.href}
-            className="whitespace-nowrap rounded-chip border-[1.5px] border-accent-a28 px-3.5 py-1.5 text-chip text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07"
+            className="whitespace-nowrap rounded-chip border-chip border-accent-a28 px-4 py-2 text-chip text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07"
           >
             {chip.label}
           </Link>
         ))}
       </div>
       {item.note ? (
-        <p className="border-l-2 border-accent pl-2.5 text-meta text-ink-a40">{item.note}</p>
+        <p className="border-l-2 border-accent pl-3 text-meta text-ink-a40">{item.note}</p>
       ) : null}
     </article>
   );

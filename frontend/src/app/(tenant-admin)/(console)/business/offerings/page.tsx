@@ -15,7 +15,7 @@ export default function OfferingsPage() {
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="What you offer" backHref="/business" />
-      <div className="min-h-0 flex-1 overflow-y-auto pb-20 lg:mx-auto lg:w-full lg:max-w-thread">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-16 lg:mx-auto lg:w-full lg:max-w-thread">
         <OfferingsList />
       </div>
     </main>

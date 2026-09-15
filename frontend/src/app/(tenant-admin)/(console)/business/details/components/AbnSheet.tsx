@@ -62,7 +62,7 @@ function AbnEditor({
   const digits = abn.replace(/\D/g, "");
 
   return (
-    <div className="flex flex-col gap-[18px] pb-2">
+    <div className="flex flex-col gap-4 pb-2">
       <label className="block">
         <span className="mb-2 block text-label font-medium uppercase text-ink-a40">ABN</span>
         <input
@@ -73,7 +73,7 @@ function AbnEditor({
           placeholder="XX XXX XXX XXX"
           autoFocus
           data-testid="abn-input"
-          className="w-full rounded-field border-chip border-border bg-surface px-[18px] py-3.5 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
+          className="w-full rounded-field border-chip border-border bg-surface px-4 py-4 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
         />
       </label>
 

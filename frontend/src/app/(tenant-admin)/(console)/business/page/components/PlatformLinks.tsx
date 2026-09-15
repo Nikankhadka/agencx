@@ -112,7 +112,7 @@ export function PlatformLinks({ links, onSaved }: PlatformLinksProps) {
                 // min-w-0 so a long label ("Google Business") wraps instead of
                 // forcing the tile wider than its quarter and pushing the row
                 // off the card - which it did at 390px.
-                "flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-field px-1 py-2.5",
+                "flex min-w-0 flex-1 flex-col items-center gap-2 rounded-field px-1 py-3",
                 "transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07",
                 saved || isEditing
                   ? "bg-surface"
@@ -145,7 +145,7 @@ export function PlatformLinks({ links, onSaved }: PlatformLinksProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="booking-link-open"
-                className="shrink-0 rounded-chip bg-brand px-3.5 py-2 text-chip font-medium text-text-inverse hover:brightness-95 active:brightness-90"
+                className="shrink-0 rounded-chip bg-brand px-4 py-2 text-chip font-medium text-text-inverse hover:brightness-95 active:brightness-90"
               >
                 Open
               </a>
@@ -155,7 +155,7 @@ export function PlatformLinks({ links, onSaved }: PlatformLinksProps) {
                 onClick={() => void confirmRemove(editing)}
                 aria-label="Remove this link"
                 data-testid="booking-link-remove"
-                className="shrink-0 rounded-chip border-[1.5px] border-border p-2 text-text-secondary transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
+                className="shrink-0 rounded-chip border-chip border-border p-2 text-text-secondary transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
               >
                 <Icon name="delete" size={16} />
               </button>
@@ -178,13 +178,13 @@ export function PlatformLinks({ links, onSaved }: PlatformLinksProps) {
               inputMode="url"
               aria-label="Link address"
               data-testid="booking-link-input"
-              className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3.5 py-2.5 text-body-sm text-text placeholder:text-ink-a40 outline-none focus-visible:border-text"
+              className="min-w-0 flex-1 rounded-field border border-border bg-surface px-4 py-3 text-body-sm text-text placeholder:text-ink-a40 outline-none focus-visible:border-text"
             />
             <button
               type="submit"
               disabled={busy || !draft.trim()}
               data-testid="booking-link-save"
-              className="shrink-0 rounded-chip bg-brand px-3.5 py-2 text-chip font-medium text-text-inverse hover:brightness-95 active:brightness-90 disabled:opacity-50"
+              className="shrink-0 rounded-chip bg-brand px-4 py-2 text-chip font-medium text-text-inverse hover:brightness-95 active:brightness-90 disabled:opacity-50"
             >
               Save
             </button>

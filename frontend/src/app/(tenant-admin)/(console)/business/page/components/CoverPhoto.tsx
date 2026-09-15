@@ -116,7 +116,7 @@ export function CoverPhoto({ hasCover, onChanged }: CoverPhotoProps) {
         disabled={busy}
         aria-label={hasCover ? "Change cover photo" : "Add a cover photo"}
         data-testid="booking-cover"
-        className="flex h-[200px] w-full flex-col items-center justify-center gap-2.5 overflow-hidden bg-accent-a09 transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
+        className="flex h-[200px] w-full flex-col items-center justify-center gap-3 overflow-hidden bg-accent-a09 transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
       >
         {hasCover && src ? (
           /* eslint-disable-next-line @next/next/no-img-element --
@@ -144,7 +144,7 @@ export function CoverPhoto({ hasCover, onChanged }: CoverPhotoProps) {
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-chip bg-scrim px-3 py-1.5 text-badge font-medium text-text-inverse transition-[filter] duration-(--duration-fast) hover:brightness-110 active:brightness-95"
+          className="absolute bottom-3 right-3 flex items-center gap-2 rounded-chip bg-scrim px-3 py-2 text-badge font-medium text-text-inverse transition-[filter] duration-(--duration-fast) hover:brightness-110 active:brightness-95"
         >
           <Icon name="edit" size={11} />
           {busy ? "Saving…" : "Edit photo"}

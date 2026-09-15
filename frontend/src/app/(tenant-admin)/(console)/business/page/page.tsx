@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
+import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
 import { apiFetch } from "@/lib/api";
 import type { BookingPage } from "@/lib/api-schemas";
@@ -84,8 +85,9 @@ export default function BusinessPageScreen() {
       <div className="min-h-0 flex-1 overflow-y-auto pb-thread-tail lg:mx-auto lg:w-full lg:max-w-thread">
         <CoverPhoto hasCover={page?.has_cover ?? false} onChanged={load} />
 
-        <div className="px-gutter pt-[18px]">
-          <h2 className="mb-1.5 text-display-sm font-bold tracking-[var(--text-display-sm-tracking)] text-text">
+        <Container>
+        <div className="pt-4">
+          <h2 className="mb-2 text-display-sm font-bold text-text">
             {page?.name ?? "Your business"}
           </h2>
           {/* Clamped: the prototype's subtitle is one tight line because Sababa's
@@ -116,7 +118,7 @@ export default function BusinessPageScreen() {
                 {page.offerings.map((offering) => (
                   <div
                     key={offering.name}
-                    className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
+                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
                   >
                     <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-accent-a09 text-accent-active">
                       {offering.media?.type === "image" ? (
@@ -139,7 +141,7 @@ export default function BusinessPageScreen() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-body-sm text-text">{offering.name}</span>
                       {offering.price_cents !== null || offering.category ? (
-                        <span className="mt-0.5 block truncate text-meta text-ink-a40 tabular-nums">
+                        <span className="mt-1 block truncate text-meta text-ink-a40 tabular-nums">
                           {offering.price_cents !== null
                             ? `$${(offering.price_cents / 100).toFixed(2)}`
                             : null}
@@ -160,7 +162,7 @@ export default function BusinessPageScreen() {
               href={publicUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 rounded-field border border-accent-a28 px-3 py-2 text-chip font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a09"
+              className="mt-4 inline-flex items-center gap-2 rounded-field border border-accent-a28 px-3 py-2 text-chip font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a09"
             >
               Preview your business page
               <Icon name="open_in_new" size={14} />
@@ -171,17 +173,17 @@ export default function BusinessPageScreen() {
         {/* `.bk-entry-wrap` - the tinted card holding the link and the tiles. */}
         <section
           data-testid="booking-links"
-          className="mx-gutter mt-3.5 rounded-card bg-accent-a06 p-4"
+          className="mt-4 rounded-card bg-accent-a06 p-4"
         >
           <h3 className="mb-1 text-chip font-medium text-accent-active">
             How customers reach you
           </h3>
-          <p className="mb-3.5 text-meta text-ink-a40">
+          <p className="mb-4 text-meta text-ink-a40">
             Share this link and anyone can ask you a question, any time.
           </p>
 
           {shown ? (
-            <div className="mb-3 flex items-center gap-3 rounded-field bg-surface px-3.5 py-2.5">
+            <div className="mb-3 flex items-center gap-3 rounded-field bg-surface px-4 py-3">
               <span
                 data-testid="booking-link"
                 className="min-w-0 flex-1 truncate text-body-sm text-text"
@@ -212,17 +214,18 @@ export default function BusinessPageScreen() {
           />
         </section>
 
-        <div className="px-gutter pt-5">
+        <div className="pt-5">
           <button
             type="button"
             onClick={share}
             data-testid="booking-share"
-            className="flex w-full items-center justify-center gap-1.5 rounded-field border-[1.5px] border-accent-a28 py-3 text-chip font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07"
+            className="flex w-full items-center justify-center gap-2 rounded-field border-chip border-accent-a28 py-3 text-chip font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07"
           >
             <Icon name="share" size={14} />
             Share
           </button>
         </div>
+        </Container>
       </div>
     </main>
   );

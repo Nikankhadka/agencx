@@ -4,6 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { CommandPill } from "@/components/ui/CommandPill";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
+import { Container } from "@/components/ui/Container";
 import { StructuredResponse } from "@/components/ui/StructuredResponse";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -112,21 +113,22 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
       <ScreenTopbar title={customerName} backHref="/chats" />
+      <Container className="flex min-h-0 flex-1 flex-col">
       <p
         data-testid="thread-status"
-        className={`px-5 pb-2 text-footnote ${takenOver ? "text-text-secondary" : "text-accent-active"}`}
+        className={`pb-2 text-footnote ${takenOver ? "text-text-secondary" : "text-accent-active"}`}
       >
         {stopped ? "Stopped" : takenOver ? "You're replying" : "Handling"}
       </p>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-5 pb-4">
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto pb-4">
         {detail?.messages.map((message) => (
           <div key={message.id} className="flex flex-col gap-1">
             <ChatBubble role={message.role as never} perspective="operator">
               {message.role === "system" ? (
                 // The prototype's `thr-pill`: a centred stamp with the time it
                 // happened, so the history says who was speaking and from when.
-                <span className="inline-block rounded-full bg-bubble-in px-3.5 py-1">
+                <span className="inline-block rounded-full bg-bubble-in px-3 py-1">
                   {message.content}
                   <span className="text-text-tertiary"> · {clockTime(message.created_at)}</span>
                 </span>
@@ -142,17 +144,17 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
         <div ref={bottomRef} />
       </div>
 
-      {error ? <p className="px-5 pb-2 text-footnote text-danger">{error}</p> : null}
+      {error ? <p className="pb-2 text-footnote text-danger">{error}</p> : null}
 
       {stopped ? null : (
-        <div className="shrink-0 border-t border-hairline px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-          <div className="mb-2.5 text-center">
+        <div className="shrink-0 border-t border-hairline pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          <div className="mb-3 text-center">
             <button
               type="button"
               disabled={working}
               data-testid={takenOver ? "hand-back" : "take-over"}
               onClick={() => void handleTakeover()}
-              className="inline-block rounded-full bg-accent-subtle px-3.5 py-1.5 text-chip font-medium text-accent-active transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90 disabled:opacity-50"
+              className="inline-block rounded-full bg-accent-subtle px-4 py-2 text-chip font-medium text-accent-active transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90 disabled:opacity-50"
             >
               {takenOver ? "Hand back to Agencx" : "Take over this conversation"}
             </button>
@@ -171,6 +173,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
           ) : null}
         </div>
       )}
+      </Container>
       {confirmDialog}
     </div>
   );
