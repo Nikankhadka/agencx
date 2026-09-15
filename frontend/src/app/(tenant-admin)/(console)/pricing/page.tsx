@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Container } from "@/components/ui/Container";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
@@ -111,7 +112,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <Container width="wide" className="flex flex-col gap-6 pt-6 pb-16">
       <div>
         <h1 className="text-title-2 font-semibold text-text">Pricing</h1>
         <p className="mt-1 text-body-sm text-text-secondary">
@@ -153,7 +154,7 @@ export default function PricingPage() {
               return (
                 <li
                   key={rule.id}
-                  className="rounded-card border border-border bg-surface p-4 shadow-card"
+                  className="rounded-card border border-hairline bg-surface p-4 shadow-card"
                 >
                   {editing && draft ? (
                     <div className="flex flex-col gap-3">
@@ -231,7 +232,7 @@ export default function PricingPage() {
                           </Badge>
                         </div>
                         <p className="mt-1 text-row-title font-medium text-text">{rule.label}</p>
-                        <p className="mt-0.5 text-body text-text">
+                        <p className="mt-1 text-body text-text">
                           <span className="tabular-nums">{formatCents(rule.unit_amount_cents)}</span>{" "}
                           <span className="text-text-tertiary">/ {rule.unit}</span>
                         </p>
@@ -278,7 +279,7 @@ export default function PricingPage() {
             {catalog.map((item) => (
               <li
                 key={item.id}
-                className="rounded-card border border-border bg-surface p-4 shadow-card"
+                className="rounded-card border border-hairline bg-surface p-4 shadow-card"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-row-title font-medium text-text">{item.name}</p>
@@ -297,6 +298,6 @@ export default function PricingPage() {
           </ul>
         )}
       </section>
-    </div>
+    </Container>
   );
 }

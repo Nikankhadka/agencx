@@ -71,7 +71,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
   const navContent = (
     <>
       <span className="px-3 py-2 text-title-3 font-semibold text-text">Agencx</span>
-      <ul className="mt-2 flex flex-col gap-0.5">
+        <ul className="mt-2 flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -97,7 +97,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
               className="flex items-center justify-between rounded-md px-3 py-2 text-body-sm font-medium text-text-secondary"
             >
               {label}
-              <span className="rounded-full bg-surface px-2 py-0.5 text-caption font-medium text-text-tertiary">
+              <span className="rounded-full bg-surface px-3 py-1 text-caption font-medium text-text-tertiary">
                 soon
               </span>
             </span>
@@ -137,7 +137,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
       </Drawer>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-bg">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface px-4 lg:hidden">
+        <header className="sticky top-0 z-30 flex h-topbar items-center gap-3 border-b border-border bg-surface px-gutter lg:hidden">
           <button
             type="button"
             onClick={() => setNavOpen(true)}
@@ -150,7 +150,7 @@ export default function PlatformConsoleLayout({ children }: { children: ReactNod
           </button>
           <span className="truncate text-title-3 font-semibold text-text">Agencx</span>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-gutter py-8">{children}</main>
       </div>
       {signOutDialog}
     </div>

@@ -3,7 +3,9 @@
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import { ChatBubble, type ChatRole } from "@/components/ui/ChatBubble";
+import { Container } from "@/components/ui/Container";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TraceTree, type TraceToolCall, type TraceCheckVerdict } from "@/components/ui/TraceTree";
 import { ApiError } from "@/lib/api";
@@ -62,16 +64,16 @@ export default function ConversationDetailPage() {
 
   if (isPending) {
     return (
-      <div className="flex flex-col gap-3 p-4 sm:p-6 lg:p-8">
+      <Container width="wide" className="flex flex-col gap-3 pt-6 pb-16">
         <div className="h-6 w-48 animate-pulse rounded bg-surface-sunken" />
         <div className="h-4 w-64 animate-pulse rounded bg-surface-sunken" />
-      </div>
+      </Container>
     );
   }
 
   if (notFound) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
+      <Container width="wide" className="pt-6 pb-16">
         <EmptyState
           title="Conversation not found"
           description="It may have been removed, or it belongs to a different business."
@@ -84,22 +86,22 @@ export default function ConversationDetailPage() {
             </Link>
           }
         />
-      </div>
+      </Container>
     );
   }
 
   if (error || !conversation) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
-        <div className="rounded-lg border border-border bg-surface p-6 text-body-sm text-danger">
+      <Container width="wide" className="pt-6 pb-16">
+        <Card padding="roomy" className="text-body-sm text-danger">
           {errorMessage(error, "Failed to load conversation") ?? "Failed to load conversation"}
-        </div>
-      </div>
+        </Card>
+      </Container>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <Container width="wide" className="flex flex-col gap-6 pt-6 pb-16">
       <div className="flex flex-col gap-2">
         <Link
           href="/conversations"
@@ -146,6 +148,6 @@ export default function ConversationDetailPage() {
           );
         })}
       </div>
-    </div>
+    </Container>
   );
 }
