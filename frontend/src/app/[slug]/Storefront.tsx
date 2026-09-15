@@ -3,6 +3,7 @@
 
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/ui/BrandMark";
+import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import type { StorefrontData } from "@/lib/tenant";
@@ -124,8 +125,8 @@ export function Storefront({
   return (
     <main className="min-h-dvh w-full bg-surface pb-8">
       <header className="sticky top-0 z-10 h-16 border-b border-hairline bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-gutter">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <Container width="wide" className="flex h-full items-center justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <BrandMark logoUrl={logoUrl} name={storefront.name} />
             <span className="truncate text-title-3 font-semibold text-text">{storefront.name}</span>
           </div>
@@ -149,10 +150,10 @@ export function Storefront({
               <Icon name="forum" size={20} />
             </button>
           </div>
-        </div>
+        </Container>
       </header>
 
-      <div className="mx-auto max-w-7xl md:px-gutter md:pt-6">
+      <div className="mx-auto max-w-5xl md:px-gutter md:pt-6">
         {storefront.has_cover ? (
           <img
             src={storefront.cover_url || `${API_URL}/api/public/tenant/${encodeURIComponent(slug)}/cover`}
@@ -162,7 +163,7 @@ export function Storefront({
           />
         ) : null}
 
-        <section className="px-gutter py-7 text-center md:px-0 md:py-9 md:text-left">
+        <section className="px-gutter py-8 text-center md:px-0 md:text-left">
           <h1 className="min-w-0 wrap-anywhere text-title-1 font-bold text-text">
             {storefront.name}
           </h1>
@@ -179,7 +180,7 @@ export function Storefront({
                   href={href}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-chip border border-border px-3 text-chip font-medium text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
+                  className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-chip border border-border px-3 text-chip font-medium text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
                 >
                   {linkLabel(key)}
                   <Icon name="open_in_new" size={13} />
@@ -209,7 +210,7 @@ export function Storefront({
             </nav>
           ) : null}
 
-          <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-4 lg:gap-10 lg:px-gutter">
+          <div className="mx-auto max-w-5xl lg:grid lg:grid-cols-4 lg:gap-8 lg:px-gutter">
             {sections.length > 1 ? (
               <aside className="hidden lg:col-span-1 lg:block">
                 <nav aria-label="Offer categories" className="sticky top-24 py-8">
@@ -235,7 +236,7 @@ export function Storefront({
                 <section
                   key={section.id}
                   id={section.id}
-                  className="scroll-mt-32 border-b border-hairline px-gutter py-7 last:border-b-0 lg:px-0 lg:py-8"
+                  className="scroll-mt-32 border-b border-hairline px-gutter py-8 last:border-b-0 lg:px-0"
                 >
                   <h2 className="text-title-2 font-semibold text-text">{section.label}</h2>
                   <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
@@ -257,7 +258,7 @@ export function Storefront({
                             </span>
                           ) : null}
                           {offering.description ? (
-                            <span className="mt-1.5 line-clamp-3 text-body-sm text-text-secondary">
+                            <span className="mt-2 line-clamp-3 text-body-sm text-text-secondary">
                               {offering.description}
                             </span>
                           ) : null}
@@ -298,7 +299,7 @@ export function Storefront({
         </div>
       ) : null}
 
-      <footer className="mx-auto flex max-w-7xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
+      <footer className="mx-auto flex w-full max-w-5xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
         <span className="font-medium text-text">Agencx</span>
         <span>Powered by Agencx</span>
       </footer>
