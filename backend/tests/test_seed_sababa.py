@@ -94,15 +94,15 @@ async def test_seed_pre_onboards_the_tenant(
     tenant_id = await seed(embedder=ZeroEmbedder())
 
     row = await superuser_conn.fetchrow(
-        "select t.business_name, c.system_prompt, c.config "
+        "select t.business_name, c.config "
         "from tenants t join tenant_config c on c.tenant_id = t.id where t.id = $1",
         tenant_id,
     )
     assert row is not None
     assert row["business_name"] == TENANT_NAME
-    assert TENANT_NAME in row["system_prompt"]
 
     config = json.loads(row["config"])
+    assert config["customer_voice"] == {"preset": "warm_casual", "custom_style": None}
     assert config["onboarding"]["completed"] is True
     assert config["onboarding"]["version"] == 4
     assert config["onboarding"]["draft"] == SABABA_PROFILE

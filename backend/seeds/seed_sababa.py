@@ -176,7 +176,6 @@ async def _seed_core(tenant_id: UUID) -> None:
         tenant_id=tenant_id,
         slug=SLUG,
         name=TENANT_NAME,
-        tone="friendly",
         # Third vertical, same code: the restaurant takes the lean column
         # default (search + escalate) like lumident, so enabled_tools stays
         # unwritten here - only bytefix opts into the commerce tools (D-2).
