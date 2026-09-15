@@ -686,17 +686,6 @@ async def test_full_flow_confirm_writes_profile(
     assert confirm.status_code == 200
     assert confirm.json() == {"tenant_id": str(tenant_id), "slug": "bytefix-repairs"}
 
-    config_row = await superuser_conn.fetchrow(
-        "select system_prompt, tone from tenant_config where tenant_id = $1",
-        tenant_id,
-    )
-    assert config_row is not None
-    # The identity sentence carries both the name and the captured type.
-    assert "Bytefix Repairs" in config_row["system_prompt"]
-    assert "phone repair shop" in config_row["system_prompt"]
-    # O-1 no longer sets these from the interview - they keep schema defaults.
-    assert config_row["tone"] == "friendly"
-
     tenant_row = await superuser_conn.fetchrow(
         "select business_name, slug from tenants where id = $1", tenant_id
     )

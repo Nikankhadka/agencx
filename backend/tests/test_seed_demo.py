@@ -127,7 +127,7 @@ async def test_both_tenants_exist_with_data(
         assert row["business_name"] == row["name"]  # pre-onboarded, not NULL
 
         config_row = await superuser_conn.fetchrow(
-            "select system_prompt, config from tenant_config where tenant_id = $1",
+            "select config from tenant_config where tenant_id = $1",
             tenant_id,
         )
         assert config_row is not None  # tenant_config row exists
@@ -135,7 +135,7 @@ async def test_both_tenants_exist_with_data(
 
         # Pre-onboarded: the demo world skips the interview, so the seed writes
         # the same end-state a real confirm leaves behind.
-        assert row["name"] in config_row["system_prompt"]
+        assert config["customer_voice"] == {"preset": "warm_casual", "custom_style": None}
         assert config["onboarding"]["completed"] is True
         assert config["onboarding"]["version"] == 4
         assert config["onboarding"]["draft"] == profile

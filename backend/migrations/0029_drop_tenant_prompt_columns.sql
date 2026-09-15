@@ -1,0 +1,22 @@
+-- 0029_drop_tenant_prompt_columns.sql - W-10: drop the retired tenant prompt
+-- columns.
+--
+-- tenant_config.system_prompt was one line of free tenant prose interpolated
+-- straight into a customer-facing prompt, and .tone was the same shape at
+-- smaller stakes. W-9 replaced both with the code-owned contract
+-- (app/agents/contract.py) plus the structured config->customer_voice that
+-- 0027 back-filled, and left the columns in place so the forward-compatible
+-- code could be verified in production first. That verification is done: W-9
+-- is live, has served real customer turns, and every tenant_config row carries
+-- config->customer_voice.
+--
+-- Two statements, no backfill and no data movement. Both columns are
+-- `not null default` ('' and 'friendly'), so no constraint, index, policy or
+-- grant references either one and the drop needs no companion change - the
+-- same shape as 0025 dropping tenant_config.escalation_threshold after its
+-- reader had gone.
+--
+-- This is destructive and a re-run cannot undo it. The prose in these columns
+-- is recoverable only from a database backup.
+alter table tenant_config drop column system_prompt;
+alter table tenant_config drop column tone;
