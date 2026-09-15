@@ -16,7 +16,7 @@ export interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>,
 
 const BASE = [
   "inline-flex min-h-11 items-center justify-center gap-2",
-  "rounded-chip border-[length:var(--border-chip)] border-accent-a28",
+  "rounded-chip border-chip border-accent-a28",
   "text-chip font-medium transition-colors duration-(--duration-fast) select-none",
   "active:bg-accent-a07",
 ].join(" ");

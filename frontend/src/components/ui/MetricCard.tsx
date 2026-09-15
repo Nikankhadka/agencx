@@ -29,7 +29,7 @@ export interface MetricCardProps {
  */
 export function MetricCard({ label, value, loading, error, icon, trend, footer }: MetricCardProps) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 shadow-1 transition-shadow hover:shadow-2">
+    <div className="rounded-lg border border-border bg-surface p-6 shadow-card transition-shadow hover:shadow-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-body-sm font-medium text-text-secondary">{label}</p>
         {icon ? (

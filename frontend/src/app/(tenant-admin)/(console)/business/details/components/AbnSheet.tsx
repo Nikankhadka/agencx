@@ -64,7 +64,7 @@ function AbnEditor({
   return (
     <div className="flex flex-col gap-[18px] pb-2">
       <label className="block">
-        <span className="mb-2 block text-field-label font-medium uppercase text-ink-a40">ABN</span>
+        <span className="mb-2 block text-label font-medium uppercase text-ink-a40">ABN</span>
         <input
           value={abn}
           onChange={(event) => setAbn(formatAbn(event.target.value))}
@@ -73,7 +73,7 @@ function AbnEditor({
           placeholder="XX XXX XXX XXX"
           autoFocus
           data-testid="abn-input"
-          className="w-full rounded-field border-[length:var(--border-chip)] border-border bg-surface px-[18px] py-3.5 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
+          className="w-full rounded-field border-chip border-border bg-surface px-[18px] py-3.5 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
         />
       </label>
 
@@ -81,7 +81,7 @@ function AbnEditor({
           interview's GST beat carries, so the two never disagree. */}
       {digits.length > 0 ? (
         <div>
-          <span className="mb-2 block text-field-label font-medium uppercase text-ink-a40">
+          <span className="mb-2 block text-label font-medium uppercase text-ink-a40">
             GST registered
           </span>
           <div className="flex gap-2">

@@ -116,16 +116,16 @@ export function PlatformLinks({ links, onSaved }: PlatformLinksProps) {
                 "transition-colors duration-(--duration-fast) hover:bg-accent-a07 active:bg-accent-a07",
                 saved || isEditing
                   ? "bg-surface"
-                  : "border border-dashed border-accent-a20 bg-transparent",
+                  : "border border-dashed border-border bg-transparent",
               ].join(" ")}
             >
               <span aria-hidden="true" className="text-body-lg leading-none">
                 {platform.glyph}
               </span>
-              <span className="w-full text-center text-eyebrow text-ink-a40">
+              <span className="w-full text-center text-meta text-ink-a40">
                 {platform.label}
               </span>
-              <span className="text-center text-eyebrow text-accent-active">
+              <span className="text-center text-meta text-accent-active">
                 {saved ? "Open" : "Add"}
               </span>
             </button>

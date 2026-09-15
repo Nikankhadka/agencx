@@ -301,18 +301,18 @@ export function OfferingsList() {
             onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
             className="mt-2"
           >
-            <summary className="cursor-pointer text-field-label font-medium uppercase text-ink-a40 transition-colors duration-(--duration-fast) hover:text-text active:opacity-60">
+            <summary className="cursor-pointer text-label font-medium uppercase text-ink-a40 transition-colors duration-(--duration-fast) hover:text-text active:opacity-60">
               Add details
             </summary>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
+            <label className="mt-3 block text-label font-medium uppercase text-ink-a40">
               Category <span className="normal-case">(optional)</span>
               <input data-testid="offering-category" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
             </label>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
+            <label className="mt-3 block text-label font-medium uppercase text-ink-a40">
               Image or video URL <span className="normal-case">(optional)</span>
               <input data-testid="offering-media-url" type="url" value={form.mediaUrl} onChange={(event) => setForm((current) => ({ ...current, mediaUrl: event.target.value, mediaChanged: true, removeMedia: false }))} className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
             </label>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
+            <label className="mt-3 block text-label font-medium uppercase text-ink-a40">
               Upload media <span className="normal-case">(optional)</span>
               <input type="file" accept="image/*,video/*" onChange={(event) => setForm((current) => ({ ...current, mediaFile: event.target.files?.[0] ?? null, mediaUrl: "", mediaChanged: true, removeMedia: false }))} className="mt-1.5 block w-full text-meta text-ink-a40" />
             </label>

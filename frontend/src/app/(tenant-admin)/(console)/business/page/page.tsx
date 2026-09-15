@@ -102,7 +102,7 @@ export default function BusinessPageScreen() {
               className="mt-5 rounded-card bg-accent-a06 p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-eyebrow font-medium uppercase text-ink-a40">
+                <h3 className="text-label font-medium uppercase text-ink-a40">
                   What we offer
                 </h3>
                 <Link

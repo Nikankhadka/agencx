@@ -12,7 +12,7 @@ import { PUBLIC_CONFIG_GLOBAL, serverPublicConfig } from "@/lib/public-config";
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-jakarta",
-  weight: ["400", "500", "700"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 

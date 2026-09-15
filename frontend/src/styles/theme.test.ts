@@ -83,7 +83,7 @@ const APPROVED: Record<string, string> = {
   "color-success": "#007A04",
   "color-success-subtle": "#E6F5E7",
   "color-warning": "#8A5A00",
-  "color-warning-subtle": "#FFF3D6",
+  "color-warning-subtle": "#FDF4E3",
   "color-danger": "#C13515",
   "color-danger-subtle": "#FDEDEA",
   "color-info": "#007A7F",

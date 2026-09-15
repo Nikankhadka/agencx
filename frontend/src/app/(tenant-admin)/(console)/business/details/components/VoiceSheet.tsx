@@ -87,7 +87,7 @@ function VoiceEditor({
   return (
     <div className="flex flex-col gap-[18px] pb-2">
       <div>
-        <span className="mb-2 block text-field-label font-medium uppercase text-ink-a40">Voice</span>
+        <span className="mb-2 block text-label font-medium uppercase text-ink-a40">Voice</span>
         <div className="flex flex-wrap gap-2">
           {VOICES.map((voice) => (
             <Chip
@@ -108,7 +108,7 @@ function VoiceEditor({
 
       {preset === CUSTOM ? (
         <label className="block">
-          <span className="mb-2 block text-field-label font-medium uppercase text-ink-a40">
+          <span className="mb-2 block text-label font-medium uppercase text-ink-a40">
             In your own words
           </span>
           <textarea
@@ -122,7 +122,7 @@ function VoiceEditor({
             placeholder="Calm and reassuring, never pushy."
             autoFocus
             data-testid="voice-style"
-            className="w-full resize-none rounded-field border-[length:var(--border-chip)] border-border bg-surface px-[18px] py-3.5 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
+            className="w-full resize-none rounded-field border-chip border-border bg-surface px-[18px] py-3.5 text-field text-text outline-none transition-colors duration-(--duration-fast) placeholder:text-ink-a40 focus:border-text"
           />
           <span className="mt-2 block text-meta text-ink-a40">
             {style.length}/{CUSTOM_VOICE_MAX} characters. It changes wording only, never a price, a

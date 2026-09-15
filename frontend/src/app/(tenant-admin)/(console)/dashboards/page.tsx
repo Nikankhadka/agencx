@@ -88,7 +88,7 @@ function titleCase(runType: string): string {
 
 function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 shadow-1">
+    <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 shadow-card">
       <p className="text-body-sm text-danger">{message}</p>
       <Button size="sm" variant="secondary" onClick={onRetry}>
         Retry
@@ -233,7 +233,7 @@ export default function DashboardsPage() {
         ) : evalsLoading && !evals ? (
           <div className="h-32 animate-pulse rounded-lg border border-border bg-surface-sunken" />
         ) : evals && evals.runs.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface shadow-1">
+          <div className="rounded-lg border border-border bg-surface shadow-card">
             <EmptyState
               icon="verified_user"
               title="No eval runs recorded for this tenant yet"
@@ -245,7 +245,7 @@ export default function DashboardsPage() {
             {evals?.runs.map((run) => (
               <div
                 key={run.run_type}
-                className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6 shadow-1"
+                className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6 shadow-card"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
