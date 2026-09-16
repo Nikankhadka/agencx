@@ -17,7 +17,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: "text-body-sm px-3 py-1.5 gap-1.5 min-h-[34px]",
+  sm: "text-body-sm px-3 py-2 gap-2 min-h-9",
   md: "text-body px-4 py-2 gap-2 min-h-11",
 };
 

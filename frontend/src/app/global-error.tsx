@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
 // global-error replaces the root layout when the root itself throws, so it must
 // bring its own <html>/<body>, styles, and font. It cannot render the shared
 // ErrorRecovery component's Button reliably (that assumes the app shell), so it
 // inlines a minimal, token-styled recovery UI.
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
 
 export default function GlobalError({
   error,
@@ -22,7 +27,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" className={`h-full antialiased ${inter.variable}`}>
+    <html lang="en" className={`h-full antialiased ${jakarta.variable}`}>
       <body className="min-h-full flex flex-col">
         <main
           role="alert"

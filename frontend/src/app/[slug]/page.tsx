@@ -5,6 +5,7 @@ import {
   resolveTenantBySlug,
 } from "@/lib/tenant";
 import { BrandMark } from "@/components/ui/BrandMark";
+import { Container } from "@/components/ui/Container";
 import { CustomerChat } from "./CustomerChat";
 import { Storefront } from "./Storefront";
 
@@ -38,11 +39,13 @@ export default async function CustomerHome({
 
   if (tenant.status === "suspended") {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center sm:px-8">
-        <h1 className="text-title-2 font-semibold text-text">{displayName}</h1>
-        <p className="text-body text-text-secondary">
-          This page is currently unavailable.
-        </p>
+      <main className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+        <Container>
+          <h1 className="text-title-2 font-semibold text-text">{displayName}</h1>
+          <p className="text-body text-text-secondary">
+            This page is currently unavailable.
+          </p>
+        </Container>
       </main>
     );
   }
@@ -53,8 +56,9 @@ export default async function CustomerHome({
   // rather than rendering an empty page.
   if (!storefront) {
     return (
-      <main className="mx-auto flex h-dvh w-full max-w-[720px] flex-col">
-        <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
+      <main className="flex h-dvh w-full flex-col">
+        <Container className="flex h-dvh flex-col">
+        <header className="flex items-center gap-3 border-b border-border py-4">
           <BrandMark logoUrl={logoUrl} name={displayName} />
           <h1 className="text-title-3 font-semibold text-text">{displayName}</h1>
         </header>
@@ -64,6 +68,7 @@ export default async function CustomerHome({
           greeting={greeting}
           starterQuestions={starterQuestions}
         />
+        </Container>
       </main>
     );
   }

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 /**
  * Three pulsing dots inside the assistant bubble while a turn is pending.
- * 7px accent dots, 5px gap, 1.3s ease-in-out loop, 220ms stagger, -2.5px travel
+ * 7px accent dots, 4px gap, 1.3s ease-in-out loop, 220ms stagger, -2.5px travel
  * (keyframe `thinking-dot` in globals.css). Decorative only (aria-hidden);
  * the global prefers-reduced-motion guard zeroes the animation.
  *
@@ -27,7 +27,7 @@ export function ThinkingDots({ className = "" }: { className?: string }) {
       // (W-3) and inside StreamingText's span. A block-level flex box would
       // break that line. Inside a flex parent (TypingLine) the two compute
       // identically, so nothing else moves.
-      className={`inline-flex items-center gap-[5px] align-middle ${className}`}
+      className={`inline-flex items-center gap-1 align-middle ${className}`}
     >
       <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("0ms")} />
       <span className="h-[7px] w-[7px] rounded-full bg-accent" style={dotStyle("220ms")} />

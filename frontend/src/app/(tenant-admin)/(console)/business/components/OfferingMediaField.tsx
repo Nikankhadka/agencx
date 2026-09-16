@@ -95,7 +95,7 @@ export function OfferingMediaField({
 
   return (
     <div className="mt-3">
-      <label className="block text-field-label font-medium uppercase text-ink-a40">
+      <label className="block text-label font-medium uppercase text-ink-a40">
         Image or video URL <span className="normal-case">(optional)</span>
         <input
           data-testid="offering-media-url"
@@ -103,18 +103,18 @@ export function OfferingMediaField({
           value={mediaUrl}
           disabled={working || hasPending}
           onChange={(event) => handleUrl(event.target.value)}
-          className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text disabled:opacity-50"
+          className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text disabled:opacity-50"
         />
       </label>
       {hasPending ? (
-        <p className="mt-1.5 text-meta text-ink-a40">
+        <p className="mt-2 text-meta text-ink-a40">
           File selected - remove it to use a URL instead.
         </p>
       ) : null}
       <div className="mt-3">
         <span
           id="offering-media-label"
-          className="block text-field-label font-medium uppercase text-ink-a40"
+          className="block text-label font-medium uppercase text-ink-a40"
         >
           Upload media <span className="normal-case">(optional)</span>
         </span>
@@ -122,7 +122,7 @@ export function OfferingMediaField({
           <div
             role="status"
             data-testid="offering-media-preview"
-            className="mt-1.5 flex items-center gap-3 rounded-field border border-border bg-surface-sunken px-3 py-2"
+            className="mt-2 flex items-center gap-3 rounded-field border border-border bg-surface-sunken px-3 py-2"
           >
             {isVideo ? (
               <video
@@ -156,7 +156,7 @@ export function OfferingMediaField({
               >
                 {mediaFile.name}
               </span>
-              <span className="mt-0.5 block text-meta text-ink-a40">
+              <span className="mt-1 block text-meta text-ink-a40">
                 {formatSize(mediaFile.size)} - Ready to save
               </span>
             </span>
@@ -191,13 +191,13 @@ export function OfferingMediaField({
             onClick={() => fileRef.current?.click()}
             data-testid="offering-media-upload"
             aria-label="Upload media"
-            className="mt-1.5"
+            className="mt-2"
           >
             <Icon name="photo_camera" size={16} />
           </Button>
         )}
         {removeMedia ? (
-          <p className="mt-1.5 text-meta text-ink-a40">
+          <p className="mt-2 text-meta text-ink-a40">
             Current media will be removed when you save.
           </p>
         ) : hasUrl && !hasPending ? (
@@ -206,7 +206,7 @@ export function OfferingMediaField({
             onClick={onRemoveSaved}
             disabled={working}
             data-testid="offering-media-remove"
-            className="mt-1.5 block text-action font-medium text-danger transition-colors duration-(--duration-fast) hover:underline active:opacity-60 disabled:opacity-50"
+            className="mt-2 block text-action font-medium text-danger transition-colors duration-(--duration-fast) hover:underline active:opacity-60 disabled:opacity-50"
           >
             Remove current media
           </button>

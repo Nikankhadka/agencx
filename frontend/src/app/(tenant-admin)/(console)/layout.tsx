@@ -112,11 +112,11 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         aria-label="Console"
         className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-sunken p-4 lg:flex"
       >
-        <span className="flex items-center gap-2.5 px-3 py-2">
+        <span className="flex items-center gap-3 px-3 py-2">
           <BrandMark logoUrl={logoUrl} name={displayName} />
           <span className="truncate text-title-3 font-semibold text-text">{displayName}</span>
         </span>
-        <ul className="mt-2 flex flex-col gap-0.5">
+        <ul className="mt-2 flex flex-col gap-1">
           {items.map((item) => {
             const active = isTabActive(item, pathname);
             return (
@@ -135,7 +135,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
                   {item.count ? (
                     <span
                       aria-hidden="true"
-                      className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-0.5 text-badge font-semibold text-text"
+                      className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-1 text-badge font-semibold text-text"
                     >
                       {item.count > 9 ? "9+" : item.count}
                     </span>

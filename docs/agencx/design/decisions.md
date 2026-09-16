@@ -772,3 +772,50 @@ gradient-stop check, usage moved at component level (primary Button gradient,
 accent chips and text actions, neutral chrome, Airbnb form fields), the
 storefront e2e accent pin updated to Rausch, and the v6 prototype recolored in
 place. `docs/agencx/progress.md` records the rollout.
+
+**Update 2026-09-15 (D27):** `--color-accent-a20` is now deleted, with both of
+its consumers moved to neutral borders. The warning wash is the founder-set
+`#FDF4E3`.
+
+## D27: Canonical spacing and typography scale
+
+**Date:** 2026-09-15 (founder ruling, rolled out on
+`feat/design-system-consistency`). **Status:** accepted.
+
+**Decision:** `docs/agencx/design/tokens.md` is the single rhythm authority
+for spacing, typography, and layout recipes. The allowed spacing steps are
+`0 1 2 3 4 5 6 8 12 16 24` (0/4/8/12/16/20/24/32/48/64/96 px); the page gutter
+is 24px at every breakpoint; there is one uppercase label role (`text-label`
+11/11); page, card, row, and control geometry follow the recipes the tokens
+file gives. Where the v6 prototype and the tokens file disagree, the tokens
+file wins. The prototype's values survive only as the tokenized geometry the
+tokens file names as exceptions (thread gaps, topbar/tabbar/icon/send/code-cell
+sizes, radii, shadows, safe-area expressions) - anything not on that list is
+not an exception. Plus Jakarta Sans loads 400/500/600/700. The warning pair is
+`#8A5A00` on `#FDF4E3`, set by the founder. `check-tokens.mjs` fails the build
+on any off-scale spacing or arbitrary px text value, with no file allowlist.
+
+**Why:** the audit found roughly a hundred off-scale numeric spacings and
+thirty arbitrary-px values across 45 files, plus dead and duplicated type
+tokens, a missing 600 weight that left every semibold one weight off, and a
+component table describing a `Card` and a `Textarea` that do not exist. The
+prototype is trusted for structure, states, and interaction vocabulary - but
+its off-grid values were never a scale, and matching them file by file is what
+produced the drift. One scale, one label role, two primitives (`Card`,
+`Container`), and a guard that fails the build is cheaper than a third audit.
+
+**Boundary:** no color, copy, flow, or state changes. The named visual shifts
+are small and listed in `design/tokens.md` so nobody reverts them as drift:
+bubble text 14/20 to 15/21, card padding to 16/24, chats and Wren-era pages
+centered at 1024/640 on desktop, admin gutter 32 to 24, sheet radius 28 to 24,
+tab gap 3 to 4, scroll tails 80 to 64. The v6 prototype file itself is
+untouched - D26's color-only exception stands, and the prototype keeps its
+off-grid values as the record of what was.
+
+**Provenance.** Rolled out on `feat/design-system-consistency`: new
+`design/tokens.md`, `frontend.md` section 4 reduced to a summary with a
+pointer, type tokens renamed and retired with all consumers migrated in the
+same commits, `Card` and `Container` primitives added with the duplicated
+recipes migrated onto them, the warning wash re-pointed to `#FDF4E3`, and the
+token guard extended to spacing and type. `docs/agencx/progress.md` records
+the rollout.

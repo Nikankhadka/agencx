@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
 import { CodeInput } from "@/components/ui/CodeInput";
 import { CommandPill } from "@/components/ui/CommandPill";
+import { Container } from "@/components/ui/Container";
 import {
   AgentLine,
   LedeMessage,
@@ -234,8 +235,8 @@ export default function LoginPage() {
         ) : null}
       </Thread>
 
-      <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-        <div className="mx-auto flex w-full max-w-thread flex-col gap-3">
+      <div className="relative z-[1] shrink-0 px-gutter pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <Container className="flex flex-col gap-3">
           {phase === "email" ? (
             <CommandPill
               variant="field"
@@ -284,7 +285,7 @@ export default function LoginPage() {
           <p role="status" className="min-h-4 text-center text-meta text-text-secondary">
             {status ?? ""}
           </p>
-        </div>
+        </Container>
       </div>
     </main>
   );

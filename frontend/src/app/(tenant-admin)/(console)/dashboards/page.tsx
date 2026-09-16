@@ -2,6 +2,8 @@
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Container } from "@/components/ui/Container";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -88,12 +90,12 @@ function titleCase(runType: string): string {
 
 function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 shadow-1">
+    <Card padding="roomy" className="flex flex-col items-start gap-3 shadow-card">
       <p className="text-body-sm text-danger">{message}</p>
       <Button size="sm" variant="secondary" onClick={onRetry}>
         Retry
       </Button>
-    </div>
+    </Card>
   );
 }
 
@@ -120,7 +122,7 @@ export default function DashboardsPage() {
     : 0;
 
   return (
-    <div className="flex flex-col gap-8 p-4 sm:p-8">
+    <Container width="wide" className="flex flex-col gap-8 pt-6 pb-16">
       <div>
         <h1 className="text-title-2 font-semibold text-text">Dashboards</h1>
         <p className="mt-1 text-body-sm text-text-secondary">
@@ -233,19 +235,20 @@ export default function DashboardsPage() {
         ) : evalsLoading && !evals ? (
           <div className="h-32 animate-pulse rounded-lg border border-border bg-surface-sunken" />
         ) : evals && evals.runs.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface shadow-1">
+          <Card padding="none">
             <EmptyState
               icon="verified_user"
               title="No eval runs recorded for this tenant yet"
               description="Evals run in CI against seeded test tenants, so a fresh business normally has none."
             />
-          </div>
+          </Card>
         ) : (
           <div className="flex flex-col gap-4">
             {evals?.runs.map((run) => (
-              <div
+              <Card
                 key={run.run_type}
-                className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6 shadow-1"
+                padding="roomy"
+                className="flex flex-col gap-3 shadow-card"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -264,7 +267,7 @@ export default function DashboardsPage() {
                   {run.checks.map((check) => (
                     <span
                       key={check.metric}
-                      className={`inline-flex items-center rounded-md px-2.5 py-1 text-footnote font-medium ${
+                      className={`inline-flex items-center rounded-md px-3 py-1 text-footnote font-medium ${
                         check.value === null
                           ? "bg-danger-subtle text-danger"
                           : check.passed
@@ -280,11 +283,11 @@ export default function DashboardsPage() {
                   ))}
                 </div>
                 <p className="font-mono text-footnote text-text-tertiary">{run.git_sha}</p>
-              </div>
+              </Card>
             ))}
           </div>
         )}
       </section>
-    </div>
+    </Container>
   );
 }

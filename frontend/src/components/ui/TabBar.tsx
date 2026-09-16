@@ -80,7 +80,7 @@ export function TabBar({ items, pathname }: { items: TabItem[]; pathname: string
             aria-current={active ? "page" : undefined}
             aria-label={item.count ? `${item.label}, ${item.count} waiting` : undefined}
             className={[
-              "mx-tab-inset-x my-tab-inset flex h-tab flex-1 flex-col items-center justify-center gap-[3px] rounded-tab transition-colors duration-(--duration-fast)",
+              "mx-tab-inset-x my-tab-inset flex h-tab flex-1 flex-col items-center justify-center gap-1 rounded-tab transition-colors duration-(--duration-fast)",
               navTone(active, "text-ink-a40"),
             ].join(" ")}
           >
@@ -89,7 +89,7 @@ export function TabBar({ items, pathname }: { items: TabItem[]; pathname: string
               {item.count ? (
                 <span
                   aria-hidden="true"
-                  className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-0.5 text-badge font-semibold text-text"
+                  className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-highlight px-1 text-badge font-semibold text-text"
                 >
                   {item.count > 9 ? "9+" : item.count}
                 </span>

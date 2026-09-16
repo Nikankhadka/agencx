@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
+import { Container } from "@/components/ui/Container";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Select } from "@/components/ui/Select";
@@ -82,7 +83,8 @@ export default function KnowledgePage() {
   ];
 
   return (
-    <main className="flex flex-col gap-6 p-8">
+    <main>
+      <Container width="wide" className="flex flex-col gap-6 pt-6 pb-16">
       <div>
         <h1 className="text-title-2 font-semibold text-text">Knowledge</h1>
         <p className="mt-1 text-body-sm text-text-secondary">
@@ -132,6 +134,7 @@ export default function KnowledgePage() {
           />
         }
       />
+      </Container>
     </main>
   );
 }

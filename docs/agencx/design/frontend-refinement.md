@@ -11,6 +11,11 @@ ported from the prototype, never designed from ticket text; take behaviour,
 never strings; every visual value lands in `theme.css` as a token, never a hex
 in a component.
 
+> **Provenance (2026-09-15):** the v7 prototype was never built -
+> `prototypes/agencx-prototype-v7.html` does not exist. The shipped refinement
+> was implemented against v6 plus `frontend.md` plus `design/tokens.md`. This
+> file is design intent, not pixel authority.
+
 ## 1. How this document is used
 
 The v7 prototype is

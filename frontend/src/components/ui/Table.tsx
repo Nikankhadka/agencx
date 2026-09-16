@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Card } from "./Card";
 
 export interface TableColumn<T> {
   key: string;
@@ -56,9 +57,9 @@ export function Table<T>({
 }: TableProps<T>) {
   if (error) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-6 text-body-sm text-danger">
+      <Card padding="roomy" className="text-body-sm text-danger">
         {error}
-      </div>
+      </Card>
     );
   }
 
@@ -69,7 +70,10 @@ export function Table<T>({
   return (
     <>
       {/* md+: real table */}
-      <div className={`${card ? "hidden md:block" : ""} overflow-x-auto rounded-lg border border-border bg-surface`}>
+      <Card
+        padding="none"
+        className={`${card ? "hidden md:block" : ""} overflow-x-auto`}
+      >
         <table className="w-full text-body-sm">
           <thead className="sticky top-0 bg-surface-sunken">
             <tr>
@@ -113,7 +117,7 @@ export function Table<T>({
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {/* below md: stacked cards (only when the card variant is on) */}
       {card ? (
@@ -121,13 +125,13 @@ export function Table<T>({
           {loading ? (
             skeletonBlocks(3, 2)
           ) : rows.length === 0 ? (
-            <li className="rounded-card border border-border bg-surface p-4">{emptyState}</li>
+            <li className="rounded-card border border-hairline bg-surface p-4">{emptyState}</li>
           ) : (
             rows.map((row) => (
               <li
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`rounded-card border border-border bg-surface p-4 shadow-card ${
+                className={`rounded-card border border-hairline bg-surface p-4 shadow-card ${
                   onRowClick ? "cursor-pointer" : ""
                 }`}
               >
@@ -135,7 +139,7 @@ export function Table<T>({
                   column.header ? (
                     <div
                       key={column.key}
-                      className="flex items-start justify-between gap-4 py-1.5"
+                      className="flex items-start justify-between gap-4 py-2"
                     >
                       <span className="shrink-0 text-footnote text-text-tertiary">
                         {column.header}

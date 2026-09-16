@@ -16,15 +16,15 @@ export interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>,
 
 const BASE = [
   "inline-flex min-h-11 items-center justify-center gap-2",
-  "rounded-chip border-[length:var(--border-chip)] border-accent-a28",
+  "rounded-chip border-chip border-accent-a28",
   "text-chip font-medium transition-colors duration-(--duration-fast) select-none",
   "active:bg-accent-a07",
 ].join(" ");
 
 const VARIANT_CLASSES = {
-  solid: "text-accent-active px-[14px] hover:bg-accent-a07",
+  solid: "text-accent-active px-4 hover:bg-accent-a07",
   dashed: "border-dashed text-accent-active px-4 hover:bg-accent-a07",
-  sent: "pointer-events-none border-accent-a16 text-ink-a40 px-[14px]",
+  sent: "pointer-events-none border-accent-a16 text-ink-a40 px-4",
 } as const;
 
 /**

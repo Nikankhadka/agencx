@@ -218,12 +218,12 @@ export function OfferingsList() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-card-hl font-medium text-text">{offering.name}</span>
                 {offering.description ? (
-                  <span className="mt-0.5 block truncate text-meta text-ink-a40">
+                  <span className="mt-1 block truncate text-meta text-ink-a40">
                     {offering.description}
                   </span>
                 ) : null}
                 {offering.price_cents !== null ? (
-                  <span className="mt-0.5 block text-meta text-ink-a40">
+                  <span className="mt-1 block text-meta text-ink-a40">
                     ${(offering.price_cents / 100).toFixed(2)}
                   </span>
                 ) : null}
@@ -302,12 +302,12 @@ export function OfferingsList() {
             onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
             className="mt-2"
           >
-            <summary className="cursor-pointer text-field-label font-medium uppercase text-ink-a40 transition-colors duration-(--duration-fast) hover:text-text active:opacity-60">
+            <summary className="cursor-pointer text-label font-medium uppercase text-ink-a40 transition-colors duration-(--duration-fast) hover:text-text active:opacity-60">
               Add details
             </summary>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
+            <label className="mt-3 block text-label font-medium uppercase text-ink-a40">
               Category <span className="normal-case">(optional)</span>
-              <input data-testid="offering-category" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
+              <input data-testid="offering-category" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
             </label>
             <OfferingMediaField
               mediaUrl={form.mediaUrl}

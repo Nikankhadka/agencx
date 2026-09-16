@@ -124,7 +124,7 @@ export function CodeInput({ value, onChange, onComplete, disabled, resetSignal }
               autoFocus={index === 0}
               className={[
                 "peer h-code-cell-h w-code-cell-w rounded-md text-center text-title-2 font-medium text-text",
-                "border-[length:var(--border-chip)] outline-none",
+                "border-chip outline-none",
                 "transition-colors duration-(--duration-fast) ease-out disabled:opacity-50",
                 "focus:border-accent focus:bg-surface",
                 filled ? "border-accent-a45 bg-surface" : "border-accent-a16 bg-surface-sunken",

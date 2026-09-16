@@ -97,7 +97,7 @@ export function Modal({ open, onClose, title, children, layer = "base" }: ModalP
         aria-labelledby={titleId}
         tabIndex={-1}
         className={[
-          "w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-3",
+          "w-full max-w-md rounded-card border border-hairline bg-surface p-6 shadow-3",
           "transition-[opacity,transform] duration-(--duration-base) ease-out",
           open ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         ].join(" ")}
