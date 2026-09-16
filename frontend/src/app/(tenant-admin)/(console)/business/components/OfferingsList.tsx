@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
+import { OfferingMediaField } from "./OfferingMediaField";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ApiError, apiFetch } from "@/lib/api";
 
@@ -308,27 +309,41 @@ export function OfferingsList() {
               Category <span className="normal-case">(optional)</span>
               <input data-testid="offering-category" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
             </label>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
-              Image or video URL <span className="normal-case">(optional)</span>
-              <input data-testid="offering-media-url" type="url" value={form.mediaUrl} onChange={(event) => setForm((current) => ({ ...current, mediaUrl: event.target.value, mediaChanged: true, removeMedia: false }))} className="mt-1.5 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
-            </label>
-            <label className="mt-3 block text-field-label font-medium uppercase text-ink-a40">
-              Upload media <span className="normal-case">(optional)</span>
-              <input type="file" accept="image/*,video/*" onChange={(event) => setForm((current) => ({ ...current, mediaFile: event.target.files?.[0] ?? null, mediaUrl: "", mediaChanged: true, removeMedia: false }))} className="mt-1.5 block w-full text-meta text-ink-a40" />
-            </label>
-            {form.removeMedia ? (
-              <p className="mt-3 text-meta text-ink-a40">
-                Current media will be removed when you save.
-              </p>
-            ) : form.mediaUrl ? (
-              <button
-                type="button"
-                onClick={() => void confirmRemoveMedia()}
-                className="mt-3 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
-              >
-                Remove current media
-              </button>
-            ) : null}
+            <OfferingMediaField
+              mediaUrl={form.mediaUrl}
+              mediaFile={form.mediaFile}
+              mediaChanged={form.mediaChanged}
+              removeMedia={form.removeMedia}
+              working={working}
+              onPickFile={(file) =>
+                setForm((current) => ({
+                  ...current,
+                  mediaFile: file,
+                  mediaUrl: "",
+                  mediaChanged: true,
+                  removeMedia: false,
+                }))
+              }
+              onUrlChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  mediaUrl: value,
+                  mediaFile: null,
+                  mediaChanged: true,
+                  removeMedia: false,
+                }))
+              }
+              onCancelPending={(restoreUrl, restoreChanged) =>
+                setForm((current) => ({
+                  ...current,
+                  mediaFile: null,
+                  mediaUrl: restoreUrl,
+                  mediaChanged: restoreChanged,
+                  removeMedia: false,
+                }))
+              }
+              onRemoveSaved={() => void confirmRemoveMedia()}
+            />
           </details>
           <div className="mt-4 flex justify-end gap-2">
             <Button

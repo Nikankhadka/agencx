@@ -185,6 +185,65 @@ test.describe("Business hub", () => {
     await expect(page.getByTestId("offerings-list")).not.toContainText("M1 cancel-remove probe");
   });
 
+  test("uploading media shows a preview with Edit and Cancel, and Cancel sends nothing", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/offerings");
+
+    await expect(
+      page.getByTestId("offerings-list").or(page.getByText("Nothing added yet.")),
+    ).toBeVisible();
+    const probeLeftovers = page.getByRole("button", { name: "Remove M1 media-button probe" });
+    while ((await probeLeftovers.count()) > 0) {
+      await probeLeftovers.first().click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(probeLeftovers).toHaveCount(0);
+    }
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill("M1 media-button probe");
+    await page.getByText("Add details", { exact: true }).click();
+
+    // Upload reads as a button, not native file text.
+    const upload = page.getByTestId("offering-media-upload");
+    await expect(upload).toBeVisible();
+    await expect(upload).toHaveAttribute("aria-label", "Upload media");
+
+    let mediaCalls = 0;
+    await page.route("**/api/business/offerings/*/media**", (route) => {
+      mediaCalls += 1;
+      return route.continue();
+    });
+
+    await page.getByTestId("offering-media-input").setInputFiles({
+      name: "probe.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from("probe-image-bytes"),
+    });
+    await expect(page.getByTestId("offering-media-preview")).toBeVisible();
+    await expect(page.getByTestId("offering-media-filename")).toContainText("probe.jpg");
+    await expect(page.getByTestId("offering-media-edit")).toBeVisible();
+    await expect(page.getByTestId("offering-media-cancel")).toBeVisible();
+
+    // Cancel drops the pending pick locally - no media traffic at all.
+    await page.getByTestId("offering-media-cancel").click();
+    await expect(page.getByTestId("offering-media-preview")).toHaveCount(0);
+    await expect(upload).toBeVisible();
+    expect(mediaCalls).toBe(0);
+
+    // Saving after a cancel performs no media call either.
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByTestId("offerings-list")).toContainText("M1 media-button probe");
+    expect(mediaCalls).toBe(0);
+
+    // Clean up through the real remove path.
+    await page.getByRole("button", { name: "Remove M1 media-button probe" }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("offerings-list")).not.toContainText("M1 media-button probe");
+  });
+
   test("copying puts the full URL, scheme and all, on the clipboard", async ({
     page,
     request,
