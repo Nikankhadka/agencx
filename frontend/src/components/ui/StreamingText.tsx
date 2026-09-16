@@ -27,7 +27,7 @@ export function StreamingText({ streaming, pending = false, children }: Streamin
           {children}
           {streaming ? (
             <span
-              className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-text align-middle"
+              className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-text align-middle"
               aria-hidden="true"
             />
           ) : null}

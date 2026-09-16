@@ -1,4 +1,5 @@
 import { Badge, toneForStatus } from "./Badge";
+import { Card } from "./Card";
 import { formatCents } from "@/lib/money";
 
 export interface QuoteLineItem {
@@ -28,15 +29,15 @@ export interface QuotePayload {
  */
 export function QuoteCard({ quote }: { quote: QuotePayload }) {
   return (
-    <div className="mt-2 w-full max-w-[420px] rounded-lg border border-border bg-surface p-4">
+    <Card className="mt-2 w-full max-w-[420px]">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-footnote font-semibold uppercase tracking-wide text-text-secondary">
+        <span className="text-footnote font-semibold uppercase text-text-secondary">
           Quote
         </span>
         <Badge tone={toneForStatus(quote.status)}>{quote.status}</Badge>
       </div>
 
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-2">
         {quote.line_items.map((item) => (
           <li
             key={item.code ?? item.item_id}
@@ -69,6 +70,6 @@ export function QuoteCard({ quote }: { quote: QuotePayload }) {
           <span className="tabular-nums">{formatCents(quote.total_cents)}</span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

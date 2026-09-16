@@ -8,6 +8,7 @@ import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
 import { buildBrief, waitingRows } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
 import { WaitingPanel } from "./components/WaitingPanel";
+import { Container } from "@/components/ui/Container";
 
 /**
  * E-4 / D21: Home, the tenant app's first tab - the greeting and the brief.
@@ -57,20 +58,22 @@ export default function HomePage() {
   const items = ready ? buildBrief(conversations.data, records.data) : [];
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface px-gutter pb-thread-tail pt-thread-top lg:mx-auto lg:w-full lg:max-w-thread">
-      <h1 className="text-greeting font-bold tracking-[var(--text-greeting-tracking)] text-text">
-        {greetingFor(new Date())},
-        <br />
-        {name ?? "there"}.
-      </h1>
+    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface pb-thread-tail pt-thread-top">
+      <Container>
+        <h1 className="text-greeting font-bold text-text">
+          {greetingFor(new Date())},
+          <br />
+          {name ?? "there"}.
+        </h1>
 
-      <WaitingPanel rows={waiting} />
+        <WaitingPanel rows={waiting} />
 
-      <div data-testid="home-brief">
-        {items.map((item) => (
-          <BriefCard key={item.kind} item={item} />
-        ))}
-      </div>
+        <div data-testid="home-brief">
+          {items.map((item) => (
+            <BriefCard key={item.kind} item={item} />
+          ))}
+        </div>
+      </Container>
     </main>
   );
 }

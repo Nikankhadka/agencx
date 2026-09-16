@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
+import { Container } from "@/components/ui/Container";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import { customerLabel, relativeTime } from "@/lib/format";
@@ -87,8 +88,9 @@ export default function ChatsPage() {
         }
       />
 
+      <Container className="flex min-h-0 flex-1 flex-col">
       {searching ? (
-        <div className="border-b border-hairline px-5 py-2">
+        <div className="border-b border-hairline py-2">
           <input
             autoFocus
             value={search}
@@ -101,7 +103,7 @@ export default function ChatsPage() {
         </div>
       ) : null}
 
-      <div className="flex gap-2 overflow-x-auto px-5 py-3">
+      <div className="flex gap-2 overflow-x-auto py-3">
         {FILTERS.map((option) => (
           <button
             key={option.id}
@@ -111,8 +113,8 @@ export default function ChatsPage() {
             data-testid={`chats-filter-${option.id}`}
             className={
               filter === option.id
-                ? "shrink-0 rounded-chip border-[1.5px] border-accent-subtle bg-accent-subtle px-3.5 py-1.5 text-chip text-accent-active transition-colors duration-(--duration-fast)"
-                : "shrink-0 rounded-chip border-[1.5px] border-hairline px-3.5 py-1.5 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active active:bg-accent-a09"
+                ? "shrink-0 rounded-chip border-chip border-accent-subtle bg-accent-subtle px-4 py-2 text-chip text-accent-active transition-colors duration-(--duration-fast)"
+                : "shrink-0 rounded-chip border-chip border-hairline px-4 py-2 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active active:bg-accent-a09"
             }
           >
             {option.label}
@@ -122,7 +124,7 @@ export default function ChatsPage() {
 
       <div className="flex-1 overflow-y-auto">
         {query.error ? (
-          <p className="px-5 py-4 text-body-sm text-danger">{errorMessage(query.error, "Could not load your chats.")}</p>
+          <p className="py-4 text-body-sm text-danger">{errorMessage(query.error, "Could not load your chats.")}</p>
         ) : null}
         {!query.error && rows.length === 0 ? (
           <EmptyState
@@ -141,7 +143,7 @@ export default function ChatsPage() {
             type="button"
             onClick={() => router.push(`/chats/${row.id}`)}
             data-testid="chat-row"
-            className="w-full border-b border-hairline px-5 py-3.5 text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
+            className="w-full border-b border-hairline py-4 text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
           >
             <div className="mb-1 flex items-center justify-between gap-3">
               <span className="min-w-0 truncate text-body font-medium text-text">
@@ -158,7 +160,7 @@ export default function ChatsPage() {
                 {row.needs_attention ? (
                   <span
                     data-testid="row-attention"
-                    className="rounded-full bg-highlight px-2 py-0.5 text-badge font-semibold text-text"
+                    className="rounded-full bg-highlight px-3 py-1 text-badge font-semibold text-text"
                   >
                     Action needed
                   </span>
@@ -177,6 +179,7 @@ export default function ChatsPage() {
           </button>
         ))}
       </div>
+      </Container>
     </div>
   );
 }

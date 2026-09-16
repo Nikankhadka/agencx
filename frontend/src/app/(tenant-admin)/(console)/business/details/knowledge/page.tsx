@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Icon } from "@/components/ui/Icon";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
+import { Container } from "@/components/ui/Container";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiFetch, ApiError } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS, describeUpload } from "@/lib/onboarding";
@@ -308,15 +309,15 @@ export default function KnowledgePage() {
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Knowledge" backHref="/business/details" />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-gutter pb-20 pt-5">
-        <div className="mx-auto w-full max-w-thread">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-16 pt-5">
+        <Container>
           <p className="text-prose text-text">
             This is what your assistant answers from. Add your site or a document, read back what
             I made of it, then save.
           </p>
 
           <div className="mt-6">
-            <label className="mb-2 block text-field-label font-medium uppercase text-ink-a40">
+            <label className="mb-2 block text-label font-medium uppercase text-ink-a40">
               Add a link
             </label>
             <div className="flex items-center gap-2">
@@ -330,7 +331,7 @@ export default function KnowledgePage() {
                 inputMode="url"
                 disabled={working !== null}
                 data-testid="knowledge-url-input"
-                className="min-w-0 flex-1 rounded-field border-[length:var(--border-chip)] border-border bg-surface px-[18px] py-3.5 text-field text-text placeholder:text-ink-a40 outline-none transition-colors duration-(--duration-fast) focus:border-text disabled:opacity-50"
+                className="min-w-0 flex-1 rounded-field border-chip border-border bg-surface px-4 py-4 text-field text-text placeholder:text-ink-a40 outline-none transition-colors duration-(--duration-fast) focus:border-text disabled:opacity-50"
               />
               <button
                 type="button"
@@ -349,7 +350,7 @@ export default function KnowledgePage() {
               onClick={() => fileRef.current?.click()}
               disabled={working !== null}
               data-testid="knowledge-add-document"
-              className="mt-1 flex w-full items-center gap-2 border-t border-dashed border-accent-a20 py-3.5 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60 disabled:opacity-50"
+              className="mt-1 flex w-full items-center gap-2 border-t border-dashed border-border py-4 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60 disabled:opacity-50"
             >
               <Icon name="add" size={16} />
               Add a document
@@ -394,13 +395,13 @@ export default function KnowledgePage() {
                   type="button"
                   onClick={() => void open(record)}
                   data-testid="knowledge-draft"
-                  className="flex items-center justify-between gap-3 rounded-field bg-accent-a06 px-4 py-3.5 text-left transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
+                  className="flex items-center justify-between gap-3 rounded-field bg-accent-a06 px-4 py-4 text-left transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-row-label font-medium text-text">
                       {sourceLabel(record)}
                     </span>
-                    <span className="mt-1.5 block text-meta text-ink-a40">
+                    <span className="mt-2 block text-meta text-ink-a40">
                       Read it back before it answers anything
                     </span>
                   </span>
@@ -412,7 +413,7 @@ export default function KnowledgePage() {
             </section>
           ) : null}
 
-          <h2 className="mt-8 text-field-label font-medium uppercase text-ink-a40">
+          <h2 className="mt-8 text-label font-medium uppercase text-ink-a40">
             What your assistant knows
           </h2>
 
@@ -434,12 +435,12 @@ export default function KnowledgePage() {
                         {sourceLabel(record)}
                       </h3>
                       <p
-                        className={`mt-1.5 text-meta ${record.status === "failed" ? "text-danger" : "text-ink-a40"}`}
+                        className={`mt-2 text-meta ${record.status === "failed" ? "text-danger" : "text-ink-a40"}`}
                       >
                         {statusLine(record)}
                       </p>
                       {record.offering_candidates && record.offering_candidates.length > 0 ? (
-                        <p className="mt-0.5 text-meta text-ink-a40">
+                        <p className="mt-1 text-meta text-ink-a40">
                           {record.offering_candidates.length === 1
                             ? "1 offering came from this"
                             : `${record.offering_candidates.length} offerings came from this`}
@@ -515,12 +516,12 @@ export default function KnowledgePage() {
             data-testid="knowledge-privacy-disclosure"
             className="mt-8 border-t border-hairline pt-6"
           >
-            <h2 className="text-field-label font-medium uppercase text-ink-a40">
+            <h2 className="text-label font-medium uppercase text-ink-a40">
               How your documents are used
             </h2>
             <p className="mt-3 text-prose text-text">{PRIVACY_DISCLOSURE}</p>
           </section>
-        </div>
+        </Container>
       </div>
 
       <ReviewSheet

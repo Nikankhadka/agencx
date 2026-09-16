@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Container } from "@/components/ui/Container";
 import { Input } from "@/components/ui/Input";
 import {
   AgentLine,
@@ -1052,17 +1054,17 @@ export default function OnboardingPage() {
         )}
       </Thread>
 
-      <div className="relative z-[1] shrink-0 px-gutter pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-        <div className="mx-auto w-full max-w-thread">
+      <div className="relative z-[1] shrink-0 px-gutter pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <Container>
           {/* W-11c: the persistent "Documents ready to review" card from
               15-document-review.md - a closed-but-unfinished draft always has
               a way back. Replaces the W-11b bare button; the button keeps the
               W-11b testid so onboarding-url.spec.ts still finds it. Styled
               after the home screen's BriefCard (same surface). */}
           {!open && drafts.length > 0 ? (
-            <div
+            <Card
               data-testid="onboarding-ready-card"
-              className="mt-4 animate-rise rounded-card border border-hairline bg-surface px-[18px] py-4 shadow-card"
+              className="mt-4 animate-rise shadow-card"
             >
               <p className="text-card-hl font-medium text-text">Documents ready to review</p>
               <p className="mt-1 text-meta text-ink-a40">
@@ -1078,7 +1080,7 @@ export default function OnboardingPage() {
               >
                 Review documents
               </Button>
-            </div>
+            </Card>
           ) : null}
           {!completed && canConfirm && !workspace ? (
             <div className="flex flex-col gap-3">
@@ -1156,7 +1158,7 @@ export default function OnboardingPage() {
           >
             {"Your documents stay private to your business, and nothing answers customers until you review and save it."}
           </p>
-        </div>
+        </Container>
       </div>
       <ReviewSheet
         workspace={workspace}

@@ -28,7 +28,7 @@ export interface ScreenTopbarProps {
 export function ScreenTopbar({ title, backHref, back = true, action }: ScreenTopbarProps) {
   const router = useRouter();
   return (
-    <header className="flex h-topbar shrink-0 items-center justify-between border-b border-hairline px-5 pb-3.5 pt-4">
+    <header className="flex h-topbar shrink-0 items-center justify-between border-b border-hairline px-gutter pb-3 pt-4">
       {back ? (
         <button
           type="button"

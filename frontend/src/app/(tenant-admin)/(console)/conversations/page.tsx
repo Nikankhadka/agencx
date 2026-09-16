@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, toneForStatus } from "@/components/ui/Badge";
+import { Container } from "@/components/ui/Container";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Select";
 import { Table, type TableColumn } from "@/components/ui/Table";
@@ -70,7 +71,7 @@ export default function ConversationsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <Container width="wide" className="flex flex-col gap-6 pt-6 pb-16">
       <div>
         <h1 className="text-title-2 font-semibold text-text">Conversations</h1>
         <p className="mt-1 text-body-sm text-text-secondary">
@@ -102,6 +103,6 @@ export default function ConversationsPage() {
           />
         }
       />
-    </div>
+    </Container>
   );
 }

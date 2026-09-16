@@ -4,7 +4,7 @@
 /*
  * Map semantic tokens (theme.css LAYER 2) into Tailwind utilities.
  * Components use bg-surface, text-text-secondary, border-border, bg-accent,
- * text-body, rounded-md, shadow-1, etc. - never raw values (CI: scripts/check-tokens.mjs).
+ * text-body, rounded-md, shadow-card, etc. - never raw values (CI: scripts/check-tokens.mjs).
  *
  * NOTE: several mappings are deliberately self-referential (--color-bg: var(--color-bg)).
  * This works because theme.css is imported UNLAYERED and therefore wins the cascade
@@ -44,7 +44,6 @@
   --color-accent-a12: var(--color-accent-a12);
   --color-accent-a06: var(--color-accent-a06);
   --color-accent-a16: var(--color-accent-a16);
-  --color-accent-a20: var(--color-accent-a20);
   --color-accent-a28: var(--color-accent-a28);
   --color-accent-a35: var(--color-accent-a35);
   --color-accent-a45: var(--color-accent-a45);
@@ -106,8 +105,6 @@
   --text-meta--line-height: var(--text-meta-leading);
   --text-prose: var(--text-prose-size);
   --text-prose--line-height: var(--text-prose-leading);
-  --text-timestamp: var(--text-timestamp-size);
-  --text-timestamp--line-height: var(--text-timestamp-leading);
   --text-lede: var(--text-lede-size);
   --text-lede--line-height: var(--text-lede-leading);
   --text-lede--letter-spacing: var(--text-lede-tracking);
@@ -115,9 +112,6 @@
   --text-lede-q--line-height: var(--text-lede-q-leading);
   --text-bubble: var(--text-bubble-size);
   --text-bubble--line-height: var(--text-bubble-leading);
-  --text-eyebrow: var(--text-eyebrow-size);
-  --text-eyebrow--line-height: var(--text-eyebrow-leading);
-  --text-eyebrow--letter-spacing: var(--text-eyebrow-tracking);
   --text-badge: var(--text-badge-size);
   --text-badge--line-height: var(--text-badge-leading);
   --text-tab: var(--text-tab-size);
@@ -127,17 +121,15 @@
   --text-screen-title: var(--text-screen-title-size);
   --text-screen-title--line-height: var(--text-screen-title-leading);
   --text-screen-title--letter-spacing: var(--text-screen-title-tracking);
-  --text-sheet-title: var(--text-sheet-title-size);
-  --text-sheet-title--line-height: var(--text-sheet-title-leading);
   --text-row-label: var(--text-row-label-size);
   --text-row-label--line-height: var(--text-row-label-leading);
   --text-action: var(--text-action-size);
   --text-action--line-height: var(--text-action-leading);
   --text-field: var(--text-field-size);
   --text-field--line-height: var(--text-field-leading);
-  --text-field-label: var(--text-field-label-size);
-  --text-field-label--line-height: var(--text-field-label-leading);
-  --text-field-label--letter-spacing: var(--text-field-label-tracking);
+  --text-label: var(--text-label-size);
+  --text-label--line-height: var(--text-label-leading);
+  --text-label--letter-spacing: var(--text-label-tracking);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
@@ -172,7 +164,6 @@
 
   --container-thread: var(--width-thread);
 
-  --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
   --shadow-3: var(--shadow-3);
   --shadow-card: var(--shadow-card);
@@ -198,6 +189,13 @@
   --animate-caret-blink: caret-blink 1s var(--ease-out) infinite;
   --ease-out: var(--ease-out);
   --ease-push: var(--ease-push);
+}
+
+/* 1.5px chip border from --border-chip (theme.css). A plain `border` utility
+   is 1px, so the chip width needs its own utility rather than an arbitrary
+   `border-[length:var(--border-chip)]` at every call site. */
+@utility border-chip {
+  border-width: var(--border-chip);
 }
 
 body {

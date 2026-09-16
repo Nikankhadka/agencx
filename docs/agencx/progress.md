@@ -129,6 +129,17 @@ Detailed records live in [`spec/completed/`](spec/completed/).
   all forms. `theme.test.ts` re-pinned with a gradient-stop AA check; the
    storefront e2e accent pin updated to Rausch; the v6 prototype recolored
    color-only; D26 recorded superseding D25.
+- [x] Design-system consistency (2026-09-15): one canonical spacing and type
+  scale in new `design/tokens.md` (D27), applied across all four surfaces.
+  New `Card` and `Container` primitives with the duplicated recipes migrated
+  onto them; dead type tokens, `accent-a20`, and `shadow-1` retired with all
+  consumers moved in the same commits; Jakarta 600 loaded and the error page
+  on Jakarta; the warning wash re-pointed to the founder-set `#FDF4E3` with
+  the AA pair re-pinned; `check:tokens` extended to fail the build on any
+  off-scale spacing or arbitrary px text value (negative proof in the commit
+  body). Intentional shifts: bubble text to 15/21, card padding to 16/24,
+  chats at 640 and storefront/admin/Wren-era pages at 1024 on desktop, admin
+  gutter to 24, sheet radius to 24.
 - [ ] UX consistency ([`spec/completed/15-ux-consistency.md`](spec/completed/15-ux-consistency.md)):
   unify all navs on the mobile accent idiom via `navTone()`, add pointer
   cursor plus hover/press feedback to every button, ask destructive removes,

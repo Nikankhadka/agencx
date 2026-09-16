@@ -1,3 +1,4 @@
+import { Card } from "./Card";
 import { formatCents } from "@/lib/money";
 
 export interface PriceSummaryLineItem {
@@ -20,16 +21,13 @@ export interface PriceSummaryPayload {
 
 export function PriceSummaryCard({ summary }: { summary: PriceSummaryPayload }) {
   return (
-    <div
-      aria-label="Price summary"
-      className="mt-2 w-full max-w-[420px] rounded-card border border-border bg-surface p-4"
-    >
+    <Card aria-label="Price summary" className="mt-2 w-full max-w-[420px]">
       <h3 className="mb-3 text-body font-semibold text-text">Price summary</h3>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-2">
         {summary.line_items.map((item) => (
           <li
             key={item.code ?? item.item_id ?? item.label}
-            className="flex items-baseline justify-between gap-3 border-b border-hairline pb-1.5 text-body-sm text-text last:border-0"
+            className="flex items-baseline justify-between gap-3 border-b border-hairline pb-2 text-body-sm text-text last:border-0"
           >
             <span>
               {item.label}
@@ -58,6 +56,6 @@ export function PriceSummaryCard({ summary }: { summary: PriceSummaryPayload }) 
         </div>
       </div>
       <p className="mt-3 text-footnote text-text-secondary">{summary.disclaimer}</p>
-    </div>
+    </Card>
   );
 }

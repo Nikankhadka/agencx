@@ -91,18 +91,18 @@ export function BeatComposer({
     ...input.chips.map((chip) => ({ ...chip, serverOwned: true })),
   ];
 
-  // W-3: 56px is the tallest of the composer's single-line widget states -
+  // W-3: 58px is the height of the composer's single-line widget states -
   // the floor both min-heights below share.
-  // - CommandPill (command variant): py-[11px] container padding (22px) plus
-  //   its tallest child, the --size-send send circle (34px) = 56px.
-  // - FieldPill / PhonePill: the input's py-3.5 padding (28px) plus the
-  //   --text-prose-leading line height (26px) = 54px.
-  // CommandPill wins at 56px; typing still grows it past that via its own
+  // - CommandPill (command variant): py-3 container padding (24px) plus
+  //   its tallest child, the --size-send send circle (34px) = 58px.
+  // - FieldPill / PhonePill: the input's py-4 padding (32px) plus the
+  //   --text-prose-leading line height (26px) = 58px.
+  // Both widgets agree at 58px; typing still grows past that via
   // MAX_HEIGHT_PX auto-grow, untouched here.
   return (
     <div
       // Covers a chipless beat, whose only content is the widget itself.
-      className="animate-beat-in flex min-h-[56px] flex-col gap-2.5"
+      className="animate-beat-in flex min-h-[58px] flex-col gap-3"
       data-testid="onboarding-composer"
     >
       {/* `.chips-row` - above the pill, in the same widget, wrapping. It stays
@@ -147,11 +147,9 @@ export function BeatComposer({
 
       {/* W-3: this wrapper is the min-height that actually neutralizes a
           widget swap - the chip row above it (when present) keeps its own
-          floor regardless, so summing "chip row + widget" would still shift
-          by FieldPill/PhonePill's 2px shortfall against CommandPill. Flooring
-          the widget itself at 56px absorbs that difference whether or not a
-          chip row is showing. */}
-      <div className="min-h-[56px]">
+          floor regardless. Flooring the widget itself at 58px absorbs any
+          residual difference whether or not a chip row is showing. */}
+      <div className="min-h-[58px]">
         {kind === "phone" ? (
           <PhonePill disabled={busy} onSubmit={(value) => submitText(value)} />
         ) : kind === "masked" ? (
@@ -169,7 +167,7 @@ export function BeatComposer({
             leading={
               input.prefix ? (
                 // `.abn-pre` is `font:500 13px/1` - the same type spec as a chip.
-                <span className="py-3.5 pl-5 pr-3 text-chip font-medium text-ink-a40">
+                <span className="py-4 pl-5 pr-3 text-chip font-medium text-ink-a40">
                   {input.prefix}
                 </span>
               ) : null

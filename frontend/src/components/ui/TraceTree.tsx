@@ -81,7 +81,7 @@ export function TraceTree({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-caption text-text-secondary transition-colors duration-(--duration-fast) hover:bg-surface active:bg-surface-container"
+        className="flex w-full items-center gap-2 px-2 py-2 text-left font-mono text-caption text-text-secondary transition-colors duration-(--duration-fast) hover:bg-surface active:bg-surface-container"
       >
         <span aria-hidden="true" className="text-text-secondary">
           {open ? "▾" : "▸"}
@@ -108,7 +108,7 @@ export function TraceTree({
         <div className="flex flex-col gap-3 border-t border-border px-3 py-2">
           {toolCalls.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="font-mono text-caption font-medium uppercase tracking-wide text-text-secondary">
+              <p className="font-mono text-caption font-medium uppercase text-text-secondary">
                 Tool calls
               </p>
               {toolCalls.map((call) => (
@@ -131,8 +131,8 @@ export function TraceTree({
           ) : null}
 
           {checks.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              <p className="font-mono text-caption font-medium uppercase tracking-wide text-text-secondary">
+            <div className="flex flex-col gap-2">
+              <p className="font-mono text-caption font-medium uppercase text-text-secondary">
                 Inspection
               </p>
               {checks.map(([name, verdict]) => (

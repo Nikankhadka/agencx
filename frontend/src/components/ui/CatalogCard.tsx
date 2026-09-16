@@ -1,3 +1,4 @@
+import { Card } from "./Card";
 import { formatCents } from "@/lib/money";
 
 export interface CatalogOffering {
@@ -22,15 +23,12 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
   }
 
   return (
-    <div
-      aria-label="Catalog"
-      className="mt-2 w-full max-w-[520px] rounded-card border border-border bg-surface p-4"
-    >
+    <Card aria-label="Catalog" className="mt-2 w-full max-w-[520px]">
       <h3 className="mb-3 text-body font-semibold text-text">Current offerings</h3>
       <div className="flex flex-col gap-4">
         {groups.map(([heading, offerings]) => (
           <section key={heading}>
-            <h4 className="mb-1 text-footnote font-semibold uppercase tracking-wide text-text-secondary">
+            <h4 className="mb-1 text-footnote font-semibold uppercase text-text-secondary">
               {heading}
             </h4>
             <ul>
@@ -45,7 +43,7 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
                     </span>
                   </div>
                   {offering.description ? (
-                    <p className="mt-0.5 text-body-sm text-text-secondary">{offering.description}</p>
+                    <p className="mt-1 text-body-sm text-text-secondary">{offering.description}</p>
                   ) : null}
                 </li>
               ))}
@@ -53,6 +51,6 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
           </section>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

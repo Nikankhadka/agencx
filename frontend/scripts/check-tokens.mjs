@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 /*
- * Token guard (docs/design/frontend.md section 1, rule 2):
+ * Token guard (docs/agencx/design/tokens.md section 6):
  * raw color literals (hex / rgb() / hsl() / oklch()) are allowed ONLY in
  * src/styles/theme.css. Anything else under src/ fails the build.
+ *
+ * Spacing and type are guarded the same way: spacing utilities may only use
+ * the canonical steps, arbitrary bracket values may not smuggle px/rem back
+ * in (except max()/min()/clamp()/env()/var() expressions), and arbitrary
+ * text sizes are banned outright. Anything else under src/ fails the build.
  *
  * Known limits (deliberate - strict beats clever): hex-looking anchors like
  * href="#abc" will trip it (name anchors non-hexy); named CSS colors and
  * lab()/lch()/hwb() are not caught - the design system never uses them.
+ * Tracking/leading overrides and non-spacing arbitrary geometry (scroll
+ * margins, dot sizes) are review-enforced, not caught here.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -34,6 +41,42 @@ const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".mjs"]);
 const COLOR_LITERAL =
   /(#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab)\s*\()/g;
 
+// Canonical spacing steps (docs/agencx/design/tokens.md section 1).
+const ALLOWED_STEPS = new Set([
+  "0", "1", "2", "3", "4", "5", "6", "8", "12", "16", "24",
+]);
+const SPACING_FAMILY =
+  "p|px|py|pt|pb|pl|pr|ps|pe|m|mx|my|mt|mb|ml|mr|ms|me|gap|gap-x|gap-y|space-x|space-y";
+const BOUNDARY = "(?:^|[^A-Za-z0-9_-])";
+const VARIANT = "(?:[a-z0-9-]+:)*";
+const NUMERIC_STEP = new RegExp(
+  `${BOUNDARY}-?${VARIANT}(${SPACING_FAMILY})-([0-9]+(?:\\.[05])?|px)\\b`,
+  "g",
+);
+const ARBITRARY_VALUE = new RegExp(
+  `${BOUNDARY}-?${VARIANT}(?:${SPACING_FAMILY}|text)-\\[([^\\]]*)\\]`,
+  "g",
+);
+const SAFE_ARBITRARY = /^(max|min|clamp|env)\(/;
+
+function spacingViolations(line) {
+  const found = [];
+  for (const match of line.matchAll(NUMERIC_STEP)) {
+    if (!ALLOWED_STEPS.has(match[2])) found.push(match[0].trim());
+  }
+  for (const match of line.matchAll(ARBITRARY_VALUE)) {
+    const value = match[1];
+    if (
+      /px|rem/.test(value) &&
+      !SAFE_ARBITRARY.test(value) &&
+      !value.includes("var(")
+    ) {
+      found.push(match[0].trim());
+    }
+  }
+  return found;
+}
+
 // Fail-fast for the Tailwind v4 "Invalid custom property, expected a value"
 // build error: a custom property with an empty value (--foo: ;) or a missing
 // colon (--foo 1px;) breaks @tailwindcss/postcss with a cryptic offset.
@@ -52,6 +95,7 @@ function walk(dir, out = []) {
 
 const violations = [];
 const propViolations = [];
+const spacingHits = [];
 for (const file of walk(SRC)) {
   const rel = relative(ROOT, file);
   const lines = readFileSync(file, "utf8").split("\n");
@@ -65,6 +109,9 @@ for (const file of walk(SRC)) {
     if (ALLOWED.has(rel)) return;
     const matches = line.match(COLOR_LITERAL);
     if (matches) violations.push(`${rel}:${i + 1}  ${line.trim()}`);
+    for (const hit of spacingViolations(line)) {
+      spacingHits.push(`${rel}:${i + 1}  ${hit}`);
+    }
   });
 }
 
@@ -75,8 +122,14 @@ if (propViolations.length > 0) {
 }
 
 if (violations.length > 0) {
-  console.error("Color literals outside src/styles/theme.css (use semantic tokens - see docs/design/frontend.md):\n");
+  console.error("Color literals outside src/styles/theme.css (use semantic tokens - see docs/agencx/design/tokens.md):\n");
   for (const v of violations) console.error("  " + v);
   process.exit(1);
 }
-console.log("check-tokens: OK (no raw color values outside theme.css)");
+
+if (spacingHits.length > 0) {
+  console.error("Off-scale spacing or arbitrary px/rem values (see docs/agencx/design/tokens.md):\n");
+  for (const v of spacingHits) console.error("  " + v);
+  process.exit(1);
+}
+console.log("check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)");

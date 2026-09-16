@@ -84,7 +84,7 @@ export function FieldPill({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {/* `command-pill` is the CSS hook that makes the pill light up as one
           rounded control on focus instead of drawing a hard rectangle around
           the input inside it (globals.css). It is the same object as the
@@ -109,7 +109,7 @@ export function FieldPill({
           aria-label={ariaLabel}
           data-testid={testId}
           autoFocus
-          className="min-w-0 flex-1 bg-transparent py-3.5 pl-2.5 pr-1 text-prose tracking-[0.02em] text-text placeholder:tracking-normal placeholder:text-ink-a40 outline-none disabled:opacity-50"
+          className="min-w-0 flex-1 bg-transparent py-4 pl-3 pr-1 text-prose text-text placeholder:text-ink-a40 outline-none disabled:opacity-50"
         />
         <button
           type="button"
@@ -117,7 +117,7 @@ export function FieldPill({
           disabled={disabled || (!canSubmit && !onRejected)}
           aria-label="Send"
           className={[
-            "m-[9px] flex size-send shrink-0 items-center justify-center rounded-full",
+            "m-2 flex size-send shrink-0 items-center justify-center rounded-full",
             "transition-colors duration-(--duration-fast) ease-out",
             canSubmit
               ? "bg-accent text-text-inverse hover:bg-accent-hover active:bg-accent-active"

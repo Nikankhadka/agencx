@@ -282,7 +282,7 @@ export function CustomerChat({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
         {messages.map((message, index) => (
           <ChatBubble key={index} role={message.role} senderLabel={`${displayName} staff`}>
             <StreamingText
@@ -325,7 +325,7 @@ export function CustomerChat({
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="flex shrink-0 flex-col gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="flex shrink-0 flex-col gap-2 border-t border-border pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="flex items-end gap-2">
             <div className="flex-1">

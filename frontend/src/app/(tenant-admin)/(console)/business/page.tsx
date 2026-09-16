@@ -56,7 +56,7 @@ export default function BusinessPage() {
               onConfirm: () => signOut(),
             })
           }
-          className="flex w-full items-center gap-3.5 border-b border-hairline px-gutter py-[15px] text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05 lg:hidden"
+          className="flex w-full items-center gap-4 border-b border-hairline px-gutter py-4 text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05 lg:hidden"
         >
           <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
             <Icon name="logout" size={20} />

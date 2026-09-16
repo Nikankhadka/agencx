@@ -65,7 +65,7 @@ export default function BusinessDetailsPage() {
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Business details" backHref="/business" />
-      <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-20">
+      <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-16">
         <RowLink
           href="/business/details/knowledge"
           label="Knowledge"
