@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M-7 Storefront redesign - prototype for review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Tokens copied verbatim from frontend/src/styles/theme.css
+   (Airbnb color system, D26). theme.css remains the source of
+   truth; this artifact only mirrors it so the mock renders in
+   the real product's design system. No raw hex is introduced
+   below this block except the demo-photo data.
+
+   Design source (Lavish priority 2): this artifact previews the
+   Agencx customer storefront, so it uses the project's own
+   design tokens, not a generic framework.
+   ============================================================ */
+:root {
+  --primary-20: #8C0026;
+  --primary-30: #B4004E;
+  --primary-35: #E31C5F;
+  --primary-40: #FF385C;
+  --primary-45: #FF5A5F;
+  --primary-60: #FF7A85;
+  --primary-70: #FF99A2;
+  --primary-80: #FFB3BA;
+  --primary-90: #FFD1DA;
+  --primary-95: #FFE8ED;
+
+  --secondary-30: #005F64;
+  --secondary-40: #007A7F;
+  --secondary-45: #008489;
+  --secondary-80: #4DC4CC;
+  --secondary-90: #E6F4F5;
+
+  --tertiary-30: #005E03;
+  --tertiary-40: #007A04;
+  --tertiary-45: #008A05;
+  --tertiary-80: #4CC952;
+  --tertiary-90: #E6F5E7;
+
+  --error-30: #8F2407;
+  --error-40: #C13515;
+  --error-80: #FFB4A9;
+  --error-90: #FDEDEA;
+
+  --amber-100: #FDF4E3;
+  --amber-300: #E8B84C;
+  --amber-400: #FFB400;
+  --amber-500: #8A5A00;
+
+  --neutral-100: #FFFFFF;
+  --neutral-98:  #FFFFFF;
+  --neutral-96:  #F7F7F7;
+  --neutral-94:  #F0F0F0;
+  --neutral-92:  #EBEBEB;
+  --neutral-90:  #DDDDDD;
+  --neutral-10:  #222222;
+  --neutral-variant-30: #717171;
+  --neutral-variant-50: #767676;
+  --neutral-variant-80: #B0B0B0;
+
+  --gradient-brand: linear-gradient(to right, #E61E4D 0%, #E31C5F 50%, #D70466 100%);
+  --gradient-veil: linear-gradient(to top, #FFD1DA 0%, rgb(255 232 237 / 0) 100%);
+
+  --white: #FFFFFF;
+  --scrim: rgb(0 0 0 / 0.4);
+  --primary-40-rgb: 255 56 92;
+  --neutral-10-rgb: 34 34 34;
+
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, ui-sans-serif, sans-serif;
+
+  --text-card-hl-size: 15px;    --text-card-hl-leading: 22px;
+  --text-chip-size: 13px;       --text-chip-leading: 13px;
+  --text-meta-size: 12px;       --text-meta-leading: 17px;
+  --text-action-size: 14px;     --text-action-leading: 14px;
+
+  --color-bg:                     var(--neutral-98);
+  --color-surface:                var(--neutral-100);
+  --color-surface-sunken:         var(--neutral-96);
+  --color-surface-container:      var(--neutral-94);
+  --color-surface-container-high: var(--neutral-92);
+  --color-border:                 var(--neutral-90);
+  --color-text:                   var(--neutral-10);
+  --color-text-secondary:         var(--neutral-variant-30);
+  --color-text-tertiary:          var(--neutral-variant-50);
+  --color-text-inverse:           var(--neutral-100);
+
+  --color-accent:                 var(--primary-40);
+  --color-accent-hover:           var(--primary-35);
+  --color-accent-active:          var(--primary-30);
+  --color-accent-subtle:          var(--primary-90);
+  --color-accent-container:       var(--primary-90);
+
+  --color-scrim:                  var(--scrim);
+  --color-accent-a06:  rgb(var(--primary-40-rgb) / 0.06);
+  --color-accent-a07:  rgb(var(--primary-40-rgb) / 0.07);
+  --color-accent-a09:  rgb(var(--primary-40-rgb) / 0.09);
+  --color-accent-a12:  rgb(var(--primary-40-rgb) / 0.12);
+  --color-ink-a05:  rgb(var(--neutral-10-rgb) / 0.05);
+  --color-ink-a40:  rgb(var(--neutral-10-rgb) / 0.40);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --radius-card: 18px;
+  --radius-chip: 20px;
+  --radius-pill: 30px;
+  --radius-bubble: 18px;
+  --border-chip: 1.5px;
+  --gutter: 24px;
+  --color-hairline: var(--neutral-92);
+  --radius-field: 14px;
+  --size-topbar: 58px;
+  --size-icon-btn: 36px;
+  --size-icon-btn-hit: 44px;
+  --size-send: 34px;
+
+  --shadow-card: 0 2px 16px rgb(0 0 0 / 0.055);
+  --shadow-pill: 0 0 0 1.5px rgb(0 0 0 / 0.06), 0 2px 12px rgb(0 0 0 / 0.06);
+  --shadow-sheet: 0 -6px 40px rgb(0 0 0 / 0.13);
+  --shadow-popover: 0 4px 32px rgb(0 0 0 / 0.15);
+
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  --color-bubble-in: #F7F7F7;
+  --color-bubble-agent-in: var(--primary-90);
+}
+
+/* ============================================================
+   Artifact chrome (review surface, not product)
+   ============================================================ */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1440px; margin: 0 auto; padding: 0 28px 96px; }
+.art-header { padding: 40px 0 20px; }
+.art-kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-accent-active);
+}
+.art-kicker::before {
+  content: ""; width: 8px; height: 8px; border-radius: 9999px; background: var(--color-accent);
+}
+h1.art-title { margin: 12px 0 8px; font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 800; }
+p.art-sub { margin: 0; max-width: 880px; color: var(--color-text-secondary); font-size: 15.5px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.meta-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--color-surface); border: 1px solid var(--color-hairline);
+  border-radius: 9999px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; color: var(--color-text-secondary);
+}
+.meta-chip strong { color: var(--color-text); font-weight: 600; }
+
+.demobar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  margin: 22px 0 8px; padding: 12px 16px;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+  border: 1px solid var(--color-hairline); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.demobar-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-tertiary); }
+.seg { display: inline-flex; background: var(--color-surface-container); border-radius: 9999px; padding: 3px; gap: 3px; }
+.seg button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+  padding: 7px 14px; border-radius: 9999px; min-height: 34px;
+}
+.seg button.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-pill); }
+.ghost-btn {
+  appearance: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 9999px; padding: 8px 16px; min-height: 36px; color: var(--color-text);
+}
+.ghost-btn:hover { background: var(--color-surface-sunken); }
+.demobar .spacer { flex: 1; }
+.demobar-hint { font-size: 12.5px; color: var(--color-text-tertiary); }
+
+h2.section-title { margin: 56px 0 6px; font-size: 24px; letter-spacing: -0.015em; font-weight: 700; }
+p.section-sub { margin: 0 0 22px; color: var(--color-text-secondary); max-width: 900px; }
+
+.frame-row { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.frame-col { display: flex; flex-direction: column; gap: 10px; }
+.frame-caption { font-size: 13px; color: var(--color-text-secondary); max-width: 390px; }
+.frame-caption strong { color: var(--color-text); font-weight: 600; }
+.frame-caption .tagrow { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.us-tag {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  background: var(--color-accent-a09); color: var(--color-accent-active);
+  border-radius: 9999px; padding: 3px 9px;
+}
+.us-tag.neutral { background: var(--color-ink-a05); color: var(--color-text-secondary); }
+
+/* Phone frame: a real scroll container so sticky + scrollspy behave truthfully */
+.phone {
+  width: 390px; height: 780px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 28px; box-shadow: var(--shadow-popover); position: relative;
+  scrollbar-width: thin; transform: translateZ(0);
+}
+.phone.tall { height: 820px; }
+.phone.short { height: 560px; }
+.phone.mini { height: 380px; }
+.desktopframe {
+  width: 1280px; max-width: 100%; height: 840px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); position: relative;
+  transform: translateZ(0);
+}
+.edge-hidden { display: none; }
+[hidden] { display: none !important; }
+body[data-photos="off"] .cover-img,
+body[data-photos="off"] .thumb,
+body[data-photos="off"] .thumb-wrap { display: none; }
+
+/* ============================================================
+   Storefront mock - mirrors the proposed Storefront.tsx structure.
+   Every visual value here is a token; names use the same roles
+   the real components will.
+   ============================================================ */
+.sf { position: relative; min-height: 100%; }
+
+.sf-header {
+  position: sticky; top: 0; z-index: 20; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 0 var(--gutter);
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-hairline);
+}
+.sf-header-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sf-topbtn {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; text-align: left; border-radius: var(--radius-field);
+}
+.sf-header-name { font-size: 18px; font-weight: 600; letter-spacing: -0.006em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 9999px; display: grid; place-items: center;
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+  cursor: pointer;
+}
+.icon-btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-text-inverse); }
+.icon-btn:hover { background: var(--color-surface-sunken); }
+.icon-btn.primary:hover { background: var(--color-accent-hover); }
+.ms { font-family: "Material Symbols Outlined"; font-size: 21px; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; }
+
+.brandmark {
+  width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+  display: grid; place-items: center; color: var(--white);
+  font-weight: 700; font-size: 14px; background: var(--gradient-brand);
+}
+.brandmark.lg { width: 56px; height: 56px; font-size: 22px; box-shadow: 0 3px 14px rgb(0 0 0 / 0.14); }
+.brandmark img { width: 100%; height: 100%; border-radius: 9999px; object-fit: cover; }
+
+.sf-cover { width: 100%; height: 160px; object-fit: cover; display: block; }
+.sf-body { padding-bottom: 28px; }
+
+.sf-hero { padding: 22px var(--gutter) 18px; }
+.sf-hero.with-cover { padding-top: 0; }
+body[data-photos="on"] .sf-hero.with-cover .brandmark.lg { margin-top: -28px; border: 3px solid var(--color-surface); }
+.sf-hero h1 { margin: 12px 0 0; font-size: clamp(28px, 5vw, 32px); line-height: 40px; letter-spacing: -0.01em; font-weight: 800; }
+.sf-hero .sub { margin: 8px 0 0; font-size: 16px; line-height: 24px; color: var(--color-text-secondary); }
+.sf-factrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.fact-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px;
+  border-radius: var(--radius-chip); padding: 6px 12px; font-size: var(--text-chip-size);
+  font-weight: 500; background: var(--color-surface-container); color: var(--color-text);
+}
+.fact-chip.accent { background: var(--color-accent-container); color: var(--color-accent-active); }
+.fact-chip .ms { font-size: 16px; }
+.sf-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.link-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 38px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-chip);
+  padding: 8px 13px; font-size: var(--text-chip-size); font-weight: 500; color: var(--color-text);
+  text-decoration: none; background: var(--color-surface);
+}
+.link-chip .ms { font-size: 14px; color: var(--color-text-secondary); }
+
+.sf-catnav {
+  position: sticky; top: 64px; z-index: 15;
+  display: flex; gap: 8px; overflow-x: auto; padding: 10px var(--gutter);
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-hairline);
+  scrollbar-width: none;
+}
+.sf-catnav::-webkit-scrollbar { display: none; }
+.cat-chip {
+  flex-shrink: 0; display: inline-flex; align-items: center; min-height: 36px;
+  border: 0; cursor: pointer; border-radius: 9999px; padding: 9px 16px;
+  background: var(--color-surface-container); color: var(--color-text-secondary);
+  font: inherit; font-size: var(--text-chip-size); font-weight: 600;
+}
+.cat-chip.active { background: var(--color-accent-a09); color: var(--color-accent-active); }
+
+.sf-section { padding: 26px var(--gutter) 8px; border-bottom: 1px solid var(--color-hairline); scroll-margin-top: 128px; }
+.sf-section:last-child { border-bottom: 0; }
+.sf-section h2 { margin: 0 0 6px; font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.01em; }
+.sf-list { display: flex; flex-direction: column; }
+.sf-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+  border-bottom: 1px solid var(--color-hairline); padding: 16px 0;
+}
+.sf-row:last-child { border-bottom: 0; }
+.sf-row:hover { background: var(--color-surface-sunken); }
+.sf-row-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.sf-row-name { font-size: var(--text-card-hl-size); line-height: var(--text-card-hl-leading); font-weight: 600; color: var(--color-text); }
+.sf-row-price { margin-top: 3px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.sf-row-desc {
+  margin-top: 5px; font-size: 14px; line-height: 20px; color: var(--color-text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.thumb {
+  width: 96px; height: 96px; border-radius: var(--radius-field); flex-shrink: 0;
+  object-fit: cover; background: var(--color-surface-container); position: relative; overflow: hidden;
+}
+.thumb-wrap { position: relative; flex-shrink: 0; width: 96px; height: 96px; }
+.thumb-wrap .badge {
+  position: absolute; left: 6px; bottom: 6px; border-radius: 9999px; padding: 3px 8px;
+  background: var(--color-scrim); color: var(--color-text-inverse); font-size: 11px; font-weight: 600;
+}
+.thumb-fallback {
+  width: 96px; height: 96px; border-radius: var(--radius-field); flex-shrink: 0;
+  display: grid; place-items: center; background: var(--color-accent-a09); color: var(--color-accent-active);
+  font-weight: 800; font-size: 30px;
+}
+
+.empty-state { padding: 26px var(--gutter) 12px; }
+.empty-card {
+  border: 1px dashed var(--color-border); border-radius: var(--radius-card);
+  padding: 22px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  background: var(--color-surface-sunken);
+}
+.empty-card .ms { font-size: 26px; color: var(--color-text-tertiary); }
+.empty-card h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.empty-card p { margin: 0; font-size: 14px; line-height: 20px; color: var(--color-text-secondary); }
+
+.chat-invite { padding: 2px var(--gutter) 22px; }
+.chat-invite .bubble-in { max-width: 300px; }
+.chat-invite.center { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.chat-invite.center .chat-lede { justify-content: center; }
+.chat-invite.center .bubble-in { text-align: left; }
+.sf.fill-page { display: flex; flex-direction: column; }
+.sf.fill-page .sf-body { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sf.fill-page .sf-hero { padding-top: 34px; }
+.sf.fill-page .chat-invite {
+  margin: auto var(--gutter);
+  background: var(--color-accent-a09);
+  border-radius: var(--radius-card);
+  padding: 18px;
+}
+.reply-pill {
+  margin-top: 14px; display: inline-flex; align-items: center; gap: 8px;
+  border: 0; cursor: pointer; border-radius: var(--radius-pill);
+  background: var(--color-accent); color: var(--color-text-inverse);
+  font: inherit; font-size: 14px; font-weight: 600; padding: 11px 20px; min-height: 44px;
+}
+.reply-pill .ms { font-size: 17px; }
+
+.sf-footer {
+  border-top: 1px solid var(--color-hairline); padding: 20px var(--gutter);
+  display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-tertiary);
+}
+.sf-footer strong { color: var(--color-text); }
+
+.sheet-scrim {
+  position: fixed; inset: 0; z-index: 40; background: var(--color-scrim);
+  display: none; align-items: flex-end; justify-content: center;
+}
+.sheet-scrim.open { display: flex; }
+.sheet {
+  width: 100%; background: var(--color-surface);
+  border-radius: 22px 22px 0 0; box-shadow: var(--shadow-sheet);
+  max-height: 86%; overflow-y: auto; padding: 18px var(--gutter) 26px;
+}
+.sheet-grip { width: 44px; height: 4px; border-radius: 9999px; background: var(--color-border); margin: 0 auto 14px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-head h3 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.sheet-close { border: 0; background: none; cursor: pointer; color: var(--color-text-secondary); padding: 6px; }
+.sheet-media { margin-top: 14px; width: 100%; max-height: 220px; object-fit: cover; border-radius: var(--radius-card); display: block; }
+.sheet-video { position: relative; margin-top: 14px; border-radius: var(--radius-card); overflow: hidden; background: var(--color-surface-container); }
+.sheet-video img { width: 100%; max-height: 220px; object-fit: cover; display: block; opacity: 0.85; }
+.sheet-video .play {
+  position: absolute; inset: 0; display: grid; place-items: center;
+}
+.sheet-video .play span { width: 54px; height: 54px; border-radius: 9999px; background: rgba(255,255,255,0.92); display: grid; place-items: center; }
+.sheet-desc { margin: 14px 0 0; font-size: 15px; line-height: 24px; color: var(--color-text-secondary); }
+.sheet-price { margin: 12px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.sheet-noprice { margin: 12px 0 0; font-size: 13px; color: var(--color-text-tertiary); }
+.sheet-cta {
+  margin-top: 16px; width: 100%; min-height: 50px; border: 0; border-radius: var(--radius-field);
+  background: var(--color-accent); color: var(--color-text-inverse);
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.chat-lede { display: flex; gap: 10px; margin-top: 16px; }
+.bubble-in {
+  background: var(--color-bubble-in); border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-bubble) 4px;
+  padding: 12px 14px; font-size: 15px; line-height: 21px; color: var(--color-text);
+}
+.starters { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.starter {
+  border: 0; background: none; text-align: left; cursor: pointer; padding: 4px 2px;
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--color-accent-active);
+}
+.composer { display: flex; align-items: flex-end; gap: 10px; margin-top: 34px; border-top: 1px solid var(--color-hairline); padding-top: 14px; }
+.composer .field {
+  flex: 1; border: 1.5px solid var(--color-border); border-radius: var(--radius-field);
+  padding: 13px 14px; font-size: 15px; color: var(--color-text-tertiary); background: var(--color-surface);
+}
+.send {
+  width: 46px; height: 46px; border-radius: 9999px; border: 0; background: var(--color-accent);
+  color: var(--color-text-inverse); display: grid; place-items: center; cursor: pointer;
+}
+
+/* Desktop storefront mock */
+.desk { display: flex; flex-direction: column; min-height: 100%; }
+.desk .sf-cover { height: 300px; }
+.desk .center { width: 100%; max-width: 1024px; margin: 0 auto; padding: 0 var(--gutter); }
+.desk .hero-h1 { font-size: 34px; line-height: 42px; font-weight: 800; letter-spacing: -0.02em; margin: 14px 0 0; }
+.desk-layout { display: grid; grid-template-columns: 240px 1fr; gap: 40px; align-items: start; }
+.desk-browse { position: sticky; top: 84px; padding: 26px 0 40px; }
+.desk-browse p { margin: 0 0 10px; font-size: 18px; font-weight: 700; }
+.desk-browse a { display: block; padding: 10px 12px; border-radius: var(--radius-field); font-size: 14px; color: var(--color-text-secondary); text-decoration: none; }
+.desk-browse a.active { background: var(--color-accent-a09); color: var(--color-accent-active); font-weight: 600; }
+.desk-menu { padding-bottom: 24px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; }
+.desk .sf-section { padding-left: 0; padding-right: 0; }
+.desk .sf-hero { padding-left: 0; padding-right: 0; }
+.desk .sf-catnav { display: none; }
+
+/* Hero fallback variants */
+.variant-card {
+  border: 1px solid var(--color-hairline); border-radius: var(--radius-card); background: var(--color-surface);
+  overflow: hidden; width: 390px;
+}
+.variant-card .cap { padding: 12px 16px; font-size: 13px; color: var(--color-text-secondary); border-top: 1px solid var(--color-hairline); }
+.variant-card .cap strong { color: var(--color-text); }
+.veil-band { height: 96px; background: var(--gradient-veil); }
+.monogram-band { height: 120px; background: var(--color-accent-a09); display: grid; place-items: center; }
+
+/* Edge case strip */
+.edge-note { font-size: 13px; color: var(--color-text-secondary); max-width: 390px; }
+.edge-note ul { margin: 6px 0 0; padding-left: 18px; }
+.edge-note li { margin-bottom: 4px; }
+
+/* Decisions */
+.decision {
+  background: var(--color-surface); border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card); padding: 20px 22px; box-shadow: var(--shadow-card);
+  margin-bottom: 18px; max-width: 860px;
+}
+.decision h3 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+.decision p { margin: 0 0 14px; font-size: 13.5px; color: var(--color-text-secondary); }
+.decision label.opt {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-field);
+  border: 1px solid var(--color-hairline); margin-bottom: 8px; cursor: pointer; font-size: 14px;
+}
+.decision label.opt:hover { background: var(--color-surface-sunken); }
+.decision label.opt input { margin-top: 3px; accent-color: var(--color-accent); }
+.decision label.opt small { display: block; color: var(--color-text-secondary); margin-top: 2px; }
+.queue-btn {
+  margin-top: 6px; appearance: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  background: var(--color-accent); color: var(--color-text-inverse); border: 0;
+  border-radius: 9999px; padding: 11px 22px; min-height: 44px;
+}
+.queue-btn:hover { background: var(--color-accent-hover); }
+
+.notes { max-width: 900px; }
+.notes ul { padding-left: 20px; color: var(--color-text-secondary); }
+.notes li { margin-bottom: 8px; }
+.notes strong { color: var(--color-text); }
+.today-grid { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; }
+.shot { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--color-surface); box-shadow: var(--shadow-card); }
+.shot img { display: block; width: 100%; }
+.shot.phone-shot { width: 390px; }
+.shot.desk-shot { width: 900px; }
+</style>
+</head>
+<body data-photos="off">
+
+<div class="wrap">
+  <header class="art-header">
+    <div class="art-kicker">M-7 prototype - storefront redesign</div>
+    <h1 class="art-title">The customer storefront: no-image-first base, Uber Eats-style mature state</h1>
+    <p class="art-sub">
+      One page, two states of the same composition. Sababa's real seed data (12 offerings, 4 categories, 2 unpriced items,
+      zero photos) is the base foundation; the Photos toggle shows the mature state. Chat stays the product's action, surfaced
+      as a fixed bottom bar. Scroll inside any frame - the sticky header, category nav, and scrollspy are real.
+    </p>
+    <div class="meta-row">
+      <span class="meta-chip"><strong>Data</strong> Sababa seed, live payload</span>
+      <span class="meta-chip"><strong>Tokens</strong> frontend/src/styles/theme.css</span>
+      <span class="meta-chip"><strong>Scope</strong> customer surface only (chat internals untouched)</span>
+      <span class="meta-chip"><strong>Status</strong> prototype for review - nothing implemented</span>
+    </div>
+  </header>
+
+  <div class="demobar">
+    <span class="demobar-label">Photos</span>
+    <div class="seg" role="group" aria-label="Photos state">
+      <button type="button" class="active" data-photos="off">Off - base foundation</button>
+      <button type="button" data-photos="on">On - mature state</button>
+    </div>
+    <button type="button" class="ghost-btn" id="toggle-edge">Show edge cases</button>
+    <span class="spacer"></span>
+    <span class="demobar-hint">Annotate anything below, or answer the decisions at the bottom.</span>
+  </div>
+
+  <!-- ===================== TODAY ===================== -->
+  <h2 class="section-title" id="today">Today (live screenshots)</h2>
+  <p class="section-sub">
+    Captured from the running stack at /sababa just now. The no-photo default leaves tall text rows with reserved
+    dead space where a 96px thumbnail would go (<code>min-h-36</code>), the identity block is centered on mobile and thin
+    on facts, and the offering list is the only content below the hero. Nothing here is wrong per se - it just reads
+    as an empty page, and there is no visible reason to tap the chat.
+  </p>
+  <div class="today-grid">
+    <figure class="shot phone-shot" style="margin:0">
+      <img src="shots/today-mobile-top.png" alt="Current storefront on mobile, top">
+      <figcaption class="cap" style="padding:12px 16px; font-size:13px; color:var(--color-text-secondary); border-top:1px solid var(--color-hairline)">
+        Today, mobile: name, a long combined tagline (services + hours), and category chips. No business facts, no cover, no action beyond two icon buttons.
+      </figcaption>
+    </figure>
+    <figure class="shot phone-shot" style="margin:0">
+      <img src="shots/today-mobile-menu.png" alt="Current storefront on mobile, menu">
+      <figcaption class="cap" style="padding:12px 16px; font-size:13px; color:var(--color-text-secondary); border-top:1px solid var(--color-hairline)">
+        Today, mobile menu: rows reserve 144px even with no photo, so text sits in dead space. Descriptions can run 3 lines.
+      </figcaption>
+    </figure>
+    <figure class="shot phone-shot" style="margin:0">
+      <img src="shots/today-mobile-chat.png" alt="Current storefront chat sheet">
+      <figcaption class="cap" style="padding:12px 16px; font-size:13px; color:var(--color-text-secondary); border-top:1px solid var(--color-hairline)">
+        Today, chat: good content, but the entry is a 44px icon top-right - easy to miss, and it is the conversion surface.
+      </figcaption>
+    </figure>
+  </div>
+  <div class="today-grid" style="margin-top:26px">
+    <figure class="shot desk-shot" style="margin:0">
+      <img src="shots/today-desktop-top.png" alt="Current storefront on desktop">
+      <figcaption class="cap" style="padding:12px 16px; font-size:13px; color:var(--color-text-secondary); border-top:1px solid var(--color-hairline)">
+        Today, desktop: two-column rows of thin text, no store facts, no action bar. The desktop layout has no equivalent of the mobile category chips beyond the Browse sidebar.
+      </figcaption>
+    </figure>
+  </div>
+
+  <!-- ===================== PROPOSED MOBILE ===================== -->
+  <h2 class="section-title" id="mobile">Proposed - mobile (no-photo base, photos-mature)</h2>
+  <p class="section-sub">
+    Frame 1 is the base foundation with Photos off; flip the toggle to see the same page mature. Rows are content-sized -
+    no reserved slot, so a no-photo menu is compact by construction. The identity block carries the business facts that
+    already exist in the tenant profile (type, hours, services). The header carries the single chat entry; tapping the
+    business identity scrolls back to top, and item-level questions stay with the items ("Ask about this"). Tap any row
+    to open its detail sheet, or the header icon to open chat.
+  </p>
+  <div class="frame-row">
+    <div class="frame-col">
+      <div class="phone" id="phone-main">
+        <div class="sf">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top">
+              <span class="brandmark">S</span>
+              <span class="sf-header-name">Sabbaba</span>
+            </button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page" title="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" data-open-chat aria-label="Chat with Sabbaba" title="Chat with Sabbaba"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <img class="sf-cover cover-img" src="assets/cover.jpg" alt="">
+
+          <div class="sf-body">
+            <section class="sf-hero with-cover" data-hero>
+              <span class="brandmark lg">S</span>
+              <h1>Sabbaba</h1>
+              <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+              <div class="sf-factrow">
+                <span class="fact-chip accent">Middle Eastern restaurant</span>
+                <span class="fact-chip"><span class="ms">schedule</span> Monday to Sunday 11am to 8pm</span>
+              </div>
+              <div class="sf-links">
+                <a class="link-chip" href="#" onclick="return false">Website <span class="ms">open_in_new</span></a>
+                <a class="link-chip" href="#" onclick="return false">Google <span class="ms">open_in_new</span></a>
+              </div>
+            </section>
+
+            <nav class="sf-catnav" aria-label="Offer categories" data-catnav>
+              <button type="button" class="cat-chip" data-target="sec-plates">Plates &amp; Bowls</button>
+              <button type="button" class="cat-chip" data-target="sec-pitas">Pitas</button>
+              <button type="button" class="cat-chip" data-target="sec-sides">Sides</button>
+              <button type="button" class="cat-chip" data-target="sec-drinks">Drinks</button>
+            </nav>
+
+            <div data-menu data-variant="mobile"></div>
+
+            <footer class="sf-footer">
+              <strong>Agencx</strong>
+              <span>Powered by Agencx</span>
+            </footer>
+          </div>
+
+          <div class="sheet-scrim" data-sheet="detail">
+            <div class="sheet" role="dialog" aria-label="Offering details">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head">
+                <h3 data-detail-name>Offering</h3>
+                <button type="button" class="sheet-close" data-close><span class="ms">close</span></button>
+              </div>
+              <img class="sheet-media" data-detail-img hidden alt="">
+              <div class="sheet-video" data-detail-video hidden>
+                <img data-detail-poster alt="">
+                <div class="play"><span><span class="ms">play_arrow</span></span></div>
+              </div>
+              <p class="sheet-desc" data-detail-desc></p>
+              <p class="sheet-price" data-detail-price></p>
+              <p class="sheet-noprice" data-detail-noprice hidden>No published price - ask the assistant for a quote.</p>
+              <button type="button" class="sheet-cta" data-open-chat-from-detail>
+                <span class="ms">forum</span> Ask about this
+              </button>
+            </div>
+          </div>
+
+          <div class="sheet-scrim" data-sheet="chat">
+            <div class="sheet" role="dialog" aria-label="Chat with Sabbaba">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head">
+                <h3>Chat with Sabbaba</h3>
+                <button type="button" class="sheet-close" data-close><span class="ms">close</span></button>
+              </div>
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">S</span>
+                <div class="bubble-in">Hi, I'm Sabbaba's assistant. How can I help today? I can walk you through the menu, price up a plate or pita, or answer questions about the restaurant - what can I get for you?</div>
+              </div>
+              <div class="starters">
+                <button type="button" class="starter">How much is the Super Plate?</button>
+                <button type="button" class="starter">What comes in the Sabbaba Pita Pocket?</button>
+                <button type="button" class="starter">When are you open?</button>
+              </div>
+              <div class="composer">
+                <div class="field">Message</div>
+                <button type="button" class="send" aria-label="Send"><span class="ms">send</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 1-2: storefront, base and mature.</strong> Mobile, scrolled into the menu so the sticky header,
+        tap-to-top identity, and category chips are visible together.
+        <span class="tagrow"><span class="us-tag">US-1 base</span><span class="us-tag">US-3 nav</span><span class="us-tag">US-4 media</span><span class="us-tag">US-6 single entry</span></span>
+      </p>
+    </div>
+
+    <div class="frame-col">
+      <div class="phone" id="phone-detail-with">
+        <div class="sf">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" aria-label="Chat with Sabbaba"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <div class="sf-body">
+            <section class="sf-hero" style="opacity:0.5">
+              <h1>Sabbaba</h1>
+              <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+            </section>
+          </div>
+          <div class="sheet-scrim open">
+            <div class="sheet">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head"><h3>Sabbaba Pita Pocket</h3><span class="ms" style="color:var(--color-text-secondary)">close</span></div>
+              <img class="sheet-media" src="assets/pita-open.jpg" alt="">
+              <p class="sheet-desc">House pita with the full four-salad, four-dip combo</p>
+              <p class="sheet-price">$20.00</p>
+              <button type="button" class="sheet-cta"><span class="ms">forum</span> Ask about this</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 3a: detail sheet with media.</strong> Same sheet as today, tightened: photo, description, price, one CTA.
+        <span class="tagrow"><span class="us-tag">US-5</span></span>
+      </p>
+    </div>
+
+    <div class="frame-col">
+      <div class="phone" id="phone-detail-without">
+        <div class="sf">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" aria-label="Chat with Sabbaba"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <div class="sf-body">
+            <section class="sf-hero" style="opacity:0.5">
+              <h1>Sabbaba</h1>
+              <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+            </section>
+          </div>
+          <div class="sheet-scrim open">
+            <div class="sheet">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head"><h3>Larnaca Pita</h3><span class="ms" style="color:var(--color-text-secondary)">close</span></div>
+              <p class="sheet-desc">Olives, green chilli and shredded halloumi</p>
+              <p class="sheet-price">$19.90</p>
+              <button type="button" class="sheet-cta"><span class="ms">forum</span> Ask about this</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 3b: detail sheet without media.</strong> No empty media box - the sheet closes up to text, price, CTA.
+        <span class="tagrow"><span class="us-tag">US-5</span></span>
+      </p>
+    </div>
+
+    <div class="frame-col">
+      <div class="phone" id="phone-chat">
+        <div class="sf">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" aria-label="Chat with Sabbaba"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <div class="sf-body" style="opacity:0.45">
+            <section class="sf-hero" data-hero>
+              <span class="brandmark lg">S</span>
+              <h1>Sabbaba</h1>
+              <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+            </section>
+          </div>
+          <div class="sheet-scrim open">
+            <div class="sheet">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head"><h3>Chat with Sabbaba</h3><span class="ms" style="color:var(--color-text-secondary)">close</span></div>
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">S</span>
+                <div class="bubble-in">Hi, I'm Sabbaba's assistant. How can I help today? I can walk you through the menu, price up a plate or pita, or answer questions about the restaurant - what can I get for you?</div>
+              </div>
+              <div class="starters">
+                <button type="button" class="starter">How much is the Super Plate?</button>
+                <button type="button" class="starter">What comes in the Sabbaba Pita Pocket?</button>
+                <button type="button" class="starter">When are you open?</button>
+              </div>
+              <div class="composer">
+                <div class="field">Message</div>
+                <button type="button" class="send"><span class="ms">send</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 4: chat sheet.</strong> Unchanged internals. Opened from the header icon or "Ask about this".
+        <span class="tagrow"><span class="us-tag">US-6</span></span>
+      </p>
+    </div>
+
+    <div class="frame-col">
+      <div class="phone" id="phone-empty">
+        <div class="sf fill-page">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top">
+              <span class="brandmark">P</span>
+              <span class="sf-header-name">Paws &amp; Claws</span>
+            </button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" data-open-chat aria-label="Chat with Paws &amp; Claws"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <div class="sf-body">
+            <section class="sf-hero" data-hero>
+              <span class="brandmark lg">P</span>
+              <h1>Paws &amp; Claws</h1>
+              <p class="sub">Dog grooming in Newtown</p>
+              <div class="sf-factrow">
+                <span class="fact-chip accent">Dog grooming</span>
+                <span class="fact-chip"><span class="ms">schedule</span> Mon to Sat 9am to 5pm</span>
+              </div>
+            </section>
+            <div class="chat-invite">
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">P</span>
+                <div class="bubble-in">Hi, I'm Paws &amp; Claws' assistant. Ask me anything - what we do, what we charge, or a time that suits you.</div>
+              </div>
+              <button type="button" class="reply-pill" data-open-chat>Reply <span class="ms">arrow_forward</span></button>
+            </div>
+            <footer class="sf-footer"><strong>Agencx</strong><span>Powered by Agencx</span></footer>
+          </div>
+          <div class="sheet-scrim" data-sheet="chat">
+            <div class="sheet" role="dialog" aria-label="Chat with Paws & Claws">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head">
+                <h3>Chat with Paws &amp; Claws</h3>
+                <button type="button" class="sheet-close" data-close><span class="ms">close</span></button>
+              </div>
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">P</span>
+                <div class="bubble-in">Hi, I'm Paws &amp; Claws' assistant. Ask me anything - what we do, what we charge, or a time that suits you.</div>
+              </div>
+              <div class="composer">
+                <div class="field">Message</div>
+                <button type="button" class="send" aria-label="Send"><span class="ms">send</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 5a: no offerings and no photos.</strong> The composition uses the full page: compact hero on top,
+        the chat invitation centered in the remaining space, footer at the bottom. The page never claims "nothing
+        published" - the assistant can always talk about what the owner has shared.
+        <span class="tagrow"><span class="us-tag">US-1</span></span>
+      </p>
+    </div>
+
+    <div class="frame-col">
+      <div class="phone" id="phone-empty-cover">
+        <div class="sf fill-page">
+          <header class="sf-header">
+            <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+            <div class="sf-header-actions">
+              <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+              <button type="button" class="icon-btn primary" data-open-chat aria-label="Chat with Sabbaba"><span class="ms">forum</span></button>
+            </div>
+          </header>
+          <img class="sf-cover cover-img" src="assets/cover.jpg" alt="">
+          <div class="sf-body">
+            <section class="sf-hero with-cover" data-hero>
+              <span class="brandmark lg">S</span>
+              <h1>Sabbaba</h1>
+              <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+              <div class="sf-factrow">
+                <span class="fact-chip accent">Middle Eastern restaurant</span>
+                <span class="fact-chip"><span class="ms">schedule</span> Monday to Sunday 11am to 8pm</span>
+              </div>
+            </section>
+            <div class="chat-invite">
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">S</span>
+                <div class="bubble-in">Hi, I'm Sabbaba's assistant. Ask me anything - what we serve, prices, or opening hours.</div>
+              </div>
+              <button type="button" class="reply-pill" data-open-chat>Reply <span class="ms">arrow_forward</span></button>
+            </div>
+            <footer class="sf-footer"><strong>Agencx</strong><span>Powered by Agencx</span></footer>
+          </div>
+          <div class="sheet-scrim" data-sheet="chat">
+            <div class="sheet" role="dialog" aria-label="Chat with Sabbaba">
+              <div class="sheet-grip"></div>
+              <div class="sheet-head">
+                <h3>Chat with Sabbaba</h3>
+                <button type="button" class="sheet-close" data-close><span class="ms">close</span></button>
+              </div>
+              <div class="chat-lede">
+                <span class="brandmark" style="width:36px;height:36px;font-size:15px">S</span>
+                <div class="bubble-in">Hi, I'm Sabbaba's assistant. Ask me anything - what we serve, prices, or opening hours.</div>
+              </div>
+              <div class="composer">
+                <div class="field">Message</div>
+                <button type="button" class="send" aria-label="Send"><span class="ms">send</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="frame-caption">
+        <strong>Frame 5b: no offerings, with a cover photo.</strong> Same composition, matured by the business image -
+        flip Photos to see it plain. This completes the flow: offerings/no-offerings crossed with photos/no-photos.
+        <span class="tagrow"><span class="us-tag">US-1</span></span>
+      </p>
+    </div>
+  </div>
+
+  <!-- ===================== HERO FALLBACK ===================== -->
+  <h2 class="section-title" id="hero-fallback">Proposed - hero when there is no cover photo</h2>
+  <p class="section-sub">
+    Three candidates for the no-cover base. They differ only in the band above the identity block; everything below is
+    identical. Pick one in the decisions at the bottom.
+  </p>
+  <div class="frame-row">
+    <div class="variant-card">
+      <div style="padding:20px 24px 4px">
+        <span class="brandmark lg">S</span>
+        <div class="hero-h1" style="font-size:30px; font-weight:800; letter-spacing:-0.01em; margin-top:10px">Sabbaba</div>
+        <p style="margin:6px 0 12px; color:var(--color-text-secondary); font-size:15px">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+        <div class="sf-factrow" style="margin-bottom:14px"><span class="fact-chip accent">Middle Eastern restaurant</span></div>
+      </div>
+      <div class="cap"><strong>A. Plain identity.</strong> No band at all - the monogram and facts lead. Cleanest, but the no-photo state loses any sense of place.</div>
+    </div>
+    <div class="variant-card">
+      <div class="veil-band"></div>
+      <div style="padding:8px 24px 4px">
+        <span class="brandmark lg" style="margin-top:-28px; border:3px solid var(--color-surface)">S</span>
+        <div class="hero-h1" style="font-size:30px; font-weight:800; letter-spacing:-0.01em; margin-top:10px">Sabbaba</div>
+        <p style="margin:6px 0 12px; color:var(--color-text-secondary); font-size:15px">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+        <div class="sf-factrow" style="margin-bottom:14px"><span class="fact-chip accent">Middle Eastern restaurant</span></div>
+      </div>
+      <div class="cap"><strong>B. Veil wash.</strong> The token veil gradient as a soft brand band; the monogram overlaps it, mirroring the with-cover layout.</div>
+    </div>
+    <div class="variant-card">
+      <div class="monogram-band"><span class="brandmark lg" style="width:64px;height:64px;font-size:24px">S</span></div>
+      <div style="padding:14px 24px 4px">
+        <div class="hero-h1" style="font-size:30px; font-weight:800; letter-spacing:-0.01em">Sabbaba</div>
+        <p style="margin:6px 0 12px; color:var(--color-text-secondary); font-size:15px">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+        <div class="sf-factrow" style="margin-bottom:14px"><span class="fact-chip accent">Middle Eastern restaurant</span></div>
+      </div>
+      <div class="cap"><strong>C. Monogram band.</strong> A tinted band with the mark centered - reads as a deliberate placeholder for a future photo.</div>
+    </div>
+  </div>
+
+  <!-- ===================== DESKTOP ===================== -->
+  <h2 class="section-title" id="desktop">Proposed - desktop</h2>
+  <p class="section-sub">
+    Same composition, Uber Eats-style geometry: sticky left Browse sidebar with scrollspy, two-column menu, and the
+    single header chat entry. Flip Photos to compare the base and mature states.
+  </p>
+  <div class="desktopframe" id="desktop-frame">
+    <div class="sf desk">
+      <header class="sf-header">
+        <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+        <div class="sf-header-actions">
+          <button type="button" class="icon-btn" aria-label="Share page"><span class="ms">share</span></button>
+          <button type="button" class="icon-btn primary" data-open-chat aria-label="Chat with Sabbaba"><span class="ms">forum</span></button>
+        </div>
+      </header>
+      <img class="sf-cover cover-img" src="assets/cover.jpg" alt="">
+      <div class="center">
+        <section class="sf-hero with-cover" data-hero>
+          <span class="brandmark lg">S</span>
+          <h1 class="hero-h1">Sabbaba</h1>
+          <p class="sub">Pita pockets, bowls, plates, salads and dips, sides, falafel, soft drinks</p>
+          <div class="sf-factrow">
+            <span class="fact-chip accent">Middle Eastern restaurant</span>
+            <span class="fact-chip"><span class="ms">schedule</span> Monday to Sunday 11am to 8pm</span>
+          </div>
+          <div class="sf-links">
+            <a class="link-chip" href="#" onclick="return false">Website <span class="ms">open_in_new</span></a>
+            <a class="link-chip" href="#" onclick="return false">Google <span class="ms">open_in_new</span></a>
+          </div>
+        </section>
+        <div class="desk-layout">
+          <aside class="desk-browse" data-browse>
+            <p>Browse</p>
+            <a href="#" data-target="dsec-plates">Plates &amp; Bowls</a>
+            <a href="#" data-target="dsec-pitas">Pitas</a>
+            <a href="#" data-target="dsec-sides">Sides</a>
+            <a href="#" data-target="dsec-drinks">Drinks</a>
+          </aside>
+          <div class="desk-menu" data-menu data-variant="desktop"></div>
+        </div>
+        <footer class="sf-footer"><strong>Agencx</strong><span>Powered by Agencx</span></footer>
+      </div>
+      <div class="sheet-scrim" data-sheet="chat">
+        <div class="sheet" role="dialog" aria-label="Chat with Sabbaba">
+          <div class="sheet-grip"></div>
+          <div class="sheet-head">
+            <h3>Chat with Sabbaba</h3>
+            <button type="button" class="sheet-close" data-close><span class="ms">close</span></button>
+          </div>
+          <div class="chat-lede">
+            <span class="brandmark" style="width:36px;height:36px;font-size:15px">S</span>
+            <div class="bubble-in">Hi, I'm Sabbaba's assistant. How can I help today? I can walk you through the menu, price up a plate or pita, or answer questions about the restaurant - what can I get for you?</div>
+          </div>
+          <div class="starters">
+            <button type="button" class="starter">How much is the Super Plate?</button>
+            <button type="button" class="starter">What comes in the Sabbaba Pita Pocket?</button>
+            <button type="button" class="starter">When are you open?</button>
+          </div>
+          <div class="composer">
+            <div class="field">Message</div>
+            <button type="button" class="send"><span class="ms">send</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="frame-caption" style="max-width:900px; margin-top:10px">
+    <strong>Frame 7: desktop.</strong> The sidebar keeps every category in reach while the menu scrolls; the header
+    icon is the chat entry. With photos on, rows keep the same 96px thumb at right.
+    <span class="tagrow"><span class="us-tag">US-1</span><span class="us-tag">US-3</span><span class="us-tag">US-4</span><span class="us-tag">US-6</span></span>
+  </p>
+
+  <!-- ===================== EDGE CASES ===================== -->
+  <div id="edge-section" class="edge-hidden">
+    <h2 class="section-title" id="edge">Edge cases</h2>
+    <p class="section-sub">The states that usually break a menu layout. Values are stretched on purpose.</p>
+    <div class="frame-row">
+      <div class="frame-col">
+        <div class="phone short">
+          <div class="sf">
+            <header class="sf-header">
+              <div class="sf-header-id"><span class="brandmark">M</span><span class="sf-header-name">Mezze &amp; More</span></div>
+              <div class="sf-header-actions"><button type="button" class="icon-btn primary"><span class="ms">forum</span></button></div>
+            </header>
+            <section class="sf-hero" data-hero>
+              <span class="brandmark lg">M</span>
+              <h1 style="font-size:28px">Mezze &amp; More</h1>
+              <p class="sub">Family-run Middle Eastern restaurant, takeaway and catering</p>
+              <div class="sf-factrow">
+                <span class="fact-chip accent">Family-run Middle Eastern restaurant, takeaway and catering</span>
+                <span class="fact-chip"><span class="ms">schedule</span> Monday to Friday 11am to 9pm, Saturday 10am to 10pm, closed Sunday</span>
+              </div>
+            </section>
+            <div class="empty-state" style="padding-top:8px">
+              <div class="empty-card" style="background:var(--color-surface)">
+                <span class="ms">info</span>
+                <h3>All values wrap, never truncate</h3>
+                <p>business_type and hours can be long free text. Chips wrap to multiple lines; nothing is clipped or ellipsized.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-caption"><strong>Long profile strings.</strong> Stretched business_type and hours.</p>
+      </div>
+
+      <div class="frame-col">
+        <div class="phone short">
+          <div class="sf">
+            <header class="sf-header">
+              <button type="button" class="sf-topbtn" data-scroll-top aria-label="Back to top"><span class="brandmark">S</span><span class="sf-header-name">Sabbaba</span></button>
+              <div class="sf-header-actions"><button type="button" class="icon-btn primary"><span class="ms">forum</span></button></div>
+            </header>
+            <section class="sf-section" style="border-top:1px solid var(--color-hairline)">
+              <h2>Pitas</h2>
+              <div class="sf-list">
+                <div class="sf-row" style="cursor:default">
+                  <span class="sf-row-main">
+                    <span class="sf-row-name">Sabbaba Pita Pocket</span>
+                    <span class="sf-row-price">$20.00</span>
+                    <span class="sf-row-desc">House pita with the full four-salad, four-dip combo</span>
+                  </span>
+                  <span class="thumb-fallback">S</span>
+                </div>
+                <div class="sf-row" style="cursor:default">
+                  <span class="sf-row-main">
+                    <span class="sf-row-name">Larnaca Pita</span>
+                    <span class="sf-row-price">$19.90</span>
+                    <span class="sf-row-desc">Olives, green chilli and shredded halloumi</span>
+                  </span>
+                </div>
+              </div>
+            </section>
+            <div class="empty-state" style="padding-top:0">
+              <div class="empty-card" style="background:var(--color-surface)">
+                <span class="ms">broken_image</span>
+                <h3>Broken external image</h3>
+                <p>A deleted Cloudinary asset falls back to a monogram letter tile - never a broken-image icon.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-caption"><strong>Broken image + mixed rows.</strong> Fallback tile, and a row without media right below it.</p>
+      </div>
+
+      <div class="frame-col">
+        <div class="phone short">
+          <div class="sf">
+            <header class="sf-header">
+              <div class="sf-header-id"><span class="brandmark">O</span><span class="sf-header-name">Olive &amp; Co</span></div>
+              <div class="sf-header-actions"><button type="button" class="icon-btn primary"><span class="ms">forum</span></button></div>
+            </header>
+            <section class="sf-hero" data-hero style="padding-bottom:8px">
+              <span class="brandmark lg">O</span>
+              <h1>Olive &amp; Co</h1>
+              <p class="sub">Small-batch olive oils</p>
+            </section>
+            <section class="sf-section" style="border-top:1px solid var(--color-hairline); border-bottom:0">
+              <h2>What we offer</h2>
+              <div class="sf-list">
+                <div class="sf-row" style="cursor:default">
+                  <span class="sf-row-main">
+                    <span class="sf-row-name">Single-origin olive oil</span>
+                    <span class="sf-row-desc">500ml, cold pressed</span>
+                  </span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="frame-caption"><strong>One offering, no category.</strong> No chips, no sidebar - one "What we offer" section, full width.</p>
+      </div>
+    </div>
+    <div class="notes" style="margin-top:18px">
+      <ul>
+        <li><strong>Null prices</strong> (Plate, Pita Pocket) render no price line at all, in rows and in the detail sheet - never "$0" or "TBD".</li>
+        <li><strong>Video offerings</strong> show the poster with a "Video" badge in the row and a play surface in the detail sheet; a video without a poster gets a neutral tile with a play glyph.</li>
+        <li><strong>Zero categories</strong> folds everything into "More" as today; a single category drops the nav entirely.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== DECISIONS ===================== -->
+  <h2 class="section-title" id="decisions">Decisions to settle in this review</h2>
+  <p class="section-sub">Each answer queues one prompt back to the agent. Annotate anything else directly on the frames.</p>
+
+  <form class="decision" data-lavish-question="hero-fallback"
+        onsubmit="event.preventDefault(); const choice = new FormData(event.currentTarget).get('hero'); if (choice) window.lavish.queuePrompt('Hero no-cover fallback: use option ' + choice, { tag: 'choice', text: 'Hero fallback: ' + choice, element: event.currentTarget, data: { question: 'hero-fallback', answer: choice } });">
+    <h3>1. Hero fallback when there is no cover photo</h3>
+    <p>Applies to every tenant who never uploads a cover - including Sababa today.</p>
+    <label class="opt"><input type="radio" name="hero" value="A - plain identity"><span><strong>A. Plain identity</strong><small>No band. Cleanest; the page leans on the monogram, name, and facts.</small></span></label>
+    <label class="opt"><input type="radio" name="hero" value="B - veil wash"><span><strong>B. Veil wash</strong><small>Soft brand gradient band; the monogram overlaps it, same as the with-cover layout.</small></span></label>
+    <label class="opt"><input type="radio" name="hero" value="C - monogram band"><span><strong>C. Monogram band</strong><small>Tinted band with the mark centered - reads as a placeholder awaiting a photo.</small></span></label>
+    <button type="submit" class="queue-btn">Queue this answer</button>
+  </form>
+
+  <form class="decision" data-lavish-question="item-layout"
+        onsubmit="event.preventDefault(); const choice = new FormData(event.currentTarget).get('layout'); if (choice) window.lavish.queuePrompt('Item list layout: ' + choice, { tag: 'choice', text: 'Item layout: ' + choice, element: event.currentTarget, data: { question: 'item-layout', answer: choice } });">
+    <h3>2. Offering list layout</h3>
+    <p>Currently the app uses a two-column grid at sm+; Uber Eats uses a single column. Both are shown above.</p>
+    <label class="opt"><input type="radio" name="layout" value="single column list (as prototyped)"><span><strong>Single column list</strong><small>Rows read like Uber Eats; photos get room; the no-photo state stays compact.</small></span></label>
+    <label class="opt"><input type="radio" name="layout" value="two-column grid at sm+"><span><strong>Two-column grid at sm+</strong><small>Denser desktop; closer to what ships today.</small></span></label>
+    <button type="submit" class="queue-btn">Queue this answer</button>
+  </form>
+
+  <form class="decision" data-lavish-question="profile-facts"
+        onsubmit="event.preventDefault(); const choice = new FormData(event.currentTarget).get('facts'); if (choice) window.lavish.queuePrompt('Profile facts on the storefront: ' + choice, { tag: 'choice', text: 'Profile facts: ' + choice, element: event.currentTarget, data: { question: 'profile-facts', answer: choice } });">
+    <h3>3. Which profile facts to publish</h3>
+    <p>Already in tenant_config.profile; exposing them is a small public-API addition. Contact is deliberately excluded (privacy).</p>
+    <label class="opt"><input type="radio" name="facts" value="type + hours + services (as prototyped)"><span><strong>Type + hours + services</strong><small>business_type as a chip, hours as a fact chip, services as the subtitle.</small></span></label>
+    <label class="opt"><input type="radio" name="facts" value="type + hours only"><span><strong>Type + hours only</strong><small>Skip services (it also appears inside the current combined tagline).</small></span></label>
+    <label class="opt"><input type="radio" name="facts" value="hours only"><span><strong>Hours only</strong><small>Minimum viable facts; keep the combined tagline as the subtitle.</small></span></label>
+    <button type="submit" class="queue-btn">Queue this answer</button>
+  </form>
+
+  <h2 class="section-title" id="notes">Notes and open questions</h2>
+  <div class="notes">
+    <ul>
+      <li><strong>Minimal business (no offerings):</strong> the page shows the name, a brief description, the default facts onboarding collects (type, hours) and the assistant's sakura panel with a Reply action, spread over the full page - hero on top, panel in the middle, footer at the bottom. No "nothing published" / "no data" copy anywhere - on a business-agnostic platform that would read as questioning the business's validity.</li>
+      <li><strong>Chat entry:</strong> one persistent chat button in the header (as today); the header business identity taps to scroll back to top; item-level questions stay in the detail sheets ("Ask about this"). No fixed bottom bar.</li>
+      <li><strong>Ask about this</strong> in the detail sheet seeds the composer exactly as today ("Tell me about {offering}").</li>
+      <li><strong>Not touched:</strong> chat internals, quoting/order lookup (chat-driven), offering search (RF-3), owner-side image workflow (RF-5), desktop chat side panel (RF-8 stays deferred).</li>
+      <li><strong>Not in this prototype:</strong> ratings/reviews (no data exists), delivery/pickup toggle (Agencx is not a delivery marketplace), cart/checkout.</li>
+      <li><strong>No new tokens or dependencies</strong> are planned. If a visual value here is not expressible on the token scale, it gets a founder ruling plus a token before implementation.</li>
+      <li><strong>Demo photos</strong> are Wikimedia Commons images used only to preview the mature state; real tenants bring their own via Cloudinary.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const OFFERINGS = [
+  { name: "Bowl", desc: "Salads and dips with pita on the side", price: "$27.00", cat: "Plates & Bowls", img: "assets/bowl.jpg", video: false },
+  { name: "Super Plate", desc: "Choice of two proteins, four seasonal salads and two dips", price: "$37.00", cat: "Plates & Bowls", img: "assets/meze.jpg", video: false },
+  { name: "Plate", desc: "Salads and dips with one pita, priced $20-$30 depending on build", price: null, cat: "Plates & Bowls", img: null, video: false },
+  { name: "Pita Pocket", desc: "Salads and dips wrapped in pita, priced $20-$30 depending on build", price: null, cat: "Pitas", img: "assets/pita.jpg", video: false },
+  { name: "Sabbaba Pita Pocket", desc: "House pita with the full four-salad, four-dip combo", price: "$20.00", cat: "Pitas", img: "assets/pita-open.jpg", video: false },
+  { name: "Larnaca Pita", desc: "Olives, green chilli and shredded halloumi", price: "$19.90", cat: "Pitas", img: null, video: false },
+  { name: "Algerian Pita", desc: "Chickpeas and eggplant", price: "$19.90", cat: "Pitas", img: null, video: false },
+  { name: "Tunisian Pita", desc: "Marrakech salad and sweet potato", price: "$20.00", cat: "Pitas", img: null, video: false },
+  { name: "Cancun Pita", desc: "Salsa, sour cream, guacamole, jalapenos, corn chips and cheese", price: "$21.90", cat: "Pitas", img: "assets/shawarma.jpg", video: true },
+  { name: "Hot Chips", desc: "Famous lightly seasoned chips", price: "$10.00", cat: "Sides", img: "assets/chips.jpg", video: false },
+  { name: "Six Falafel", desc: "Six falafel pieces", price: "$10.90", cat: "Sides", img: null, video: false },
+  { name: "Soft Drink Can", desc: "A can of soft drink", price: "$4.50", cat: "Drinks", img: "assets/drink.jpg", video: false },
+];
+
+const CAT_ORDER = ["Plates & Bowls", "Pitas", "Sides", "Drinks"];
+const idFor = (variant, cat) => (variant === "desktop" ? "dsec-" : "sec-") + cat.toLowerCase().split(" ")[0].replace("&", "");
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function rowHtml(item) {
+  let thumb = "";
+  if (item.img) {
+    thumb = item.video
+      ? `<span class="thumb-wrap"><img class="thumb" src="${item.img}" alt=""><span class="badge">Video</span></span>`
+      : `<img class="thumb" src="${item.img}" alt="">`;
+  }
+  const price = item.price ? `<span class="sf-row-price" data-testid="offering-price">${item.price}</span>` : "";
+  return `
+    <button type="button" class="sf-row" data-name="${escapeHtml(item.name)}" data-desc="${escapeHtml(item.desc)}" data-price="${item.price || ""}" data-img="${item.img || ""}" data-video="${item.video}">
+      <span class="sf-row-main">
+        <span class="sf-row-name">${escapeHtml(item.name)}</span>
+        ${price}
+        <span class="sf-row-desc">${escapeHtml(item.desc)}</span>
+      </span>
+      ${thumb}
+    </button>`;
+}
+
+function renderMenu(el) {
+  const variant = el.dataset.variant;
+  const cols = variant === "desktop" ? "two-col" : "";
+  el.innerHTML = CAT_ORDER.map((cat) => {
+    const items = OFFERINGS.filter((o) => o.cat === cat);
+    return `
+      <section class="sf-section" id="${idFor(variant, cat)}">
+        <h2>${cat}</h2>
+        <div class="sf-list ${cols}">${items.map(rowHtml).join("")}</div>
+      </section>`;
+  }).join("");
+}
+document.querySelectorAll("[data-menu]").forEach(renderMenu);
+
+document.querySelectorAll(".seg [data-photos]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".seg [data-photos]").forEach((b) => b.classList.toggle("active", b === btn));
+    document.body.dataset.photos = btn.dataset.photos;
+  });
+});
+
+const edge = document.getElementById("edge-section");
+const edgeBtn = document.getElementById("toggle-edge");
+edgeBtn.addEventListener("click", () => {
+  const hidden = edge.classList.toggle("edge-hidden");
+  edgeBtn.textContent = hidden ? "Show edge cases" : "Hide edge cases";
+  if (!hidden) edge.scrollIntoView({ behavior: "smooth" });
+});
+
+document.addEventListener("click", (event) => {
+  const topBtn = event.target.closest("[data-scroll-top]");
+  if (topBtn) {
+    topBtn.closest(".phone, .desktopframe")?.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const chatTrigger = event.target.closest("[data-open-chat], [data-open-chat-from-detail]");
+  const closeBtn = event.target.closest("[data-close]");
+  const row = event.target.closest(".sf-row");
+
+  if (row && row.dataset.name) {
+    const frame = row.closest(".phone, .desktopframe");
+    const scrim = frame.querySelector('[data-sheet="detail"]');
+    if (!scrim) return;
+    scrim.querySelector("[data-detail-name]").textContent = row.dataset.name;
+    scrim.querySelector("[data-detail-desc]").textContent = row.dataset.desc;
+    const img = scrim.querySelector("[data-detail-img]");
+    const video = scrim.querySelector("[data-detail-video]");
+    img.hidden = true; video.hidden = true;
+    if (row.dataset.img && row.dataset.video === "true") {
+      video.hidden = false;
+      video.querySelector("img").src = row.dataset.img;
+    } else if (row.dataset.img) {
+      img.hidden = false;
+      img.src = row.dataset.img;
+    }
+    const price = scrim.querySelector("[data-detail-price]");
+    const noprice = scrim.querySelector("[data-detail-noprice]");
+    if (row.dataset.price) { price.hidden = false; price.textContent = row.dataset.price; noprice.hidden = true; }
+    else { price.hidden = true; noprice.hidden = false; }
+    scrim.classList.add("open");
+    return;
+  }
+
+  if (chatTrigger) {
+    event.preventDefault();
+    const frame = chatTrigger.closest(".phone, .desktopframe");
+    const detail = frame.querySelector('[data-sheet="detail"]');
+    if (detail) detail.classList.remove("open");
+    frame.querySelector('[data-sheet="chat"]')?.classList.add("open");
+    return;
+  }
+
+  if (closeBtn) {
+    const scrim = closeBtn.closest(".sheet-scrim");
+    if (scrim) scrim.classList.remove("open");
+    return;
+  }
+
+  if (event.target.classList.contains("sheet-scrim")) {
+    event.target.classList.remove("open");
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") document.querySelectorAll(".sheet-scrim.open").forEach((s) => s.classList.remove("open"));
+});
+
+function wireNav(navEl, frame) {
+  const links = [...navEl.querySelectorAll("[data-target]")];
+  links.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const target = frame.querySelector("#" + link.dataset.target);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      links.forEach((l) => l.classList.toggle("active", l === link));
+    });
+  });
+  const ON = 64 + 57 + 8;
+  const onScroll = () => {
+    let active = links[0];
+    links.forEach((link) => {
+      const target = frame.querySelector("#" + link.dataset.target);
+      if (target && target.getBoundingClientRect().top - frame.getBoundingClientRect().top <= ON) active = link;
+    });
+    links.forEach((l) => l.classList.toggle("active", l === active));
+  };
+  frame.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+}
+
+document.querySelectorAll(".phone").forEach((frame) => {
+  const nav = frame.querySelector("[data-catnav]");
+  if (nav) wireNav(nav, frame);
+});
+document.querySelectorAll(".desktopframe").forEach((frame) => {
+  const nav = frame.querySelector("[data-browse]");
+  if (nav) wireNav(nav, frame);
+});
+</script>
+</body>
+</html>

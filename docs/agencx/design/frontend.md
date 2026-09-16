@@ -514,12 +514,21 @@ share link is how a customer gets here (E-6 removed the QR).
 
 **M-4 made this a storefront, not just a chat.** It had been a message list and
 a composer, which meant a customer arriving from a shared link had to know what
-to ask before the page told them anything. The page now leads with the business:
-optional cover, name and tagline, **what we offer** (the owner's `offerings`,
-with categories, optional media, and the owner's own price when they published
-one), and the links. Legacy About data is preserved but not exposed or rendered.
-The assistant is a tap away in the existing sheet from one header action, "Ask a
-question"; the rest of the storefront remains informational.
+to ask before the page told them anything. **M-7 rebuilt it no-image-first
+(see `17-storefront-redesign.md`, prototype `agencx-storefront-customer-v4.html`):**
+the no-photo state is the base foundation, not an empty state - plain identity
+(monogram, name, services subtitle), `business_type` chip and `hours` facts,
+category nav, and compact offering rows with no reserved media space. Tenants
+with media mature into the same composition: optional cover, 96px thumbnails,
+broken-image tile fallback. A business with no offerings shows its name,
+description, facts, and the assistant-invitation panel using the full page,
+never a "nothing published" notice. The only chat entry is the persistent
+header button (the header identity taps back to top); the detail sheet keeps
+"Ask about this", which seeds the composer exactly as today. The page leads
+with the business: **what we offer** (the owner's `offerings`, with
+categories, optional media, and the owner's own price when they published
+one), and the links. Legacy About data is preserved but not exposed or
+rendered. Chat internals, quoting, and order lookup are untouched.
 
 The address is the owner's own: M-4 lets them choose it at go-live rather than
 keeping the provisional `biz-…` slug (see `11-offerings-media.md` M-4 US-3).
@@ -602,9 +611,12 @@ codebase, responsive; no native app, no PWA shell in Stage 1.
   (`docs/agencx/design/prototypes/agencx-prototype-v6.html`) is trusted for
   screen inventory, states, interaction vocabulary, and the bottom tab bar
   pattern, now carrying the shipped Airbnb identity, the monogram mark, and
-  the Sababa reference tenant (D17, D18, D25). The companion storefront surface
-  (`docs/archive/prototypes/agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
-  storefront interaction vocabulary only
+the Sababa reference tenant (D17, D18, D25). The companion storefront surface
+(`docs/agencx/design/prototypes/agencx-storefront-customer-v4.html`) is the
+current M-7 reference: no-image-first base, Uber Eats-style mature state,
+single header chat entry. The earlier
+(`docs/archive/prototypes/agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
+storefront interaction vocabulary only
 
 ## 8. SSE event contract
 

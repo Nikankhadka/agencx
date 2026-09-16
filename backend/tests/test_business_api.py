@@ -445,9 +445,13 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
     ]
     assert "about" not in body
     assert "reviews" not in body
+    assert "contact" not in body
+    # A fresh signup has no profile yet: facts read None, never empty strings.
+    assert body["business_type"] is None
+    assert body["hours"] is None
+    assert body["services"] is None
     assert body["links"] == {"website": "https://example.com"}
     assert body["has_cover"] is True
-
     image = await client.get(f"/api/public/tenant/{slug}/cover")
     assert image.status_code == 200
     assert image.content == PNG_1PX
@@ -457,6 +461,38 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
     assert "public" in cache_control
     assert "must-revalidate" in cache_control
     assert image.headers["etag"]
+
+
+async def test_storefront_publishes_profile_facts_but_not_contact(
+    client: httpx.AsyncClient,
+) -> None:
+    """M-7: the storefront composition reads business_type, hours, and services
+    from the profile. Contact stays private - publishing it needs its own ticket."""
+    import json
+
+    headers, tenant_id = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set config = jsonb_set(config, '{profile}', $2::jsonb, true) "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps(
+                {
+                    "business_type": "phone repair shop",
+                    "hours": "Mon to Sat 9am to 5pm",
+                    "services": "Screen and battery replacement",
+                    "contact": "0412 345 678",
+                }
+            ),
+        )
+
+    body = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+
+    assert body["business_type"] == "phone repair shop"
+    assert body["hours"] == "Mon to Sat 9am to 5pm"
+    assert body["services"] == "Screen and battery replacement"
+    assert "contact" not in body
 
 
 async def test_a_priceless_offering_reaches_the_storefront_with_no_price(

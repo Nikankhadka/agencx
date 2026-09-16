@@ -103,4 +103,57 @@ test.describe("the public storefront", () => {
     // - the same trap the deploy smoke test documents (deploy.md, B-4).
     await expect(page.getByText("There's no business here.")).toBeVisible();
   });
+
+  /**
+   * M-7 US-1/US-4: bytefix is the no-photo base - 15 offerings, zero media.
+   * The page leads with profile facts, rows reserve no media space, and the
+   * seeded contact address never reaches the customer surface.
+   */
+  test("the no-photo base shows profile facts and no contact", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
+    await expect(page.getByText("phone repair shop")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Phone and laptop repairs, screen replacements, battery replacements, data recovery",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Monday to Friday 9am to 6pm, Saturday 10am to 2pm"),
+    ).toBeVisible();
+    await expect(page.getByText("owner@bytefix.dev")).toHaveCount(0);
+    // No cover, no thumbnails, no logo image anywhere in the page.
+    await expect(page.locator("main img")).toHaveCount(0);
+  });
+
+  test("rows carry no reserved media space", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    // The old composition held every row at min-h-36 (144px) for media that
+    // was never coming. A text-only row is only as tall as its text.
+    const row = page.getByRole("button", { name: /iPhone 11 \(Refurbished, 64GB\)/ });
+    await expect(row).toBeVisible();
+    const box = await row.boundingBox();
+    expect(box, "text-only row must not reserve thumbnail space").not.toBeNull();
+    expect(box!.height).toBeLessThan(144);
+  });
+
+  test("the desktop category nav follows the menu", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    const repairs = page.locator("aside").getByRole("link", { name: "Repairs" });
+    await repairs.click();
+    await expect(repairs).toHaveAttribute("aria-current", "true");
+  });
+
+  test("the header identity returns to the top", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    await page.locator("aside").getByRole("link", { name: "Repairs" }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "Back to top" }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  });
 });

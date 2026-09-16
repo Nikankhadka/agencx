@@ -32,6 +32,10 @@ export async function expectTapTargets(page: Page, minPx = 44): Promise<void> {
       if (rect.width === 0 || rect.height === 0) return false; // hidden
       const style = window.getComputedStyle(el);
       if (style.visibility === "hidden") return false;
+      // Closed sheets keep their content mounted but inert and translated off
+      // screen (Sheet/Modal/Drawer) - untappable by definition, and their
+      // sub-pixel geometry at rest is not the geometry users get.
+      if (el.closest("[inert]")) return false;
       return rect.height < min;
     });
     return offenders.map((el) => ({

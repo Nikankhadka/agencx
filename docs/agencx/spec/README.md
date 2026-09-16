@@ -33,6 +33,7 @@ Active phase files contain unresolved tickets only:
 |---|---|
 | [`active/08-deferred.md`](active/08-deferred.md) | B-2, D-1, D-3 |
 | [`active/12-refinement.md`](active/12-refinement.md) | R-3, R-4, R-5 |
+| [`active/17-storefront-redesign.md`](active/17-storefront-redesign.md) | M-7 storefront redesign |
 
 Completed phase files preserve the detailed records for shipped work:
 
@@ -67,7 +68,10 @@ Port its structure, states, spacing, and interaction vocabulary. Use prototype
 behaviour, not prototype copy or hex values. Visual values belong in
 `frontend/src/styles/theme.css`.
 
-The former storefront prototype is preserved at
+The current storefront prototype is
+[`agencx-storefront-customer-v4.html`](../design/prototypes/agencx-storefront-customer-v4.html)
+(M-7: no-image-first base, Uber Eats-style mature state, single header chat
+entry). The former storefront prototype is preserved at
 [`agencx-storefront-customer-v3.html`](../../archive/prototypes/agencx-storefront-customer-v3.html)
 for interaction vocabulary only. It is not a current navigation reference.
 

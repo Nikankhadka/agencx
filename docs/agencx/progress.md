@@ -34,6 +34,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 
 ## What's next
 
+- [ ] M-7: rebuild the customer storefront no-image-first, with an Uber Eats-style mature state and one persistent chat entry ([`spec/active/17-storefront-redesign.md`](spec/active/17-storefront-redesign.md)). Prototype v4 approved in founder review; built on `feat/m7-storefront-redesign`, awaiting founder review and merge.
 - [ ] R-3: audit success schemas and explicit unknown-field policies.
 - [ ] R-4: complete founder judge calibration and record additional production-smoke evidence.
 - [ ] **The provider-backed `make eval` gate has now failed four times on free-tier
@@ -585,6 +586,7 @@ stubs the unnamed case the seed cannot produce.
 |---|---|---|
 | [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
 | [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
+| [`spec/active/17-storefront-redesign.md`](spec/active/17-storefront-redesign.md) | Open | M-7 storefront redesign |
 | [`spec/completed/13-walkthrough.md`](spec/completed/13-walkthrough.md) | Complete | W-1 through W-9 delivered and verified |
 | [`spec/completed/14-schema-drop.md`](spec/completed/14-schema-drop.md) | Complete | W-10 delivered; migration `0029` applied to production |
 | [`spec/completed/15-document-review.md`](spec/completed/15-document-review.md) | Complete | W-11a, W-11b, W-11c delivered and verified |

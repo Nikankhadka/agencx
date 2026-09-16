@@ -85,6 +85,12 @@ export interface StorefrontOffering {
 export interface StorefrontData {
   name: string;
   tagline: string | null;
+  /** M-7 profile facts. Optional so a frontend deployed ahead of the backend
+   * degrades to the no-facts state instead of throwing - deploy order between
+   * the two should never matter. `contact` is never published. */
+  business_type?: string | null;
+  hours?: string | null;
+  services?: string | null;
   links: Record<string, string>;
   offerings: StorefrontOffering[];
   has_cover: boolean;
