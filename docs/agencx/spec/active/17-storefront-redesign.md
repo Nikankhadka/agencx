@@ -2,7 +2,10 @@
 
 **Status:** built on `feat/m7-storefront-redesign` (M-7 US-1 through US-6);
 founder review amendments applied (hero veil in both states, long facts wrap);
-awaiting merge. Prototype
+verified against every acceptance signal below, `make check` /
+`make eval-skip-llm` / the full E2E suite green, PR open to `development`;
+awaiting the founder's mobile/desktop walkthrough against v4 and merge.
+Prototype
 [`agencx-storefront-customer-v4.html`](../design/prototypes/agencx-storefront-customer-v4.html)
 approved in founder review.
 
@@ -68,12 +71,12 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Sababa with no photos: hero carries the veil band rather than an empty
+- [x] Sababa with no photos: hero carries the veil band rather than an empty
   cover slot, rows carry no dead media space, type chip and hours fact render
   from the payload.
-- [ ] Empty tenant: full-page minimal state with invitation and Reply pill,
+- [x] Empty tenant: full-page minimal state with invitation and Reply pill,
   footer pinned to the bottom, no "nothing published" copy.
-- [ ] Null-price and no-category states from the v4 edge cases render as
+- [x] Null-price and no-category states from the v4 edge cases render as
   specified.
 
 ## M-7 US-2: spec and docs (this ticket)
@@ -86,7 +89,7 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Every pointer above names v4; no active doc still presents v3 as the
+- [x] Every pointer above names v4; no active doc still presents v3 as the
   storefront reference.
 
 ## M-7 US-3: category navigation
@@ -97,7 +100,7 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Scrolling the menu moves the active nav state; tapping a category
+- [x] Scrolling the menu moves the active nav state; tapping a category
   scrolls to its section on mobile and desktop.
 
 ## M-7 US-4: media maturity
@@ -110,8 +113,12 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Photos-on Sababa matches the v4 mature frames; a broken image renders
-  the fallback tile with no layout shift.
+- [x] Photos-on Sababa matches the v4 mature frames; a broken image renders
+  the fallback tile with no layout shift. Verified by code review and
+  `Offerings.test.tsx` (image/video-poster/video-no-poster render paths); this
+  dev stack has no Cloudinary configured, so a live photo render and a
+  triggered `onError` fallback could not be exercised in a real browser here -
+  worth a look against a real tenant upload before or shortly after merge.
 
 ## M-7 US-5: detail sheet
 
@@ -122,7 +129,7 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Sheet with and without media matches v4 frames 3a/3b; "Ask about
+- [x] Sheet with and without media matches v4 frames 3a/3b; "Ask about
   this" seeds the composer with the item context.
 
 ## M-7 US-6: single chat entry
@@ -133,7 +140,7 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] No fixed bottom bar on the storefront at any viewport; the header
+- [x] No fixed bottom bar on the storefront at any viewport; the header
   button opens the sheet; tapping the header identity returns to top.
 
 ## Backend: profile facts in the public payload
@@ -145,7 +152,7 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [ ] Unit tests pin the three new fields and the absence of `contact` on
+- [x] Unit tests pin the three new fields and the absence of `contact` on
   the public response.
 
 ## Tests
@@ -153,13 +160,24 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 - Backend unit tests for the payload addition.
 - `storefront.spec.ts` pins updated for the new composition; new mobile
   spec covering the no-photo base and the minimal business state.
+- `Offerings.test.tsx` (new) pins `RowMedia`'s image, video-with-poster, and
+  video-without-poster branches - the one part of US-4 nothing else touched.
+- `storefront.spec.ts` gained a no-media detail-sheet assertion (US-5 frame
+  3b) and a no-fixed-bottom-bar assertion (US-6), mirrored in
+  `storefront-mobile.spec.ts` for the latter.
+- Two pre-existing storefront E2E cases were flaky under `next dev`'s
+  streaming SSR (the server tree and the client tree briefly coexist on
+  load - the same class of race `typing-indicator.spec.ts`'s `ask()` already
+  settles for): fixed by retrying the whole read together instead of a
+  one-shot assertion, the same idiom. Confirmed via `--repeat-each=12` with
+  zero failures after the fix, versus a majority failure rate before it.
 - `make check`, `make eval-skip-llm`, and the full E2E suite per the
   verification phase.
 
 ## Definition of done
 
-- [ ] All six stories meet their acceptance signals.
-- [ ] `make lint`, `make typecheck`, `make test`, `make eval-skip-llm`
+- [x] All six stories meet their acceptance signals.
+- [x] `make lint`, `make typecheck`, `make test`, `make eval-skip-llm`
   green; E2E suite green including the new mobile spec.
 - [ ] Founder walkthrough of `/{slug}` on mobile and desktop against v4.
 - [ ] One commit on `feat/m7-storefront-redesign`, PR to `development`.

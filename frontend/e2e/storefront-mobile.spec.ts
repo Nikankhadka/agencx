@@ -16,23 +16,48 @@ test.describe("the storefront on mobile", () => {
   test("the no-photo base is compact, factual, and tappable", async ({ page }) => {
     await page.goto("/bytefix");
 
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
-    await expect(page.getByText("phone repair shop")).toBeVisible();
-    await expect(
-      page.getByText(
-        "Phone and laptop repairs, screen replacements, battery replacements, data recovery",
-      ),
-    ).toBeVisible();
+    // next dev streams this page: for a beat after load the server tree and
+    // the client tree are both in the DOM (typing-indicator.spec.ts's ask()) -
+    // duplicate facts and a strict-mode violation for anything addressing one
+    // of them. Retrying the whole read together is what waits for it to settle.
+    await expect(async () => {
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
+      await expect(page.getByText("phone repair shop")).toBeVisible();
+      await expect(
+        page.getByText(
+          "Phone and laptop repairs, screen replacements, battery replacements, data recovery",
+        ),
+      ).toBeVisible();
+      await expect(page.locator("main img")).toHaveCount(0);
+    }).toPass({ timeout: 15_000 });
 
     // Text-only rows, no reserved thumbnail space, no horizontal overflow,
     // every control at tap size.
-    await expect(page.locator("main img")).toHaveCount(0);
     const row = page.getByRole("button", { name: /iPhone 11 \(Refurbished, 64GB\)/ });
     const box = await row.boundingBox();
     expect(box, "text-only row must not reserve thumbnail space").not.toBeNull();
     expect(box!.height).toBeLessThan(144);
     await expectNoHorizontalOverflow(page);
     await expectTapTargets(page);
+  });
+
+  /**
+   * M-7 US-6: the fixed bottom Ask bar is gone. The chat and offering sheets
+   * are themselves always-mounted `fixed inset-0` containers (Sheet.tsx)
+   * while closed, so this only counts a bar outside that inert/aria-hidden
+   * state.
+   */
+  test("has no fixed bottom bar", async ({ page }) => {
+    await page.goto("/bytefix");
+    const fixedBottomBars = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("body *")).filter((el) => {
+          if (el.closest('[aria-hidden="true"]') || el.closest("[inert]")) return false;
+          const style = getComputedStyle(el);
+          return style.position === "fixed" && style.bottom === "0px";
+        }).length,
+    );
+    expect(fixedBottomBars).toBe(0);
   });
 
   test("the category chips follow the menu", async ({ page }) => {
