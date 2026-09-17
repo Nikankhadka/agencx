@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from app.features.business.offering_candidates import normalize_name
 from app.ingestion.pipeline import ingest_offerings, process_document
 from app.llm.embedder import Embedder
 from app.onboarding.agent import OnboardingRecord
@@ -115,17 +116,34 @@ async def insert_offerings(
     tenant_id: UUID,
     catalog: list[tuple[str, str, int | None, str | None]],
 ) -> None:
-    """(name, description, price_cents, category) rows, position = list order."""
+    """(name, description, price_cents, category) rows, position = list order.
+
+    The label is written beside the category row it belongs to (D28), so a
+    seeded world has the shape production writes and an owner can rename a
+    seeded category the same way they rename one they created.
+    """
     for position, (name, description, price_cents, category) in enumerate(catalog):
+        category_id = None
+        if category and category.strip():
+            category_id = await conn.fetchval(
+                "insert into offering_categories (tenant_id, name, normalized_key) "
+                "values ($1, $2, $3) on conflict (tenant_id, normalized_key) "
+                "do update set name = offering_categories.name returning id",
+                tenant_id,
+                category.strip(),
+                normalize_name(category),
+            )
         await conn.execute(
-            "insert into offerings (tenant_id, name, description, price_cents, position, category) "
-            "values ($1, $2, $3, $4, $5, $6)",
+            "insert into offerings "
+            "(tenant_id, name, description, price_cents, position, category, category_id) "
+            "values ($1, $2, $3, $4, $5, $6, $7)",
             tenant_id,
             name,
             description,
             price_cents,
             position,
             category,
+            category_id,
         )
 
 

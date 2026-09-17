@@ -303,6 +303,13 @@ async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
         "price_options": [],
         "supporting_document_ids": [],
         "support_state": "supported",
+        # D28: the normalization fields travel with the candidate, so a
+        # complete one round trips with its provenance, not just its price.
+        "source_wording": "Coffee is $5 and oat milk is available.",
+        "proposed_category": "Drinks",
+        "description_origin": "document",
+        "review_status": "pending",
+        "provenance": {},
     }
     saved = await client.put(
         f"/api/knowledge/records/{draft['id']}",

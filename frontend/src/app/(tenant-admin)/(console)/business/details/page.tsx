@@ -7,11 +7,13 @@ import { abnSummary } from "@/lib/abn";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import { AbnSheet } from "./components/AbnSheet";
+import { ServicesSheet, servicesSummary } from "./components/ServicesSheet";
 import { VoiceSheet, voiceSummary } from "./components/VoiceSheet";
 
 const EMPTY: BusinessProfile = {
   abn: "",
   gst: "",
+  services: [],
   customer_voice_preset: "warm_casual",
   customer_voice_custom_style: "",
 };
@@ -32,7 +34,7 @@ const EMPTY: BusinessProfile = {
 export default function BusinessDetailsPage() {
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY);
   // Which sheet is open, if any - the rows share one save path and one error.
-  const [editing, setEditing] = useState<"abn" | "voice" | null>(null);
+  const [editing, setEditing] = useState<"abn" | "voice" | "services" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,7 +92,24 @@ export default function BusinessDetailsPage() {
             setEditing("voice");
           }}
         />
+        <RowLink
+          label="Services"
+          icon="sell"
+          detail={servicesSummary(profile)}
+          onClick={() => {
+            setError(null);
+            setEditing("services");
+          }}
+        />
       </div>
+      <ServicesSheet
+        open={editing === "services"}
+        profile={profile}
+        busy={busy}
+        error={error}
+        onClose={() => setEditing(null)}
+        onSave={save}
+      />
       <AbnSheet
         open={editing === "abn"}
         profile={profile}

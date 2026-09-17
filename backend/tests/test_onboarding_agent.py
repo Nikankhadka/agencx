@@ -389,7 +389,7 @@ async def test_run_turn_extracts_from_a_complex_message() -> None:
     )
 
     assert updated.draft["business_type"] == "mobile phone business"
-    assert updated.draft["services"] == "phone cases and accessories"
+    assert updated.draft["services"] == ["phone cases and accessories"]
     assert "mobile phone" in reply
     assert len(updated.history) >= 2
 
@@ -906,7 +906,7 @@ async def test_an_off_beat_answer_is_captured_and_the_pending_question_stands() 
     )
 
     assert [item.name for item in updated.offering_candidates] == ["pita", "coffee", "wraps"]
-    assert updated.draft["services"] == "pita, coffee, wraps"
+    assert updated.draft["services"] == ["pita", "coffee", "wraps"]
     # The pending beat is still the one that gets asked.
     assert reply.endswith(beats.BEATS["hours"].ask)
 
@@ -1116,12 +1116,11 @@ def test_ack_keeps_the_statement_and_drops_a_trailing_question() -> None:
     assert _ack("What's your name?") == ""
 
 
-def test_no_beat_offers_a_skip_chip() -> None:
-    """W-7 removed the skip chip; nothing may reintroduce a skip-valued chip."""
+def test_only_optional_beats_offer_a_skip_chip() -> None:
+    """Optional beats expose one explicit persisted skip action."""
     for beat in beats.BEAT_ORDER:
-        for chip in beats.input_spec(beat).chips:
-            assert chip.value != "__skip__"
-            assert chip.label != "Skip for now"
+        labels = [chip.label for chip in beats.input_spec(beat).chips]
+        assert ("Skip for now" in labels) is beat.optional
 
 
 def test_hours_beat_asks_one_question() -> None:
@@ -1512,7 +1511,7 @@ def test_a_pending_proposal_survives_a_reload() -> None:
     stage, spec, can_confirm = progress(restored)
     assert (stage, can_confirm) == ("business_name", False)
     assert spec is not None
-    assert [chip.label for chip in spec.chips] == ["Yes"]
+    assert [chip.label for chip in spec.chips] == ["Yes", "No"]
 
 
 def test_a_v3_record_carries_no_proposal_and_a_v4_one_round_trips() -> None:

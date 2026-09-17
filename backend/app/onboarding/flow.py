@@ -11,7 +11,7 @@ boundary stays with the customer assistant and the pricing engine).
 from __future__ import annotations
 
 from hashlib import sha256
-from typing import Literal
+from typing import Any, Literal
 from unicodedata import normalize
 from uuid import UUID
 
@@ -32,7 +32,7 @@ class ProfileDraft(BaseModel):
     business_type: str = ""
     headcount: str = ""
     hours: str = ""
-    services: str = ""
+    services: list[str] = Field(default_factory=list)
     contact: str = ""
     # O-6: an ABN is what a business puts on an invoice, so the interview asks
     # for it. "none" is the stated answer of an owner who does not have one -
@@ -44,6 +44,17 @@ class ProfileDraft(BaseModel):
     # refuses them, so extraction can never put words in the owner's mouth here.
     customer_voice_preset: str = ""
     customer_voice_custom_style: str = ""
+
+    @field_validator("services", mode="before")
+    @classmethod
+    def _legacy_services(cls, value: object) -> list[str]:
+        """Read the old comma-delimited string without preserving its shape."""
+        if isinstance(value, str):
+            value = value.replace("\n", ",")
+            return list(dict.fromkeys(part.strip() for part in value.split(",") if part.strip()))
+        if isinstance(value, list):
+            return list(dict.fromkeys(str(part).strip() for part in value if str(part).strip()))
+        return []
 
 
 def customer_voice_for(profile: ProfileDraft) -> dict[str, str | None]:
@@ -172,6 +183,13 @@ class PendingOffering(BaseModel):
     # W-6: the competing amounts when two sources price one item differently.
     # The owner picks; nothing here decides for them.
     price_options: list[int] = Field(default_factory=list)
+    # Normalization provenance. These fields are additive so old onboarding and
+    # document drafts remain readable through pydantic defaults.
+    source_wording: str = Field(default="", max_length=2000)
+    proposed_category: str = Field(default="", max_length=80)
+    description_origin: Literal["owner", "document", "generated", "none"] = "none"
+    review_status: Literal["pending", "approved", "rejected"] = "pending"
+    provenance: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -239,6 +257,11 @@ def normalize_pending_offerings(raw: object) -> list[PendingOffering]:
     ]
 
 
+def read_services(value: object) -> list[str]:
+    """Compatibility reader for profile values written before services were a list."""
+    return ProfileDraft.model_validate({"services": value}).services
+
+
 def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> PendingOffering:
     """Combine two candidates for the same offering, document values winning.
 
@@ -299,6 +322,20 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
         needs_review=existing.needs_review or incoming.needs_review,
         possible_matches=sorted({*existing.possible_matches, *incoming.possible_matches}),
         price_options=conflicting if len(conflicting) > 1 else [],
+        source_wording=next((item.source_wording for item in preferred if item.source_wording), ""),
+        proposed_category=next(
+            (item.proposed_category for item in preferred if item.proposed_category), ""
+        ),
+        description_origin=next(
+            (item.description_origin for item in preferred if item.description_origin != "none"),
+            "none",
+        ),
+        review_status=(
+            "pending"
+            if existing.review_status == "pending" or incoming.review_status == "pending"
+            else incoming.review_status
+        ),
+        provenance={**existing.provenance, **incoming.provenance},
     )
 
 

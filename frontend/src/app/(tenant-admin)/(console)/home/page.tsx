@@ -9,6 +9,7 @@ import { buildBrief, waitingRows } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
 import { WaitingPanel } from "./components/WaitingPanel";
 import { Container } from "@/components/ui/Container";
+import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions";
 
 /**
  * E-4 / D21: Home, the tenant app's first tab - the greeting and the brief.
@@ -67,6 +68,8 @@ export default function HomePage() {
         </h1>
 
         <WaitingPanel rows={waiting} />
+
+        <OfferingSuggestions variant="card" />
 
         <div data-testid="home-brief">
           {items.map((item) => (

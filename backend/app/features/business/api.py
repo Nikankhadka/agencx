@@ -37,10 +37,12 @@ ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
 
 
 class BookingPageOffering(BaseModel):
+    id: UUID
     name: str
     description: str
     price_cents: int | None
     category: str | None = None
+    category_id: UUID | None = None
     media: OfferingMedia | None = None
 
 
@@ -109,7 +111,14 @@ class OfferingResponse(BaseModel):
     description: str
     price_cents: int | None
     category: str | None = None
+    category_id: UUID | None = None
     media: OfferingMedia | None = None
+
+
+class OfferingCategoryResponse(BaseModel):
+    id: UUID
+    name: str
+    normalized_key: str
 
 
 class OfferingCreate(BaseModel):
@@ -119,6 +128,7 @@ class OfferingCreate(BaseModel):
     description: str = ""
     price_dollars: Decimal | None = None
     category: str | None = Field(default=None, max_length=80)
+    category_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -153,6 +163,7 @@ class OfferingUpdate(BaseModel):
     description: str | None = None
     price_dollars: Decimal | None = None
     category: str | None = Field(default=None, max_length=80)
+    category_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -183,7 +194,20 @@ class OfferingUpdate(BaseModel):
             updates["price_cents"] = _price_cents(self.price_dollars)
         if "category" in self.model_fields_set:
             updates["category"] = self.category.strip() if self.category else None
+        if "category_id" in self.model_fields_set:
+            updates["category_id"] = self.category_id
         return updates
+
+
+class OfferingCategoryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        return value.strip()
 
 
 @router.get("/page", response_model=BookingPageResponse)
@@ -216,6 +240,38 @@ async def list_offerings(
     return [OfferingResponse.model_validate(row) for row in rows]
 
 
+@router.get("/offering-categories", response_model=list[OfferingCategoryResponse])
+async def list_offering_categories(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> list[OfferingCategoryResponse]:
+    rows = await service.list_categories(tenant_id=admin.tenant_id)
+    return [OfferingCategoryResponse.model_validate(row) for row in rows]
+
+
+@router.patch("/offering-categories/{category_id}", response_model=OfferingCategoryResponse)
+async def patch_offering_category(
+    category_id: UUID,
+    body: OfferingCategoryUpdate,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> OfferingCategoryResponse:
+    row = await service.rename_category(
+        tenant_id=admin.tenant_id, category_id=category_id, name=body.name
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="category not found")
+    return OfferingCategoryResponse.model_validate(row)
+
+
+@router.delete("/offering-categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_offering_category(
+    category_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> Response:
+    if not await service.delete_category(tenant_id=admin.tenant_id, category_id=category_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="category not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/offerings",
     response_model=OfferingResponse,
@@ -226,16 +282,21 @@ async def post_offering(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OfferingResponse:
-    return OfferingResponse.model_validate(
-        await service.create_offering(
+    try:
+        row = await service.create_offering(
             tenant_id=admin.tenant_id,
             name=body.name,
             description=body.description,
             price_cents=_price_cents(body.price_dollars),
             category=body.category.strip() if body.category else None,
+            category_id=body.category_id,
             embedder=embedder,
         )
-    )
+    except ValueError as exc:
+        # The only ValueError reachable here is a category_id this tenant does
+        # not own; everything else was refused by the model.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return OfferingResponse.model_validate(row)
 
 
 @router.patch("/offerings/{offering_id}", response_model=OfferingResponse)
@@ -250,12 +311,15 @@ async def patch_offering(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="no fields to update"
         )
-    row = await service.update_offering(
-        tenant_id=admin.tenant_id,
-        offering_id=offering_id,
-        updates=updates,
-        embedder=embedder,
-    )
+    try:
+        row = await service.update_offering(
+            tenant_id=admin.tenant_id,
+            offering_id=offering_id,
+            updates=updates,
+            embedder=embedder,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="offering not found")
     return OfferingResponse.model_validate(row)
@@ -286,6 +350,7 @@ class BusinessProfile(BaseModel):
     gst: str
     customer_voice_preset: str
     customer_voice_custom_style: str
+    services: list[str]
 
 
 class ProfileUpdate(BaseModel):
@@ -300,17 +365,18 @@ class ProfileUpdate(BaseModel):
 
     abn: str | None = None
     gst: str | None = None
+    services: list[str] | None = None
     customer_voice_preset: str | None = None
     customer_voice_custom_style: str | None = None
 
-    def normalized(self) -> dict[str, str]:
+    def normalized(self) -> dict[str, object]:
         """The fields as they are stored, or a ValueError an owner can read.
 
         Not field validators: pydantic prefixes those with "Value error," and
         this message is rendered verbatim under the field the owner is typing
         in.
         """
-        fields: dict[str, str] = {}
+        fields: dict[str, object] = {}
         if self.abn is not None:
             fields["abn"] = _normalize_abn(self.abn)
         if self.gst is not None:
@@ -318,6 +384,10 @@ class ProfileUpdate(BaseModel):
             if gst not in ("yes", "no"):
                 raise ValueError("GST is either yes or no.")
             fields["gst"] = gst
+        if self.services is not None:
+            fields["services"] = list(
+                dict.fromkeys(item.strip() for item in self.services if item.strip())
+            )
         if self.customer_voice_preset is not None or self.customer_voice_custom_style is not None:
             fields.update(
                 _normalize_voice(self.customer_voice_preset, self.customer_voice_custom_style)
