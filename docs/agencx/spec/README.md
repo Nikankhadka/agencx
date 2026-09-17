@@ -1,80 +1,79 @@
 # Agencx specs and user stories
 
-The spec set records the Agencx change build. Each ticket includes its intent,
-acceptance criteria, implementation constraints, verification, and definition
-of done. One ticket equals one commit, and commit messages start with the
-ticket id when a ticket is implemented.
+The spec set records the Agencx change build. Each ticket holds intent,
+acceptance criteria, implementation constraints, verification, and
+definition of done. One ticket equals one commit, and commit messages
+start with the ticket id.
 
-## How to read a ticket
+## Status vocabulary
 
-| Section | Purpose |
+Every ticket header uses one of these labels. This table owns them.
+
+| Label | Meaning |
 |---|---|
-| Summary | What the ticket delivers |
-| Why | The product promise or measured problem |
-| User stories | Persona-specific acceptance criteria |
-| Design reference | The prototype screen for UI work |
-| Technical spec | The intended implementation shape |
-| Tests | The checks required for completion |
-| Definition of done | The final completion checklist |
+| `Active - todo` | Ticket written, work not started |
+| `Active - in progress` | Branch exists, work under way |
+| `Active - PR open` | PR open to `development`, checks listed |
+| `Active - awaiting review` | Code complete, founder walkthrough remains |
+| `Done - merged` | Merged to `development` or `staging`, commit or PR cited |
+| `Deferred - Phase 2` | Explicitly out of Phase 1 |
 
-Tickets are written before implementation. Amendments are written after a
-founder walkthrough exposes a change inside a closed phase. Amendments retain
-their checked acceptance criteria and do not gain invented retrospective
-technical sections. The amendments are O-6 through O-12, E-6, and the Phase 13
-amendment record inside `13-walkthrough.md` (2026-09-05), which refines W-3
-through W-6, adds W-8 and W-9, and distinguishes specification updates from
-implementation delivery.
+Per-ticket header pattern:
 
-## Active and completed work
+```md
+**Status:** Active - PR open on feat/example.
+**Phase 1 area:** Storefront and media.
+```
 
-Active phase files contain unresolved tickets only:
+## Active work
 
-| Location | Contents |
-|---|---|
-| [`active/08-deferred.md`](active/08-deferred.md) | B-2, D-1, D-3 |
-| [`active/12-refinement.md`](active/12-refinement.md) | R-3, R-4, R-5 |
+| Location | Contents | Status |
+|---|---|---|
+| [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
+| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder | `Active - todo` |
+| [completed/15-ux-consistency.md](completed/15-ux-consistency.md) | U-1 through U-4 | `Active - awaiting review`, misfiled, moves to `active/` |
+| [../HiveAgencyXRefinement.md](../HiveAgencyXRefinement.md) | RF proposal, moves to `active/18-refinement-proposal.md` | `Active - todo` |
 
-Completed phase files preserve the detailed records for shipped work:
+M-7 storefront redesign ships on `feat/m7-storefront-redesign`; its ticket
+file `active/17-storefront-redesign.md` lands with that branch.
+
+## Completed work
 
 | Location | Phase |
 |---|---|
-| [`completed/01-foundation.md`](completed/01-foundation.md) | Foundation |
-| [`completed/02-onboarding.md`](completed/02-onboarding.md) | Onboarding |
-| [`completed/03-chat-spine.md`](completed/03-chat-spine.md) | Chat spine |
-| [`completed/04-chat-grounding.md`](completed/04-chat-grounding.md) | Chat grounding |
-| [`completed/05-business-page.md`](completed/05-business-page.md) | Business page |
-| [`completed/06-polish.md`](completed/06-polish.md) | Polish |
-| [`completed/07-hygiene.md`](completed/07-hygiene.md) | Hygiene |
-| [`completed/09-devex.md`](completed/09-devex.md) | Developer experience |
-| [`completed/10-deploy.md`](completed/10-deploy.md) | Deployment |
-| [`completed/11-offerings-media.md`](completed/11-offerings-media.md) | Offerings and media |
-| [`completed/13-walkthrough.md`](completed/13-walkthrough.md) | Walkthrough fixes |
-| [`completed/14-schema-drop.md`](completed/14-schema-drop.md) | Schema drop |
-| [`completed/15-document-review.md`](completed/15-document-review.md) | Document review and privacy workflow |
-| [`completed/16-auth-otp-reliability.md`](completed/16-auth-otp-reliability.md) | Authentication OTP reliability |
+| [completed/01-foundation.md](completed/01-foundation.md) | Foundation, `Done - merged` |
+| [completed/02-onboarding.md](completed/02-onboarding.md) | Onboarding, `Done - merged` |
+| [completed/03-chat-spine.md](completed/03-chat-spine.md) | Chat spine, `Done - merged` |
+| [completed/04-chat-grounding.md](completed/04-chat-grounding.md) | Chat grounding, `Done - merged` |
+| [completed/05-business-page.md](completed/05-business-page.md) | Business page, `Done - merged` |
+| [completed/06-polish.md](completed/06-polish.md) | Polish, `Done - merged` |
+| [completed/07-hygiene.md](completed/07-hygiene.md) | Hygiene, `Done - merged` |
+| [completed/09-devex.md](completed/09-devex.md) | Developer experience, `Done - merged` |
+| [completed/10-deploy.md](completed/10-deploy.md) | Deployment, `Done - merged` |
+| [completed/11-offerings-media.md](completed/11-offerings-media.md) | Offerings and media, `Done - merged` |
+| [completed/13-walkthrough.md](completed/13-walkthrough.md) | Walkthrough fixes W-1 through W-9, `Done - merged` |
+| [completed/14-schema-drop.md](completed/14-schema-drop.md) | Schema drop W-10, `Done - merged` |
+| [completed/15-document-review.md](completed/15-document-review.md) | Document review W-11, `Done - merged` |
+| [completed/16-auth-otp-reliability.md](completed/16-auth-otp-reliability.md) | Auth OTP W-12 and W-13, `Done - merged` |
 
-Completed R-1 and R-2 refinement records are preserved in
-[`docs/archive/phase1-complete/12-refinement-r1-r2.md`](../../archive/phase1-complete/12-refinement-r1-r2.md).
+Completed R-1 and R-2 records are preserved in
+[the archived refinement record](../../archive/phase1-complete/12-refinement-r1-r2.md).
 
-When a phase's tickets are complete, move its file from `active/` to
-`completed/` with `git mv`, then update [progress.md](../progress.md).
+## Prototype currency
 
-## Building UI
+| Prototype | Status |
+|---|---|
+| [agencx-prototype-v6.html](../design/prototypes/agencx-prototype-v6.html) | Current app reference |
+| `agencx-storefront-customer-v4.html` | Current storefront reference for M-7, lands with `feat/m7-storefront-redesign` |
+| [archived v3 storefront](../../archive/prototypes/agencx-storefront-customer-v3.html) | Interaction vocabulary only |
 
-The current prototype is
-[`agencx-prototype-v6.html`](../design/prototypes/agencx-prototype-v6.html).
-Port its structure, states, spacing, and interaction vocabulary. Use prototype
-behaviour, not prototype copy or hex values. Visual values belong in
+Port structure, states, spacing, and interaction vocabulary. Use prototype
+behaviour, never prototype copy or hex values. Visual values belong in
 `frontend/src/styles/theme.css`.
-
-The former storefront prototype is preserved at
-[`agencx-storefront-customer-v3.html`](../../archive/prototypes/agencx-storefront-customer-v3.html)
-for interaction vocabulary only. It is not a current navigation reference.
 
 ## Phase sequence
 
-Phase 1 delivered onboarding, customer chat, and the business page. The
-supporting phases landed in this order:
+Phase 1 delivered onboarding, customer chat, and the business page:
 
 1. Foundation and onboarding
 2. Chat spine and grounding
@@ -87,19 +86,11 @@ supporting phases landed in this order:
 9. Document review and privacy workflow
 10. Authentication OTP reliability
 
-The active refinement phase is hardening, not new product scope. B-2, D-1, and
-D-3 remain deferred to Phase 2. Payments, scheduling, invoicing, leads, and
-other Stage 2 work remain outside this spec set.
+The walkthrough phase (W-1 through W-9) is a second bug-fix pass on
+shipped Phase 1 surfaces, not new product scope. B-2, D-1, and D-3 stay
+`Deferred - Phase 2`. Payments, scheduling, invoicing, and leads stay out.
 
-The walkthrough phase (`W-1` through `W-9`) closes defects a founder
-walkthrough found in already-shipped work: the home escalation queue, the
-onboarding interview, customer chat grounding, the review sheet, and
-conversational correction. It is a second bug-fix pass on Phase 1 surfaces,
-not new product scope. W-1 through W-9 are delivered; the file is complete.
+## Maintenance
 
-The walkthrough spec file also carries the amendment record for the second
-round ([`completed/13-walkthrough.md`](completed/13-walkthrough.md)), which keeps the
-reported observations, the found clarified preferences, the implementation
-evidence, and the boundary between symptoms, confirmed code behavior,
-suspected causes, and outstanding browser verification beside the tickets it
-feeds.
+When every ticket in a phase is complete, move its file from `active/` to
+`completed/` with `git mv`, then update [progress.md](../progress.md).
