@@ -29,7 +29,9 @@ import pytest_asyncio
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
-from seeds import seed_demo
+from seeds import seed_demo, seed_sababa
+from seeds.seed_sababa import SABABA_PROFILE
+from seeds.seed_sababa import SLUG as SABABA_SLUG
 from seeds.seed_tenant1_phoneshop import BYTEFIX_PROFILE
 from seeds.seed_tenant1_phoneshop import SLUG as BYTEFIX_SLUG
 from tests.conftest import _app_dsn_for
@@ -98,14 +100,46 @@ async def client(app_pool: None) -> AsyncIterator[httpx.AsyncClient]:
         yield ac
 
 
-# --- both tenants + data --------------------------------------------------------
+# --- GoTrue service token selection ---------------------------------------------
 
 
-async def test_both_tenants_exist_with_data(
+def test_gotrue_service_token_prefers_the_real_service_role_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hosted projects on asymmetric signing keys 401 a minted HS256 token, so
+    the real key wins whenever the environment carries one."""
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key")
+    get_settings.cache_clear()
+    try:
+        assert seed_demo._gotrue_service_token() == "real-service-role-key"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_gotrue_service_token_mints_from_the_jwt_secret_without_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local dev has no service role key; the symmetric-secret mint is what the
+    local GoTrue accepts."""
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        token = seed_demo._gotrue_service_token()
+    finally:
+        get_settings.cache_clear()
+    payload = jwt.decode(token, TEST_JWT_SECRET, algorithms=["HS256"])
+    assert payload["role"] == "service_role"
+
+
+# --- all three tenants + data ----------------------------------------------------
+
+
+async def test_all_tenants_exist_with_data(
     seeded: dict[str, uuid.UUID], superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     bytefix_id = seeded["bytefix_id"]
     lumident_id = seeded["lumident_id"]
+    sababa_id = seeded["sababa_id"]
 
     lumident_catalog_n = len(seed_demo.LUMIDENT_CATALOG)
     lumident_rules_n = len(seed_demo.LUMIDENT_PRICING_RULES)
@@ -117,6 +151,13 @@ async def test_both_tenants_exist_with_data(
             lumident_catalog_n,
             lumident_rules_n,
             seed_demo.LUMIDENT_PROFILE,
+        ),
+        (
+            sababa_id,
+            SABABA_SLUG,
+            len(seed_sababa.CATALOG_ITEMS),
+            len(seed_sababa.PRICING_RULES),
+            SABABA_PROFILE,
         ),
     ]:
         row = await superuser_conn.fetchrow(
@@ -162,32 +203,34 @@ async def test_both_tenants_exist_with_data(
         )
 
 
-async def test_lumident_differs_only_in_data(
+async def test_tenants_differ_only_in_data(
     seeded: dict[str, uuid.UUID], superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """Domain-agnostic proof stays data-side: lumident is dental, bytefix is
-    phone repair, but both run identical code - differ only in config + docs."""
+    """Domain-agnostic proof stays data-side: bytefix is phone repair,
+    lumident is dental, sababa is a restaurant, but all run identical code -
+    differ only in config + docs."""
     bytefix_cfg = await superuser_conn.fetchval(
         "select config from tenant_config where tenant_id = $1", seeded["bytefix_id"]
     )
     lumident_cfg = await superuser_conn.fetchval(
         "select config from tenant_config where tenant_id = $1", seeded["lumident_id"]
     )
+    sababa_cfg = await superuser_conn.fetchval(
+        "select config from tenant_config where tenant_id = $1", seeded["sababa_id"]
+    )
     # Distinct greetings + starter questions - the data-side difference.
-    assert bytefix_cfg != lumident_cfg
-    bytefix_names = {
-        r["name"]
-        for r in await superuser_conn.fetch(
-            "select name from offerings where tenant_id = $1", seeded["bytefix_id"]
-        )
-    }
-    lumident_names = {
-        r["name"]
-        for r in await superuser_conn.fetch(
-            "select name from offerings where tenant_id = $1", seeded["lumident_id"]
-        )
-    }
-    assert bytefix_names.isdisjoint(lumident_names)  # no overlap - two verticals
+    assert len({bytefix_cfg, lumident_cfg, sababa_cfg}) == 3
+    names: dict[str, set[str]] = {}
+    for key in ("bytefix_id", "lumident_id", "sababa_id"):
+        names[key] = {
+            r["name"]
+            for r in await superuser_conn.fetch(
+                "select name from offerings where tenant_id = $1", seeded[key]
+            )
+        }
+    assert names["bytefix_id"].isdisjoint(names["lumident_id"])
+    assert names["bytefix_id"].isdisjoint(names["sababa_id"])
+    assert names["lumident_id"].isdisjoint(names["sababa_id"])  # no overlap - three verticals
 
 
 # --- membership -----------------------------------------------------------------
@@ -209,6 +252,13 @@ async def test_membership_rows(
     assert lumident_owner_row is not None
     assert lumident_owner_row["tenant_id"] == seeded["lumident_id"]
     assert lumident_owner_row["role"] == "owner"
+
+    sababa_owner_row = await superuser_conn.fetchrow(
+        "select tenant_id, role from users where id = $1", seeded["sababa_owner"]
+    )
+    assert sababa_owner_row is not None
+    assert sababa_owner_row["tenant_id"] == seeded["sababa_id"]
+    assert sababa_owner_row["role"] == "owner"
 
     admin_count = await superuser_conn.fetchval(
         "select count(*) from platform_admins where user_id = $1", seeded["founder"]
@@ -241,6 +291,11 @@ async def test_conversation_counts_and_statuses(
         "select count(*) from conversations where tenant_id = $1", seeded["lumident_id"]
     )
     assert lumident_count == 2
+
+    sababa_count = await superuser_conn.fetchval(
+        "select count(*) from conversations where tenant_id = $1", seeded["sababa_id"]
+    )
+    assert sababa_count == 2
 
 
 async def test_message_ordering_strictly_increasing(
@@ -369,18 +424,18 @@ async def test_cost_attribution_through_real_endpoint(
     assert detail["total_cost_usd"] > 0
 
 
-async def test_platform_tenants_table_shows_nonzero_for_both(
+async def test_platform_tenants_table_shows_nonzero_for_all(
     seeded: dict[str, uuid.UUID],
     client: httpx.AsyncClient,
 ) -> None:
-    """The platform surface's tenants table (admin.localhost) shows both tenants
+    """The platform surface's tenants table (admin.localhost) shows all tenants
     with non-zero conversation and cost columns - demo criterion #3."""
     token = _make_token(seeded["founder"])
     resp = await client.get("/api/platform/tenants", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200, resp.text
     tenants = {t["slug"]: t for t in resp.json()}
-    assert set(tenants) >= {BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG}
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG):
+    assert set(tenants) >= {BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG}
+    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG):
         assert tenants[slug]["conversation_count"] > 0, slug
         assert tenants[slug]["cost_usd"] > 0, slug
 
@@ -421,7 +476,7 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
     # a platform admin exactly once (global count not asserted - session-shared
     # wren_test accumulates other tests' admin rows, and the real seed only
     # manages the founder's row by design).
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG):
+    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG):
         assert (
             await superuser_conn.fetchval("select count(*) from tenants where slug = $1", slug) == 1
         )

@@ -16,7 +16,7 @@ replaced by a single Vercel project running two container services.
 | Backend (FastAPI) | Vercel, `backend` container service | $0 |
 | DB + Auth (Postgres + pgvector + GoTrue + RLS) | hosted Supabase | $0 (7-day idle pause) |
 | Chat LLM | Google AI Studio + Groq + OpenRouter | $0 |
-| Embeddings | Google `text-embedding-004` | $0 / credits |
+| Embeddings | Google `gemini-embedding-001` | $0 / credits |
 | Reranker | Cohere | $0 free tier |
 | Storefront media | Cloudinary signed Upload API | free tier during Stage 1 |
 | Login-in-chat email | SMTP relay (Brevo) or `console` | $0 |
@@ -32,7 +32,7 @@ Three decisions shape the rest:
    point a domain at later (B-2).
 2. The production image stays **lean** (no `sentence-transformers`/`torch`), so
    embeddings and reranking are hosted, not local. Embeddings use Google
-   `text-embedding-004` truncated to 384 dims (matches the schema, no
+   `gemini-embedding-001` truncated to 384 dims (matches the schema, no
    re-ingest); reranking uses Cohere.
 3. The product ships on the **auto URL** first (`<project>.vercel.app`).
    Buying `agencx.app` and pointing it at the project is ticket B-2, deferred -
@@ -180,6 +180,18 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
      -e DATABASE_URL='<pooler url>' \
      backend python -m seeds.seed_tenant1_phoneshop
    ```
+
+    To add Sabbaba (slug `sababa`) without touching the other tenants:
+
+    ```bash
+    docker compose run --rm \
+      -e DATABASE_URL='<pooler url>' \
+      backend python -m seeds.seed_sababa
+    ```
+
+    This wipe-and-recreates only the `sababa` slug. Do not run the full
+    `seeds.seed_demo` against the hosted database: it wipes and recreates
+    every demo tenant, which would destroy the live `bytefix` rows.
 5. **Auth dashboard configuration (D23, `design/decisions.md`) - blocking, not
    optional.** Login-in-chat's OTP is issued by GoTrue itself now, not by the
    backend, so this project's Auth settings are the only thing standing between
@@ -328,7 +340,6 @@ LLM_FAILOVER_BASE_URL=https://openrouter.ai/api/v1
 LLM_FAILOVER_API_KEY=<OpenRouter key, optional>
 LLM_FAILOVER_MODEL=google/gemma-4-26b-a4b-it:free
 EMBEDDER=google
-GOOGLE_EMBED_MODEL=text-embedding-004
 EMBEDDING_DIM=384
 RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
@@ -337,7 +348,8 @@ ENVIRONMENT=production
 ```
 
 `GOOGLE_EMBED_MODEL` is not in the list because `config.py` already defaults it
-to `text-embedding-004`; set it only to move off that model.
+to `gemini-embedding-001` (text-embedding-004 is retired and 404s); set it only
+to move off that model.
 
 Every one of these is load-bearing, but a few of them fail in ways that do not
 look like a missing variable, so check them by name after any project rebuild:
