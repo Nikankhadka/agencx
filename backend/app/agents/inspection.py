@@ -50,6 +50,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 from pydantic import BaseModel
 
+from app.agents.escalation import contact_ask
 from app.agents.price_gate import owner_material
 from app.agents.state import AgentState, GraphContext
 from app.pricing.validation_gate import validate as validate_price_provenance
@@ -59,6 +60,13 @@ ESCALATION_MESSAGE = (
     "That one's outside what I can answer for you, so I've asked someone from "
     "the business to follow up with you on it. I'm still here for anything else."
 )
+
+
+def escalation_message(*, name_known: bool, email_known: bool) -> str:
+    """ESCALATION_MESSAGE plus a contact ask when either is missing."""
+    ask = contact_ask(name_known=name_known, email_known=email_known)
+    return f"{ESCALATION_MESSAGE} {ask}" if ask else ESCALATION_MESSAGE
+
 
 logger = logging.getLogger("app.agents.inspection")
 
