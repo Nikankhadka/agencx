@@ -180,4 +180,5 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 - [x] `make lint`, `make typecheck`, `make test`, `make eval-skip-llm`
   green; E2E suite green including the new mobile spec.
 - [ ] Founder walkthrough of `/{slug}` on mobile and desktop against v4.
-- [ ] One commit on `feat/m7-storefront-redesign`, PR to `development`.
+- [x] One commit on `feat/m7-storefront-redesign`, PR to `development`
+  ([#41](https://github.com/Nikankhadka/agencx/pull/41)).
