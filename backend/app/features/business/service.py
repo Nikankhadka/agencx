@@ -16,6 +16,7 @@ from app.ingestion.pipeline import ingest_offerings
 from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
+from app.onboarding.flow import read_services
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.voice import voice_from_config
@@ -54,6 +55,95 @@ async def _suggest_category(
     return value or None
 
 
+async def _ensure_category(
+    *,
+    conn: db.AppConnection,
+    tenant_id: UUID,
+    name: str | None = None,
+    category_id: UUID | None = None,
+) -> tuple[UUID | None, str | None]:
+    """Resolve one tenant-owned category, creating labels only on explicit input."""
+    if category_id is not None:
+        row = await conn.fetchrow(
+            "select id, name from offering_categories where tenant_id=$1 and id=$2",
+            tenant_id,
+            category_id,
+        )
+        if row is None:
+            raise ValueError("category not found")
+        return row["id"], row["name"]
+    label = name.strip() if name else ""
+    if not label:
+        return None, None
+    key = normalize_name(label)
+    row = await conn.fetchrow(
+        "insert into offering_categories (tenant_id, name, normalized_key) values ($1, $2, $3) "
+        "on conflict (tenant_id, normalized_key) do update set name=offering_categories.name "
+        "returning id, name",
+        tenant_id,
+        label,
+        key,
+    )
+    return (row["id"], row["name"]) if row is not None else (None, None)
+
+
+async def list_categories(*, tenant_id: UUID) -> list[dict[str, Any]]:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        rows = await conn.fetch(
+            "select id, name, normalized_key from offering_categories "
+            "where tenant_id=$1 order by lower(name), id",
+            tenant_id,
+        )
+    return [dict(row) for row in rows]
+
+
+async def rename_category(
+    *, tenant_id: UUID, category_id: UUID, name: str
+) -> dict[str, Any] | None:
+    label = name.strip()
+    key = normalize_name(label)
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            "update offering_categories set name=$3, normalized_key=$4 "
+            "where tenant_id=$1 and id=$2 returning id, name, normalized_key",
+            tenant_id,
+            category_id,
+            label,
+            key,
+        )
+        if row is not None:
+            await conn.execute(
+                "update offerings set category=$3 where tenant_id=$1 and category_id=$2",
+                tenant_id,
+                category_id,
+                label,
+            )
+    return dict(row) if row is not None else None
+
+
+async def delete_category(*, tenant_id: UUID, category_id: UUID) -> bool:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        exists = await conn.fetchval(
+            "select 1 from offering_categories where tenant_id=$1 and id=$2",
+            tenant_id,
+            category_id,
+        )
+        if not exists:
+            return False
+        await conn.execute(
+            "update offerings set category_id=null, category=null "
+            "where tenant_id=$1 and category_id=$2",
+            tenant_id,
+            category_id,
+        )
+        await conn.execute(
+            "delete from offering_categories where tenant_id=$1 and id=$2",
+            tenant_id,
+            category_id,
+        )
+    return True
+
+
 async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[dict[str, Any]]:
     """The owner's structured offerings, in the order they appear on the page.
 
@@ -64,10 +154,12 @@ async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[
     active_filter = "and active" if active_only else ""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
-            "select o.id, o.name, o.description, o.price_cents, o.category, o.active, o.position, "
+            "select o.id, o.name, o.description, o.price_cents, "
+            "coalesce(c.name, o.category) as category, o.category_id, o.active, o.position, "
             "m.type as media_type, m.provider as media_provider, m.url as media_url, m.poster_url "
             "from offerings o left join tenant_media m on m.offering_id = o.id "
             "and m.role = 'offering' "
+            "left join offering_categories c on c.tenant_id=o.tenant_id and c.id=o.category_id "
             f"where o.tenant_id = $1 {active_filter} order by o.position, o.created_at, o.id",  # noqa: S608
             tenant_id,
         )
@@ -98,6 +190,7 @@ async def create_offering(
     price_cents: int | None,
     embedder: Embedder,
     category: str | None = None,
+    category_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Create one offering at the end of the list, then rebuild its projection."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
@@ -110,6 +203,7 @@ async def create_offering(
                     "description": description,
                     "price_cents": price_cents,
                     "category": category,
+                    "category_id": category_id,
                 }
             ],
             embedder=embedder,
@@ -165,16 +259,24 @@ async def create_offerings_batch(
                 preferred=existing_categories,
                 provider=category_provider,
             )
+        category_id, category = await _ensure_category(
+            conn=conn,
+            tenant_id=tenant_id,
+            name=category,
+            category_id=item.get("category_id"),
+        )
         row = await conn.fetchrow(
-            "insert into offerings (tenant_id, name, description, price_cents, category, position) "
-            "values ($1, $2, $3, $4, $5, $6) returning id, name, description, price_cents, "
-            "category, active, "
+            "insert into offerings (tenant_id, name, description, price_cents, category, "
+            "category_id, position) "
+            "values ($1, $2, $3, $4, $5, $6, $7) returning id, name, description, price_cents, "
+            "category, category_id, active, "
             "position",
             tenant_id,
             name,
             str(item.get("description", "")),
             item.get("price_cents"),
             category,
+            category_id,
             position,
         )
         if row is not None:
@@ -212,11 +314,24 @@ async def reconcile_offerings_batch(
     for item in offerings:
         name = str(item.get("name", "")).strip()
         key = normalize_name(name)
-        values = (name, str(item.get("description", "")), item.get("price_cents"))
+        category_id, category = await _ensure_category(
+            conn=conn,
+            tenant_id=tenant_id,
+            name=str(item.get("category") or item.get("proposed_category") or "") or None,
+            category_id=item.get("category_id"),
+        )
+        values = (
+            name,
+            str(item.get("description", "")),
+            item.get("price_cents"),
+            category,
+            category_id,
+        )
         row = existing.get(key)
         if row is not None:
             await conn.execute(
-                "update offerings set name = $3, description = $4, price_cents = $5 "
+                "update offerings set name = $3, description = $4, price_cents = $5, "
+                "category = $6, category_id = $7 "
                 "where tenant_id = $1 and id = $2",
                 tenant_id,
                 row["id"],
@@ -224,8 +339,9 @@ async def reconcile_offerings_batch(
             )
         else:
             inserted = await conn.fetchrow(
-                "insert into offerings (tenant_id, name, description, price_cents, position) "
-                "values ($1, $2, $3, $4, $5) returning id, name",
+                "insert into offerings (tenant_id, name, description, price_cents, category, "
+                "category_id, position) "
+                "values ($1, $2, $3, $4, $5, $6, $7) returning id, name",
                 tenant_id,
                 *values,
                 position,
@@ -260,13 +376,32 @@ async def update_offering(
     and for no other. It is never empty: the route refuses an empty patch with
     a 422 before reaching here.
     """
-    columns = tuple(updates)
-    assignments = ", ".join(f"{column} = ${index}" for index, column in enumerate(columns, start=3))
+    updates = dict(updates)
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        if "category" in updates:
+            category_id, category = await _ensure_category(
+                conn=conn,
+                tenant_id=tenant_id,
+                name=updates["category"],
+            )
+            updates["category"] = category
+            updates["category_id"] = category_id
+        elif "category_id" in updates:
+            category_id, category = await _ensure_category(
+                conn=conn,
+                tenant_id=tenant_id,
+                category_id=updates["category_id"],
+            )
+            updates["category_id"] = category_id
+            updates["category"] = category
+        columns = tuple(updates)
+        assignments = ", ".join(
+            f"{column} = ${index}" for index, column in enumerate(columns, start=3)
+        )
         row = await conn.fetchrow(
             f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
             "where tenant_id = $1 and id = $2 "
-            "returning id, name, description, price_cents, category, active, position",
+            "returning id, name, description, price_cents, category, category_id, active, position",
             tenant_id,
             offering_id,
             *(updates[column] for column in columns),
@@ -478,7 +613,8 @@ def profile_tagline(profile: dict[str, Any]) -> str | None:
     """The prototype's one-line subtitle: what the business does, then when it
     is open. Either half may be missing - a business that never answered the
     hours beat gets the shorter sentence rather than a dangling separator."""
-    kept = [part for key in ("services", "hours") if (part := str(profile.get(key, "")).strip())]
+    services = ", ".join(read_services(profile.get("services", [])))
+    kept = [part for part in (services, str(profile.get("hours", "")).strip()) if part]
     return " · ".join(kept) if kept else None
 
 
@@ -515,8 +651,11 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             tenant_id,
         )
         offerings = await conn.fetch(
-            "select id, name, description, price_cents, category from offerings "
-            "where tenant_id = $1 and active order by position, created_at, id",
+            "select o.id, o.name, o.description, o.price_cents, "
+            "coalesce(c.name, o.category) as category, o.category_id "
+            "from offerings o left join offering_categories c "
+            "on c.tenant_id=o.tenant_id and c.id=o.category_id "
+            "where o.tenant_id = $1 and o.active order by o.position, o.created_at, o.id",
             tenant_id,
         )
         cover = await conn.fetchval(
@@ -720,7 +859,7 @@ async def read_public_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None
 # O-9: the slice of the profile an owner can correct after go-live. The rest of
 # the profile is written once, at confirm, and stays frozen - the ticket says
 # why, and a settings tree that edits all of it is not being built.
-PROFILE_FIELDS = ("abn", "gst")
+PROFILE_FIELDS = ("abn", "gst", "services")
 
 # W-9: how the public assistant sounds. Editable here beside the ABN, but kept
 # at `config->customer_voice` rather than in the profile object, because that is
@@ -729,7 +868,7 @@ VOICE_FIELDS = ("customer_voice_preset", "customer_voice_custom_style")
 EDITABLE_FIELDS = PROFILE_FIELDS + VOICE_FIELDS
 
 
-async def read_profile(*, tenant_id: UUID) -> dict[str, str]:
+async def read_profile(*, tenant_id: UUID) -> dict[str, Any]:
     """The editable profile fields, empty string where nothing was captured.
 
     Reads `config->profile` (what confirm writes) and falls back per field to
@@ -743,7 +882,10 @@ async def read_profile(*, tenant_id: UUID) -> dict[str, str]:
     config = json.loads(raw) if isinstance(raw, str) else (raw or {})
     profile = config.get("profile") or {}
     draft = (config.get("onboarding") or {}).get("draft") or {}
-    fields = {key: str(profile.get(key) or draft.get(key) or "") for key in PROFILE_FIELDS}
+    fields: dict[str, Any] = {
+        key: str(profile.get(key) or draft.get(key) or "") for key in ("abn", "gst")
+    }
+    fields["services"] = read_services(profile.get("services", draft.get("services", [])))
     # The voice is read through the same normalizer the customer contract uses,
     # so the editor opens on the voice the assistant is actually speaking in -
     # including the default a tenant who never reached the voice beat resolves to.
@@ -753,7 +895,7 @@ async def read_profile(*, tenant_id: UUID) -> dict[str, str]:
     return fields
 
 
-async def write_profile(*, tenant_id: UUID, fields: dict[str, str]) -> dict[str, str]:
+async def write_profile(*, tenant_id: UUID, fields: dict[str, Any]) -> dict[str, Any]:
     """Merge `fields` into the places each of them is kept.
 
     `config->profile` is what confirm writes and what the E-5 spec names;

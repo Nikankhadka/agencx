@@ -23,7 +23,7 @@ the Agencx build. Background on the pre-Agencx build lives in
 | 10 | Hosting "chosen" (Cloudflare) | **Closed by B-4:** both services are containers in one Vercel project behind one origin. The ECS Terraform stays dormant, still CI-validated, deployed by nothing | The frontend host stayed open until its own phase could decide it; B-4 is that phase, and it closed the backend target too - one provider, one origin, no CORS surface |
 | 11 | Wren copy ported verbatim | Copy rewritten inside the porting ticket, never "later" | Wren surfaces said "AI"/"agent"; user-facing copy never does |
 
-## New decisions (D12-D17)
+## New decisions (D12 onward)
 
 ### D12: Lean-first flow - whole-corpus fast path, hybrid RAG deferred
 
@@ -822,3 +822,24 @@ same commits, `Card` and `Container` primitives added with the duplicated
 recipes migrated onto them, the warning wash re-pointed to `#FDF4E3`, and the
 token guard extended to spacing and type. `docs/agencx/progress.md` records
 the rollout.
+
+## D28: Server checkpoints own resumable onboarding and private suggestions
+
+**Date:** 2026-09-18. **Status:** accepted.
+
+**Decision:** Onboarding writes its accepted draft, skipped beats, pending name
+confirmation, review state, and retry metadata to the tenant's JSON checkpoint.
+Optional offering candidates stay there as private drafts. Go live publishes
+only approved candidates; after go live, the same owner-only suggestion
+boundary is used to review and publish them.
+
+**Why:** A browser-local conversation can be lost or replayed, while a second
+draft system would split authority from the existing knowledge review flow.
+The tenant checkpoint is already the durable seam, and the existing review
+sheet is the right owner interaction for candidate edits. Stable category IDs
+and a compatibility label keep the catalog readable while legacy rows migrate.
+
+**Boundary:** The model may classify or judge plausibility, but it never
+rewrites names or creates monetary values. Category matching is tenant-scoped
+and deterministic; uncertain candidates remain uncategorized or private until
+the owner decides.

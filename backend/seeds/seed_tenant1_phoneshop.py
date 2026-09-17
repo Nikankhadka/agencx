@@ -34,9 +34,12 @@ BYTEFIX_PROFILE = {
     "business_type": "phone repair shop",
     "headcount": "4",
     "hours": "Monday to Friday 9am to 6pm, Saturday 10am to 2pm",
-    "services": (
-        "Phone and laptop repairs, screen replacements, battery replacements, data recovery"
-    ),
+    "services": [
+        "Phone and laptop repairs",
+        "Screen replacements",
+        "Battery replacements",
+        "Data recovery",
+    ],
     "contact": "owner@bytefix.dev",
     "abn": "none",
     "gst": "no",

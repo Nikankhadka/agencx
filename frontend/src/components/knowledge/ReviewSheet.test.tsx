@@ -204,6 +204,67 @@ describe("review toolbar", () => {
   });
 });
 
+describe("suggestions-only review", () => {
+  /**
+   * The suggestions sheet is the only place a private draft is ever shown. It
+   * shares the sheet and the offering card with the knowledge review, but it
+   * reviews candidates alone - there is no document, no workspace, and nothing
+   * to publish until the owner saves. (The save itself is a click, so the
+   * approved payload is asserted in the e2e spec, not here.)
+   */
+  function suggestion(name: string, overrides: Partial<ReviewOffering> = {}): ReviewOffering {
+    return {
+      candidate_id: `cand-${name.toLowerCase().replace(/\s+/g, "-")}`,
+      name,
+      description: "",
+      price_cents: null,
+      sources: ["document"],
+      review_status: "pending",
+      ...overrides,
+    };
+  }
+
+  function renderSuggestions(suggestions: ReviewOffering[], withHandler = true): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={null}
+        suggestions={suggestions}
+        suggestionsOnly
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onSaveSuggestions={withHandler ? async () => {} : undefined}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("puts every candidate in a row the owner can edit before approving", () => {
+    const html = renderSuggestions([suggestion("Screen repair"), suggestion("Battery swap")]);
+    expect(html).toContain("Suggestions to review");
+    expect(html).toContain('value="Screen repair"');
+    expect(html).toContain('value="Battery swap"');
+    expect(html).toContain('data-testid="suggestions-save"');
+  });
+
+  it("says outright that nothing here has reached a customer", () => {
+    // The owner is being asked to approve drafts the assistant wrote from
+    // their own uploads. Whether those are already live is the first thing
+    // they need to know, so it is stated on the sheet rather than implied.
+    const html = renderSuggestions([suggestion("Screen repair")]);
+    expect(html).toContain("These private drafts never reach customers until you save them.");
+  });
+
+  it("renders nothing to review without a handler to save through", () => {
+    // A sheet with a Save button that goes nowhere is worse than no sheet.
+    const html = renderSuggestions([suggestion("Screen repair")], false);
+    expect(html).not.toContain('value="Screen repair"');
+    expect(html).not.toContain('data-testid="suggestions-save"');
+  });
+});
+
 describe("pagination copy", () => {
   function renderPagination(page: number, pages: number, count: number): string {
     return renderToStaticMarkup(

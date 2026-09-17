@@ -51,13 +51,8 @@ WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 # the GST beat skip itself.
 NO_ABN = "none"
 
-# W-7 removed the "Skip for now" chip. A beat that will not fill is closed out
-# by the ask cap instead, so there is no chip to explain and no skip vocabulary
-# to teach. A skipped beat's field still stays empty and its key is remembered
-# beside the draft, because `profile_tagline` reads `services` and `hours`
-# straight into the public storefront subtitle and a sentinel there would show
-# to customers. (NO_ABN is the opposite case: "no ABN" is a real answer that is
-# meant to display.)
+# Optional beats expose one explicit server-persisted skip. The sentinel never
+# enters the profile, so skipped data cannot leak into the storefront.
 
 
 class ChipSpec(BaseModel):
@@ -378,6 +373,9 @@ def next_beat(
 
 def input_spec(beat: Beat) -> InputSpec:
     """The composer widget for a beat."""
+    chips = list(beat.chips)
+    if beat.optional:
+        chips.append(ChipSpec(label="Skip for now", value="__skip__", dashed=True))
     return InputSpec(
         kind=beat.kind,
         # W-3: a non-chipped beat's placeholder used to repeat `beat.ask`, but
@@ -386,7 +384,7 @@ def input_spec(beat: Beat) -> InputSpec:
         # CommandPill's `ariaLabel` prop). A chipped beat still teaches "or
         # type…" past its chips.
         placeholder=CHIPPED_PLACEHOLDER if beat.chips else "",
-        chips=list(beat.chips),
+        chips=chips,
         mask=beat.mask,
         prefix=beat.prefix,
         suggest_owner_email=beat.suggest_owner_email,
@@ -437,7 +435,7 @@ def apply_selection(draft: dict[str, Any], key: str, values: list[str]) -> str:
 NAME_CONFIRM_INPUT = InputSpec(
     kind="text",
     placeholder=CHIPPED_PLACEHOLDER,
-    chips=[ChipSpec(label="Yes", value="yes")],
+    chips=[ChipSpec(label="Yes", value="yes"), ChipSpec(label="No", value="no")],
 )
 
 

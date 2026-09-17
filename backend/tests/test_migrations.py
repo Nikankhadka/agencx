@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "cost_logs",
     "tenant_assets",
     "tenant_media",
+    "offering_categories",
 }
 
 
@@ -67,8 +68,11 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # 0029 (W-10) drops the retired tenant_config.system_prompt and .tone
     # columns, once W-9's reader removal and 0027's customer_voice backfill were
     # verified in production; 0030 keeps that failure metadata off non-failed
-    # rows without requiring a legacy failed row to be backfilled.
-    assert len(on_disk) == 30, "expected migrations 0001-0030"
+    # rows without requiring a legacy failed row to be backfilled; 0031 adds the
+    # tenant-scoped offering_categories table and offerings.category_id, so a
+    # category is a row the owner can rename once rather than a label repeated on
+    # every offering.
+    assert len(on_disk) == 31, "expected migrations 0001-0031"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

@@ -2,6 +2,7 @@
 
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { OfferingsList } from "../components/OfferingsList";
+import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions";
 
 /**
  * M-1/M-4: "What you offer" - the owner's own offerings, on their own screen.
@@ -16,6 +17,7 @@ export default function OfferingsPage() {
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="What you offer" backHref="/business" />
       <div className="min-h-0 flex-1 overflow-y-auto pb-16 lg:mx-auto lg:w-full lg:max-w-thread">
+        <OfferingSuggestions variant="section" />
         <OfferingsList />
       </div>
     </main>
