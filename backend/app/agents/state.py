@@ -92,6 +92,18 @@ class AgentState(TypedDict):
     # Amendment 4: a server-produced card payload. Structured responses bypass
     # prose drafting but still pass through the final inspection node.
     response: NotRequired[dict[str, Any]]
+    # Intent/action classification for this turn (app/agents/intent.py) -
+    # descriptive metadata persisted on the assistant message and the
+    # escalation row. NotRequired so every existing constructor stays valid;
+    # nothing routes or gates on these values.
+    intent: NotRequired[str]
+    action: NotRequired[str]
+    # Escalation-scoped contact capture: whether the conversation already holds
+    # the customer's preferred name (conversations.customer_ref) and email
+    # (conversations.customer_email). Read at turn start by the agent node;
+    # escalation message builders append a contact ask only when one is false.
+    customer_name_known: NotRequired[bool]
+    customer_email_known: NotRequired[bool]
 
 
 @dataclass(frozen=True)
