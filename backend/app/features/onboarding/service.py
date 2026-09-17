@@ -27,6 +27,10 @@ class PublicSlugTakenError(RuntimeError):
     """The requested public page address belongs to another tenant."""
 
 
+class RevisionConflictError(RuntimeError):
+    """Another request checkpointed this tenant's onboarding first."""
+
+
 async def load_record(*, tenant_id: UUID) -> dict[str, Any]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         raw = await conn.fetchval(
@@ -37,20 +41,32 @@ async def load_record(*, tenant_id: UUID) -> dict[str, Any]:
 
 
 async def set_onboarding_json(
-    conn: db.AppConnection, tenant_id: UUID, record: dict[str, Any]
+    conn: db.AppConnection,
+    tenant_id: UUID,
+    record: dict[str, Any],
+    *,
+    expected_revision: int | None = None,
 ) -> None:
-    await conn.execute(
+    where = "where tenant_id = $1"
+    args: list[Any] = [tenant_id, json.dumps(record)]
+    if expected_revision is not None:
+        where += " and coalesce((config->'onboarding'->>'revision')::bigint, 0) = $3"
+        args.append(expected_revision)
+    result = await conn.execute(
         "update tenant_config set config = jsonb_set("
         "config, '{onboarding}', $2::jsonb, true), "
-        "updated_at = now() where tenant_id = $1",
-        tenant_id,
-        json.dumps(record),
+        f"updated_at = now() {where}",
+        *args,
     )
+    if expected_revision is not None and result != "UPDATE 1":
+        raise RevisionConflictError
 
 
 async def save_record(*, tenant_id: UUID, record: dict[str, Any]) -> None:
+    expected_revision = int(record.get("revision", 0) or 0)
+    record["revision"] = expected_revision + 1
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await set_onboarding_json(conn, tenant_id, record)
+        await set_onboarding_json(conn, tenant_id, record, expected_revision=expected_revision)
 
 
 async def apply_confirmation(
@@ -110,3 +126,18 @@ async def apply_confirmation(
     if old_slug:
         tenant_service.invalidate_slug_cache(old_slug)
     tenant_service.invalidate_slug_cache(slug)
+
+
+async def publish_reviewed_offerings(
+    *, tenant_id: UUID, offerings: list[PendingOffering], embedder: Embedder
+) -> None:
+    """Publish owner-approved suggestions for an already-live tenant."""
+    if not offerings:
+        return
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await reconcile_offerings_batch(
+            conn=conn,
+            tenant_id=tenant_id,
+            offerings=[item.model_dump() for item in offerings],
+            embedder=embedder,
+        )

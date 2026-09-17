@@ -31,6 +31,7 @@ import {
   type InputSpec,
   type OnboardingDraft,
   type OnboardingState,
+  type PendingConfirmation,
 } from "@/lib/onboarding";
 import { slugShapeError } from "@/lib/slug";
 import { BeatComposer } from "./components/BeatComposer";
@@ -63,6 +64,9 @@ interface StateFields {
   can_confirm: boolean;
   suggested_slug: string | null;
   paused_beat: string | null;
+  pending_confirmation?: PendingConfirmation | null;
+  skipped?: string[];
+  revision?: number;
   offering_candidates?: PendingOffering[];
 }
 
@@ -214,6 +218,8 @@ export default function OnboardingPage() {
   const [input, setInput] = useState<InputSpec | null>(null);
   const [canConfirm, setCanConfirm] = useState(false);
   const [pausedBeat, setPausedBeat] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<PendingConfirmation | null>(null);
   // W-4: the address is derived, never latched. `suggestedSlug` is set
   // unconditionally on every state read - the server recomputes it from the
   // draft's business name every time (controller.py:175-181, 121-125), so it
@@ -261,6 +267,7 @@ export default function OnboardingPage() {
     setInput(fields.input);
     setCanConfirm(fields.can_confirm);
     setPausedBeat(fields.paused_beat);
+    setPendingConfirmation(fields.pending_confirmation ?? null);
     setOwnerOfferings(fields.offering_candidates ?? []);
     setBusinessName((current) => current || fields.draft.business_name || "");
     // W-4 US-1/US-2: unconditional, every time - see the `suggestedSlug`
@@ -1130,6 +1137,7 @@ export default function OnboardingPage() {
               onSelection={(values, label) => void sendSelection(values, label)}
               onStop={handleStop}
               ownerEmail={user?.email ?? null}
+              pendingConfirmation={pendingConfirmation}
               onFiles={stage === "knowledge" ? (files) => void uploadFiles(files) : undefined}
             />
           ) : null}

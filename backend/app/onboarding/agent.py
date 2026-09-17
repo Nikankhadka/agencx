@@ -43,7 +43,9 @@ import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
 
 from app.agents.spotlight import scan_input
 from app.features.business.offering_candidates import normalize_name
@@ -59,6 +61,7 @@ from app.onboarding.flow import (
     ProfileDraft,
     merge_offerings,
     normalize_pending_offerings,
+    read_services,
 )
 from app.onboarding.tools import SERVER_OWNED_FIELDS, save_profile
 from app.shared.text import plain_dashes
@@ -249,6 +252,60 @@ _VOICE_BEAT = "customer_voice_preset"
 # looks (US-1) - this is the limit that is not about taste.
 _NAME_MAX = 200
 
+
+class NamePlausibility(BaseModel):
+    """The constrained second-pass verdict for a submitted name replacement."""
+
+    verdict: Literal["plausible", "implausible"] = Field(description="one of two verdicts")
+
+
+def valid_name_replacement(value: str) -> bool:
+    """Reject obvious non-names while leaving unusual names to the verdict call."""
+    candidate = value.strip()
+    lowered = candidate.casefold()
+    if not candidate or len(candidate) > _NAME_MAX or any(ord(char) < 32 for char in candidate):
+        return False
+    if re.search(r"(?:https?://|www\.|\b[a-z0-9.-]+\.(?:com|net|org|au)\b)", lowered):
+        return False
+    if any(word in lowered for word in ("ignore previous", "system prompt", "instructions:")):
+        return False
+    if not re.search(r"[^\W\d_]", candidate, re.UNICODE):
+        return False
+    digit_count = sum(char.isdigit() for char in candidate)
+    letter_count = sum(char.isalpha() for char in candidate)
+    return not (digit_count >= 3 and digit_count > letter_count // 2)
+
+
+async def propose_name_replacement(
+    *, record: OnboardingRecord, value: str, provider: LLMProvider, target: str | None = None
+) -> tuple[bool, str]:
+    """Validate and stage a name exactly as typed, without model rewriting."""
+    candidate = value.strip()
+    pending = record.pending_name
+    target = target or (pending["target"] if pending else record.ask_beat)
+    if target not in _NAME_FIELDS or not valid_name_replacement(candidate):
+        return False, (
+            "That doesn't look like a usable name. Try the name exactly as you want it shown."
+        )
+    try:
+        verdict = await provider.extract(
+            system_prompt=(
+                "Return only verdict=plausible or verdict=implausible. Judge whether the "
+                "submitted value could be a real personal or business name. Do not rewrite it."
+            ),
+            user_input=f"Target: {target}\nSubmitted value: {candidate}",
+            schema=NamePlausibility,
+        )
+    except Exception:
+        return False, "I couldn't verify that name. Try submitting it again."
+    if verdict.verdict != "plausible":
+        return False, (
+            "That doesn't look like a usable name. Try the name exactly as you want it shown."
+        )
+    record.pending_name = {"target": target, "raw": candidate, "proposal": candidate}
+    return True, f'I have "{candidate}". Is that right?'
+
+
 # Typed agreement with a proposal, so the owner who types "yes" instead of
 # tapping Yes is not asked the same thing again. Deterministic and closed: it
 # is a fixed vocabulary, not a similarity check over the owner's words.
@@ -287,6 +344,11 @@ class OnboardingRecord:
     # a junk business name becoming the public identity. It is part of the
     # persisted record, so a reload mid-confirmation resumes the same proposal.
     pending_name: dict[str, str] | None = None
+    # Monotonic JSON checkpoint metadata. It makes retries and concurrent tabs
+    # converge on one server-authored state instead of advancing twice.
+    revision: int = 0
+    last_action_key: str | None = None
+    last_action_fingerprint: str | None = None
 
     @classmethod
     def from_jsonb(cls, raw: dict[str, Any]) -> OnboardingRecord:
@@ -302,9 +364,12 @@ class OnboardingRecord:
         """
         version = raw.get("version")
         if version in (3, 4):
+            draft = dict(raw.get("draft", {})) if isinstance(raw.get("draft", {}), dict) else {}
+            if "services" in draft:
+                draft["services"] = read_services(draft["services"])
             record = cls(
                 version=4,
-                draft=raw.get("draft", {}),
+                draft=draft,
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
@@ -322,6 +387,13 @@ class OnboardingRecord:
                 # do: a v4 record written before it existed has no name waiting
                 # to be confirmed, which is exactly what its absence says.
                 pending_name=_load_pending_name(raw.get("pending_name")),
+                revision=int(raw.get("revision", 0) or 0),
+                last_action_key=str(raw.get("last_action_key"))
+                if raw.get("last_action_key")
+                else None,
+                last_action_fingerprint=str(raw.get("last_action_fingerprint"))
+                if raw.get("last_action_fingerprint")
+                else None,
             )
             if version == 3:
                 record._rename_owner_name_beat()
@@ -333,6 +405,11 @@ class OnboardingRecord:
             off_topic_count=0,
             completed=raw.get("completed", False),
             offering_candidates=[],
+            revision=int(raw.get("revision", 0) or 0),
+            last_action_key=str(raw.get("last_action_key")) if raw.get("last_action_key") else None,
+            last_action_fingerprint=str(raw.get("last_action_fingerprint"))
+            if raw.get("last_action_fingerprint")
+            else None,
         )
 
     def _rename_owner_name_beat(self) -> None:
@@ -369,6 +446,9 @@ class OnboardingRecord:
             "ask_count": self.ask_count,
             "paused_beat": self.paused_beat,
             "pending_name": self.pending_name,
+            "revision": self.revision,
+            "last_action_key": self.last_action_key,
+            "last_action_fingerprint": self.last_action_fingerprint,
         }
 
 
@@ -505,7 +585,7 @@ def _apply_corrections(
         if beat.valid is not None and not beat.valid(value):
             continue
         previous = str(record.draft.get(target, ""))
-        record.draft = save_profile(record.draft, ProfileDraft(**{target: value}))
+        record.draft = save_profile(record.draft, ProfileDraft.model_validate({target: value}))
         current = str(record.draft.get(target, ""))
         if current and current != previous:
             applied.append((beat.label, current))
@@ -539,7 +619,7 @@ def confirm_pending_name(record: OnboardingRecord) -> str:
     return pending["proposal"]
 
 
-def _is_affirmative(message: str) -> bool:
+def is_affirmative(message: str) -> bool:
     """Whether a typed message is plain agreement with the waiting proposal."""
     return message.strip().strip(".!").casefold() in _AFFIRMATIVE
 
@@ -963,7 +1043,7 @@ async def prepare_turn(
     # W-9 US-1: a typed yes to a waiting proposal is the same act as tapping the
     # Yes chip, and is answered the same way - deterministically, with no model
     # call at all, so agreeing can never produce a reply that re-asks.
-    if record.pending_name is not None and _is_affirmative(admin_message):
+    if record.pending_name is not None and is_affirmative(admin_message):
         saved = confirm_pending_name(record)
         record.history.append({"role": "user", "content": admin_message})
         return TurnPlan(
@@ -1013,7 +1093,7 @@ async def prepare_turn(
         # A named offering is an answer to the offer beat, so it fills that
         # field too rather than leaving the beat open and asking again.
         if not record.draft.get("services") and "services" not in record.skipped:
-            record.draft["services"] = ", ".join(item.name for item in record.offering_candidates)
+            record.draft["services"] = [item.name for item in record.offering_candidates]
     corrected, clarification = _apply_corrections(record, update.corrections or [])
     acknowledged.extend(corrected)
 

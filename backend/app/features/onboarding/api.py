@@ -15,7 +15,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,7 +30,7 @@ from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
-from app.onboarding.flow import PendingOffering
+from app.onboarding.flow import CorrectionTarget, FieldCorrection, PendingOffering
 from app.shared import auth
 from app.shared.errors import request_id
 from app.shared.limits import LimitTimeout
@@ -44,7 +44,7 @@ class OnboardingStateResponse(BaseModel):
     stage: str
     prompt: str
     # O-1: the draft is a flat profile - one string per captured field.
-    draft: dict[str, str]
+    draft: dict[str, Any]
     completed: bool
     history: list[dict[str, str]]
     input: InputSpec | None
@@ -52,6 +52,18 @@ class OnboardingStateResponse(BaseModel):
     suggested_slug: str | None
     offering_candidates: list[PendingOffering]
     paused_beat: str | None
+    pending_confirmation: dict[str, str] | None = None
+    skipped: list[str] = Field(default_factory=list)
+    revision: int = 0
+
+
+class OnboardingSuggestionsResponse(BaseModel):
+    count: int
+    candidates: list[PendingOffering]
+
+
+class OnboardingSuggestionsRequest(BaseModel):
+    candidates: list[PendingOffering] = Field(default_factory=list, max_length=100)
 
 
 class SelectionPayload(BaseModel):
@@ -59,15 +71,41 @@ class SelectionPayload(BaseModel):
     values: list[str] = Field(default_factory=list)
 
 
+class CorrectionPayload(BaseModel):
+    field: CorrectionTarget
+    value: str = Field(min_length=1, max_length=2000)
+    raw: str = Field(default="", max_length=2000)
+
+
+class SkipPayload(BaseModel):
+    beat: str = Field(min_length=1, max_length=80)
+
+
 class OnboardingMessageRequest(BaseModel):
     text: str | None = None
     selection: SelectionPayload | None = None
     resume: bool = False
+    correction: CorrectionPayload | None = None
+    skip: SkipPayload | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=120)
 
     @model_validator(mode="after")
     def _exactly_one_of_text_or_selection(self) -> OnboardingMessageRequest:
-        if sum((self.text is not None, self.selection is not None, self.resume)) != 1:
-            raise ValueError("provide exactly one of 'text', 'selection', or 'resume'")
+        if (
+            sum(
+                (
+                    self.text is not None,
+                    self.selection is not None,
+                    self.resume,
+                    self.correction is not None,
+                    self.skip is not None,
+                )
+            )
+            != 1
+        ):
+            raise ValueError(
+                "provide exactly one of 'text', 'selection', 'resume', 'correction', or 'skip'"
+            )
         return self
 
 
@@ -137,6 +175,28 @@ async def get_state(
     return OnboardingStateResponse(**record)
 
 
+@router.get("/suggestions", response_model=OnboardingSuggestionsResponse)
+async def get_suggestions(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> OnboardingSuggestionsResponse:
+    record = await controller.load_offering_suggestions(tenant_id=admin.tenant_id)
+    return OnboardingSuggestionsResponse(**record)
+
+
+@router.put("/suggestions", response_model=OnboardingSuggestionsResponse)
+async def put_suggestions(
+    body: OnboardingSuggestionsRequest,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
+) -> OnboardingSuggestionsResponse:
+    record = await controller.save_offering_suggestions(
+        tenant_id=admin.tenant_id,
+        candidates=body.candidates,
+        embedder=embedder,
+    )
+    return OnboardingSuggestionsResponse(**record)
+
+
 # W-11a: registered before the "/knowledge/{document_id}" route below - Starlette
 # matches routes in declaration order and "{document_id}" would otherwise
 # swallow "/knowledge/batch" (matching "batch" as the path segment, then 422ing
@@ -194,18 +254,41 @@ async def post_message(
     embedder: Annotated[Embedder, Depends(get_embedder_dependency)],
 ) -> OnboardingStateResponse:
     if body.resume:
-        record_data = await controller.run_resume(tenant_id=admin.tenant_id)
+        record_data = await controller.run_resume(
+            tenant_id=admin.tenant_id, idempotency_key=body.idempotency_key
+        )
         return OnboardingStateResponse(**controller.response_from_record(record_data))
     if body.selection is not None:
         record_data = await controller.run_selection(
             tenant_id=admin.tenant_id,
             beat_key=body.selection.beat,
             values=body.selection.values,
+            idempotency_key=body.idempotency_key,
+        )
+        return OnboardingStateResponse(**controller.response_from_record(record_data))
+    if body.skip is not None:
+        record_data = await controller.run_selection(
+            tenant_id=admin.tenant_id,
+            beat_key=body.skip.beat,
+            values=["__skip__"],
+            idempotency_key=body.idempotency_key,
+        )
+        return OnboardingStateResponse(**controller.response_from_record(record_data))
+    if body.correction is not None:
+        record_data = await controller.run_correction(
+            tenant_id=admin.tenant_id,
+            correction=FieldCorrection(**body.correction.model_dump()),
+            provider=provider,
+            idempotency_key=body.idempotency_key,
         )
         return OnboardingStateResponse(**controller.response_from_record(record_data))
     assert body.text is not None
     record_data = await controller.run_message(
-        tenant_id=admin.tenant_id, text=body.text, provider=provider, embedder=embedder
+        tenant_id=admin.tenant_id,
+        text=body.text,
+        provider=provider,
+        embedder=embedder,
+        idempotency_key=body.idempotency_key,
     )
     return OnboardingStateResponse(**controller.response_from_record(record_data))
 
@@ -229,7 +312,11 @@ async def post_message_stream(
         stream_started = time.perf_counter()
         try:
             async for event in controller.run_message_stream(
-                tenant_id=admin.tenant_id, text=text, provider=provider, embedder=embedder
+                tenant_id=admin.tenant_id,
+                text=text,
+                provider=provider,
+                embedder=embedder,
+                idempotency_key=body.idempotency_key,
             ):
                 yield await _sse(event)
         except HTTPException as exc:

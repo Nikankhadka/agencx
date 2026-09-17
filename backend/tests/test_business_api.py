@@ -135,6 +135,7 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "description": "Most models",
             "price_cents": 8950,
             "category": "Screen repairs",
+            "category_id": offering["category_id"],
             "media": None,
         }
     ]
@@ -156,6 +157,7 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "description": "Most models",
             "price_cents": 9900,
             "category": "Screen repairs",
+            "category_id": offering["category_id"],
             "media": None,
         }
     ]
@@ -169,6 +171,47 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
     assert (await client.get("/api/business/offerings", headers=headers)).json() == []
     async with db.tenant_context(tenant_id, "customer") as conn:
         assert await knowledge_version(conn, tenant_id) > after_update
+
+
+async def test_category_rename_and_delete_moves_offerings_to_uncategorized(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Baklava", "category": "Desserts"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    category_id = created.json()["category_id"]
+
+    renamed = await client.patch(
+        f"/api/business/offering-categories/{category_id}",
+        json={"name": "Sweet treats"},
+        headers=headers,
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Sweet treats"
+    assert (await client.get("/api/business/offerings", headers=headers)).json()[0][
+        "category"
+    ] == "Sweet treats"
+
+    deleted = await client.delete(
+        f"/api/business/offering-categories/{category_id}", headers=headers
+    )
+    assert deleted.status_code == 204
+    offering = (await client.get("/api/business/offerings", headers=headers)).json()[0]
+    assert offering["category"] is None
+    assert offering["category_id"] is None
+
+    # A category this tenant no longer owns is a 404, not a 500 from the
+    # service's own lookup.
+    stale = await client.patch(
+        f"/api/business/offerings/{offering['id']}",
+        json={"category_id": category_id},
+        headers=headers,
+    )
+    assert stale.status_code == 404
 
 
 async def test_youtube_offering_media_does_not_require_cloudinary(
@@ -606,6 +649,7 @@ async def test_profile_patch_moves_both_keys_together(client: httpx.AsyncClient)
         # An owner who never reached the voice beat reads the default back.
         "customer_voice_preset": "warm_casual",
         "customer_voice_custom_style": "",
+        "services": [],
     }
 
     read_back = await client.get("/api/business/profile", headers=headers)
@@ -614,6 +658,7 @@ async def test_profile_patch_moves_both_keys_together(client: httpx.AsyncClient)
         "gst": "yes",
         "customer_voice_preset": "warm_casual",
         "customer_voice_custom_style": "",
+        "services": [],
     }
 
     config = await _config_of(tenant_id)
@@ -636,7 +681,24 @@ async def test_profile_patch_leaves_absent_fields_alone(client: httpx.AsyncClien
         # An owner who never reached the voice beat reads the default back.
         "customer_voice_preset": "warm_casual",
         "customer_voice_custom_style": "",
+        "services": [],
     }
+
+
+async def test_services_are_owner_editable_as_a_deduplicated_list(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, tenant_id = await _signup(client)
+    saved = await client.patch(
+        "/api/business/profile",
+        json={"services": [" Meat ", "Desserts", "Meat"]},
+        headers=headers,
+    )
+    assert saved.status_code == 200
+    assert saved.json()["services"] == ["Meat", "Desserts"]
+    config = await _config_of(tenant_id)
+    assert config["profile"]["services"] == ["Meat", "Desserts"]
+    assert config["onboarding"]["draft"]["services"] == ["Meat", "Desserts"]
 
 
 async def test_a_cleared_abn_is_the_stated_no(client: httpx.AsyncClient) -> None:

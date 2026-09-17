@@ -48,6 +48,13 @@ live in the ticket files, not here.
   chat entry. `Active - in progress` on `feat/m7-storefront-redesign`;
   ticket file lands with that branch. Founder mobile and desktop
   walkthrough is the remaining step before merge.
+- [ ] Resumable owner input and offering normalization: optional beats can
+  be skipped and stay skipped, name proposals are confirmed rather than
+  assumed, services are a normalized list, offering suggestions stay private
+  until the owner reviews them, and categories are tenant-scoped rows
+  (migration `0031`). Code in `development`, founder walkthrough on the
+  preview deploy remains; record in
+  [12-refinement.md](spec/active/12-refinement.md), ADR D28.
 - [ ] U-1 through U-4 UX consistency: shared nav idiom, button feel,
   shared confirm dialog, toasts. Code in `development`, founder
   walkthrough remains; record folded into
@@ -74,7 +81,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases |
 
 Phase 1 is not called fully complete until the active refinement items

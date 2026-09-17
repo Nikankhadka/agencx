@@ -172,6 +172,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Suggestions */
+        get: operations["get_suggestions_api_onboarding_suggestions_get"];
+        /** Put Suggestions */
+        put: operations["put_suggestions_api_onboarding_suggestions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/knowledge/batch": {
         parameters: {
             query?: never;
@@ -497,6 +515,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/business/offering-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Offering Categories */
+        get: operations["list_offering_categories_api_business_offering_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business/offering-categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Offering Category */
+        delete: operations["remove_offering_category_api_business_offering_categories__category_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Offering Category */
+        patch: operations["patch_offering_category_api_business_offering_categories__category_id__patch"];
         trace?: never;
     };
     "/api/business/offerings/{offering_id}": {
@@ -939,6 +992,11 @@ export interface components {
         };
         /** BookingPageOffering */
         BookingPageOffering: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Name */
             name: string;
             /** Description */
@@ -947,6 +1005,8 @@ export interface components {
             price_cents: number | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
             media?: components["schemas"]["OfferingMedia"] | null;
         };
         /** BookingPageResponse */
@@ -996,6 +1056,8 @@ export interface components {
             customer_voice_preset: string;
             /** Customer Voice Custom Style */
             customer_voice_custom_style: string;
+            /** Services */
+            services: string[];
         };
         /** CatalogItemResponse */
         CatalogItemResponse: {
@@ -1095,6 +1157,21 @@ export interface components {
             last_message?: string | null;
             /** Last Activity At */
             last_activity_at?: string | null;
+        };
+        /** CorrectionPayload */
+        CorrectionPayload: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "owner_display_name" | "business_name" | "business_type" | "headcount" | "hours" | "services" | "contact" | "abn" | "gst" | "unresolved_name";
+            /** Value */
+            value: string;
+            /**
+             * Raw
+             * @default
+             */
+            raw: string;
         };
         /** CostDashboard */
         CostDashboard: {
@@ -1341,6 +1418,23 @@ export interface components {
             /** Tool Calls */
             tool_calls: components["schemas"]["ToolCallDetail"][];
         };
+        /** OfferingCategoryResponse */
+        OfferingCategoryResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Normalized Key */
+            normalized_key: string;
+        };
+        /** OfferingCategoryUpdate */
+        OfferingCategoryUpdate: {
+            /** Name */
+            name: string;
+        };
         /** OfferingCreate */
         OfferingCreate: {
             /** Name */
@@ -1354,6 +1448,8 @@ export interface components {
             price_dollars?: number | string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
         };
         /** OfferingMedia */
         OfferingMedia: {
@@ -1392,6 +1488,8 @@ export interface components {
             price_cents: number | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
             media?: components["schemas"]["OfferingMedia"] | null;
         };
         /**
@@ -1412,6 +1510,8 @@ export interface components {
             price_dollars?: number | string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
         };
         /** OnboardingConfirmRequest */
         OnboardingConfirmRequest: {
@@ -1492,6 +1592,10 @@ export interface components {
              * @default false
              */
             resume: boolean;
+            correction?: components["schemas"]["CorrectionPayload"] | null;
+            skip?: components["schemas"]["SkipPayload"] | null;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
         };
         /** OnboardingStateResponse */
         OnboardingStateResponse: {
@@ -1501,7 +1605,7 @@ export interface components {
             prompt: string;
             /** Draft */
             draft: {
-                [key: string]: string;
+                [key: string]: unknown;
             };
             /** Completed */
             completed: boolean;
@@ -1518,6 +1622,29 @@ export interface components {
             offering_candidates: components["schemas"]["PendingOffering-Output"][];
             /** Paused Beat */
             paused_beat: string | null;
+            /** Pending Confirmation */
+            pending_confirmation?: {
+                [key: string]: string;
+            } | null;
+            /** Skipped */
+            skipped?: string[];
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+        };
+        /** OnboardingSuggestionsRequest */
+        OnboardingSuggestionsRequest: {
+            /** Candidates */
+            candidates?: components["schemas"]["PendingOffering-Input"][];
+        };
+        /** OnboardingSuggestionsResponse */
+        OnboardingSuggestionsResponse: {
+            /** Count */
+            count: number;
+            /** Candidates */
+            candidates: components["schemas"]["PendingOffering-Output"][];
         };
         /**
          * PendingOffering
@@ -1564,6 +1691,32 @@ export interface components {
             possible_matches?: string[];
             /** Price Options */
             price_options?: number[];
+            /**
+             * Source Wording
+             * @default
+             */
+            source_wording: string;
+            /**
+             * Proposed Category
+             * @default
+             */
+            proposed_category: string;
+            /**
+             * Description Origin
+             * @default none
+             * @enum {string}
+             */
+            description_origin: "owner" | "document" | "generated" | "none";
+            /**
+             * Review Status
+             * @default pending
+             * @enum {string}
+             */
+            review_status: "pending" | "approved" | "rejected";
+            /** Provenance */
+            provenance?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * PendingOffering
@@ -1610,6 +1763,32 @@ export interface components {
             possible_matches?: string[];
             /** Price Options */
             price_options?: number[];
+            /**
+             * Source Wording
+             * @default
+             */
+            source_wording: string;
+            /**
+             * Proposed Category
+             * @default
+             */
+            proposed_category: string;
+            /**
+             * Description Origin
+             * @default none
+             * @enum {string}
+             */
+            description_origin: "owner" | "document" | "generated" | "none";
+            /**
+             * Review Status
+             * @default pending
+             * @enum {string}
+             */
+            review_status: "pending" | "approved" | "rejected";
+            /** Provenance */
+            provenance?: {
+                [key: string]: unknown;
+            };
         };
         /** PlatformMetrics */
         PlatformMetrics: {
@@ -1667,6 +1846,8 @@ export interface components {
             abn?: string | null;
             /** Gst */
             gst?: string | null;
+            /** Services */
+            services?: string[] | null;
             /** Customer Voice Preset */
             customer_voice_preset?: string | null;
             /** Customer Voice Custom Style */
@@ -1742,6 +1923,11 @@ export interface components {
             beat: string;
             /** Values */
             values?: string[];
+        };
+        /** SkipPayload */
+        SkipPayload: {
+            /** Beat */
+            beat: string;
         };
         /** SourceDetail */
         SourceDetail: {
@@ -2285,6 +2471,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStateResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_suggestions_api_onboarding_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingSuggestionsResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_suggestions_api_onboarding_suggestions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingSuggestionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingSuggestionsResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */
@@ -3100,6 +3357,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OfferingResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_offering_categories_api_business_offering_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingCategoryResponse"][];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    remove_offering_category_api_business_offering_categories__category_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    patch_offering_category_api_business_offering_categories__category_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferingCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingCategoryResponse"];
                 };
             };
             /** @description Validation failed */

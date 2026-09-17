@@ -105,6 +105,25 @@ general clinic - prove the domain-agnostic invariant visually: identical
 screens and workflow code, with content, offerings, categories, and
 knowledge driven by config only.
 
+### Resumable owner input and offering normalization
+
+Implemented on `feat/onboarding-normalization` from the founder-approved
+change brief. The implementation supersedes the earlier preserve-onboarding-
+flow restriction for this slice while keeping the existing server checkpoint,
+knowledge review, and go-live boundaries.
+
+- Required onboarding fields remain business name, business type, hours, and
+  contact. Optional beats can be skipped once and are persisted as skipped.
+- Name proposals are explicitly confirmed. A rejected proposal is edited
+  locally, and a submitted replacement is checked without model rewriting.
+- Services are broad normalized capabilities. Offerings are concrete reviewable
+  candidates with source wording, category proposals, provenance, and explicit
+  review status.
+- Pending offering candidates are private. Go live ignores unreviewed
+  candidates; Home and What you offer are the only later review entry points.
+- Category records are tenant-scoped, normalized, RLS protected, and linked by
+  nullable stable IDs while the legacy category label remains on the wire.
+
 ### Agreed behavior
 
 **Business maintenance:**

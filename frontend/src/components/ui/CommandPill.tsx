@@ -32,6 +32,12 @@ export interface CommandPillProps {
    * (name, email) signals validity without error text.
    */
   variant?: "command" | "field";
+  /**
+   * A handle on the textarea, for a caller that prefills the composer and then
+   * has to put the cursor in it. Same ref-callback shape ReviewSheet's
+   * OfferingCard uses; the pill keeps its own ref for auto-grow either way.
+   */
+  inputRef?: (node: HTMLTextAreaElement | null) => void;
 }
 
 const MAX_HEIGHT_PX = 96;
@@ -60,6 +66,7 @@ export function CommandPill({
   onAttach,
   canSubmit = true,
   variant = "command",
+  inputRef,
 }: CommandPillProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -107,7 +114,10 @@ export function CommandPill({
         </button>
       )}
       <textarea
-        ref={textareaRef}
+        ref={(node) => {
+          textareaRef.current = node;
+          inputRef?.(node);
+        }}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}

@@ -81,7 +81,7 @@ LUMIDENT_PROFILE = {
     "business_type": "family dental practice",
     "headcount": "6",
     "hours": "Monday to Friday 8am to 5pm, Saturday 9am to 12pm",
-    "services": "General dentistry, cleanings, fillings, crowns",
+    "services": ["General dentistry", "Cleanings", "Fillings", "Crowns"],
     "contact": "owner@lumident.dev",
     "abn": "none",
     "gst": "no",

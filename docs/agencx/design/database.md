@@ -328,6 +328,17 @@ deleted offering no longer has an `updated_at` value for this formula to read.
 ## 5. Commerce (the deterministic-pricing tables; per-tenant optional in Agencx)
 
 ```sql
+create table offering_categories (
+  id              uuid primary key default gen_random_uuid(),
+  tenant_id       uuid not null references tenants(id) on delete cascade,
+  name            text not null check (length(trim(name)) > 0),
+  normalized_key  text not null,                          -- normalize_name: casefolded, punctuation to space, collapsed
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  unique (tenant_id, id),                                 -- the composite target offerings points at
+  unique (tenant_id, normalized_key)
+);
+
 create table offerings (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
@@ -336,8 +347,12 @@ create table offerings (
   price_cents  integer check (price_cents is null or price_cents >= 0),  -- null = priced via a rule
   active       boolean not null default true,             -- false = retired, never deleted
   position     integer not null default 0,               -- M-4: the owner's storefront order
+  category     text,                                     -- 0025 label, legacy; read-only compatibility
+  category_id  uuid,                                     -- 0031: the durable identity new writes use
   created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  updated_at   timestamptz not null default now(),
+  foreign key (tenant_id, category_id)
+    references offering_categories (tenant_id, id) on delete set null
 );
 create index offerings_storefront_order on offerings (tenant_id, active, position, created_at);
 
@@ -368,6 +383,12 @@ create table quotes (
   created_at       timestamptz not null default now()
 );
 ```
+
+A category is a row the owner renames once, not a label repeated on every
+offering (D28). The foreign key is composite - `(tenant_id, category_id)` -
+so a category can never be borrowed across tenants even if an id leaks, and
+`on delete set null` is what "uncategorized" means: deleting a category keeps
+its offerings.
 
 All Shape A. **Only the pricing engine writes `quotes`** - it computes
 `line_items/subtotal/tax/total`; no other code path constructs those values. In
@@ -522,6 +543,7 @@ applied in order by a plain runner (no heavy framework):
 0028_document_failure_metadata.sql  documents failure_stage, failure_retryable, failed_at (W-11a)
 0029_drop_tenant_prompt_columns.sql  drops the retired tenant_config.system_prompt and tone (W-10)
 0030_document_failure_metadata_check.sql  keeps failure metadata null on non-failed rows, legacy-safe (W-11a correction)
+0031_offering_categories.sql  offering_categories + offerings.category_id, backfilled from the legacy label (D28)
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,
