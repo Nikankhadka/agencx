@@ -346,7 +346,8 @@ look like a missing variable, so check them by name after any project rebuild:
 `WREN_APP_DB_PASSWORD` (below).
 
 `WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
-database role's password. It is created by migration `0002_roles.sql` at first
+database role's password. (`wren_*` names are standing names kept from the
+prior build - see `history.md`.) It is created by migration `0002_roles.sql` at first
 migrate, and the deployed backend connects as `wren_app` with whatever value
 Vercel hands it. If the two ever disagree, the app answers 500
 (`password authentication failed for user "wren_app"`) while `migrate` itself

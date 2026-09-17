@@ -3,7 +3,9 @@
 The decision ledger: every consequential choice, old and new, with the reason it
 was made. Nothing changes silently. The 11 decisions below were carried from
 the planning phase (reasons condensed); D12 onward are the decisions that shape
-the Agencx build.
+the Agencx build. Background on the pre-Agencx build lives in
+`../history.md`; related reading on conversational input handling is
+`../research/owner-input-and-conversational-agent-architecture.md`.
 
 ## The carried decisions (1-11)
 
@@ -115,7 +117,7 @@ contract, not from any single provider's SLA.
 ### D17: Rebrand - Agencx name, crimson primary, Plus Jakarta Sans
 
 **Decision:** The product is **Agencx** on every user-facing surface (B-1, B-2).
-The visual identity is the existing Wren Material 3 system with its **crimson
+The visual identity is the existing Material 3 system with its **crimson
 primary** (already the shipped M3 tonal ramps in `frontend/src/styles/theme.css`,
 CI-enforced by `check:tokens`) and **Plus Jakarta Sans** via `next/font` (a
 token-level swap: `--font-sans` re-point, no component changes). The teal accent
@@ -124,11 +126,11 @@ from the Agencx planning design is retired, not carried forward. Copy never says
 amendment of 2026-09-06 took "assistant" off that list and put "virtual" on it,
 because both mandated openings name the assistant as what the surface is).
 
-**Why:** The merge decision locked "AgenCX PRD/design, Wren's Supabase auth +
-crimson primary". The Wren rebrand proved the tokens-only path (a full visual
+**Why:** The merge decision locked "AgenCX PRD/design, Supabase auth +
+crimson primary". The earlier rebrand proved the tokens-only path (a full visual
 rebrand with zero component code changes); reusing it keeps the Agencx look
 consistent with the platform the code already ships. The repo, roles, and env
-names stay `wren` (renaming is churn with no user value - see the set README).
+names stay `wren` (renaming is churn with no user value - see `../history.md`).
 The mobile-first structure does return - see D18.
 
 **Amended by D25 (2026-09-11):** the crimson primary is superseded; the Agencx name and Plus Jakarta Sans stand.
@@ -291,7 +293,7 @@ which the free-tier provider failed into on its first run.
 
 **Consequence for the owner surface:** the escalations queue stops being a
 separate destination - it is the "Action needed" filter on the Chats list, where
-the owner already is. The Wren-era `/escalations` and `/conversations` screens
+the owner already is. The legacy `/escalations` and `/conversations` screens
 stay mounted for E-2 to hide.
 
 ---
@@ -353,7 +355,8 @@ are paths on one origin, not three host patterns:
 | Platform | `admin.agencx.app` | `agencx.app/admin` |
 
 Host resolution is gone, not made configurable: `resolveHost`, `surfaceUrl`,
-`BASE_HOSTS`, the `x-wren-surface`/`x-wren-slug` request headers and
+`BASE_HOSTS`, the retired `x-wren-surface`/`x-wren-slug` request headers (standing
+names, see `../history.md`) and
 `frontend/src/proxy.ts` itself are all deleted. The customer page is a plain
 dynamic segment (`app/[slug]/page.tsx`) that reads `params`.
 
@@ -806,7 +809,7 @@ produced the drift. One scale, one label role, two primitives (`Card`,
 
 **Boundary:** no color, copy, flow, or state changes. The named visual shifts
 are small and listed in `design/tokens.md` so nobody reverts them as drift:
-bubble text 14/20 to 15/21, card padding to 16/24, chats and Wren-era pages
+bubble text 14/20 to 15/21, card padding to 16/24, chats and legacy pages
 centered at 1024/640 on desktop, admin gutter 32 to 24, sheet radius 28 to 24,
 tab gap 3 to 4, scroll tails 80 to 64. The v6 prototype file itself is
 untouched - D26's color-only exception stands, and the prototype keeps its

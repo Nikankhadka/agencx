@@ -8,13 +8,16 @@ discipline** - white surfaces and cool greys, a **Rausch red action colour**
 actions) with amber, green, teal and red functional statuses, generous
 whitespace, Plus Jakarta Sans throughout (D17 name and font, D26).
 
-The system below is the shipped Wren frontend carried forward; the Agencx
-changes are the three-screen manifest (S1/S2/S3), the font swap, the Airbnb
+The system below is the shipped frontend carried forward from the prior build
+(background in [history.md](../history.md)); the Agencx changes are the
+three-screen manifest (S1/S2/S3), the font swap, the Airbnb
 color system (D26, superseding D25), the failover typing indicator (P-5), and
 the mobile-first app chrome (D18). The pre-Agencx prototype's teal accent,
 cleaning copy, and Hivee emblem stay retired and archived (D17); its
 mobile-first structure returns as the tenant app's bottom tab bar (D18).
 D26's teal is the info status role, not a return of that identity accent.
+Prototype currency (which prototype is current for which surface) is owned
+by [the spec index](../spec/README.md).
 
 ## 1. The one hard rule: nothing is hardcoded
 
@@ -64,7 +67,7 @@ fill. The D17 font change stands:
 
 wired via `next/font/google` Plus Jakarta Sans in `layout.tsx` (replacing Inter;
 `display: "swap"`). Component code is untouched - the color swap is a re-point
-of tokens, the same load-bearing pattern the Wren rebrand proved.
+of tokens, the same load-bearing pattern the earlier rebrand proved.
 
 **Colour convention (action accent + semantic status colours).** Deep red
 (`text-accent-active`, `#B4004E`) is the **brand action** colour and carries
@@ -546,7 +549,7 @@ entered address so a retry succeeds without restarting onboarding.
 ### Tenant console shell (nav re-cut, E-1/E-2)
 
 Nav re-cut to **Home**, **Chats** and **Business** (E-1, D21) - the sidebar at
-`lg+`, the bottom tab bar below it. The advanced Wren screens (Conversations
+`lg+`, the bottom tab bar below it. The advanced screens (Conversations
 with traces, Dashboards, Escalations, Pricing) are removed from the tenant nav
 but their routes and code remain (E-2), reachable by the platform owner until
 Stage 2 re-lands them. Platform admin stays minimal (E-3): one Tenants page
