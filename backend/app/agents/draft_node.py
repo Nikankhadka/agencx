@@ -18,7 +18,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
 from app.agents.drafting import MONEY_GUIDANCE, stream_draft
-from app.agents.escalation import HANDOFF_MESSAGE
+from app.agents.escalation import handoff_message
 from app.agents.spotlight import new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ChatMessage
@@ -174,7 +174,10 @@ async def run(state: AgentState) -> dict[str, Any]:
         # One handoff message, defined next to the node that owns handoffs -
         # this used to hold its own copy of the text and kept the pre-C-5
         # sign-off after escalation.py had already moved on.
-        handoff = state.get("draft_response") or HANDOFF_MESSAGE
+        handoff = state.get("draft_response") or handoff_message(
+            name_known=state.get("customer_name_known", False),
+            email_known=state.get("customer_email_known", False),
+        )
         if not state.get("draft_response"):
             writer({"type": "refusal", "text": handoff})
         # An escalation upstream (price_gate/inspection) already named the
@@ -221,6 +224,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "retrieved_chunks": [],
                 "draft_deterministic": True,
                 "author_node": "draft",
+                "action": "offer_followup",
             }
         citations = [
             {"index": i + 1, "source": citation_source(c), "snippet": c["content"][:200]}
@@ -256,6 +260,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "selections": [],
                 "draft_deterministic": True,
                 "author_node": "draft",
+                "action": "offer_followup",
             }
         system_prompt = _with_contract(state, _build_recommendation_prompt(selections, violations))
         messages = [
@@ -279,6 +284,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                 "selections": [],
                 "draft_deterministic": True,
                 "author_node": "draft",
+                "action": "offer_followup",
             }
         if not engine_quote.get("quote_id"):
             import json as _json

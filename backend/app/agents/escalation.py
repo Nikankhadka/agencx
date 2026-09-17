@@ -28,6 +28,7 @@ from uuid import UUID
 from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
+from app.agents.intent import as_intent
 from app.agents.state import AgentState, GraphContext
 from app.shared import db
 
@@ -88,6 +89,7 @@ async def run(state: AgentState) -> dict[str, Any]:
     writer = get_stream_writer()
 
     reason = state.get("escalation_reason") or _DEFAULT_REASON
+    intent = as_intent(state.get("intent"))
     conversation_id = UUID(state["conversation_id"])
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
@@ -98,11 +100,13 @@ async def run(state: AgentState) -> dict[str, Any]:
         # nothing to the owner's queue - which is what C-5 wants, since the
         # conversation now continues and may well hand off again.
         await conn.execute(
-            "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
+            "insert into escalations (tenant_id, conversation_id, reason, intent) "
+            "values ($1, $2, $3, $4) "
             "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
             ctx.tenant_id,
             conversation_id,
             reason,
+            intent,
         )
     # A producing node upstream (price_gate on its second violation) may have
     # already streamed and set a handoff message - don't stream a second one.
@@ -110,6 +114,10 @@ async def run(state: AgentState) -> dict[str, Any]:
         writer({"type": "handoff"})
         return {"escalated": True}
 
-    writer({"type": "refusal", "text": HANDOFF_MESSAGE})
+    message = handoff_message(
+        name_known=state.get("customer_name_known", False),
+        email_known=state.get("customer_email_known", False),
+    )
+    writer({"type": "refusal", "text": message})
     writer({"type": "handoff"})
-    return {"escalated": True, "draft_response": HANDOFF_MESSAGE, "author_node": "escalation"}
+    return {"escalated": True, "draft_response": message, "author_node": "escalation"}

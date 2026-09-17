@@ -86,11 +86,15 @@ async def run(state: AgentState) -> dict[str, Any]:
             "price_gate_attempted": True,
         }
 
-    writer({"type": "refusal", "text": GATE_ESCALATION_MESSAGE})
+    escalation_text = gate_escalation_message(
+        name_known=state.get("customer_name_known", False),
+        email_known=state.get("customer_email_known", False),
+    )
+    writer({"type": "refusal", "text": escalation_text})
     return {
         "price_gate_decision": "escalate",
         "escalated": True,
         "escalation_reason": "price_provenance",
-        "draft_response": GATE_ESCALATION_MESSAGE,
+        "draft_response": escalation_text,
         "author_node": "price_gate",
     }

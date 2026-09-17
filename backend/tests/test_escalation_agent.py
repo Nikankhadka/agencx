@@ -12,7 +12,7 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.agents.escalation import HANDOFF_MESSAGE
+from app.agents.escalation import HANDOFF_MESSAGE, handoff_message
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ToolCall, ToolTurn
@@ -69,12 +69,15 @@ async def _seed_tenant_with_conversation(
     return tenant_id, conversation_id
 
 
-def _escalation_provider(*, reason: str) -> ToolAwareFakeProvider:
+def _escalation_provider(*, reason: str, intent: str | None = None) -> ToolAwareFakeProvider:
+    args: dict[str, Any] = {"reason": reason}
+    if intent is not None:
+        args["intent"] = intent
     return ToolAwareFakeProvider(
         tool_call_sequence=[
             ToolTurn(
                 tool_calls=[
-                    ToolCall(id="call_e", name="create_escalation", args={"reason": reason}),
+                    ToolCall(id="call_e", name="create_escalation", args=args),
                 ]
             ),
         ],
@@ -114,7 +117,7 @@ async def test_escalation_records_the_handoff_and_leaves_the_chat_open(
         _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
     )
     assert final_state["escalated"] is True
-    assert final_state["draft_response"] == HANDOFF_MESSAGE
+    assert final_state["draft_response"] == handoff_message(name_known=False, email_known=False)
     escalation_row = await superuser_conn.fetchrow(
         "select reason, status from escalations where conversation_id = $1", conversation_id
     )
@@ -255,3 +258,122 @@ async def test_a_second_handoff_does_not_queue_a_duplicate_for_the_owner(
         conversation_id,
     )
     assert open_rows == 1
+
+
+# --- intent + contact capture on the handoff ---------------------------------
+
+
+async def test_escalation_row_carries_the_tool_intent(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_escalation_provider(reason="customer_request", intent="support"),
+        embedder=ZeroEmbedder(),
+        reranker=NoopReranker(),
+    )
+    final_state = await graph.ainvoke(
+        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
+    )
+    assert final_state["intent"] == "support"
+    assert final_state["action"] == "escalate"
+    row_intent = await superuser_conn.fetchval(
+        "select intent from escalations where conversation_id = $1", conversation_id
+    )
+    assert row_intent == "support"
+
+
+async def test_unknown_tool_intent_still_escalates_and_writes_null(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_escalation_provider(reason="customer_request", intent="not-a-family"),
+        embedder=ZeroEmbedder(),
+        reranker=NoopReranker(),
+    )
+    final_state = await graph.ainvoke(
+        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
+    )
+    assert final_state["escalated"] is True
+    assert final_state.get("intent") is None
+    row_intent = await superuser_conn.fetchval(
+        "select intent from escalations where conversation_id = $1", conversation_id
+    )
+    assert row_intent is None
+
+
+async def test_known_contact_handoff_omits_the_ask(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    await superuser_conn.execute(
+        "update conversations set customer_ref = 'Sam', customer_email = 'sam@example.com' "
+        "where id = $1",
+        conversation_id,
+    )
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_escalation_provider(reason="customer_request"),
+        embedder=ZeroEmbedder(),
+        reranker=NoopReranker(),
+    )
+    final_state = await graph.ainvoke(
+        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
+    )
+    assert final_state["draft_response"] == HANDOFF_MESSAGE
+
+
+async def test_contact_set_in_the_same_turn_omits_the_ask(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The flags are run-local: storing contact before the handoff in one turn
+    is enough to suppress the ask in that same reply."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_c",
+                        name="set_customer_contact",
+                        args={"name": "Sam", "email": "sam@example.com"},
+                    ),
+                ]
+            ),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_e",
+                        name="create_escalation",
+                        args={"reason": "customer_request"},
+                    )
+                ]
+            ),
+        ],
+        stream_text="",
+        extract_route="escalation",
+    )
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=provider,
+        embedder=ZeroEmbedder(),
+        reranker=NoopReranker(),
+    )
+    final_state = await graph.ainvoke(
+        _initial_state(tenant_id=tenant_id, conversation_id=conversation_id), context=context
+    )
+    assert final_state["draft_response"] == HANDOFF_MESSAGE
+    row = await superuser_conn.fetchrow(
+        "select customer_ref, customer_email from conversations where id = $1",
+        conversation_id,
+    )
+    assert row is not None
+    assert row["customer_ref"] == "Sam"
+    assert row["customer_email"] == "sam@example.com"

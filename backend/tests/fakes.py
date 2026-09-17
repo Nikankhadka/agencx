@@ -42,12 +42,16 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         stream_text: str = "Hello! I'm the virtual assistant. How can I help?",
         extract_route: str = "knowledge",
         extract_confidence: float = 1.0,
+        extract_intent: str | None = None,
+        extract_action: str | None = None,
     ) -> None:
         self._turns = list(tool_call_sequence or [])
         self._turn_index = 0
         self._stream_text = stream_text
         self._extract_route = extract_route
         self._extract_confidence = extract_confidence
+        self._extract_intent = extract_intent
+        self._extract_action = extract_action
         # Messages seen by each chat_with_tools call, so a test can assert what
         # the agent loop actually feeds back to the model (tool results are
         # tenant-authored data and must arrive spotlight-wrapped).
@@ -60,7 +64,9 @@ class ToolAwareFakeProvider(BaseFakeProvider):
         self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
     ) -> SchemaT:
         if "grounding" in schema.model_fields:
-            return schema.model_validate({})
+            return schema.model_validate(
+                {"intent": self._extract_intent, "action": self._extract_action}
+            )
         if "route" in schema.model_fields:
             return schema.model_validate(
                 {
