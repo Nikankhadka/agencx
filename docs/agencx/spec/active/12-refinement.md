@@ -6,7 +6,8 @@ R-1 and R-2 records are preserved in
 
 ## R-3: Schema and type safety
 
-**Status:** backlog, not yet scoped.
+**Status:** Active - todo.
+**Phase 1 area:** Refinement.
 
 Pydantic models across the API layer are not uniformly configured with an
 explicit unknown-field policy. The generated-types path currently covers error

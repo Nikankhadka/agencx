@@ -1,6 +1,7 @@
 # Phase 1 - Foundation (A)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Foundation and tenancy.
 
 The doc restructure that stands up the canonical Agencx set and re-points every
 entry point at it. Both tickets are **done**.

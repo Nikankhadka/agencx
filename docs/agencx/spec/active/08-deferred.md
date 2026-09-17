@@ -1,5 +1,8 @@
 # Phase 2 / Deferred (B-2, D-1, D-3)
 
+**Status:** Deferred - Phase 2.
+**Phase 1 area:** Out of Phase 1 scope.
+
 Tickets deferred out of Phase 1: the domain/CORS move (the founder buys a
 domain) and the per-tenant tool registry plus toggle UI (Phase 2). D-1's
 registry is the machinery D-2 depends on, but D-2 itself stays in Phase 1.

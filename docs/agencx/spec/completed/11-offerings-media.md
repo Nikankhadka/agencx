@@ -1,6 +1,7 @@
 # Offerings + Media (D24)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Storefront and media.
 
 Four tickets. `M-1`, `M-2`, `M-3`, and `M-4` are built; live Cloudinary
 smoke testing remains credential-dependent. See
@@ -407,7 +408,7 @@ an automatic overwrite.
 
 ## M-4: The public storefront, and the address the owner chooses
 
-**Status: built.** Depends on `M-1`.
+**Status:** Done - merged. Depends on `M-1`.
 
 ### Summary
 

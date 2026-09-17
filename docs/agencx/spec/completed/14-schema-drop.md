@@ -1,5 +1,8 @@
 # Phase 14: schema drop (W)
 
+**Status:** Done - merged.
+**Phase 1 area:** Schema drop.
+
 One ticket, and it exists only to finish something W-9 deliberately left
 half-done. W-9 stopped every application code path from reading
 `tenant_config.system_prompt` and `.tone`, backfilled the structured

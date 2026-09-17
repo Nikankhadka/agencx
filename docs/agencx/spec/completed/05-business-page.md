@@ -1,6 +1,7 @@
 # Phase 1 - Business page (E)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Tenant console.
 
 The tenant surface re-cut: the three-tab app (Home + Chat + Business, D21) with
 the advanced Wren screens hidden, not deleted.

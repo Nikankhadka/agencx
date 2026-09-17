@@ -1,5 +1,10 @@
 # Agencx Phase 1 Refinement - Frontend Design Spec (v7 prototype)
 
+**Status:** Design intent for the RF ticket series in
+[18-refinement-proposal.md](../spec/active/18-refinement-proposal.md).
+The v7 prototype was never built; shipped refinement was implemented
+against v6 plus `frontend.md` plus `design/tokens.md`.
+
 The design companion to
 [HiveAgencyXRefinement.md](../HiveAgencyXRefinement.md). The refinement plan
 owns the product decisions; this file owns the UI decisions those decisions

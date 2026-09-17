@@ -1,6 +1,7 @@
 # Phase 1 - Chat spine (P)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Chat spine and providers.
 
 The customer chat spine: provider layers, latency/failover, agent-ready
 pre-load, knowledge versioning, and the typing indicator. These re-cut the
