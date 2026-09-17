@@ -3,7 +3,7 @@
 **Status:** Done - merged.
 **Phase 1 area:** Deployment.
 
-Current procedure lives in [deploy.md](../../deploy.md); this file is the
+Current procedure lives in [deploy.md](../../agencx/deploy.md); this file is the
 delivery record.
 
 Shipping the built product to a URL. Everything before this phase is proven in

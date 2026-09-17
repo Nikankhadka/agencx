@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/design/frontend.md`.
 # WREN - Frontend Design System & Surface Specs
 
 > The implementation truth for UI. The pixel standard of `docs/conventions.md` section 6 applies to everything here.

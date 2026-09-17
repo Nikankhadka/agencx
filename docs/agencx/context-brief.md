@@ -22,20 +22,19 @@ per-tenant tool registry and toggle UI (B-2, D-1, D-3).
 
 ## What is done
 
-| Area | Tickets |
-|---|---|
-| Onboarding and login | O-1, O-2, O-5 through O-12, `Done - merged` |
-| Chat spine and grounding | P-1 through P-5, O-3, O-4, C-1 through C-6, `Done - merged` |
-| Console, storefront, polish | E-1 through E-6, M-1 through M-6, B-1, B-3, D-2, `Done - merged` |
-| Walkthrough and closeout | W-1 through W-13, `Done - merged` |
+Delivered tickets (A through W-13: onboarding, chat spine and grounding,
+console, storefront, polish, deploy, walkthrough closeout) are archived
+in `docs/archive/phase1-complete/README.md`. Detail in [progress.md](progress.md).
 
 ## What is next
 
-M-7 storefront redesign (`Active - in progress`); U-1 through U-4 UX
-consistency (`Active - awaiting review`); R-3 backlog; R-4 remainder
+M-7 storefront redesign (`Active - in progress`, lands with its branch);
+U-1 through U-4 shipped, walkthrough remains; R-3 backlog; R-4 remainder
 (judge calibration, prod evidence); R-5 remainder (backups, error
-tracking, E2E in CI, dep scan); provider-backed eval needs paid tier or
-smaller slice (free-tier quota 429).
+tracking, E2E in CI, dep scan); RF-1 through RF-17 product refinement
+(design intent); provider-backed eval needs paid tier or smaller slice
+(free-tier quota 429). All tracked in
+[`spec/active/12-refinement.md`](spec/active/12-refinement.md).
 
 ## Invariants
 

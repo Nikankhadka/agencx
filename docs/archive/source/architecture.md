@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/architecture.md`.
 > **NAVIGATION:** Frozen source document (v2.0). This file wins on scope questions only. Schema detail lives in `docs/design/database.md`, UI detail in `docs/design/frontend.md`, progress in `docs/PROGRESS.md`. `docs/conventions.md` governs how work gets done.
 
 # WREN - Technical Architecture Document

@@ -20,8 +20,7 @@ chat when planning work.
 | [history.md](history.md) | Where did this come from? The Wren story, once |
 | [design/decisions.md](design/decisions.md) | Why was it built this way? Decision ledger D1 through D27 |
 | [design/database.md](design/database.md) | The schema: tables, roles, RLS, migrations, seeds |
-| [design/frontend.md](design/frontend.md) | The UI: design system, components, screens and states |
-| [design/tokens.md](design/tokens.md) | The rhythm: spacing scale, type roles, layout recipes, CI guard |
+| [design/frontend.md](design/frontend.md) | The UI: design system, rhythm (spacing, type, layout, CI guard), components, screens and states |
 | [design/api-contract.md](design/api-contract.md) | The API shape: Problem Details errors, safe SSE, review contract |
 | [spec/](spec/README.md) | The tickets: user stories, acceptance criteria, done definitions |
 | [research/owner-input-and-conversational-agent-architecture.md](research/owner-input-and-conversational-agent-architecture.md) | Which conversational pattern? Intent plus deterministic validation |

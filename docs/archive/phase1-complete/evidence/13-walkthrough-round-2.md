@@ -9,7 +9,7 @@ file records the walkthrough's observations, the founder's clarified
 preferences, the implementation evidence at the time, and the boundary
 between reported symptoms, confirmed code behavior, suspected causes, and
 outstanding browser verification. The tickets live in
-[13-walkthrough.md](../completed/13-walkthrough.md) and reference this file
+[13-walkthrough.md](../13-walkthrough.md) and reference this file
 rather than restating it. The original PDF behind the 40-row review output
 is unavailable, so the pasted review output is preserved here as reported
 but cannot establish which prices, descriptions, or offerings correctly
@@ -97,10 +97,10 @@ acceptance criteria:
 
 | Concern | Owning ticket |
 |---|---|
-| SSE versus polling; pending indicators; repeated input placeholder | [W-3](../completed/13-walkthrough.md#w-3-keep-the-onboarding-thread-clear-and-responsive) |
-| Slug prefill, review-return paths, and actionable go-live errors | [W-4](../completed/13-walkthrough.md#w-4-complete-go-live-address-handling) |
-| Customer answers combining confirmed offerings and knowledge | [W-5](../completed/13-walkthrough.md#w-5-answer-from-confirmed-offerings-and-knowledge-together) |
-| Offering names, descriptions, source-backed prices, duplicate proposals | [W-6](../completed/13-walkthrough.md#w-6-extract-accurate-offerings-from-the-complete-source) |
-| Five-item preview, pagination, editing, duplicate decisions | [W-8](../completed/13-walkthrough.md#w-8-review-a-large-import-without-losing-information) |
-| Readable, editable knowledge sections | [W-8](../completed/13-walkthrough.md#w-8-review-a-large-import-without-losing-information) |
-| Repeated names, conservative wording cleanup, conversational corrections, the customer-assistant contract and voice | [W-9](../completed/13-walkthrough.md#w-9-definitive-onboarding-and-customer-assistant-contract) |
+| SSE versus polling; pending indicators; repeated input placeholder | [W-3](../13-walkthrough.md#w-3-keep-the-onboarding-thread-clear-and-responsive) |
+| Slug prefill, review-return paths, and actionable go-live errors | [W-4](../13-walkthrough.md#w-4-complete-go-live-address-handling) |
+| Customer answers combining confirmed offerings and knowledge | [W-5](../13-walkthrough.md#w-5-answer-from-confirmed-offerings-and-knowledge-together) |
+| Offering names, descriptions, source-backed prices, duplicate proposals | [W-6](../13-walkthrough.md#w-6-extract-accurate-offerings-from-the-complete-source) |
+| Five-item preview, pagination, editing, duplicate decisions | [W-8](../13-walkthrough.md#w-8-review-a-large-import-without-losing-information) |
+| Readable, editable knowledge sections | [W-8](../13-walkthrough.md#w-8-review-a-large-import-without-losing-information) |
+| Repeated names, conservative wording cleanup, conversational corrections, the customer-assistant contract and voice | [W-9](../13-walkthrough.md#w-9-definitive-onboarding-and-customer-assistant-contract) |

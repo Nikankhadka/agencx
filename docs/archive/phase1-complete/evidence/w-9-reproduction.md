@@ -1,10 +1,10 @@
 > **NAVIGATION:** Evidence record for W-9. Read it with the ticket in
-> [13-walkthrough.md](../completed/13-walkthrough.md) and its
-> [Amendment 3](../completed/13-walkthrough.md#amendment-3-the-agent-contract-2026-09-06).
+> [13-walkthrough.md](../13-walkthrough.md) and its
+> [Amendment 3](../13-walkthrough.md#amendment-3-the-agent-contract-2026-09-06).
 
 # W-9 reproduction record
 
-This is the reproduction step [conventions.md section 5](../../design/conventions.md#5-bug-fix-protocol)
+This is the reproduction step [conventions.md section 5](../../agencx/design/conventions.md#5-bug-fix-protocol)
 requires before any W-9 fix lands. Nothing under `backend/app/` or
 `frontend/src/` was changed to produce it. Five of the six failures W-9 exists
 to close reproduce through the real onboarding UI; the sixth reproduces through

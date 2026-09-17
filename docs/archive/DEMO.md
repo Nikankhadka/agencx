@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/running.md`.
 # Demo Guide
 
 A one-command script brings up the whole system locally - a real local GoTrue

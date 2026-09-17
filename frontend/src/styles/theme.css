@@ -1,6 +1,6 @@
 /*
  * WREN theme - THE single source of visual truth.
- * Spec: docs/agencx/design/tokens.md (rhythm) and docs/agencx/design/frontend.md (system).
+ * Spec: docs/agencx/design/frontend.md section 4 (rhythm) and the rest of that file (system).
  *
  * Rules (CI-enforced by frontend/scripts/check-tokens.mjs):
  *  - Raw color values (hex/rgb/hsl) may exist ONLY in this file.
@@ -102,7 +102,7 @@
   --font-display: var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
 
-  /* type scale (docs/agencx/design/tokens.md section 3) - exposed as Tailwind
+  /* type scale (docs/agencx/design/frontend.md section 4.3) - exposed as Tailwind
      text-* utilities via the @theme mapping in globals.css. Tracking is only
      set where the scale departs from 0 (display/title-1 tighten, caption opens). */
   --text-caption-size: 12px;    --text-caption-leading: 16px;   --text-caption-tracking: 0.05em;

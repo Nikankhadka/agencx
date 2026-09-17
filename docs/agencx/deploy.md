@@ -459,33 +459,17 @@ VERCEL_TOKEN=<token scoped to the project's team>
 
 ## What the repo changes deliver
 
-The founder steps above are external. The code that makes them work is B-4
-(`docs/agencx/spec/completed/10-deploy.md`, branch `feat/deploy-containers-cicd`):
+The founder steps above are external. The code that makes them work is B-4;
+the full delivery record is archived in
+[`10-deploy.md`](../../archive/phase1-complete/10-deploy.md) (branch
+`feat/deploy-containers-cicd`). Two of its decisions remain live constraints
+worth stating here:
 
-1. `vercel.json` - the two services and the rewrites that route them. The
-   branch filter lives in the dashboard as the Ignored Build Step, not here -
-   see the warning under Branches.
-2. `frontend/Dockerfile` + `output: "standalone"` in `next.config.ts` - the
-   frontend as a self-contained container.
-3. `backend/Dockerfile` - retargeted off ECS, `PORT`-driven, plus a `test` stage
-   CI runs the suite in.
-4. `backend/app/llm/embedder.py` - a `GoogleEmbedder` (native `embedContent`,
-   `outputDimensionality=384`) and a `'google'` branch in `get_embedder`;
-   `backend/app/shared/config.py` accepts `'google'` and adds
-   `google_embed_model`.
-5. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` narrowed to `localhost`,
+1. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` narrowed to `localhost`,
    because production is same-origin and has no preflight to allow.
-6. `backend/app/features/knowledge/api.py` - the upload cap lowered to 4MB, so
+2. `backend/app/features/knowledge/api.py` - the upload cap lowered to 4MB, so
    an oversized file gets the backend's own 422 rather than the platform's
    opaque 413.
-7. `.github/workflows/` - `ci.yml` gates `staging`/`development` and runs the
-   backend suite in the image's `test` stage; `deploy.yml` drops the AWS build
-   and push entirely and smoke-tests the live origin instead; `keep-warm.yml`
-   pings `/health` and `/login` every 10 minutes so a visitor is unlikely to
-   wake a cold container; `registry-cleanup.yml` prunes old container-registry
-   images so the hobby 50-image cap cannot block deploys (Step 6).
-8. `.env.example` - documents `EMBEDDER=google`, `RERANKER=cohere` and the
-   pooler `DATABASE_URL`.
 
 `ci.yml` remains the gate on every push and PR. `deploy.yml` fires via
 `workflow_run` only after CI is green on `staging`.

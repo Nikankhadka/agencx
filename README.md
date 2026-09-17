@@ -85,9 +85,9 @@ The canonical set lives in `docs/agencx/`; everything pre-Agencx is archived in 
 | [`docs/agencx/prd.md`](docs/agencx/prd.md) | What is Agencx? Why, who, what is in Stage 1 scope, and what signals decide next steps? |
 | [`docs/agencx/architecture.md`](docs/agencx/architecture.md) | How does it work? Invariants, agent flow, providers, latency budget, eval gates |
 | [`docs/agencx/design/api-contract.md`](docs/agencx/design/api-contract.md) | What JSON and SSE errors and success responses look like |
-| [`docs/agencx/design/`](docs/agencx/design/) | How is it designed? `database.md`, `frontend.md`, `tokens.md` (spacing/type/layout rhythm), `decisions.md` (the decision ledger + ADRs) |
+| [`docs/agencx/design/`](docs/agencx/design/) | How is it designed? `database.md`, `frontend.md` (design system + spacing/type/layout rhythm), `decisions.md` (the decision ledger + ADRs) |
 | [`docs/agencx/spec/active/`](docs/agencx/spec/active/) | What work remains? Open and deferred tickets |
-| [`docs/agencx/spec/completed/`](docs/agencx/spec/completed/) | What was delivered? Completed phase records |
+| [`docs/archive/phase1-complete/`](docs/archive/phase1-complete/) | What was delivered? Completed phase records |
 | [`docs/agencx/design/conventions.md`](docs/agencx/design/conventions.md) | What rules bind all work here? (style, git, testing, the two hard rules) |
 | [`docs/archive/`](docs/archive/) | What came before? The pre-Agencx planning and design docs, kept for provenance |
 

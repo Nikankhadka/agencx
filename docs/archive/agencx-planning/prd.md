@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/prd.md`.
 # Agencx PRD
 
 The product authority. Why, who, what, Stage 1 scope, and the signals that decide what happens next.

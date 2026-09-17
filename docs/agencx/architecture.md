@@ -31,7 +31,7 @@ mechanism, and money as the one thing a model never touches.
 | Backend | Python 3.12+ / FastAPI / uv | Proven modules, ported per decision 2 (background in `history.md`) |
 | Database | Postgres + pgvector, Supabase CLI for local dev | RLS is the isolation mechanism of I5 |
 | Orchestration | LangGraph, assistant graph only; onboarding is a plain tool loop | Decision 4 - Stage 2 specialists are nodes on the same graph |
-| Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced), rhythm owned by `design/tokens.md` |
+| Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced), rhythm owned by `design/frontend.md` section 4 |
 | Retrieval | Dense (pgvector HNSW) + sparse (Postgres FTS) + RRF (k=60) + cross-encoder rerank | One `retrieve()` behind `get_business_context`; whole-corpus fast path below the token threshold |
 | Identity | Email + 6-digit code issued and verified inside the chat | Decision 6; zero paid dependencies in Stage 1 |
 | Storefront media | Cloudinary signed Upload API | Backend-only credentials; tenant_media stores delivery metadata, not secrets |

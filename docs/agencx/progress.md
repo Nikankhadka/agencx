@@ -30,25 +30,17 @@ scope boundary is in [the PRD](prd.md).
 
 ## What is done
 
+Full ticket records live in [the phase-1-complete
+archive](../archive/phase1-complete/README.md); verification narratives
+live in the ticket files, not here.
+
 | Area | Tickets |
 |---|---|
 | Foundation and tenancy | A-1, A-2 |
-| Onboarding and login | O-1, O-2, O-5 through O-12 |
-| Chat spine and providers | P-1 through P-5 |
-| Grounded chat | O-3, O-4 |
-| Money and escalation safety | C-1 through C-6 |
-| Tenant console | E-1, E-2, E-4 through E-6 |
-| Storefront and media | M-1 through M-6 |
-| Product polish and hygiene | B-1, B-3, D-2, E-3, F-1 through F-3, G-1 |
-| Developer experience and deployment | K-1, B-4 |
-| Security and API reliability | R-1, R-2, R-4 US-1, R-5 US-1 |
-| Walkthrough fixes | W-1 through W-9, `Done - merged` |
-| Schema drop | W-10, `Done - merged`, migration `0029` |
-| Document review | W-11a, W-11b, W-11c, `Done - merged` |
-| Auth OTP reliability | W-12, W-13, `Done - merged`, hosted-verified |
-
-Detailed records live in [the completed specs](spec/README.md).
-Verification narratives live in the ticket files, not here.
+| Onboarding, login, chat spine, grounding, money and escalation safety | O-1 through O-12, P-1 through P-5, C-1 through C-6 |
+| Tenant console, storefront and media, product polish and hygiene | E-1 through E-6, M-1 through M-6, B-1, B-3, D-2, F-1 through F-3, G-1 |
+| Developer experience, deployment, security and API reliability | K-1, B-4, R-1, R-2, R-4 US-1, R-5 US-1 |
+| Walkthrough fixes, schema drop, document review, auth OTP | W-1 through W-13, migration `0029`, hosted-verified |
 
 ## What is next
 
@@ -57,9 +49,9 @@ Verification narratives live in the ticket files, not here.
   ticket file lands with that branch. Founder mobile and desktop
   walkthrough is the remaining step before merge.
 - [ ] U-1 through U-4 UX consistency: shared nav idiom, button feel,
-  shared confirm dialog, toasts. `Active - awaiting review` on
-  `feat/ux-consistency`; see
-  [15-ux-consistency.md](spec/active/15-ux-consistency.md).
+  shared confirm dialog, toasts. Code in `development`, founder
+  walkthrough remains; record folded into
+  [12-refinement.md](spec/active/12-refinement.md) Part 3.
 - [ ] R-3 schema and type safety: `Active - todo`, not yet scoped. See
   [12-refinement.md](spec/active/12-refinement.md).
 - [ ] R-4 remainder: founder judge calibration plus production-smoke
@@ -67,6 +59,8 @@ Verification narratives live in the ticket files, not here.
 - [ ] R-5 remainder: backups and restore drill, error tracking, E2E in
   CI, dependency scanning. See
   [12-refinement.md](spec/active/12-refinement.md).
+- [ ] RF-1 through RF-17 product refinement: `Active - todo`, design
+  intent in [12-refinement.md](spec/active/12-refinement.md) Part 2.
 - [ ] Provider-backed `make eval` has no valid baseline: deterministic
   gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
   attempts). Needs a paid tier or a smaller eval slice.
@@ -80,11 +74,8 @@ Verification narratives live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder |
-| [spec/active/15-ux-consistency.md](spec/active/15-ux-consistency.md) | `Active - awaiting review` | U-1 through U-4 |
-| [spec/active/18-refinement-proposal.md](spec/active/18-refinement-proposal.md) | `Active - todo` | RF-1 through RF-17 proposal |
-| [spec/completed/](spec/completed/) | `Done - merged` | All delivered feature, deployment, and supporting phases |
-| [archived R-1 and R-2](../archive/phase1-complete/12-refinement-r1-r2.md) | Historical | Completed refinement records |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record |
+| [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases |
 
 Phase 1 is not called fully complete until the active refinement items
 are validated or explicitly accepted as deferred.
