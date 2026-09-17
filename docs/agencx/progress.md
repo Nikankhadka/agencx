@@ -34,7 +34,7 @@ Detailed records live in [`spec/completed/`](spec/completed/).
 
 ## What's next
 
-- [ ] M-7: rebuild the customer storefront no-image-first, with an Uber Eats-style mature state and one persistent chat entry ([`spec/active/17-storefront-redesign.md`](spec/active/17-storefront-redesign.md)). Prototype v4 approved in founder review; built on `feat/m7-storefront-redesign`, awaiting founder review and merge.
+- [ ] M-7: rebuild the customer storefront no-image-first, with an Uber Eats-style mature state and one persistent chat entry ([`spec/active/17-storefront-redesign.md`](spec/active/17-storefront-redesign.md)). Prototype v4 approved in founder review; built on `feat/m7-storefront-redesign`, with the review amendments (hero veil in both states, long facts wrap) applied, awaiting merge.
 - [ ] R-3: audit success schemas and explicit unknown-field policies.
 - [ ] R-4: complete founder judge calibration and record additional production-smoke evidence.
 - [ ] **The provider-backed `make eval` gate has now failed four times on free-tier

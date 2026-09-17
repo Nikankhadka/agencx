@@ -43,6 +43,24 @@ describe("Storefront minimal business", () => {
   });
 });
 
+describe("Storefront hero veil", () => {
+  it("renders the veil band in the cover's place when there is no photo", () => {
+    const html = htmlFor(BASE);
+
+    expect(html).toContain('data-testid="hero-veil"');
+    expect(html).toContain("bg-veil");
+    expect(html).not.toContain("<img");
+  });
+
+  it("lays the same veil over the photo's lower edge when there is a cover", () => {
+    const html = htmlFor({ ...BASE, has_cover: true, cover_url: "https://cdn.example.com/cover.jpg" });
+
+    expect(html).toContain("https://cdn.example.com/cover.jpg");
+    expect(html).toContain('data-testid="hero-veil"');
+    expect(html).toContain("bottom-0 h-24 bg-veil");
+  });
+});
+
 describe("Storefront profile facts", () => {
   const FACTS: StorefrontData = {
     ...BASE,
@@ -64,6 +82,18 @@ describe("Storefront profile facts", () => {
     const html = htmlFor(FACTS);
 
     expect(html).not.toContain("Dog grooming in Newtown · Mon to Sat 9am to 5pm");
+  });
+
+  it("lets long fact values wrap instead of clipping them", () => {
+    const html = htmlFor({
+      ...BASE,
+      business_type: "Family-run Middle Eastern restaurant, takeaway and catering",
+      hours: "Monday to Friday 11am to 9pm, Saturday 10am to 10pm, closed Sunday",
+    });
+
+    // v4 edge case: nothing clipped or ellipsized - the chips wrap.
+    expect(html).not.toContain("min-w-0 truncate");
+    expect(html).toContain("min-w-0 wrap-anywhere");
   });
 
   it("renders no subtitle or facts when the profile has none", () => {

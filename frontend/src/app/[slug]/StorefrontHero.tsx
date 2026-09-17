@@ -11,13 +11,14 @@ function linkLabel(key: string) {
 }
 
 /**
- * M-7 plain-identity hero (v4 frame 1): the monogram, name, and facts lead -
- * there is no reserved cover band, so the no-photo state is the base
- * foundation rather than an empty state. With a cover the large mark overlaps
- * it; without one the identity stands on its own. The subtitle is the owner's
- * `services`; the legacy combined tagline stays in the payload but is no
- * longer rendered. Fact chips truncate instead of breaking the row (v4 edge
- * case: stretched profile strings).
+ * M-7 hero, amended in founder review to the veil in both states (v4 hero
+ * fallback B): no cover renders a 96px `--gradient-veil` band in the cover's
+ * place; with a cover the same veil lies over the photo's lower edge so it
+ * fades into the page. The monogram overlaps the band the same way in both
+ * states, so the composition does not change with media. The subtitle is the
+ * owner's `services`; the legacy combined tagline stays in the payload but is
+ * no longer rendered. Long facts wrap instead of truncating (v4 edge case:
+ * nothing clipped or ellipsized).
  */
 export function StorefrontHero({
   slug,
@@ -31,22 +32,29 @@ export function StorefrontHero({
   return (
     <>
       {storefront.has_cover ? (
-        <img
-          src={storefront.cover_url || `${API_URL}/api/public/tenant/${encodeURIComponent(slug)}/cover`}
-          alt=""
-          fetchPriority="high"
-          className="h-40 w-full object-cover md:h-80 md:rounded-lg"
-        />
-      ) : null}
+        <div className="relative">
+          <img
+            src={storefront.cover_url || `${API_URL}/api/public/tenant/${encodeURIComponent(slug)}/cover`}
+            alt=""
+            fetchPriority="high"
+            className="h-40 w-full object-cover md:h-80 md:rounded-lg"
+          />
+          <div
+            aria-hidden
+            data-testid="hero-veil"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-veil md:rounded-b-lg"
+          />
+        </div>
+      ) : (
+        <div aria-hidden data-testid="hero-veil" className="h-24 w-full bg-veil md:rounded-lg" />
+      )}
 
-      <section className="px-gutter pb-6 pt-5">
-        {storefront.has_cover ? (
-          <span className="-mt-12 inline-flex rounded-full ring-4 ring-surface">
-            <BrandMark logoUrl={logoUrl} name={storefront.name} size="lg" />
-          </span>
-        ) : (
+      <section className="relative px-gutter pb-6 pt-5">
+        {/* Block-level, not inline: a negative top margin only shifts a
+            block-level box, and the overlap is the whole point of the band. */}
+        <div data-testid="hero-mark" className="-mt-12 flex w-fit rounded-full ring-4 ring-surface">
           <BrandMark logoUrl={logoUrl} name={storefront.name} size="lg" />
-        )}
+        </div>
         <h1 className="mt-3 min-w-0 wrap-anywhere text-title-1 font-bold text-text">
           {storefront.name}
         </h1>
@@ -57,12 +65,12 @@ export function StorefrontHero({
           <div className="mt-3 flex max-w-full flex-wrap gap-2">
             {storefront.business_type ? (
               <span className="inline-flex max-w-full items-center rounded-chip bg-accent-container px-3 py-1 text-chip font-medium text-accent-active">
-                <span className="min-w-0 truncate">{storefront.business_type}</span>
+                <span className="min-w-0 wrap-anywhere">{storefront.business_type}</span>
               </span>
             ) : null}
             {storefront.hours ? (
               <span className="inline-flex max-w-full items-center rounded-chip bg-surface-container px-3 py-1 text-chip font-medium text-text-secondary">
-                <span className="min-w-0 truncate">{storefront.hours}</span>
+                <span className="min-w-0 wrap-anywhere">{storefront.hours}</span>
               </span>
             ) : null}
           </div>

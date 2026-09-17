@@ -1,7 +1,8 @@
 # 17 - Storefront redesign: no-image-first base, Uber Eats-style mature state (M-7)
 
-**Status:** built on `feat/m7-storefront-redesign` (M-7 US-1 through US-6),
-awaiting founder review and merge. Prototype
+**Status:** built on `feat/m7-storefront-redesign` (M-7 US-1 through US-6);
+founder review amendments applied (hero veil in both states, long facts wrap);
+awaiting merge. Prototype
 [`agencx-storefront-customer-v4.html`](../design/prototypes/agencx-storefront-customer-v4.html)
 approved in founder review.
 
@@ -22,10 +23,15 @@ structure, states, and vocabulary from it; take behaviour, never strings,
 except where the artifact's words specify a state (no "nothing published"
 notice); visual values are `theme.css` tokens only, no new tokens.
 
-Review decisions (approved as built):
+Review decisions (hero fallback amended in founder review 2026-09-17):
 
-- Hero fallback: **A. Plain identity** - no band; the monogram, name, and
-  facts lead.
+- Hero fallback: **the veil in both states** (supersedes A. Plain identity) -
+  with no cover a 96px `--gradient-veil` band stands where the cover would be;
+  with a cover the same veil lies over the photo's lower edge. The monogram
+  overlaps the band identically in both states, so media changes the band
+  filling, never the composition.
+- Long profile facts wrap to multiple lines and are never clipped or
+  ellipsized (restores the v4 edge case).
 - Offering layout: single-column rows on mobile, two-column grid at `sm+`
   (today's responsive behavior with compact rows and no reserved media
   space).
@@ -41,15 +47,16 @@ Review decisions (approved as built):
 - Must: M-7 US-1 and US-3 through US-6 as reviewed, the backend payload
   addition, and E2E pins plus the new mobile spec. Tokens only, no new
   dependencies.
-- Should: overflow guards for stretched profile strings (edge case
-  documented in v4).
+- Should: stretched profile strings wrap to multiple lines, never clipped
+  (v4 edge case).
 - Could: nothing reserved; video offerings keep today's poster and badge
   behavior unchanged.
 
 ## M-7 US-1: no-image base composition
 
-- Plain-identity hero: monogram, name, services subtitle, `business_type`
-  chip, `hours` fact. No reserved cover band, no reserved row media slots.
+- Veil hero: veil band in the cover's place (or over the photo's lower edge
+  when one exists), monogram overlap in both states, name, services subtitle,
+  `business_type` chip, `hours` fact. No reserved row media slots.
 - Minimal business (no offerings, with or without cover): name, brief
   description, facts, and the assistant-invitation panel using the full page
   - hero top, invitation middle, footer bottom. Never a "nothing published"
@@ -61,8 +68,9 @@ Review decisions (approved as built):
 
 ### Acceptance signal
 
-- [ ] Sababa with no photos: hero has no empty band, rows carry no dead
-  media space, type chip and hours fact render from the payload.
+- [ ] Sababa with no photos: hero carries the veil band rather than an empty
+  cover slot, rows carry no dead media space, type chip and hours fact render
+  from the payload.
 - [ ] Empty tenant: full-page minimal state with invitation and Reply pill,
   footer pinned to the bottom, no "nothing published" copy.
 - [ ] Null-price and no-category states from the v4 edge cases render as
@@ -94,9 +102,9 @@ Review decisions (approved as built):
 
 ## M-7 US-4: media maturity
 
-- Optional cover with monogram overlap; 96px thumbnails only where media
-  exists; broken-image tile fallback; video keeps today's poster and badge
-  behavior.
+- Optional cover with the veil over its lower edge and monogram overlap; 96px
+  thumbnails only where media exists; broken-image tile fallback; video keeps
+  today's poster and badge behavior.
 - The v4 demo photos are Wikimedia Commons stand-ins for the mature state
   and never ship.
 

@@ -123,8 +123,21 @@ test.describe("the public storefront", () => {
       page.getByText("Monday to Friday 9am to 6pm, Saturday 10am to 2pm"),
     ).toBeVisible();
     await expect(page.getByText("owner@bytefix.dev")).toHaveCount(0);
-    // No cover, no thumbnails, no logo image anywhere in the page.
+    // The veil band stands in the cover's place, and no image is reserved.
+    await expect(page.getByTestId("hero-veil")).toBeVisible();
     await expect(page.locator("main img")).toHaveCount(0);
+  });
+
+  test("the hero monogram overlaps the veil band", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    // v4 fallback B: the mark sits on the band, not below it. A block-level
+    // wrapper carries the -mt-12; an inline one silently fails to shift.
+    const band = await page.getByTestId("hero-veil").boundingBox();
+    const mark = await page.getByTestId("hero-mark").boundingBox();
+    expect(band).not.toBeNull();
+    expect(mark).not.toBeNull();
+    expect(band!.y + band!.height - mark!.y).toBeGreaterThan(20);
   });
 
   test("rows carry no reserved media space", async ({ page }) => {
