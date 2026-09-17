@@ -1,597 +1,90 @@
 # Agencx build dashboard
 
+This page is the single authority for Phase 1 scope, what is done, and
+what is next. Ticket detail lives in [the spec index](spec/README.md).
+The Wren origin story lives in [history.md](history.md).
+
 ## Current status
 
-The Stage 1 product is deployed on Vercel and the production smoke test is
-green. Feature delivery is complete. Phase 1 refinement remains open for
-schema/type safety, judge calibration, production evidence, and operational
-hardening.
+Stage 1 is deployed and the production smoke test is green. Feature
+delivery is complete; refinement and hardening remain open.
 
 | Environment | Value |
 |---|---|
 | Production branch | `staging` |
 | Live origin | `https://agencx-iota.vercel.app` |
 | Preview branch | `development` |
-Production database: hosted Supabase, migrated and seeded with `bytefix`
 
-## What's done
+Production database: hosted Supabase, migrated and seeded with `bytefix`.
 
-| Area | Tickets and evidence |
+## Phase 1 scope
+
+Phase 1 is onboarding plus customer chat plus the business page plus
+hardening: the owner self-onboards in a chat, lands in Home, Chats, and
+Business, uploads knowledge, and an anonymous customer asks questions at
+`/{slug}` grounded in that material, with escalation and handoff.
+
+Out of Phase 1: lead records, quotes, payments, scheduling, invoicing,
+custom domains, and the per-tenant tool registry plus toggle UI. Full
+scope boundary is in [the PRD](prd.md).
+
+## What is done
+
+| Area | Tickets |
 |---|---|
-| Foundation and tenancy | A-1, A-2; schema, RLS, auth, tenant resolution |
-| Onboarding and login | O-1, O-2, O-5, O-6, O-7, O-8, O-9, O-10, O-11, O-12 |
-| Chat spine and providers | P-1, P-2, P-3, P-4, P-5; Google primary, fallback tiers, latency race, preload, invalidation, typing indicator |
-| Grounded chat | O-3, O-4; hybrid retrieval, URL/document ingest, context package |
-| Money and escalation safety | C-1, C-2, C-3, C-4, C-5, C-6; deterministic pricing, figure gate, non-terminal handoff, staff takeover |
-| Tenant console | E-1, E-2, E-4, E-5, E-6; Home, Chats, Business, Booking, responsive navigation |
-| Storefront and media | M-1, M-2, M-3, M-4, M-5, M-6; owner offerings, prices, Cloudinary media, reviewed imports |
-| Product polish and hygiene | B-1, B-3, D-2, E-3, F-1, F-2, F-3, G-1 |
-| Developer experience and deployment | K-1, B-4; containerized development, two Vercel services, same-origin routing, hosted embedding and reranking |
-| Security and API reliability | R-1, R-2, R-4 US-1, R-5 US-1; Problem Details, safe SSE errors, request correlation, SSRF protection, Google tool-history fix |
-| Customer-agent contract | W-9 complete; base contract and Amendment 4 merged and verified, with deterministic basket summaries, catalog cards, transcript parity, and in-chat handoff |
+| Foundation and tenancy | A-1, A-2 |
+| Onboarding and login | O-1, O-2, O-5 through O-12 |
+| Chat spine and providers | P-1 through P-5 |
+| Grounded chat | O-3, O-4 |
+| Money and escalation safety | C-1 through C-6 |
+| Tenant console | E-1, E-2, E-4 through E-6 |
+| Storefront and media | M-1 through M-6 |
+| Product polish and hygiene | B-1, B-3, D-2, E-3, F-1 through F-3, G-1 |
+| Developer experience and deployment | K-1, B-4 |
+| Security and API reliability | R-1, R-2, R-4 US-1, R-5 US-1 |
+| Walkthrough fixes | W-1 through W-9, `Done - merged` |
+| Schema drop | W-10, `Done - merged`, migration `0029` |
+| Document review | W-11a, W-11b, W-11c, `Done - merged` |
+| Auth OTP reliability | W-12, W-13, `Done - merged`, hosted-verified |
 
-Detailed records live in [`spec/completed/`](spec/completed/).
+Detailed records live in [the completed specs](spec/README.md).
+Verification narratives live in the ticket files, not here.
 
-## What's next
+## What is next
 
-- [ ] R-3: audit success schemas and explicit unknown-field policies.
-- [ ] R-4: complete founder judge calibration and record additional production-smoke evidence.
-- [ ] **The provider-backed `make eval` gate has now failed four times on free-tier
-  quota and has never produced a valid baseline.** This is a capacity problem, not a
-  code problem: the deterministic gates pass and the LLM legs crash on a 429 rather
-  than regressing. Closing it needs a paid provider tier or an eval slice that fits
-  inside 200k tokens per day. Carried forward from W-9, most recently hit again
-  during W-10 (2026-09-13).
-- [ ] R-5: decide and validate backups/restore, error tracking, E2E-in-CI, and dependency scanning.
-- [ ] Add the GitHub `VERCEL_TOKEN` secret so registry cleanup can run. The local Vercel token is not a repository secret.
-- [ ] Record the QA pass, root-cause fixes, regression tests, and measured optimization results.
-- [x] W-1: cap the home escalation queue by screen size, not a fixed row count, and keep it fresh without a manual reload.
-- [x] W-2: stop the onboarding interview from re-asking a filled slot.
-- [x] W-3: keep the onboarding thread clear and responsive - empty placeholders, stable composer geometry, one pending indicator, animated upload processing, and a proven SSE/ordinary-request transport split.
-- [x] W-4: complete go-live address handling - the suggested slug on every confirm-opening path, actionable field errors, owner-typed addresses preserved, and recoverable network failures.
-- [x] W-5: ground one customer chat answer in both the confirmed offerings catalog and uploaded knowledge together, using the existing context package.
-- [x] W-6: extract accurate offerings from the complete source - distinct items, source-backed descriptions, deterministic item-bound prices, complex-price preservation, and possible-match proposals.
-- [x] W-7: make the interview read like a person - challenge junk input, drop the
-  skip chip, keep replies short, address-only go-live, priced offering cards.
-- [x] W-8: review a large import without losing information - shared structured document review, five-item preview and editor pages, explicit duplicate decisions, owner-only source evidence, and catalog-only offering publication.
-- [x] W-9: the definitive onboarding and customer-assistant contract - name
-  confirmation, corrections from any beat, offering operations, a code-owned
-  customer-agent contract applied to every prose route, structured customer
-  voice, deterministic basket pricing, structured catalog responses, and
-  non-terminal handoff. Closed out 2026-09-08 on `test/w-9-closeout` by writing
-  the verification Amendment 4's delivery evidence had claimed but not shipped.
-- [x] W-10: drop `tenant_config.system_prompt` and `.tone` and their last
-  writers ([`spec/completed/14-schema-drop.md`](spec/completed/14-schema-drop.md)).
-  All three preconditions were checked before starting: W-9 is deployed to
-  production and has served a real customer turn from the deployed build;
-  `select count(*) from tenant_config where not (config ? 'customer_voice')`
-  returned 0 against the production database, so `0027`'s backfill reached every
-  row; and a production database backup exists with a known restore path.
-  `system_prompt_for` deleted along with both seed writers and the probe seed's
-  duplicate leak-marker copy - the marker now reaches the prompt only through
-  `app/agents/contract.py`. Migration `0029` drops both columns.
-- [x] W-13: keep the six-digit email OTP contract aligned across local and
-  hosted Auth configuration; inspect hosted `mailer_otp_length` before any
-  change and verify a fresh real login
-  ([`spec/completed/16-auth-otp-reliability.md`](spec/completed/16-auth-otp-reliability.md)).
-  Hosted reported `mailer_otp_length: 8`; a single-field PATCH set it to `6`
-  and a re-GET confirmed, then a fresh code completed login through the
-  deployed UI. The same check found and fixed a five-migration hosted schema
-  drift (see the narrative below). Local config and docs landed
-  (`GOTRUE_MAILER_OTP_LENGTH: "6"`, `deploy.md` GET/PATCH examples).
-- [x] W-12: make the email OTP resend cooldown visible and recovery from a
-  failed code reliable, with mobile and desktop browser coverage
-  ([`spec/completed/16-auth-otp-reliability.md`](spec/completed/16-auth-otp-reliability.md)).
-  Visible `Resend in Ns` / `Resend code` countdown, clear-and-refocus on
-  failed verification and on resend (including when nothing was typed yet),
-  one request per click, inline recoverable network errors. 12 new
-  deterministic Playwright cases (desktop + mobile) plus the existing 19
-  real GoTrue/Mailpit cases all green; `make check` green.
-- [x] W-11: retain and review multi-file document drafts safely, publish
-  successful documents independently, expose retryable failures, and disclose
-  tenant-isolated storage and configured AI processing. Split into three
-  tickets, each on its own branch
-  ([`spec/completed/15-document-review.md`](spec/completed/15-document-review.md)).
-  - [x] W-11a: backend contract - `supporting_document_ids`/`support_state`
-    and `reconcile_replacement` for document replacement, migration 0028's
-    failure metadata with the reversed stored-failure rule, `retry-draft`,
-    and the batch publish endpoint. Reviewed and merged to `development` via
-    PR #31; corrective follow-up adding retryability and review-state guards,
-    batch cardinality validation, storage-failure isolation, and migration
-    0030's legacy-safe metadata constraint merged via PR #34.
-  - [x] W-11b: the retained review workspace (`ReviewSheet`'s `record` ->
-    `workspace`/`open` split). Reviewed and merged to `development` via PR #32.
-  - [x] W-11c: bounded-concurrency batch upload, `Replace`, offering
-    ordering/labels, pagination copy, and the privacy disclosures. 3-at-a-time
-    uploads capped at 5 files with in-place stamps and a single workspace
-    build; combined review sheet with a Sources panel (add/replace/remove),
-    per-document sections, and batch save with partial-failure retention;
-    reconcile and label policies mirrored from `flow.py` into a pure
-    `offerings.ts`; ready card and both disclosures verbatim; Business >
-    Knowledge retry-draft, Replace, and disclosure. 14 new deterministic
-    Playwright cases (desktop + mobile), 131 total e2e, `make check`, `make
-    ci`, and the eval gate all green.
-- [x] Soft Sakura color rollout (2026-09-11): replace the crimson brand system
-  with the locked Soft Sakura palette in `theme.css` (blossom `#F3C3D6`, action
-  `#8D2A58`, restored paper/surface depth, AA status pairs), retire the
-  per-tenant accent override as visually inactive while `brand.accent` stays
-  accepted/stored/returned, recolor the v6 prototype color-only (no layout,
-  copy, interaction, or state changes), and record D25 with the docs
-  reconciled. New `frontend/src/styles/theme.test.ts` pins the token contract,
-  and an e2e case proves both demo tenants render the same accent.
-- [x] Airbnb color rollout (2026-09-11): supersede Soft Sakura with the Airbnb
-  color system in `theme.css` (Rausch `#FF385C` action, deep red text stop
-  `#B4004E`, CTA gradient `#E61E4D -> #E31C5F -> #D70466`, soft red `#FFD1DA`,
-  Airbnb greys, and status ramps rebuilt as Airbnb-adjacent AA dark-on-pastel
-  pairs). Usage moves to Airbnb discipline: gradient text-bearing CTAs, accent
-  text actions and chips, flat red icon fills, soft accent washes on the
-  Business cards, neutral chrome, and white bordered fields with ink focus in
-  all forms. `theme.test.ts` re-pinned with a gradient-stop AA check; the
-   storefront e2e accent pin updated to Rausch; the v6 prototype recolored
-   color-only; D26 recorded superseding D25.
-- [x] Design-system consistency (2026-09-15): one canonical spacing and type
-  scale in new `design/tokens.md` (D27), applied across all four surfaces.
-  New `Card` and `Container` primitives with the duplicated recipes migrated
-  onto them; dead type tokens, `accent-a20`, and `shadow-1` retired with all
-  consumers moved in the same commits; Jakarta 600 loaded and the error page
-  on Jakarta; the warning wash re-pointed to the founder-set `#FDF4E3` with
-  the AA pair re-pinned; `check:tokens` extended to fail the build on any
-  off-scale spacing or arbitrary px text value (negative proof in the commit
-  body). Intentional shifts: bubble text to 15/21, card padding to 16/24,
-  chats at 640 and storefront/admin/Wren-era pages at 1024 on desktop, admin
-  gutter to 24, sheet radius to 24.
-- [ ] UX consistency ([`spec/completed/15-ux-consistency.md`](spec/completed/15-ux-consistency.md)):
-  unify all navs on the mobile accent idiom via `navTone()`, add pointer
-  cursor plus hover/press feedback to every button, ask destructive removes,
-  hand-back, and sign-out through a shared `ConfirmDialog`/`useConfirm`,
-  and toast every mutation. Built on `feat/ux-consistency` (U-1 through U-4
-  with unit and e2e coverage); awaiting founder review and merge.
-
-**Phase 13 specification amended four times.** 2026-09-05
-(`docs/phase13-walkthrough-refinement`): a second walkthrough round and its
-planning refined W-3 through W-6, added W-8 and W-9, and corrected the phase
-introduction to nine tickets. 2026-09-06: W-9 was rewritten into the phase's
-single authoritative closing ticket (Amendment 3 in `13-walkthrough.md`),
-2026-09-07: Amendment 4 added deterministic basket pricing, catalog responses,
-and the non-terminal handoff contract, and 2026-09-08: the base contract and
-Amendment 4 were merged to `development` sequentially. **W-1 through W-9 are
-shipped, and the phase is closed** ([`spec/completed/13-walkthrough.md`](spec/completed/13-walkthrough.md)).
-W-11 is documented separately in Phase 15 and can now proceed independently from
-the merge dependency. It is fully implemented: W-11a, W-11b, and W-11c are merged.
-
-## Known gaps and deliberate deferrals
-
-- The owner Copilot route is deferred to Phase 2.
-- Per-tenant tool gating and its toggle UI are deferred to Phase 2; advanced tools remain built but off by default in the lean configuration.
-- `agencx.app` is deferred until the founder buys and binds the domain. The Vercel origin is the current stand-in.
-- Judge calibration needs founder labels to avoid circular evaluation.
-- The Hobby deployment has cold starts and Supabase can pause after inactivity; keep-warm mitigates this for the portfolio deployment.
-- No real customer data should use the free-tier LLM and embedding providers until the provider decision changes.
-- Custom SMTP (Brevo) is not yet configured on the hosted Supabase project. Its built-in mailer delivers only to project members at ~2/hour, so no real tenant owner can receive a login code until Brevo is set (`deploy.md` Step 1.5) - found 2026-09-04 while fixing the login OTP misconfiguration below.
-- Hosted migrations are manual: `.github/workflows/deploy.yml` never runs
-  `python -m app.shared.migrate`, so every deploy that adds a migration file
-  depends on an operator remembering `deploy.md` Step 3. The hosted schema
-  was five migrations behind the deployed code until the 2026-09-11 drift
-  below. Automating the step, or gating a deploy on the ledger, is open
-  operational hardening work.
+- [ ] M-7 storefront redesign: no-image-first rebuild with one persistent
+  chat entry. `Active - in progress` on `feat/m7-storefront-redesign`;
+  ticket file lands with that branch. Founder mobile and desktop
+  walkthrough is the remaining step before merge.
+- [ ] U-1 through U-4 UX consistency: shared nav idiom, button feel,
+  shared confirm dialog, toasts. `Active - awaiting review` on
+  `feat/ux-consistency`; see
+  [15-ux-consistency.md](spec/completed/15-ux-consistency.md).
+- [ ] R-3 schema and type safety: `Active - todo`, not yet scoped. See
+  [12-refinement.md](spec/active/12-refinement.md).
+- [ ] R-4 remainder: founder judge calibration plus production-smoke
+  evidence. See [12-refinement.md](spec/active/12-refinement.md).
+- [ ] R-5 remainder: backups and restore drill, error tracking, E2E in
+  CI, dependency scanning. See
+  [12-refinement.md](spec/active/12-refinement.md).
+- [ ] Provider-backed `make eval` has no valid baseline: deterministic
+  gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
+  attempts). Needs a paid tier or a smaller eval slice.
+- [ ] Ops: add the GitHub `VERCEL_TOKEN` secret; configure Brevo SMTP on
+  the hosted project (built-in mailer is member-only); automate hosted
+  migrations (`deploy.yml` runs no migrate step). Procedure is in
+  [deploy.md](deploy.md).
 
 ## Spec status
 
-**Two abandoned attempts sit behind `M-1`/`M-4`, and the record is the point.**
-A Codex session built `M-1` on `feat/offerings-media-import` and renamed
-`catalog_items` to `offerings`; a second, on `feat/business-storefront`, built
-the storefront but kept `catalog_items`, reversed the rename in its own
-migration, and dropped prices from offerings entirely. The founder ruled on
-both open questions - the rename stands, and prices are owner-typed facts that
-belong on the page (D24) - so the first branch merged to `development` as
-`M-1` and the second was rebuilt on top of it as `M-4`. Nothing was thrown
-away except the reversal migration. The dev database carried both experiments
-plus a `0023_storefront_gallery.sql` that exists in no branch, so it was reset
-from schema zero to prove `0001`-`0024` apply in order.
-
-O-5 pulled **B-3 US-1** (the lighter crimson `#C1123F`) forward, because the
-prototype the onboarding thread is ported from carries that ramp - B-3 stays
-open for US-2, the `STATUS_TONE` map.
-
-**Phase 1 refinement (`12-refinement.md`) has opened.** R-1 (documentation
-truth), R-2 (the standard API contract), R-4 (reliability and provider, US-1),
-and R-5 (operations and security, US-1) are closed: every JSON error is RFC
-9457 Problem Details, SSE streams fail safely with a typed `error` event,
-`api-contract.md` documents the shape, D-4 and other stale documentation is
-reconciled against the code, Google's tool-history bug is fixed, and the
-URL-ingest path is hardened against SSRF. **R-3 (schema and type safety) is
-open as a backlog entry**, not yet scoped into a full ticket; R-4 and R-5 each
-keep an open second half (judge calibration/production-smoke evidence;
-backups, error tracking, E2E-in-CI, dependency scanning). No Phase 2 feature
-work happens as a side effect of this phase - recommendation, quoting, and
-order/ticket lookup stay exactly where D-2 left them: built, exposed to every
-tenant today because D-1's per-tenant gating hasn't landed yet, not deleted or
-deferred out of the codebase.
-
-**Owner-home escalation queue is unticketed UI polish** (founder request,
-2026-09-04, `feat/owner-escalation-panel`), not a spec ticket. Home's
-`WaitingPanel` replaces the single collapsed "waiting" `BriefItem` with one
-row per customer who needs the owner (name, relative time, the assistant's
-one-line summary), sorted oldest escalation first and capped to 3 with a
-"Show all N" expand; a row links straight to `/chats/:id` rather than the bare
-list. The Chats tab badge (bottom bar and sidebar) now carries the count
-instead of a bare dot. `escalations.summary` is only ever written today by the
-`create_escalation` tool - the price_gate/inspection/limit paths leave it
-NULL - so a new async summariser (`app/agents/escalation_summary.py`) fills it
-from the last few messages after the customer's turn is already on the wire
-(never inside it: T-028's 10s turn budget has no room for an extra LLM call at
-the point an escalation fires). `ConversationSummary` gained `pending_since`
-(the escalation's own timestamp) alongside the existing `pending_summary`.
-Also fixed in passing: the Chats-list attention dot and the new count badges
-disagreed on which amber to use (`--color-warning`'s amber-500, a "kept from
-the prior system" holdover that reads brown at text weight and fails 4.5:1
-against its own subtle background, versus `--color-highlight`'s amber-400,
-the prototype's actual notification colour). W-1 points `--color-highlight`
-at that prototype literal, with 8.6:1 dark-text-on-solid-fill contrast, and
-every "wants the owner" indicator in the app uses it consistently.
-
-**Hosted login OTP was misconfigured, not a code bug** (found 2026-09-04,
-`fix/hosted-otp-sends-link`). Staging's login-in-chat mailed a magic LINK to
-Supabase's default Site URL (`http://localhost:3000`) instead of the
-six-digit code the UI asks for - `auth_logs` showed `POST /otp` 200 followed
-by `GET /verify` **303** (a clicked link, not a typed code, which is a `POST
-/verify` 200), and `auth.users.recovery_sent_at` was stamped instead of
-`confirmation_sent_at`, confirming the Magic Link template's link-only
-default had rendered. `signInWithOtp`/`verifyOtp` (`login/page.tsx`) were
-already correct; the hosted project's Auth config (Site URL, URI allow list,
-Magic Link and Confirm signup email templates) had simply never been set per
-`deploy.md`'s own Step 1.5, which calls this "blocking, not optional." Fixed
-by PATCHing the project's Management API config directly - `deploy.md` Step
-1.5 now gives literal field values and `curl` commands instead of
-dashboard-click prose, and `docker-compose.yml` gained
-`GOTRUE_MAILER_TEMPLATES_CONFIRMATION` so local dev mirrors both templates
-hosted needs. Custom SMTP (Brevo) is a separate, still-open gap (above): this
-fix restores the founder's own login, but a real tenant owner receives
-nothing until Brevo is configured.
-
-**Hosted production schema was five migrations behind the deployed code**
-(found 2026-09-11 during the W-13 hosted acceptance login, fixed the same
-day). Hosted `schema_migrations` stopped at `0025`, while the deployed
-staging build already contained W-6 and W-11, whose record columns read
-`documents.offerings` (0026) and
-`documents.failure_stage`/`failure_retryable`/`failed_at` (0028/0030). Every
-owner call to `/api/onboarding/state` or `/api/knowledge/records` failed with
-`UndefinedColumnError: column "offerings" does not exist`, surfaced to the
-browser as a 500 Problem Details - login itself was fine. Re-running the
-documented migration runner against the hosted pooler URL applied the four
-pending migrations; the ledger now reads 29/29, and no redeploy was needed
-because the running backend reads the schema live. The systemic half is
-recorded under Known gaps: `deploy.yml` has no migration step, so hosted
-schema changes have always depended on an operator. **This class of drift is
-invisible to a health-check smoke test** - it only appeared when a real owner
-loaded `/onboarding` - which is worth remembering for R-4/R-5 evidence
-planning.
-
-**W-6 shipped** (2026-09-06, `feat/w-6-offering-extraction`). The founder's PDF
-turned out to be recoverable, and it is now `backend/tests/fixtures/`. Running
-the old `derive()` over it reproduces the report exactly: `"Pocket both run"`,
-`"of wrapped in. For"`, `"Salads are sold individually too, mostly"`. Six pages
-of prose about a Bondi Junction restaurant, ~20 sellable items, in a document
-that is ~80% reviews, FAQ and platform trivia - nothing like the seeded catalogs,
-which are rows the app itself produced.
-
-The fix is a split of labour rather than a better regex: the model identifies
-items, the server counts. That is structural, not instructed. **Stage 0 indexes
-every monetary figure before the model sees a token**, so the set of amounts the
-pipeline can emit is fixed in advance; the extraction schema then has no numeric
-field at all, and for money the model can only return a block id pointing into
-that frozen index. There is nowhere for an invented number to arrive.
-
-Three things the ticket did not anticipate, all found by running the real
-fixture:
-
-- `is_hedged` (built for the chat price gate, used nowhere else) rejects
-  `"around $18"` for free, and a reporting-verb check catches `"another said the
-  $18 plate"`. Two customer reviews price the plate in this document; neither may
-  price the menu.
-- Quotation marks are **not** an attribution signal. The first pass treated them
-  as one and silently suppressed two real menu prices, because this kind of
-  document is full of scare quotes - a `"Pimped Up"` pocket, chips `"described as
-  famous"`. A whole quoted sentence is caught structurally instead.
-- A range whose second half drops the currency mark (`"mostly $10-14"`) is
-  invisible to `extract_monetary_figures`, so a pairwise check between two
-  detected figures reads it as one flat price and puts every salad on the menu at
-  $10. The range check reads forwards from a figure's own text instead.
-
-Blocks are sentence-sized, not paragraph-sized: a prose menu paragraph prices
-several items in a row, and at paragraph granularity every figure looks like a
-competing price for every item in the paragraph.
-
-Because extraction needs a model call it moved to ingest (`documents.offerings`,
-migration 0026); it used to run inside **every read** of every document.
-`derive()` and its helpers are deleted rather than kept as a fallback, so there
-is one extraction path - a failure yields fewer candidates and says so
-(`extraction_status`), never a fall back to first-number parsing.
-
-`merge_offerings` is now the single written statement of offering precedence.
-The browser had reimplemented it with the opposite rule - owner wins, not
-document - so an uploaded price list and a chip-typed name disagreed depending on
-which surface you looked at. `withCombinedOfferings` could not simply be deleted
-as planned: a file uploaded mid-interview posts to the shared knowledge route,
-which does not fold candidates into the onboarding record the way the URL turn
-does. It now applies the server's rule and names it.
-
-Also fixed in passing: `vitest.config.ts` had no `@/` alias, so a unit test could
-only import from modules that happened to use relative paths - which had quietly
-decided which components were testable.
-
-**Still owed: the browser pass.** No LLM key is configured locally, so the real
-model call over the real PDF has not run. Everything either side of it is
-verified end to end - the upload route, structuring, extraction, the jsonb
-column, the API shape and the no-re-extraction-on-read property, in
-`test_knowledge_api.py` - and the resolver is pinned against the real fixture
-text in `test_offering_extraction.py`. What remains unproven is how well the
-model itself identifies items in prose, which is the one part a fake provider
-cannot stand in for.
-
-**Phase 13 (walkthrough fixes) has opened** (`13-walkthrough.md`, 2026-09-04).
-A founder walkthrough of the deployed build found defects across the home
-escalation queue, the onboarding interview, and customer chat grounding. Two
-of the six tickets, W-1 and W-5, refine work this same session already
-shipped (the escalation queue above, and `fix/customer-offering-context`'s
-offerings-grounding fix) rather than building it fresh. W-2 is the largest
-ticket: the onboarding interview's next question has always been chosen
-deterministically but composed by a second, unconstrained LLM call, which let
-it re-ask a business name already on file - the fix makes the server emit the
-question verbatim, the same way the chip-answer path already does, and adds a
-flow-change confirmation rule to `conventions.md` so a working conversational
-flow is not altered again without a flagged before/after. The phase was
-extended to nine tickets by a second walkthrough round and its planning
-(`docs/phase13-walkthrough-refinement`, 2026-09-05) - refined W-3 through
-W-6, new W-8 and W-9 - as a specification update only; those tickets remain
-open for implementation.
-
-**W-2 shipped** (2026-09-05, `fix/w-2-onboarding-repeat`). Building it surfaced
-that the ticket named a symptom the spec had mis-sized: there was no repeat cap
-anywhere to raise or lower - `next_beat` was a stateless rescan and
-`off_topic_count` was incremented but read by nothing - and every one of the
-nine beats was a hard gate, so an unanswerable one looped forever and blocked
-go-live. The diagnosis that shaped the fix is that *adjacency*, not count, is
-what made the transcript infuriating: three business-name questions back to
-back. So each beat now gets two asks, and then resolves rather than repeating -
-a skippable beat takes a default or is dropped, a required one is deferred to a
-second pass that returns only once every other beat is done. Which beats are
-which follows one rule: skippable means nothing downstream reads it, or the
-owner can still edit it after go-live. On the final pass the owner's own words
-are never stored as a fallback: an unresolved required field pauses the
-interview, survives reload, and offers a retry with a fresh two-ask allowance.
-Go-live stays blocked until it has a valid value. A skipped beat deliberately
-writes no sentinel into the profile - `profile_tagline` renders `services` and
-`hours` straight into the public storefront subtitle, so a "skipped" string
-there would have shown to customers.
-
-Still open from this ticket's edges: `hours` and `contact` are required only
-because no post-go-live editor exists for them. A profile editor at
-Business > details would let them become skippable, and is the natural
-follow-up.
-
-**W-5 shipped** (2026-09-05, `fix/w-5-combined-grounding`). The customer chat
-answered "what do you offer?" from the confirmed catalog and stopped there,
-surfacing uploaded knowledge only on a second, more insistent question. Three
-mechanisms caused it and all three were prompt-level: the offerings block told
-the model to "enumerate the complete catalog before offering to share more
-detail", the tool guidance said that answer "is in the material above", and on
-the hybrid path the catalog could never reach the same generation as the
-retrieved chunks because `_build_knowledge_prompt` only ever saw
-`retrieved_chunks`. The catalog now rides in state as `offerings_text`, set
-beside the existing `owner_material` on both of the agent node's return paths,
-so the draft node can put both sources in front of one generation without a
-second query.
-
-The ticket missed one thing that would have made the fix backfire: the
-grounding judge's only evidence is `_provenance_text`, which read
-`retrieved_chunks` alone, and catalog rows are stripped from retrieval on both
-paths on purpose (M-1). A reply naming a confirmed offering therefore had no
-provenance in front of the judge, so doing exactly what W-5 asks for would have
-failed grounding and escalated. The offerings block is appended there too. The
-price gate needed nothing - `owner_material` already carried the catalog
-string, which is why the money guardrail never showed the same gap.
-
-Verified through the real customer chat with a live model rather than a mocked
-turn: the repo's E2E convention deliberately scripts customer turns through
-`page.route` (`e2e/typing-indicator.spec.ts` header) because a free-tier model
-makes timing non-deterministic, and a mocked `/api/chat` would mock away the
-server-side prompt assembly that is the whole change. Before and after were run
-twice each against `bytefix`.
-
-**W-9 was delivered sequentially to `development`** (2026-09-08). The original
-contract branch was squash-merged first as `7ae710e`; the Amendment 4 branch was
-then validated and squash-merged as the second delivery. The deterministic
-verification is green: 943 backend tests, 110 frontend tests, frontend and
-backend lint/type/format checks, the full 105-test browser suite, and the
-targeted mobile voice-sheet rerun after fixing the shared topbar's flex-shrink
-touch-target bug. The ticket was closed out on `test/w-9-closeout` the same day
-(see the W-9 closeout record below); only the provider-backed `make eval` and
-production evidence remain outstanding, and the deterministic
-`make eval-skip-llm` gate is the local regression gate.
-
-What the reproduction changed about the ticket is worth keeping. Five of the six
-failures the ticket names reproduced through the real onboarding UI, and the
-drive surfaced four the ticket had not: a beat's own `example` reaching the
-owner as a fact (the owner greeted as "Nikan", the founder's name in the name
-beat), the model answering the question it was one turn away from asking, em
-dashes in assistant output against a repo-wide rule, and a value typed during
-another beat landing nowhere. The sixth named failure, the owner's name standing
-in for the business name, turned out to be latent rather than user-visible: the
-summary carrying that fallback renders only once every required beat is
-satisfied, and `business_name` is required. It is removed anyway, and the ticket
-record says plainly that no user-visible bug was fixed by removing it.
-
-Two consequences worth carrying forward. The customer contract and its voice
-block measure 3,682 characters at their longest, where the retired
-`tenant_config.system_prompt` measured 202, so the fast-path budget now accounts
-for a much larger prompt and a tenant sitting within about 3,500 characters of
-that budget takes the hybrid path where it used to take the fast path - honest
-accounting, but a real behavior change on live tenants. And the pin that carries
-that cost into the budget, `_CONTRACT_OVERHEAD_CHARS`, is a number rather than a
-measurement, because the import contract forbids `app.services` from importing
-`app.agents`; a test that imports both fails the moment the contract outgrows
-it.
-
-`tenant_config.system_prompt` and `.tone` were read by no application code after
-this ticket, and their columns and seed writes stayed in place until W-10 dropped
-them (`spec/completed/14-schema-drop.md`), deliberately its own ticket because one
-squash-merge cannot both deploy forward-compatible code and run the destructive
-migration after it is verified.
-
-**W-9 closed out** (2026-09-08, `test/w-9-closeout`). The prior session recorded
-the six open Amendment 4 boxes as "verification, not unwritten code". That was
-half right. The code was all there, but Amendment 4's own delivery evidence
-claimed a test matrix - "ambiguity... mixed priceability... inactive items,
-tenant isolation... owner price changes between turns... transcript parity...
-handoff deduplication, explicit contact-channel requests" - and several of those
-tests did not exist. Closing the ticket meant writing them. Backend tests went
-from 943 to 959, frontend from 110 to 120.
-
-Three things the boxes said that turned out to need rewording rather than a fix:
-
-- **Ids are supposed to be on the payload.** Box 1 reads as though the offering
-  id should be absent from customer-facing structured responses. It cannot be:
-  the cards use it as the row key and a follow-up turn re-selects by it. The
-  real guarantee is that it never reaches a *printed* field, and that is now
-  pinned on both sides, including the first tests `CatalogCard` and
-  `PriceSummaryCard` have ever had.
-- **There is no customer transcript to be in parity with.** Box 4's "customer
-  and owner transcript views render the same persisted response payload" reads
-  like a cross-surface guarantee. The customer surface has no history restore at
-  all - `conversationId` starts null and nothing is stored - so parity means the
-  persisted payload is identical to the streamed one and both feed the same
-  components. Asserted that way rather than by building customer history, which
-  no ticket asked for.
-- **"Exact" was asserted against itself.** Every handoff test compared the draft
-  to the imported `HANDOFF_MESSAGE` constant, so the wording could have been
-  changed to anything and the suite would still have passed. It is now pinned
-  against a literal copy, U+2019 apostrophe included.
-
-**`make eval` was attempted and failed on provider quota, not on the code.**
-Run 2026-09-08 against `bytefix`. The three absolute deterministic gates passed
-(`money_guardrail_eval`, `leakage_eval`, `retrieval_eval`). The three
-provider-backed legs (`generation_eval`, `trajectory_eval`, `injection_eval`)
-each reported `eval errored (exit 1)`, not a metric regression: the run ground
-through roughly 31 of 41 trajectory cases on a 120-second retry ladder before
-Groq returned `429 tokens per day (TPD): Limit 200000, Used 197944, Requested
-2869` for `openai/gpt-oss-120b`, with the Google primary leg rate-limited into
-its own retries at the same time. **So the gate is still unmeasured, for the
-third attempt, and for the same reason each time.** There is no valid recorded
-`tool_correctness` or injection `pass_rate` baseline for this code, so the first
-run that completes establishes a baseline rather than gating against one. Per
-the founder's 2026-09-08 decision the sequence does not block on this. **The
-honest read is that the free tier cannot measure this gate; a paid tier or a
-much smaller eval slice is what would actually close it.**
-
-**Two clauses are prompt-only and are recorded as such rather than claimed.**
-The contact-channel rule ("a confirmed email or phone is returned only when that
-channel is explicitly requested") has no deterministic enforcement anywhere -
-there is no gate analogous to `price_gate.py`. Coverage proves the rule text
-reaches every customer prose route's prompt; obedience rests on the model.
-Likewise "ambiguous" and "commitment" requests have no code path to drive, so
-they are deliberately untested rather than faked by scripting a provider into
-the answer. **A deterministic contact-channel gate is the natural follow-up if
-the founder wants that clause enforced rather than instructed.**
-
-**W-10 shipped** (2026-09-13, `chore/w-10-schema-drop`). All three preconditions
-were checked before starting: W-9 is deployed to production and has served a
-real customer turn from the deployed build; `select count(*) from tenant_config
-where not (config ? 'customer_voice')` returned 0 against the production
-database, confirming `0027`'s backfill reached every row; and a production
-database backup exists with a known restore path.
-
-The ticket's own Tests section named only "the existing confirm test" and the
-four seed runs, but dropping two columns that a running application still
-inserts into breaks anything that names them in raw SQL. A grep the ticket
-didn't do found seven test files doing exactly that
-(`test_onboarding_api.py`, `test_seed_demo.py`, `test_seed_tenant1.py`,
-`test_agent_contract.py`, `test_context_package.py`, `test_chat_api.py`,
-`test_inspection.py`), plus an eighth (`test_agent_contract.py`'s marker test)
-that imported the deleted `SYSTEM_PROMPT` constant by name. All eight needed
-companion fixes - not scope creep, just what `make check` staying green
-actually requires. Two of the seed-persona assertions were rewritten rather
-than deleted: they existed to prove the seed's end-state matched a real
-confirm, and after the drop the part of that end-state application code
-actually reads is `config->customer_voice`, so that's what they assert now.
-
-The order matters more than the diff. Production still runs W-9 code that
-writes `system_prompt` on every onboarding confirm, and the `development`
-preview shares the same production Supabase database - there's only one - so
-`0029` could not be applied until both `development` and `staging` carried the
-new, column-independent code. Deploy first, migrate second; the reverse order
-500s every `POST /api/onboarding/confirm`.
-
-`system_prompt_for` (`app/onboarding/flow.py`) is deleted outright rather than
-left unused. `seed_injection_probe.py`'s duplicate copy of the leak marker -
-written through `system_prompt` "so the probe tenant matches every other
-seeded tenant," per its own W-9 comment - is gone too; the eight
-`injection_set.jsonl` prompt-leak cases now score against a marker that reaches
-the model through exactly one path, `app/agents/contract.py`, instead of two
-copies that could have drifted apart.
-
-Verification: 1007 backend tests and 219 frontend tests green, `make check`,
-`make ci`, and `make eval-skip-llm` all green, all four seeds
-(`seed_demo`, `seed_tenant1_phoneshop`, `seed_leakage_pair`,
-`seed_injection_probe`) run clean against the migrated schema, and the full
-137-case Playwright suite passed against a real onboarding confirm through the
-UI. `make eval` failed a fourth time on the same Groq free-tier TPD quota
-(`200000` daily tokens, `199007` used) documented above under "What's next" -
-the three deterministic gates (`money_guardrail_eval`, `leakage_eval`,
-`retrieval_eval`) passed and the three provider-backed legs errored on the 429,
-not a metric regression. No injection baseline exists yet for this code; the
-honest substitute evidence is `test_agent_contract.py::test_leak_marker_rides_in_the_contract_render_path`
-(the marker still reaches every rendered contract) and
-`test_injection_eval.py`'s dataset tests (the eight cases are intact). This
-remains a capacity gap, not something W-10 introduced or could have closed.
-Production: migration `0029` applied <FILL: date>, `schema_migrations` count
-<FILL: before>→<FILL: after>, and a real onboarding confirm plus one customer
-chat turn verified on the live origin post-migration.
-
-**Chats-list row identity is unticketed UI polish** (founder request,
-2026-09-06, `fix/chats-row-identity`). Every row on the owner's Chats list read
-"Customer", because the web chat surface never captures a name - `chat/service.py`
-inserts a conversation with nothing but `tenant_id`, and only `seed_demo.py` ever
-sets `customer_ref`. The seeded demo world hid this completely: all seven of its
-conversations are named, so the list looked fine in every screenshot and every
-E2E run, and the defect only appears against a conversation a real customer
-started. An unnamed row now falls back to the conversation's own short reference
-(`#06BD83`, the head of its uuid), which is a literal prefix of the id in
-`/chats/<id>` - so a row, its thread topbar, and the URL all identify the same
-conversation without a new column, a migration, or a generated id nothing else
-would agree with. A named customer shows the name alone; the code is a fallback,
-not a suffix.
-
-The second half is the attention signal: "needs you" was a 7px amber dot sitting
-right of the timestamp, unlabelled, beside an identically sized accent dot
-meaning the opposite ("being handled, ignore this"). Two dots differing only in
-hue, one demanding action and one suppressing it, and the amber one's
-`aria-label` was on a bare `<span>` with no role, so it announced to nobody. It
-is now a pill reading "Action needed" in the same words as the filter chip above
-that selects for it, on `--color-highlight` per W-1. The accent dot stays a dot -
-these two states are not peers, and only one of them is asking for something.
-
-Two things worth recording. The three surfaces had drifted to three different
-fallbacks (`"Customer"` twice, `"A customer"` once, `"Anonymous"` on the legacy
-table); the label now lives once in `lib/format.ts` beside `relativeTime`, which
-all three already shared. And `check-tokens.mjs` fails a six-hex-character
-display code as a colour literal - the same "hex-looking, not a colour" class as
-the `href="#abc"` limit its own header documents - so `format.ts` joins
-`brand.ts` on the allowlist rather than the regex being loosened. `/chats` had no
-E2E coverage at all, which is how this shipped; `e2e/chats-list.spec.ts` now
-stubs the unnamed case the seed cannot produce.
-
 | Location | Status | Contents |
 |---|---|---|
-| [`spec/active/08-deferred.md`](spec/active/08-deferred.md) | Deferred | B-2, D-1, D-3 |
-| [`spec/active/12-refinement.md`](spec/active/12-refinement.md) | Open | R-3, R-4, R-5 |
-| [`spec/completed/13-walkthrough.md`](spec/completed/13-walkthrough.md) | Complete | W-1 through W-9 delivered and verified |
-| [`spec/completed/14-schema-drop.md`](spec/completed/14-schema-drop.md) | Complete | W-10 delivered; migration `0029` applied to production |
-| [`spec/completed/15-document-review.md`](spec/completed/15-document-review.md) | Complete | W-11a, W-11b, W-11c delivered and verified |
-| [`spec/completed/16-auth-otp-reliability.md`](spec/completed/16-auth-otp-reliability.md) | Complete | W-12, W-13 delivered and hosted-verified |
-| [`spec/completed/`](spec/completed/) | Complete | All delivered feature, deployment, and supporting phases |
-| [`docs/archive/phase1-complete/`](../archive/phase1-complete/) | Historical | Completed R-1 and R-2 records |
+| [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder |
+| [spec/completed/15-ux-consistency.md](spec/completed/15-ux-consistency.md) | `Active - awaiting review` | U-1 through U-4, misfiled, moves to `active/` |
+| [HiveAgencyXRefinement.md](HiveAgencyXRefinement.md) | `Active - todo` | RF proposal, moves to `active/18-refinement-proposal.md` |
+| [spec/completed/](spec/completed/) | `Done - merged` | All delivered feature, deployment, and supporting phases |
+| [archived R-1 and R-2](../archive/phase1-complete/12-refinement-r1-r2.md) | Historical | Completed refinement records |
 
-Phase 1 is not called fully complete until the active refinement items are
-validated or explicitly accepted as deferred. QA and optimization are separate
-from the documentation closeout and must be evidence-driven.
+Phase 1 is not called fully complete until the active refinement items
+are validated or explicitly accepted as deferred.
