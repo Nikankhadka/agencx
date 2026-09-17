@@ -1,7 +1,7 @@
 # 15 - UX consistency: nav tone, button feel, confirmations, toasts
 
-**Status:** built on `feat/ux-consistency` (U-1 through U-4), awaiting founder
-review and merge.
+**Status:** Active - awaiting review on `feat/ux-consistency`.
+**Phase 1 area:** Product polish.
 
 Founder request: the mobile tab bar's accent active state and the desktop
 sidebars' grey pill were visibly different products. All navs now wear the

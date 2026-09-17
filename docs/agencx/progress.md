@@ -59,7 +59,7 @@ Verification narratives live in the ticket files, not here.
 - [ ] U-1 through U-4 UX consistency: shared nav idiom, button feel,
   shared confirm dialog, toasts. `Active - awaiting review` on
   `feat/ux-consistency`; see
-  [15-ux-consistency.md](spec/completed/15-ux-consistency.md).
+  [15-ux-consistency.md](spec/active/15-ux-consistency.md).
 - [ ] R-3 schema and type safety: `Active - todo`, not yet scoped. See
   [12-refinement.md](spec/active/12-refinement.md).
 - [ ] R-4 remainder: founder judge calibration plus production-smoke
@@ -81,8 +81,8 @@ Verification narratives live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder |
-| [spec/completed/15-ux-consistency.md](spec/completed/15-ux-consistency.md) | `Active - awaiting review` | U-1 through U-4, misfiled, moves to `active/` |
-| [HiveAgencyXRefinement.md](HiveAgencyXRefinement.md) | `Active - todo` | RF proposal, moves to `active/18-refinement-proposal.md` |
+| [spec/active/15-ux-consistency.md](spec/active/15-ux-consistency.md) | `Active - awaiting review` | U-1 through U-4 |
+| [spec/active/18-refinement-proposal.md](spec/active/18-refinement-proposal.md) | `Active - todo` | RF-1 through RF-17 proposal |
 | [spec/completed/](spec/completed/) | `Done - merged` | All delivered feature, deployment, and supporting phases |
 | [archived R-1 and R-2](../archive/phase1-complete/12-refinement-r1-r2.md) | Historical | Completed refinement records |
 

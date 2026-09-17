@@ -31,8 +31,8 @@ Per-ticket header pattern:
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder | `Active - todo` |
-| [completed/15-ux-consistency.md](completed/15-ux-consistency.md) | U-1 through U-4 | `Active - awaiting review`, misfiled, moves to `active/` |
-| [../HiveAgencyXRefinement.md](../HiveAgencyXRefinement.md) | RF proposal, moves to `active/18-refinement-proposal.md` | `Active - todo` |
+| [active/15-ux-consistency.md](active/15-ux-consistency.md) | U-1 through U-4 | `Active - awaiting review` |
+| [active/18-refinement-proposal.md](active/18-refinement-proposal.md) | RF-1 through RF-17 proposal | `Active - todo` |
 
 M-7 storefront redesign ships on `feat/m7-storefront-redesign`; its ticket
 file `active/17-storefront-redesign.md` lands with that branch.
@@ -51,7 +51,7 @@ file `active/17-storefront-redesign.md` lands with that branch.
 | [completed/09-devex.md](completed/09-devex.md) | Developer experience, `Done - merged` |
 | [completed/10-deploy.md](completed/10-deploy.md) | Deployment, `Done - merged` |
 | [completed/11-offerings-media.md](completed/11-offerings-media.md) | Offerings and media, `Done - merged` |
-| [completed/13-walkthrough.md](completed/13-walkthrough.md) | Walkthrough fixes W-1 through W-9, `Done - merged` |
+| [completed/13-walkthrough.md](completed/13-walkthrough.md) | Walkthrough fixes W-1 through W-9, `Done - merged`; observation log in [evidence/13-walkthrough-round-2.md](evidence/13-walkthrough-round-2.md) |
 | [completed/14-schema-drop.md](completed/14-schema-drop.md) | Schema drop W-10, `Done - merged` |
 | [completed/15-document-review.md](completed/15-document-review.md) | Document review W-11, `Done - merged` |
 | [completed/16-auth-otp-reliability.md](completed/16-auth-otp-reliability.md) | Auth OTP W-12 and W-13, `Done - merged` |
