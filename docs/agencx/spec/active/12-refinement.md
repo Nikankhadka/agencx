@@ -91,7 +91,8 @@ onboarding and document review. Preserve Home, Chats, and Business
 navigation, the onboarding sequence and completion flow, and document-review
 drafts, source evidence, explicit price decisions, replacement, retry, and
 independent publication. Allow go-live without uploaded documents or
-confirmed offerings, with clear next steps. Exclude old payment,
+confirmed offerings, with clear next steps (20 narrowed this: a stated
+services overview is now required, though it is still not a priced catalog). Exclude old payment,
 scheduling, and Copilot screens from the Phase 1 experience. Each ticket
 specifies its visible outcome, current/proposed behavior, prototype states,
 dependencies, API changes, acceptance scenarios, and regression checks;
@@ -112,8 +113,10 @@ change brief. The implementation supersedes the earlier preserve-onboarding-
 flow restriction for this slice while keeping the existing server checkpoint,
 knowledge review, and go-live boundaries.
 
-- Required onboarding fields remain business name, business type, hours, and
-  contact. Optional beats can be skipped once and are persisted as skipped.
+- Required onboarding fields are business name, business type, hours, contact
+  and, since 20, services. Optional beats resolve by default or, for the
+  owner's name alone, to `skipped` on the two-ask cap - 20 retired the "Skip
+  for now" chip from every beat, leaving only the knowledge ask with one.
 - Name proposals are explicitly confirmed. A rejected proposal is edited
   locally, and a submitted replacement is checked without model rewriting.
 - Services are broad normalized capabilities. Offerings are concrete reviewable
