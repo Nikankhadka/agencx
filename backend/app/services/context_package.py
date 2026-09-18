@@ -76,7 +76,7 @@ _PROFILE_LABELS: tuple[tuple[str, str], ...] = (
 # lives in ``app/agents/contract.py``, which this module may not import (the
 # import contracts in backend/pyproject.toml forbid app.services -> app.agents),
 # so the size is pinned here and held to it by a test in test_agent_contract.py.
-_CONTRACT_OVERHEAD_CHARS = 4000
+_CONTRACT_OVERHEAD_CHARS = 4400
 
 
 @dataclass(frozen=True)
