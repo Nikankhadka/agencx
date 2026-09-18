@@ -135,7 +135,7 @@ async def test_graph_opens_a_span_per_node(
             turn=turn,
         )
         initial_state: AgentState = {
-            "conversation_id": "test",
+            "conversation_id": str(uuid.uuid4()),
             "tenant_id": str(tenant_id),
             "messages": [{"role": "customer", "content": "What are your hours?"}],
             "route": None,
