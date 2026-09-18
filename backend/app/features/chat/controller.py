@@ -171,6 +171,12 @@ async def stream_chat_response(
     author_node: str | None = None
     response_payload: dict[str, object] | None = None
     price_summary_ms: float | None = None
+    # Descriptive classification for the persisted row. The custom stream
+    # cannot read final graph state, so the controller reads it off the last
+    # inspection event (every branch of that node carries it). None means the
+    # turn classified nothing, not "classified as nothing".
+    intent: str | None = None
+    action: str | None = None
     # Every in-graph escalation path (create_escalation tool, price_gate,
     # inspection) routes through escalation.py's node, which always emits
     # this - the one reliable signal, from inside the custom stream, that
@@ -286,6 +292,16 @@ async def stream_chat_response(
                         author = event.get("author_node")
                         if author:
                             author_node = str(author)
+                        # The last inspection event wins: a redraft means an
+                        # earlier verdict described an attempt that was
+                        # discarded, so only the final event classifies the
+                        # message actually persisted below. Both keys are
+                        # present on every inspection event; a missing one
+                        # stays None (no metadata key).
+                        if event.get("intent") is not None:
+                            intent = str(event["intent"])
+                        if event.get("action") is not None:
+                            action = str(event["action"])
                         if event.get("decision") == "retry":
                             full_text = ""
                             buffer = [e for e in buffer if e["type"] not in ("token", "refusal")]
@@ -389,6 +405,8 @@ async def stream_chat_response(
         author_node=author_node,
         response=response_payload,
         price_summary_ms=price_summary_ms,
+        intent=intent,
+        action=action,
     )
     if handoff_seen:
         escalation_summary.schedule(

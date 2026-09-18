@@ -39,7 +39,7 @@ pytestmark = pytest.mark.db
 
 
 class FakeChatProvider(ToolAwareFakeProvider):
-    def __init__(self) -> None:
+    def __init__(self, *, intent: str | None = None, action: str | None = None) -> None:
         from app.llm.provider import ToolCall, ToolTurn
 
         super().__init__(
@@ -52,6 +52,8 @@ class FakeChatProvider(ToolAwareFakeProvider):
                 ToolTurn(text="ok", tool_calls=[]),
             ],
             extract_route="knowledge",
+            extract_intent=intent,
+            extract_action=action,
         )
 
     async def chat_stream(self, messages: list[Any]) -> AsyncIterator[str]:
@@ -147,6 +149,21 @@ async def _seed_tenant_with_chunk(
         [0.0] * EMBEDDING_DIM,
         json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),
     )
+    return tenant_id
+
+
+async def _seed_tenant_without_corpus(
+    conn: asyncpg.Connection[Any], *, slug: str
+) -> uuid.UUID:
+    """A tenant that has published nothing, so a no-tool-call turn routes to
+    ``conversation`` rather than ``knowledge`` (the fast path's has_corpus
+    check in agent_node._determine_route)."""
+    tenant_id: uuid.UUID = await conn.fetchval(
+        "insert into tenants (slug, name, status) values ($1, $2, 'active') returning id",
+        slug,
+        "No Corpus Chat Test Co",
+    )
+    await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
     return tenant_id
 
 
@@ -841,3 +858,176 @@ async def test_the_owners_summary_never_reaches_a_customer(
     transcript = await client.get(f"/api/chat/{conversation_id}/messages?slug={slug}")
     assert transcript.status_code == 200
     assert secret not in transcript.text
+
+
+# --- intent/action persistence on the assistant message ---------------------
+
+
+async def _assistant_metadata(
+    conn: asyncpg.Connection[Any], *, tenant_id: uuid.UUID, conversation_id: str
+) -> dict[str, Any]:
+    row = await conn.fetchrow(
+        "select metadata from messages where tenant_id = $1 and conversation_id = $2 "
+        "and role = 'assistant'",
+        tenant_id,
+        uuid.UUID(conversation_id),
+    )
+    assert row is not None
+    metadata: dict[str, Any] = json.loads(row["metadata"])
+    return metadata
+
+
+class FakeGreetingProvider(ToolAwareFakeProvider):
+    """A greeting/ambiguous turn: no tool call, so the route has nothing to
+    go on and falls back to ``conversation``."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            tool_call_sequence=[ToolTurn(text="Hi! How can I help?", tool_calls=[])],
+            stream_text="Hi! How can I help?",
+            extract_route="conversation",
+        )
+
+
+class FakeEscalationProvider(ToolAwareFakeProvider):
+    """An explicit request for a person - ``create_escalation``, optionally
+    carrying the intent family the model classified."""
+
+    def __init__(self, *, intent: str | None = None) -> None:
+        args: dict[str, Any] = {"reason": "human_requested"}
+        if intent is not None:
+            args["intent"] = intent
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(tool_calls=[ToolCall(id="call_e", name="create_escalation", args=args)])
+            ],
+            stream_text="",
+            extract_route="escalation",
+        )
+
+
+@pytest.mark.parametrize(
+    ("classifier_intent", "expected_intent"),
+    [(None, "information"), ("offer", "offer"), ("support", "support")],
+)
+async def test_chat_persists_the_classified_intent_and_action(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    classifier_intent: str | None,
+    expected_intent: str,
+) -> None:
+    """The inspection classifier's verdict lands on the persisted assistant
+    row: a plain information question falls back to the knowledge route's
+    ``information``; offer and support come from the classifier itself. The
+    graph's ``respond`` is the action either way."""
+    slug = f"chat-intent-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+    app.dependency_overrides[get_llm_provider] = lambda: FakeChatProvider(
+        intent=classifier_intent, action="respond"
+    )
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+    )
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    metadata = await _assistant_metadata(
+        superuser_conn, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert metadata["intent"] == expected_intent
+    assert metadata["action"] == "respond"
+
+
+async def test_chat_persists_offer_followup_for_missing_knowledge(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], hybrid_path: None
+) -> None:
+    """A deterministic refusal keeps its route intent and sets
+    ``offer_followup`` - its text already offers to forward the question."""
+    slug = f"chat-refusal-intent-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=-5.0)
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "What's the capital of France?"}
+    )
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    metadata = await _assistant_metadata(
+        superuser_conn, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert metadata["intent"] == "information"
+    assert metadata["action"] == "offer_followup"
+
+
+async def test_chat_persists_respond_for_a_greeting(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """A greeting routes to ``conversation``; intent still comes from the
+    route fallback (information) and the action is a plain respond."""
+    slug = f"chat-greeting-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_without_corpus(superuser_conn, slug=slug)
+    app.dependency_overrides[get_llm_provider] = FakeGreetingProvider
+
+    response = await client.post("/api/chat", json={"slug": slug, "message": "hi"})
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    metadata = await _assistant_metadata(
+        superuser_conn, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert metadata["intent"] == "information"
+    assert metadata["action"] == "respond"
+
+
+@pytest.mark.parametrize("family", ["information", "offer", "support"])
+async def test_chat_persists_escalate_and_the_escalation_intent(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], family: str
+) -> None:
+    """An explicit request for a person persists ``escalate`` plus whatever
+    family the tool call carried, and the escalations row keeps the same
+    intent."""
+    slug = f"chat-escalate-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_llm_provider] = lambda: FakeEscalationProvider(intent=family)
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "Can I talk to a person?"}
+    )
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    metadata = await _assistant_metadata(
+        superuser_conn, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert metadata["action"] == "escalate"
+    assert metadata["intent"] == family
+    row_intent = await superuser_conn.fetchval(
+        "select intent from escalations where conversation_id = $1",
+        uuid.UUID(conversation_id),
+    )
+    assert row_intent == family
+
+
+async def test_chat_omits_intent_when_the_escalation_carries_none(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Not classified is not the same as classified as nothing: an escalation
+    with no intent family writes no ``intent`` key, only the action."""
+    slug = f"chat-escalate-none-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_llm_provider] = FakeEscalationProvider
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "someone please help"}
+    )
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    metadata = await _assistant_metadata(
+        superuser_conn, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert metadata["action"] == "escalate"
+    assert "intent" not in metadata

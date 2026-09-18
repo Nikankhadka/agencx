@@ -19,6 +19,7 @@ from typing import Any
 import asyncpg
 import pytest
 
+from app.agents.escalation import contact_ask
 from app.features.chat.controller import stream_budget_escalation, stream_chat_response
 from app.llm.provider import ChatMessage, SchemaT, ToolSpec, ToolTurn
 from app.observability.cost import report_usage
@@ -228,11 +229,17 @@ async def test_over_budget_tenant_is_detected_and_escalated(
     )
     assert reason == BUDGET_ESCALATION_REASON
     role_content = await superuser_conn.fetchrow(
-        "select role, metadata from messages where conversation_id = $1 and role = 'assistant'",
+        "select role, content, metadata from messages "
+        "where conversation_id = $1 and role = 'assistant'",
         conversation_id,
     )
     assert role_content is not None
-    assert json.loads(role_content["metadata"])["limit_escalation"] == BUDGET_ESCALATION_REASON
+    metadata = json.loads(role_content["metadata"])
+    # A limit stop is terminal: tagged as a handoff, no intent (no classifier
+    # ran), and no contact ask - the composer locks, so asking would dead-end.
+    assert metadata == {"limit_escalation": BUDGET_ESCALATION_REASON, "action": "handoff"}
+    assert "intent" not in metadata
+    assert contact_ask(name_known=False, email_known=False) not in role_content["content"]
 
 
 async def test_under_budget_tenant_is_not_flagged(
@@ -303,6 +310,18 @@ async def test_turn_over_its_latency_budget_hands_off_gracefully(
         "select status from conversations where id = $1", conversation_id
     )
     assert status == "escalated"
+
+    message_row = await superuser_conn.fetchrow(
+        "select content, metadata from messages "
+        "where conversation_id = $1 and role = 'assistant'",
+        conversation_id,
+    )
+    assert message_row is not None
+    assert json.loads(message_row["metadata"]) == {
+        "limit_escalation": TURN_BUDGET_ESCALATION_REASON,
+        "action": "handoff",
+    }
+    assert contact_ask(name_known=False, email_known=False) not in message_row["content"]
 
 
 async def test_a_turn_inside_its_budget_is_untouched(
