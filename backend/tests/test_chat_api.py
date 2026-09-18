@@ -214,6 +214,45 @@ async def test_chat_persists_customer_and_assistant_messages(
     assert rows[1]["agent_node"] == "draft"
 
 
+async def test_an_information_answer_never_requires_customer_contact(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Plan Tests: contact is never required for an information answer. A
+    normal knowledge turn must complete end to end and leave the conversation's
+    contact fields untouched - capture is escalation-scoped."""
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+    )
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    prose = _without_progress(events)
+    assert prose[-1]["type"] == "done"
+    assert "".join(e["text"] for e in events if e["type"] == "token") == (
+        "Sure, here's the answer [1]."
+    )
+    conversation_id = events[0]["conversation_id"]
+
+    assistant = await superuser_conn.fetchval(
+        "select content from messages where tenant_id = $1 and conversation_id = $2 "
+        "and role = 'assistant'",
+        tenant_id,
+        uuid.UUID(conversation_id),
+    )
+    assert assistant == "Sure, here's the answer [1]."
+
+    contact = await superuser_conn.fetchrow(
+        "select customer_ref, customer_email from conversations where id = $1",
+        uuid.UUID(conversation_id),
+    )
+    assert contact is not None
+    assert contact["customer_ref"] is None
+    assert contact["customer_email"] is None
+
+
 async def test_chat_refuses_when_nothing_is_relevant(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], hybrid_path: None
 ) -> None:
