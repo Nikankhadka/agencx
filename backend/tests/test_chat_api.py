@@ -860,6 +860,31 @@ async def test_the_owners_summary_never_reaches_a_customer(
     assert secret not in transcript.text
 
 
+async def test_the_customers_email_never_reaches_the_public_transcript(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """customer_email is an owner-only field (the Chats detail response). The
+    unauthenticated transcript poll must never carry it, so it is asserted
+    rather than assumed - same reasoning as the owner summary pin above."""
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id, customer_ref, customer_email) "
+        "values ($1, 'Sam', 'sam@example.com') returning id",
+        tenant_id,
+    )
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content) "
+        "values ($1, $2, 'customer', 'where is my order?')",
+        tenant_id,
+        conversation_id,
+    )
+
+    transcript = await client.get(f"/api/chat/{conversation_id}/messages?slug={slug}")
+    assert transcript.status_code == 200
+    assert "sam@example.com" not in transcript.text
+
+
 # --- intent/action persistence on the assistant message ---------------------
 
 
