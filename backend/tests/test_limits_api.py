@@ -312,8 +312,7 @@ async def test_turn_over_its_latency_budget_hands_off_gracefully(
     assert status == "escalated"
 
     message_row = await superuser_conn.fetchrow(
-        "select content, metadata from messages "
-        "where conversation_id = $1 and role = 'assistant'",
+        "select content, metadata from messages where conversation_id = $1 and role = 'assistant'",
         conversation_id,
     )
     assert message_row is not None

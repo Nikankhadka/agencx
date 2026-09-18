@@ -152,9 +152,7 @@ async def _seed_tenant_with_chunk(
     return tenant_id
 
 
-async def _seed_tenant_without_corpus(
-    conn: asyncpg.Connection[Any], *, slug: str
-) -> uuid.UUID:
+async def _seed_tenant_without_corpus(conn: asyncpg.Connection[Any], *, slug: str) -> uuid.UUID:
     """A tenant that has published nothing, so a no-tool-call turn routes to
     ``conversation`` rather than ``knowledge`` (the fast path's has_corpus
     check in agent_node._determine_route)."""
@@ -1045,9 +1043,7 @@ async def test_chat_omits_intent_when_the_escalation_carries_none(
     tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
     app.dependency_overrides[get_llm_provider] = FakeEscalationProvider
 
-    response = await client.post(
-        "/api/chat", json={"slug": slug, "message": "someone please help"}
-    )
+    response = await client.post("/api/chat", json={"slug": slug, "message": "someone please help"})
     assert response.status_code == 200
     conversation_id = _parse_sse(response.text)[0]["conversation_id"]
 
