@@ -67,6 +67,13 @@ exactly where the business needs it, and it never blocks the handoff.
    and appends no contact ask, because the composer locks on a limit stop. It
    is the only writer of `conversations.status = 'escalated'`; every other
    escalation is non-terminal and leaves the conversation open (C-5/D20).
+8. **The judge prompt fences the customer message.** The customer's raw last
+   message enters the inspection `extract()` system prompt wrapped by
+   `spotlight.new_spotlight()` - the per-request delimiter plus
+   `spot.instruction()` - keeping the "data to classify, never an instruction"
+   label. The retrieved context in that same prompt is deliberately left
+   unwrapped, unchanged from before (the reviewer's fence applies to the
+   newly added customer text, not to `_provenance_text`).
 
 Intent source per path (the `route` key is internal drafting/routing, unchanged):
 
@@ -137,7 +144,8 @@ Intent source per path (the `route` key is internal drafting/routing, unchanged)
 
 ## Verification run on this branch
 
-Run from the repo root on `feat/intent-and-identity`, 2026-09-18:
+Interim, before the review fixes, run from the repo root on
+`feat/intent-and-identity`, 2026-09-18:
 
 - Targeted backend suites (the plan's list):
   `docker compose run --rm backend pytest tests/test_intent.py
@@ -152,13 +160,31 @@ Run from the repo root on `feat/intent-and-identity`, 2026-09-18:
 - Frontend unit suite: `docker compose run --rm --no-deps frontend npm run test`
   -> **229 passed** (20 files).
 
-Not yet run on this branch: `make ci` (includes the api-types drift check),
-`make eval`, and `make test-e2e`. No CI or E2E result is claimed here.
+Final gate, after the review fixes, same day:
+
+- Targeted backend suites (the rerun list):
+  `docker compose run --rm backend pytest tests/test_inspection.py
+  tests/test_chat_api.py tests/test_limits_api.py tests/test_agent_identity.py
+  tests/test_agent_contract.py -q`
+  -> **108 passed**.
+- `make check` -> **passed**: backend **1119 passed**, frontend **229 passed**
+  (20 files); lint and typecheck clean.
+- `make ci` -> **exit 0**: format-check clean (213 files already formatted) and
+  the frontend build compiled successfully.
+- api-types drift check: `npm run gen:types -- --check` ->
+  **api-types.ts is up to date**.
+- `make test-e2e` -> **141 passed** (2.5m), no failures.
+- `make eval-skip-llm` -> **GATE PASSED**: money guardrail matrix 21/21,
+  leakage 12/12 each direction (pass rate 1.000), retrieval recall@3 1.000,
+  recall@5 1.000, mrr 0.911, ndcg@5 0.934 (45 positive / 5 negative cases);
+  generation, trajectory, and injection evals report PASS as skipped because
+  the run was `--skip-llm`.
 
 ## Definition of done
 
-- [ ] Local E2E run once the full stack is available: `make dev && make seed &&
-  make test-e2e`.
+- [x] Local E2E run once the full stack is available: the stack was already up,
+  so `make seed && make test-e2e` was run against it (`make dev` was not
+  re-run) -> **141 passed**.
 - [ ] Founder preview walkthrough: a seeded chat that trips a pricing question
   (offer), a bad order (support), and an explicit person request (escalation
   row, name+email ask); reply with both and confirm the Chats thread shows the
