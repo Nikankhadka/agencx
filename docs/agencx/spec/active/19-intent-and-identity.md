@@ -1,6 +1,6 @@
 # 19: Intent architecture and escalation-scoped contact capture
 
-**Status:** Active - in progress on feat/intent-and-identity.
+**Status:** Active - awaiting review. Merged to development and staging as 5300586 (PR #43); founder preview walkthrough remains.
 **Phase 1 area:** Grounded chat, money and escalation safety.
 
 Numbering note: 17 is reserved for the M-7 storefront redesign, and 18 was the
@@ -190,4 +190,4 @@ Final gate, after the review fixes, same day:
   row, name+email ask); reply with both and confirm the Chats thread shows the
   email while the customer transcript does not; keep chatting to confirm the
   handoff is non-terminal.
-- [ ] Merge to `development` and record the commit.
+- [x] Merged to `development` and `staging` as `5300586` (PR #43).
