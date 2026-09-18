@@ -843,3 +843,45 @@ and a compatibility label keep the catalog readable while legacy rows migrate.
 rewrites names or creates monetary values. Category matching is tenant-scoped
 and deterministic; uncertain candidates remain uncategorized or private until
 the owner decides.
+
+## D29: Intent is descriptive metadata, and contact is captured at escalation
+
+**Date:** 2026-09-18. **Status:** accepted.
+
+**Decision:** A customer turn carries one of three intent families
+(`information`, `offer`, `support`) and one of four actions (`respond`,
+`offer_followup`, `escalate`, `handoff`). Escalation is an action, not an
+intent: any family can escalate, and the two are recorded independently. The
+existing inspection extract call classifies both alongside its compliance
+verdicts - no new LLM call and no graph node - and a turn's intent falls back
+to the route mapping when the classifier is silent, while any action other than
+`respond`/`offer_followup` coerces to `respond` because the graph outcome is
+authoritative. Intent is persisted on `escalations.intent` (migration `0032`)
+and on `messages.metadata.intent`/`action`; limit stops are tagged
+`action="handoff"` with no intent because no classifier ran. Contact is
+captured at the point of escalation, not at conversation start: one ask covers
+name and email together, a name-only answer is accepted, the email is chased
+once more only for an order, quote, or booking, no phone number is ever asked
+for, and the escalation row is written first so the ask never gates the
+handoff. The captured name lives in `conversations.customer_ref` and the email
+in `conversations.customer_email` (migration `0033`), which only the owner
+conversation detail and Chats thread read.
+
+**Why:** The intent families and actions name mechanics that already existed -
+the escalation row, the handoff message, the inspection pass. Making them
+explicit gives one shared, code-pinned vocabulary for the assistant, the owner
+surfaces, and future evaluation without adding a classifier call or a graph
+node, and it keeps a missing or unknown value from ever blocking a turn.
+Identity is captured where the business actually needs it: at the handoff that
+requires a follow-up, with no opening-phase friction and no field the owner
+cannot act on. The earlier name-only stance was about not collecting contact
+during the opening flow; escalation-scoped capture supersedes it by design
+rather than by accident.
+
+**Boundary:** Intent never triggers an escalation and never touches money -
+nothing routes or gates on a family or an action, and only a tenant limit stop
+is terminal (C-5/D20). No code branches on a business vertical; intent is
+derived from the route, the tools, or the classifier, never from the industry.
+The email is owner-visible only and never appears on the public customer
+surface, and a missing email is never a reason to withhold an answer or a
+handoff.

@@ -158,12 +158,16 @@ knowledge review, and go-live boundaries.
 
 - Answer while asking for a preferred name, at most two opening-phase name
   requests; first name or nickname accepted without verification; no phone
-  number or email collected. Name shown, correctable, persisted across
-  refresh; after the limit the prompt stops silently.
-- Visible **Ask for a person** action; customer-requested handoff requires
-  the name, otherwise the action explains the one missing thing. Refused or
-  unanswered handoffs stay in the owner's All view; operational alerts may
-  still use the conversation reference.
+  number, email, or other contact detail collected during the opening phase.
+  Name shown, correctable, persisted across refresh; after the limit the prompt
+  stops silently. Contact is now captured deliberately at handoff instead,
+  scoped to the escalation (ticket `19`): one ask covers name and email, a
+  name-only answer is accepted, and the email is chased once more only for an
+  order, quote, or booking.
+- Visible **Ask for a person** action; the handoff always happens, and when
+  contact is incomplete the handoff reply asks once - the ask never gates or
+  blocks the escalation. Refused or unanswered handoffs stay in the owner's All
+  view; operational alerts may still use the conversation reference.
 - Conversation content, structured cards, and relevant state restore after
   same-tab refresh. Failed sends recover in place with the draft preserved -
   explicit retry in the failed-bubble idiom, no unsafe automatic replay.
@@ -225,8 +229,9 @@ attention count when Needs you is non-empty.
 
 Verify existing login, onboarding, document review, pricing safeguards, and
 tenant isolation; all four businesses on identical workflow code with
-configuration-driven content; name refusal, correction, duplicate names,
-and handoff without customer contact collection; 200+ conversations
+configuration-driven content; name refusal, correction, and duplicate names;
+escalation-scoped contact capture (one ask, name-only accepted) with the public
+transcript staying leak-free; 200+ conversations
 including older unresolved issues beyond the first page; owner/customer
 transcript consistency across takeover, reply, resolution, handback, and
 refresh; long offerings, missing images, unpriced items, pricing wording,

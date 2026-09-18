@@ -402,7 +402,8 @@ enabled set.
 create table conversations (
   id            uuid primary key default gen_random_uuid(),
   tenant_id     uuid not null references tenants(id) on delete cascade,
-  customer_ref  text,                                   -- anonymous session id or handle; no auth at core scope
+  customer_ref  text,                                   -- anonymous session id, or the preferred name captured at handoff
+  customer_email text,                                  -- 0033: captured at handoff (escalation-scoped); owner-only, never on the public surface
   channel       text not null default 'web' check (channel in ('web')),
   status        text not null default 'open' check (status in ('open', 'escalated', 'closed')),
   created_at    timestamptz not null default now(),
@@ -454,6 +455,8 @@ create table escalations (
   conversation_id  uuid not null,
   foreign key (tenant_id, conversation_id) references conversations (tenant_id, id) on delete cascade,
   reason           text not null,
+  -- 0032: descriptive metadata only (information/offer/support); never a gate
+  intent           text check (intent is null or intent in ('information', 'offer', 'support')),
   status           text not null default 'open' check (status in ('open', 'claimed', 'resolved')),
   created_at       timestamptz not null default now(),
   resolved_at      timestamptz
@@ -544,6 +547,8 @@ applied in order by a plain runner (no heavy framework):
 0029_drop_tenant_prompt_columns.sql  drops the retired tenant_config.system_prompt and tone (W-10)
 0030_document_failure_metadata_check.sql  keeps failure metadata null on non-failed rows, legacy-safe (W-11a correction)
 0031_offering_categories.sql  offering_categories + offerings.category_id, backfilled from the legacy label (D28)
+0032_escalation_intent.sql  escalations.intent - descriptive information/offer/support family; never a gate (ticket 19)
+0033_conversations_customer_email.sql  conversations.customer_email captured at escalation; owner-only, never on the public surface (ticket 19)
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,

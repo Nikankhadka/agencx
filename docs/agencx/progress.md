@@ -48,6 +48,14 @@ live in the ticket files, not here.
   chat entry. `Active - in progress` on `feat/m7-storefront-redesign`;
   ticket file lands with that branch. Founder mobile and desktop
   walkthrough is the remaining step before merge.
+- [ ] Intent architecture and escalation-scoped contact capture: three intent
+  families (information/offer/support) and four actions
+  (respond/offer_followup/escalate/handoff) classified by the existing
+  inspection call and persisted on the escalation row and message metadata;
+  contact is captured at handoff (one name+email ask, never blocking).
+  `Active - in progress` on `feat/intent-and-identity`; ticket file
+  [19-intent-and-identity.md](spec/active/19-intent-and-identity.md). Founder
+  preview walkthrough and merge remain.
 - [ ] Resumable owner input and offering normalization: optional beats can
   be skipped and stay skipped, name proposals are confirmed rather than
   assumed, services are a normalized list, offering suggestions stay private
@@ -82,6 +90,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
+| [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - in progress` | Intent families and actions, escalation-scoped contact capture |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases |
 
 Phase 1 is not called fully complete until the active refinement items
