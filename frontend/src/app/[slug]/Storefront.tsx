@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
+import { ServicesOverview } from "@/components/ui/ServicesOverview";
 import { Sheet } from "@/components/ui/Sheet";
 import type { StorefrontData } from "@/lib/tenant";
 import { CustomerChat } from "./CustomerChat";
@@ -196,6 +197,13 @@ export function Storefront({
           <div className="mx-auto w-full max-w-5xl md:px-gutter md:pt-6">
             <StorefrontHero slug={slug} logoUrl={logoUrl} storefront={storefront} />
           </div>
+          {/* 20: with no catalog the overview is all the page can say about
+              what this business does, so it renders here rather than leaving
+              the question to the assistant alone. */}
+          <ServicesOverview
+            services={storefront.services ?? []}
+            className="mx-auto w-full max-w-5xl px-gutter"
+          />
           <AssistantInvite name={storefront.name} onChat={openChat} />
         </div>
       )}

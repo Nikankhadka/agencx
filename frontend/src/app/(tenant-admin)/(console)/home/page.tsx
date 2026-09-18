@@ -44,7 +44,16 @@ export default function HomePage() {
 
   useEffect(() => {
     apiFetch<OnboardingState>("/api/onboarding/state")
-      .then((state) => setName(state.draft?.["owner_display_name"]?.trim() || null))
+      .then((state) =>
+        // 20: the owner's name is optional - any staff member may be holding
+        // the phone - so the greeting falls back to the business rather than
+        // blocking on a name nobody has to give.
+        setName(
+          state.draft?.["owner_display_name"]?.trim() ||
+            state.draft?.["business_name"]?.trim() ||
+            null,
+        ),
+      )
       .catch(() => setName(null));
   }, []);
 
@@ -64,7 +73,7 @@ export default function HomePage() {
         <h1 className="text-greeting font-bold text-text">
           {greetingFor(new Date())},
           <br />
-          {name ?? "there"}.
+          {name ?? "admin"}.
         </h1>
 
         <WaitingPanel rows={waiting} />

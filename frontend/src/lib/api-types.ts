@@ -1597,7 +1597,6 @@ export interface components {
              */
             resume: boolean;
             correction?: components["schemas"]["CorrectionPayload"] | null;
-            skip?: components["schemas"]["SkipPayload"] | null;
             /** Idempotency Key */
             idempotency_key?: string | null;
         };
@@ -1927,11 +1926,6 @@ export interface components {
             beat: string;
             /** Values */
             values?: string[];
-        };
-        /** SkipPayload */
-        SkipPayload: {
-            /** Beat */
-            beat: string;
         };
         /** SourceDetail */
         SourceDetail: {
