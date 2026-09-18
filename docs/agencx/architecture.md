@@ -162,10 +162,13 @@ The assistant's available tools are built from `tenant_config.enabled_tools`,
 never a fixed list. The lean default:
 
 - `answer_from_knowledge` (the grounded Q&A path - context package + guardrail)
-- `escalate` (terminal human handoff)
+- `escalate` (non-terminal human handoff - the conversation stays open; only a tenant limit stop is terminal, C-5/D20)
 
 Optional, off by default: recommendations, quoting, order/ticket lookup. The
-pricing engine runs only when quoting is enabled. Enforcement points:
+pricing engine runs only when quoting is enabled. `set_customer_contact` is
+always on regardless of the enabled set: it is bookkeeping for the preferred
+name and email the customer gives at handoff, touches neither retrieval nor
+money, and never changes how an answer is grounded. Enforcement points:
 
 - Agent layer: the tool registry is built from the tenant's enabled set
 - Validation layer: inspection rejects any reply that used a disabled tool

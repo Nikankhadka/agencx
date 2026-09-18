@@ -34,7 +34,7 @@ class PassthroughReranker(Reranker):
 
 def _initial_state(message: str) -> AgentState:
     return {
-        "conversation_id": "test",
+        "conversation_id": str(uuid.uuid4()),
         "tenant_id": "test",
         "messages": [{"role": "customer", "content": message}],
         "route": None,

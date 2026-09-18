@@ -122,7 +122,10 @@ async def record_limit_escalation(
             tenant_id,
             conversation_id,
             message,
-            json.dumps({"limit_escalation": reason}),
+            # A limit stop is a terminal handoff with no contact ask - the
+            # composer locks, so asking for a name or email would be a dead
+            # end. Intent is deliberately absent: no classifier ran.
+            json.dumps({"limit_escalation": reason, "action": "handoff"}),
         )
 
 
@@ -200,6 +203,8 @@ async def persist_assistant_turn(
     author_node: str | None = None,
     response: dict[str, Any] | None = None,
     price_summary_ms: float | None = None,
+    intent: str | None = None,
+    action: str | None = None,
 ) -> None:
     """Persist the approved assistant message, its tool-call trace rows, and
     per-turn token costs in one transaction.
@@ -207,6 +212,11 @@ async def persist_assistant_turn(
     ``author_node`` names the graph node that produced the message (F-3) and
     lands on the ``agent_node`` column the Surface-2 trace viewer renders;
     None when no graph ran (the limit-escalation paths write their own rows).
+
+    ``intent``/``action`` are the turn's descriptive classification
+    (app/agents/intent.py). They are written only when the graph actually
+    classified them - an absent value means no key on the row, never a null
+    one, so a reader can tell "not classified" from "classified as nothing".
     """
     async with db.tenant_context(tenant_id, "customer") as conn:
         metadata: dict[str, Any] = {"inspection": verdicts} if verdicts else {}
@@ -214,6 +224,10 @@ async def persist_assistant_turn(
             metadata["response"] = response
         if price_summary_ms is not None:
             metadata["price_summary_ms"] = price_summary_ms
+        if intent is not None:
+            metadata["intent"] = intent
+        if action is not None:
+            metadata["action"] = action
         message_id = await conn.fetchval(
             "insert into messages (tenant_id, conversation_id, role, content, "
             "agent_node, metadata) "

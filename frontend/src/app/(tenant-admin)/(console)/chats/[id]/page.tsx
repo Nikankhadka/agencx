@@ -120,6 +120,11 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       >
         {stopped ? "Stopped" : takenOver ? "You're replying" : "Handling"}
       </p>
+      {detail?.customer_email ? (
+        <p data-testid="thread-email" className="-mt-2 pb-2 text-footnote text-text-tertiary">
+          {detail.customer_email}
+        </p>
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto pb-4">
         {detail?.messages.map((message) => (

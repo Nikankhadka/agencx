@@ -181,6 +181,40 @@ async def test_forced_route_runs_agent_draft_inspection(
 
 
 @pytest.mark.parametrize(
+    ("route", "expected_intent", "expected_action"),
+    [
+        ("conversation", "information", "respond"),
+        ("knowledge", "information", "offer_followup"),
+        ("recommendation", "offer", "offer_followup"),
+        ("quoting", "offer", "offer_followup"),
+        ("order_status", "information", "respond"),
+        ("escalation", None, "escalate"),
+    ],
+)
+async def test_state_carries_intent_and_action_per_route(
+    route: str,
+    expected_intent: str | None,
+    expected_action: str,
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Intent is descriptive metadata: the prose/offer routes fall back to the
+    route mapping, deterministic refusals that already offer forwarding set
+    ``offer_followup``, and an escalation always lands ``escalate``."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_provider_for_route(route, tenant_id=tenant_id),
+        embedder=ZeroEmbedder(),
+        reranker=FakeReranker(),
+    )
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    final_state = await graph.ainvoke(initial_state, context=context)
+    assert final_state.get("intent") == expected_intent
+    assert final_state.get("action") == expected_action
+
+
+@pytest.mark.parametrize(
     ("route", "expected_author"),
     [
         ("conversation", "agent"),
@@ -301,6 +335,12 @@ async def test_second_invented_figure_on_the_answer_path_escalates(
     assert final_state["escalated"] is True
     assert final_state["escalation_reason"] == "price_provenance"
     assert final_state["author_node"] == "price_gate"
+    assert final_state["intent"] == "information"
+    assert final_state["action"] == "escalate"
+    row_intent = await superuser_conn.fetchval(
+        "select intent from escalations where conversation_id = $1", conversation_id
+    )
+    assert row_intent == "information"
 
 
 async def test_hedging_the_owners_own_price_is_a_violation(

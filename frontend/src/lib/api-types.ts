@@ -1112,6 +1112,8 @@ export interface components {
             id: string;
             /** Customer Ref */
             customer_ref: string | null;
+            /** Customer Email */
+            customer_email?: string | null;
             /** Channel */
             channel: string;
             /** Status */

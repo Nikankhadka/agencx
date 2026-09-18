@@ -71,8 +71,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # rows without requiring a legacy failed row to be backfilled; 0031 adds the
     # tenant-scoped offering_categories table and offerings.category_id, so a
     # category is a row the owner can rename once rather than a label repeated on
-    # every offering.
-    assert len(on_disk) == 31, "expected migrations 0001-0031"
+    # every offering; 0032 adds the escalation's intent family; 0033 adds
+    # conversations.customer_email, the escalation-scoped contact column.
+    assert len(on_disk) == 33, "expected migrations 0001-0033"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
@@ -213,6 +214,72 @@ async def test_quotes_total_check_rejects_mismatch(
             tenant_id,
             conv["id"],
         )
+    await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
+
+
+async def test_escalation_intent_and_customer_email_columns(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Pin 0032/0033: escalation intent is nullable + family-checked; email nullable."""
+    tenant_id = await superuser_conn.fetchval(
+        """
+        insert into tenants (slug, name) values ('t002-intent', 'T002')
+        on conflict (slug) do update set name = excluded.name
+        returning id
+        """
+    )
+    # Separate conversations: the dedupe index is unique per
+    # (tenant_id, conversation_id) where status = 'open'.
+    first = await superuser_conn.fetchrow(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    second = await superuser_conn.fetchrow(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    third = await superuser_conn.fetchrow(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    assert first is not None and second is not None and third is not None
+    # Null intent inserts fine: limit escalations and rows written before 0032.
+    await superuser_conn.execute(
+        "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, 'legacy')",
+        tenant_id,
+        first["id"],
+    )
+    # A valid family inserts fine.
+    await superuser_conn.execute(
+        """
+        insert into escalations (tenant_id, conversation_id, reason, intent)
+        values ($1, $2, 'human_requested', 'support')
+        """,
+        tenant_id,
+        second["id"],
+    )
+    with pytest.raises(asyncpg.CheckViolationError):
+        await superuser_conn.execute(
+            """
+            insert into escalations (tenant_id, conversation_id, reason, intent)
+            values ($1, $2, 'human_requested', 'bogus')
+            """,
+            tenant_id,
+            third["id"],
+        )
+    # customer_email accepts a text value and stays null by default.
+    await superuser_conn.execute(
+        "update conversations set customer_email = 'sam@example.com' where id = $1", first["id"]
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select customer_email from conversations where id = $1", first["id"]
+        )
+        == "sam@example.com"
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select customer_email from conversations where id = $1", second["id"]
+        )
+        is None
+    )
     await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
 
 

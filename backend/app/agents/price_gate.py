@@ -21,6 +21,7 @@ from typing import Any
 
 from langgraph.config import get_stream_writer
 
+from app.agents.escalation import contact_ask
 from app.agents.state import AgentState
 from app.pricing.validation_gate import validate
 
@@ -31,6 +32,12 @@ GATE_ESCALATION_MESSAGE = (
     "to confirm that one and come back to you. Anything else I can help with in "
     "the meantime?"
 )
+
+
+def gate_escalation_message(*, name_known: bool, email_known: bool) -> str:
+    """GATE_ESCALATION_MESSAGE plus a contact ask when either is missing."""
+    ask = contact_ask(name_known=name_known, email_known=email_known)
+    return f"{GATE_ESCALATION_MESSAGE} {ask}" if ask else GATE_ESCALATION_MESSAGE
 
 
 def owner_material(state: AgentState) -> list[str]:
@@ -79,11 +86,15 @@ async def run(state: AgentState) -> dict[str, Any]:
             "price_gate_attempted": True,
         }
 
-    writer({"type": "refusal", "text": GATE_ESCALATION_MESSAGE})
+    escalation_text = gate_escalation_message(
+        name_known=state.get("customer_name_known", False),
+        email_known=state.get("customer_email_known", False),
+    )
+    writer({"type": "refusal", "text": escalation_text})
     return {
         "price_gate_decision": "escalate",
         "escalated": True,
         "escalation_reason": "price_provenance",
-        "draft_response": GATE_ESCALATION_MESSAGE,
+        "draft_response": escalation_text,
         "author_node": "price_gate",
     }

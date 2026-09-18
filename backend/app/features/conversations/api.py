@@ -60,6 +60,9 @@ class MessageDetail(BaseModel):
 class ConversationDetail(BaseModel):
     id: UUID
     customer_ref: str | None
+    # Slice 7: captured at escalation, owner-only. Never on ConversationSummary
+    # (the queue labels by name) and never on the public customer surface.
+    customer_email: str | None = None
     channel: str
     status: str
     created_at: datetime

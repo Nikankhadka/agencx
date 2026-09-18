@@ -17,7 +17,7 @@ import asyncpg
 import pytest
 
 from app.agents.graph import build_graph
-from app.agents.price_gate import GATE_ESCALATION_MESSAGE
+from app.agents.price_gate import gate_escalation_message
 from app.agents.state import AgentState, GraphContext
 from app.features.chat.api import ChatRequest
 from app.llm.provider import ChatMessage, ToolCall, ToolTurn
@@ -335,7 +335,9 @@ async def test_second_violation_escalates_with_price_provenance_reason(
 
     assert final_state["escalated"] is True
     assert final_state["escalation_reason"] == "price_provenance"
-    assert final_state["draft_response"] == GATE_ESCALATION_MESSAGE
+    assert final_state["draft_response"] == gate_escalation_message(
+        name_known=False, email_known=False
+    )
 
 
 @pytest.mark.db

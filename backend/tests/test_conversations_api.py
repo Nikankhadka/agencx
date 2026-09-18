@@ -77,13 +77,15 @@ async def _seed_conversation(
     *,
     status: str = "open",
     customer_ref: str | None = None,
+    customer_email: str | None = None,
 ) -> uuid.UUID:
     conversation_id: uuid.UUID = await conn.fetchval(
-        "insert into conversations (tenant_id, status, customer_ref) values ($1, $2, $3) "
-        "returning id",
+        "insert into conversations (tenant_id, status, customer_ref, customer_email) "
+        "values ($1, $2, $3, $4) returning id",
         tenant_id,
         status,
         customer_ref,
+        customer_email,
     )
     return conversation_id
 
@@ -212,6 +214,31 @@ async def test_get_conversation_detail_includes_tool_calls_verdicts_and_cost(
     customer_message = next(m for m in body["messages"] if m["role"] == "customer")
     assert customer_message["cost_usd"] is None
     assert customer_message["tool_calls"] == []
+
+
+async def test_get_conversation_detail_exposes_customer_email(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """The email captured at escalation rides only on the owner detail. The
+    queue list still labels by name, so its summary payload must not carry it."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(
+        superuser_conn,
+        tenant_id,
+        customer_ref="cust-3",
+        customer_email="cust3@example.com",
+    )
+
+    detail = await client.get(
+        f"/api/conversations/{conversation_id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert detail.status_code == 200
+    assert detail.json()["customer_email"] == "cust3@example.com"
+
+    listed = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
+    assert listed.status_code == 200
+    summary = next(row for row in listed.json() if row["id"] == str(conversation_id))
+    assert "customer_email" not in summary
 
 
 async def test_get_conversation_detail_cross_tenant_is_404(
