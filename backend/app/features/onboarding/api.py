@@ -77,16 +77,11 @@ class CorrectionPayload(BaseModel):
     raw: str = Field(default="", max_length=2000)
 
 
-class SkipPayload(BaseModel):
-    beat: str = Field(min_length=1, max_length=80)
-
-
 class OnboardingMessageRequest(BaseModel):
     text: str | None = None
     selection: SelectionPayload | None = None
     resume: bool = False
     correction: CorrectionPayload | None = None
-    skip: SkipPayload | None = None
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=120)
 
     @model_validator(mode="after")
@@ -98,13 +93,12 @@ class OnboardingMessageRequest(BaseModel):
                     self.selection is not None,
                     self.resume,
                     self.correction is not None,
-                    self.skip is not None,
                 )
             )
             != 1
         ):
             raise ValueError(
-                "provide exactly one of 'text', 'selection', 'resume', 'correction', or 'skip'"
+                "provide exactly one of 'text', 'selection', 'resume', or 'correction'"
             )
         return self
 
@@ -263,14 +257,6 @@ async def post_message(
             tenant_id=admin.tenant_id,
             beat_key=body.selection.beat,
             values=body.selection.values,
-            idempotency_key=body.idempotency_key,
-        )
-        return OnboardingStateResponse(**controller.response_from_record(record_data))
-    if body.skip is not None:
-        record_data = await controller.run_selection(
-            tenant_id=admin.tenant_id,
-            beat_key=body.skip.beat,
-            values=["__skip__"],
             idempotency_key=body.idempotency_key,
         )
         return OnboardingStateResponse(**controller.response_from_record(record_data))

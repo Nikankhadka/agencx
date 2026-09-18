@@ -201,7 +201,15 @@ _EXTRACT_PROMPT = (
     "only when the owner explicitly names individual offerings. Fill only what the owner "
     "actually said - never invent a value. Copy any price or other amount "
     "exactly as the owner wrote it: never round it, convert it, tidy it up, or "
-    "work one out. Two fields have a fixed vocabulary: set abn to the digits "
+    "work one out. "
+    # 20: the services beat now asks for the price alongside the offering, so
+    # both halves arrive in one breath. Splitting them would strip the range
+    # off the overview; the amount stays the owner's own words either way, and
+    # nothing downstream ever computes with it.
+    "When the owner gives a price with something they offer, keep that price in "
+    'the same services entry rather than splitting it out: "coffee, $4 to $10" '
+    "is one entry, with the amount exactly as they wrote it. "
+    "Two fields have a fixed vocabulary: set abn to the digits "
     'the owner gave, or to "none" if they said they do not have one yet; set '
     'gst to "yes" or "no". Never infer or invent offering names, and never add prices '
     "or descriptions to offering_names. Split a run-on list into one entry per item "
@@ -322,8 +330,9 @@ class OnboardingRecord:
     off_topic_count: int = 0
     completed: bool = False
     # O-3 follow-up: the optional website/documents ask is pending until the
-    # owner answers it (paste a link, attach a file, or say "skip"). It never
-    # gates go-live - confirm still requires only the seven profile fields.
+    # owner answers it (paste a link, attach a file, tap Skip for now, or say
+    # "skip"). It never gates go-live - confirm still requires only the seven
+    # profile fields.
     knowledge_pending: bool = False
     offering_candidates: list[PendingOffering] = field(default_factory=list)
     # W-2's two-pass cursor and ask counter. ``skipped`` beats are gone for
@@ -674,7 +683,7 @@ def _activation_summary(draft: dict[str, Any]) -> str:
 # names the Settings > Knowledge fallback so knowledge can always wait.
 _KNOWLEDGE_OFFER = (
     " Do you have a website or any documents - a menu, price list, or FAQs? "
-    'You can paste a link, attach a file, or say "skip". Anything you save '
+    "You can paste a link, attach a file, or tap Skip for now. Anything you save "
     "becomes a reference I can use when answering your customers, and you can "
     "add more any time from Settings."
 )
@@ -699,6 +708,18 @@ def _completion_reply(record: OnboardingRecord) -> str:
         return _activation_summary(record.draft) + _KNOWLEDGE_OFFER
     record.knowledge_pending = False
     return _activation_summary(record.draft)
+
+
+def decline_knowledge(record: OnboardingRecord) -> str:
+    """Close the knowledge ask from its Skip chip, with no model call (20).
+
+    The typed "skip" reaches the same place through the extractor; this is the
+    chip's deterministic door to it. ``_completion_reply`` owns clearing the
+    flag and composing the activation summary, so the two paths cannot drift.
+    """
+    if not record.knowledge_pending:
+        raise ValueError("there is no knowledge ask waiting to be answered")
+    return _completion_reply(record)
 
 
 def selection_reply(record: OnboardingRecord, ack: str = "Got it.") -> str:
