@@ -25,6 +25,11 @@ export function servicesSummary(profile: BusinessProfile): string {
  * interview captures it one line at a time and the storefront subtitle reads it
  * back, so an owner correcting one service should not have to retype the
  * sentence around it.
+ *
+ * 20: a rough price may live in the line, in the owner's own words, which is
+ * what the placeholder now shows. It stays their text: nothing parses it and
+ * nothing quotes from it - the priced catalog is Offerings, and every amount
+ * the product states comes from there through the pricing engine.
  */
 export function ServicesSheet({ open, profile, busy, error, onClose, onSave }: ServicesSheetProps) {
   return (
@@ -70,7 +75,7 @@ function ServicesEditor({
               label={`Service ${index + 1}`}
               value={service}
               disabled={busy}
-              placeholder="Screen replacements"
+              placeholder="Screen replacement, $80 to $150"
               onChange={(event) =>
                 setServices((current) =>
                   current.map((item, at) => (at === index ? event.target.value : item)),

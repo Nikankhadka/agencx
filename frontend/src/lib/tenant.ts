@@ -87,7 +87,9 @@ export interface StorefrontData {
   tagline: string | null;
   /** M-7 profile facts. Optional so a frontend deployed ahead of the backend
    * degrades to the no-facts state instead of throwing - deploy order between
-   * the two should never matter. `contact` is never published. */
+   * the two should never matter. `contact` is never published. 20: `services`
+   * is the owner's own overview, one entry per line they typed, and it may
+   * carry their own rough price text - it is not the priced catalog. */
   business_type?: string | null;
   hours?: string | null;
   services?: string[];

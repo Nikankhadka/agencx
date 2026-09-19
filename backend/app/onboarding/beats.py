@@ -51,8 +51,10 @@ WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 # the GST beat skip itself.
 NO_ABN = "none"
 
-# Optional beats expose one explicit server-persisted skip. The sentinel never
-# enters the profile, so skipped data cannot leak into the storefront.
+# 20: the `__skip__` selection sentinel is gone with the beat chips that sent
+# it. An optional beat resolves to its default or, failing that, to `skipped`
+# on the two-ask cap - neither path puts a sentinel in the draft, so skipped
+# data still cannot reach the storefront.
 
 
 class ChipSpec(BaseModel):
@@ -86,11 +88,16 @@ class Beat:
     """One question in the interview.
 
     W-2 splits the beats in two. A ``optional`` beat is one nothing downstream
-    reads (``owner_display_name``, ``headcount``) or one the owner can still edit after
-    go-live (``services`` via Business > What you offer, ``abn``/``gst`` via
-    Business > details) - it resolves to its ``default`` or to nothing rather
-    than being asked a third time. A required beat has neither property, so it
-    is deferred to a second pass instead of being dropped.
+    reads (``owner_display_name``, ``headcount``) or one the owner can still edit
+    after go-live (``abn``/``gst`` via Business > details) - it resolves to its
+    ``default`` or to nothing rather than being asked a third time. A required
+    beat has neither property, so it is deferred to a second pass instead of
+    being dropped.
+
+    20: neither kind renders a skip chip any more. Being editable later stopped
+    being enough to make a beat optional - ``services`` states a real business
+    fact and is required, and the optional beats that remain all resolve
+    themselves, so there is nothing left for a button to do.
 
     ``reject`` is what the beat says when it gets something that cannot be its
     answer, and it is spoken verbatim: a rejected beat's reply is the beat's own
@@ -256,18 +263,26 @@ BEAT_ORDER: tuple[Beat, ...] = (
     Beat(
         key="services",
         label="what you offer",
-        ask="What would you like customers to know you offer?",
+        # 20/W-7: one question carrying both halves - what you offer and what it
+        # roughly costs - rather than a second beat for price. The amount the
+        # owner types is kept verbatim by extraction and never computed with.
+        ask="What do you offer, and roughly what does it cost?",
         kind="text",
         complete=_complete("services"),
-        # Editable after go-live at Business > What you offer, and an uploaded
-        # menu or price list can fill the catalog instead.
-        optional=True,
+        # 20: required. A business with no stated offering has no business, so
+        # this is as compulsory as its name - unanswered twice it defers, then
+        # pauses with go-live blocked, like every other required beat. An
+        # uploaded menu cannot rescue it: the knowledge ask only opens once
+        # every beat is done. Still editable after go-live at Business >
+        # What you offer.
+        optional=False,
         valid=_wordish,
         reject="I couldn't read that as something you offer.",
         # I8: the example teaches the shape of the answer - a few items, plainly
         # named - and names no trade, so a cafe is never nudged in a salon's
-        # vocabulary (W-9).
-        example="two or three of the things you do most, in your own words, is plenty",
+        # vocabulary (W-9). 20 adds the price half: it teaches "rough", so the
+        # owner answers in ranges rather than reaching for an exact figure.
+        example='a few things you do most with a rough price each - "coffee, $4 to $10"',
     ),
     Beat(
         key="customer_voice_preset",
@@ -373,9 +388,12 @@ def next_beat(
 
 def input_spec(beat: Beat) -> InputSpec:
     """The composer widget for a beat."""
+    # 20: no beat renders a skip chip. Every optional beat now resolves by its
+    # own default or drops to `skipped` on the two-ask cap, and the one beat
+    # with neither (`owner_display_name`) is not a business fact, so a blank is
+    # a correct answer rather than something to offer a button for. The
+    # knowledge ask keeps a chip, but it is not a beat - see KNOWLEDGE_INPUT.
     chips = list(beat.chips)
-    if beat.optional:
-        chips.append(ChipSpec(label="Skip for now", value="__skip__", dashed=True))
     return InputSpec(
         kind=beat.kind,
         # W-3: a non-chipped beat's placeholder used to repeat `beat.ask`, but
@@ -442,7 +460,14 @@ NAME_CONFIRM_INPUT = InputSpec(
 # The optional website/documents ask (see agent._completion_reply) is not a
 # beat - it never gates the profile - but it still needs a text composer, so it
 # reuses the same InputSpec shape as the text beats it follows.
-KNOWLEDGE_INPUT = InputSpec(kind="text", placeholder='Paste a link, attach a file, or say "skip"')
+KNOWLEDGE_INPUT = InputSpec(
+    kind="text",
+    placeholder="Paste a link or attach a file…",
+    # 20: the one Skip chip left in the interview, and it is always visible.
+    # Knowledge never gates go-live, so declining it needs to be one tap rather
+    # than a word the owner has to guess. Typing "skip" still works.
+    chips=[ChipSpec(label="Skip for now", value="skip", dashed=True)],
+)
 
 
 def check_completeness(draft: dict[str, Any], skipped: Sequence[str] = ()) -> list[str]:

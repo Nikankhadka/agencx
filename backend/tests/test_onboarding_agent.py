@@ -25,9 +25,11 @@ from app.onboarding.agent import (
     OnboardingRecord,
     _ack,
     _activation_summary,
+    _completion_reply,
     _echo,
     _usable,
     confirm_pending_name,
+    decline_knowledge,
     prepare_turn,
     prepare_url_turn,
     progress,
@@ -818,6 +820,33 @@ def test_the_copilot_contract_is_sectioned_and_states_every_prohibition() -> Non
     # conventions.md 1 (observation 4 of the reproduction).
     assert "Never use an em dash" in _COPILOT
     assert "becomes a reference" in _KNOWLEDGE_OFFER
+    # 20: the offer names the chip the composer now shows.
+    assert "Skip for now" in _KNOWLEDGE_OFFER
+
+
+def test_declining_knowledge_closes_the_ask_and_returns_the_summary() -> None:
+    """20: the Skip chip's deterministic door - no model call on this path."""
+    record = OnboardingRecord(draft=_complete_draft())
+    # First call opens the ask; the owner is now looking at the chip.
+    offer = _completion_reply(record)
+    assert record.knowledge_pending is True
+    assert "Skip for now" in offer
+
+    reply = decline_knowledge(record)
+
+    assert record.knowledge_pending is False
+    # The same activation summary the typed "skip" lands on, and no offer again.
+    assert "ready to go live" in reply
+    assert "Skip for now" not in reply
+
+
+def test_declining_knowledge_that_was_never_asked_is_refused() -> None:
+    """A closed ask cannot be closed twice - the controller turns this into a
+    409 rather than silently re-running the completion reply."""
+    record = OnboardingRecord(draft=_complete_draft())
+    assert record.knowledge_pending is False
+    with pytest.raises(ValueError):
+        decline_knowledge(record)
 
 
 def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
@@ -1011,23 +1040,25 @@ async def test_the_opening_question_validates_its_first_answer() -> None:
 
 
 def test_a_skipped_beat_is_never_asked_again_and_does_not_block_go_live() -> None:
+    # 20: `services` is required now, so the skippable subject here is the
+    # owner's name - the one beat that still resolves to a genuine blank.
     draft = _complete_draft()
-    del draft["services"]
+    del draft["owner_display_name"]
 
     open_beat = beats.next_beat(draft)
-    assert open_beat is not None and open_beat.key == "services"
-    assert beats.next_beat(draft, ["services"]) is None
-    assert request_finalize(draft, ["services"]).ok
+    assert open_beat is not None and open_beat.key == "owner_display_name"
+    assert beats.next_beat(draft, ["owner_display_name"]) is None
+    assert request_finalize(draft, ["owner_display_name"]).ok
 
 
 def test_skipping_writes_no_sentinel_into_the_public_profile() -> None:
     """A skip must not reach the storefront - `profile_tagline` renders these."""
     draft = _complete_draft()
-    del draft["services"]
-    record = OnboardingRecord(draft=draft, skipped=["services"])
+    del draft["owner_display_name"]
+    record = OnboardingRecord(draft=draft, skipped=["owner_display_name"])
 
     stored = record.to_jsonb()["draft"]
-    assert "services" not in stored
+    assert "owner_display_name" not in stored
     tagline = profile_tagline(stored) or ""
     assert "skip" not in tagline.lower()
 
@@ -1036,7 +1067,7 @@ def test_w2_record_fields_survive_a_round_trip_without_a_version_bump() -> None:
     """An in-flight interview must not be reset by this ticket's new fields."""
     record = OnboardingRecord(
         draft={"owner_display_name": "Sam"},
-        skipped=["services"],
+        skipped=["owner_display_name"],
         deferred=["hours"],
         ask_beat="hours",
         ask_count=2,
@@ -1044,7 +1075,7 @@ def test_w2_record_fields_survive_a_round_trip_without_a_version_bump() -> None:
     restored = OnboardingRecord.from_jsonb(record.to_jsonb())
 
     assert restored.version == 4
-    assert (restored.skipped, restored.deferred) == (["services"], ["hours"])
+    assert (restored.skipped, restored.deferred) == (["owner_display_name"], ["hours"])
     assert (restored.ask_beat, restored.ask_count) == ("hours", 2)
 
     # A record written before W-2 loads clean rather than crashing.
@@ -1116,11 +1147,19 @@ def test_ack_keeps_the_statement_and_drops_a_trailing_question() -> None:
     assert _ack("What's your name?") == ""
 
 
-def test_only_optional_beats_offer_a_skip_chip() -> None:
-    """Optional beats expose one explicit persisted skip action."""
+def test_no_beat_offers_a_skip_chip_and_the_knowledge_ask_does() -> None:
+    """20: the chip leaves the interview and survives only on the knowledge ask.
+
+    Every optional beat resolves itself - by its default, or by dropping to
+    `skipped` on the two-ask cap - so a button adds nothing. Knowledge is not a
+    beat and never gates go-live, so declining it stays one tap.
+    """
     for beat in beats.BEAT_ORDER:
         labels = [chip.label for chip in beats.input_spec(beat).chips]
-        assert ("Skip for now" in labels) is beat.optional
+        assert "Skip for now" not in labels, f"{beat.key} still offers a skip chip"
+
+    knowledge_chips = [(chip.label, chip.value) for chip in beats.KNOWLEDGE_INPUT.chips]
+    assert knowledge_chips == [("Skip for now", "skip")]
 
 
 def test_hours_beat_asks_one_question() -> None:

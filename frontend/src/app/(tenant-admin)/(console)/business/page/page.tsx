@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
+import { ServicesOverview } from "@/components/ui/ServicesOverview";
 import { apiFetch } from "@/lib/api";
 import type { BookingPage } from "@/lib/api-schemas";
 import { CoverPhoto } from "./components/CoverPhoto";
@@ -156,7 +157,12 @@ export default function BusinessPageScreen() {
                 ))}
               </div>
             </section>
-          ) : null}
+          ) : (
+            // 20: with nothing priced yet the storefront falls back to the
+            // owner's own overview, so the preview has to fall back with it -
+            // this screen is meant to be the page as a customer finds it.
+            <ServicesOverview services={page?.services ?? []} className="mt-5" />
+          )}
           {publicUrl ? (
             <a
               href={publicUrl}

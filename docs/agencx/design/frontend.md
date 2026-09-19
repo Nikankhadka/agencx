@@ -552,7 +552,10 @@ is a platform-admin lifecycle (suspend / reactivate), not an owner-facing one.
 Schedule, Money and Plan are the prototype's Stage 2 rows and are absent, not
 disabled. The Booking page (`renderScreen('booking')`) shows the business name,
 a clamped one-line description built from the O-1 profile's services and hours,
-and the public link with a copy control - the address derived from the current
+the shared `ServicesOverview` block in place of the offerings summary when
+nothing is priced yet (20 - the same block the storefront falls back to, so the
+preview cannot show something the page does not), and the public link with a
+copy control - the address derived from the current
 host via `surfaceUrl()`, never hardcoded, and shown without its scheme or
 trailing slash while the whole URL is what gets copied.
 

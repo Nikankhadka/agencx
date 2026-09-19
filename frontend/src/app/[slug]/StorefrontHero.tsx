@@ -16,7 +16,8 @@ function linkLabel(key: string) {
  * place; with a cover the same veil lies over the photo's lower edge so it
  * fades into the page. The monogram overlaps the band the same way in both
  * states, so the composition does not change with media. The subtitle is the
- * owner's `services`; the legacy combined tagline stays in the payload but is
+ * owner's `services`, joined into one line (20: it is a list of entries, not a
+ * sentence); the legacy combined tagline stays in the payload but is
  * no longer rendered. Long facts wrap instead of truncating (v4 edge case:
  * nothing clipped or ellipsized).
  */

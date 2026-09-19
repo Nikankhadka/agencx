@@ -401,11 +401,12 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
 
     states = await _walk_states(client, headers)
 
-    assert labels(states["headcount"]) == ["Just me", "Got a team", "Skip for now"]
+    assert labels(states["headcount"]) == ["Just me", "Got a team"]
     # A chipped beat invites typing past the chips, never blocks it.
     assert states["headcount"]["input"]["placeholder"] == "or type…"
 
-    assert labels(states["services"]) == ["Skip for now"]
+    # 20: services is required now, and no beat carries a Skip chip at all.
+    assert labels(states["services"]) == []
     # W-3: a non-chipped beat's placeholder is blank - the assistant's question
     # already in the thread is the context carrier, not a repeated placeholder.
     assert states["services"]["input"]["placeholder"] == ""
@@ -418,7 +419,6 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
         "Clear and professional",
         "Direct and concise",
         "Describe it myself",
-        "Skip for now",
     ]
     assert voice["input"]["chips"][3]["widget"] == "text"
 
@@ -428,12 +428,12 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     assert states["contact"]["input"]["chips"][0]["widget"] == "phone"
     assert states["contact"]["input"]["suggest_owner_email"] is True
 
-    assert labels(states["abn"]) == ["Yes", "No", "Skip for now"]
+    assert labels(states["abn"]) == ["Yes", "No"]
     assert states["abn"]["input"]["chips"][0]["widget"] == "masked"
     assert states["abn"]["input"]["mask"] == "XX XXX XXX XXX"
     assert states["abn"]["input"]["prefix"] == "ABN"
 
-    assert labels(states["gst"]) == ["Yes", "Not yet", "Skip for now"]
+    assert labels(states["gst"]) == ["Yes", "Not yet"]
     assert labels(states["owner_display_name"]) == ["Yes", "No"]
 
 
@@ -713,23 +713,31 @@ async def test_a_stale_checkpoint_is_a_conflict_not_a_crash(
     assert "another tab" in conflict.json()["detail"].casefold()
 
 
-async def test_a_required_beat_cannot_be_skipped(client: httpx.AsyncClient) -> None:
-    """`Skip for now` is offered only on optional beats; the server is what
-    enforces that, not the chip the client happened to render."""
+async def test_services_cannot_be_skipped(client: httpx.AsyncClient) -> None:
+    """20: services joined the required set, and the skip door it used to take
+    is gone - there is no `skip` field on the payload any more, and the old
+    sentinel is just an invalid selection value like any other."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
-    await _walk_until(client, headers, "business_name")
+    await _walk_until(client, headers, "services")
+
+    gone = await client.post(
+        "/api/onboarding/message",
+        json={"skip": {"beat": "services"}},
+        headers=headers,
+    )
+    assert gone.status_code == 422
 
     refused = await client.post(
         "/api/onboarding/message",
-        json={"skip": {"beat": "business_name"}},
+        json={"selection": {"beat": "services", "values": ["__skip__"]}},
         headers=headers,
     )
     assert refused.status_code == 409
-    assert refused.json()["detail"] == "that field cannot be skipped"
+    assert refused.json()["detail"] == "select one valid answer"
 
     state = await client.get("/api/onboarding/state", headers=headers)
-    assert state.json()["stage"] == "business_name"
+    assert state.json()["stage"] == "services"
     assert state.json()["skipped"] == []
 
 
@@ -789,6 +797,38 @@ async def test_knowledge_ask_then_skip_advances_to_confirm(
     assert final["stage"] == "confirm"
     assert final["can_confirm"] is True
     assert final["input"] is None
+
+
+async def test_the_knowledge_skip_chip_closes_the_ask_without_a_model_call(
+    client: httpx.AsyncClient,
+) -> None:
+    """20: the knowledge ask is the one place a Skip chip survives, and it is
+    always visible - declining the only step that never gates go-live should
+    not cost the owner a word they have to guess. The chip takes the
+    deterministic selection path, so no extractor runs behind it."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # The ask lives past the last beat, so before it fires there is nothing to
+    # decline - `knowledge` is not a beat the cursor can be parked on.
+    early = await client.post(
+        "/api/onboarding/message",
+        json={"selection": {"beat": "knowledge", "values": ["skip"]}},
+        headers=headers,
+    )
+    assert early.status_code == 409
+
+    body: dict[str, Any] = {}
+    for step in _FULL_WALK:
+        body = await _send(client, headers, text=step[1])
+
+    assert body["stage"] == "knowledge"
+    assert [(c["label"], c["value"]) for c in body["input"]["chips"]] == [("Skip for now", "skip")]
+
+    final = await _send(client, headers, selection={"beat": "knowledge", "values": ["skip"]})
+    assert final["stage"] == "confirm"
+    assert final["can_confirm"] is True
+    assert final["history"][-2] == {"role": "user", "content": "Skip for now"}
 
 
 async def test_full_flow_confirm_writes_profile(

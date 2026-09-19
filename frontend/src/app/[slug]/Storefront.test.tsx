@@ -41,6 +41,32 @@ describe("Storefront minimal business", () => {
     expect(html).not.toContain("What we offer");
     expect(html).not.toContain("offering-price");
   });
+
+  it("falls back to the owner's own overview when the catalog is empty", () => {
+    // 20: services is required now, so an empty catalog is the common state,
+    // not the bare one - the overview is what the page can say meanwhile.
+    const html = htmlFor({ ...BASE, services: ["coffee, $4 to $10", "toasties, about $12"] });
+
+    expect(html).toContain('data-testid="services-overview"');
+    expect(html).toContain("What we offer");
+    expect(html).toContain("coffee, $4 to $10");
+    expect(html).toContain("toasties, about $12");
+    // The owner's price text is theirs, copied, never a quote the page computes.
+    expect(html).not.toContain("offering-price");
+  });
+
+  it("keeps the overview out of the way once offerings carry the heading", () => {
+    const html = htmlFor({
+      ...BASE,
+      services: ["coffee, $4 to $10"],
+      offerings: [
+        { id: "1", name: "Flat white", description: "", price_cents: 450, category: null, media: null },
+      ],
+    });
+
+    expect(html).not.toContain('data-testid="services-overview"');
+    expect(html.match(/What we offer/g) ?? []).toHaveLength(1);
+  });
 });
 
 describe("Storefront hero veil", () => {
@@ -100,6 +126,7 @@ describe("Storefront profile facts", () => {
     const html = htmlFor({ ...BASE, tagline: null });
 
     expect(html).not.toContain("offering-price");
+    expect(html).not.toContain('data-testid="services-overview"');
     // Only the name heading and the invitation remain - no fact chips.
     expect(html).not.toContain("rounded-chip bg-accent-container");
     expect(html).not.toContain("rounded-chip bg-surface-container");

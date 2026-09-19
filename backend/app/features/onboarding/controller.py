@@ -29,6 +29,7 @@ from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     confirm_pending_name,
+    decline_knowledge,
     is_affirmative,
     prepare_turn,
     prepare_url_turn,
@@ -391,6 +392,21 @@ async def run_selection(
             status_code=status.HTTP_409_CONFLICT,
             detail="finish the paused field before selecting an answer",
         )
+    # 20: the knowledge ask is not a beat - it sits past the last one, holding
+    # `knowledge_pending` - so its Skip chip is answered before any beat cursor
+    # is consulted. `decline_knowledge` is the same door the typed "skip" takes
+    # through the extractor, minus the model call.
+    if beat_key == "knowledge":
+        if values != ["skip"] or not onboarding.knowledge_pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="there is no knowledge ask waiting to be answered",
+            )
+        reply = decline_knowledge(onboarding)
+        onboarding.history.append({"role": "user", "content": "Skip for now"})
+        onboarding.history.append({"role": "assistant", "content": reply})
+        _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+        return await _checkpoint(tenant_id, onboarding)
     current = beats.next_beat(onboarding.draft, onboarding.skipped, onboarding.deferred)
     # A name waiting to be confirmed holds the interview on its own beat, which
     # is not always the one `next_beat` would ask next - a correction can leave
@@ -400,9 +416,7 @@ async def run_selection(
         if onboarding.pending_name
         else (current.key if current is not None else "confirm")
     )
-    if stage != beat_key and (
-        beat_key in onboarding.skipped or (beat_key in onboarding.draft and values == ["yes"])
-    ):
+    if stage != beat_key and beat_key in onboarding.draft and values == ["yes"]:
         return onboarding.to_jsonb()
     if stage != beat_key:
         raise HTTPException(
@@ -421,17 +435,6 @@ async def run_selection(
             )
         user_message = "Yes"
         ack = f"Saved as {confirm_pending_name(onboarding)}."
-    elif values == ["__skip__"]:
-        beat = beats.BEATS.get(beat_key)
-        if beat is None or not beat.optional:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="that field cannot be skipped",
-            )
-        if beat_key not in onboarding.skipped:
-            onboarding.skipped.append(beat_key)
-        user_message = "Skip for now"
-        ack = "Skipped for now."
     else:
         try:
             user_message = beats.apply_selection(onboarding.draft, beat_key, values)

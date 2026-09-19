@@ -885,3 +885,46 @@ derived from the route, the tools, or the classifier, never from the industry.
 The email is owner-visible only and never appears on the public customer
 surface, and a missing email is never a reason to withhold an answer or a
 handoff.
+
+## D30: A stated services overview is required, and it is not the priced catalog
+
+**Date:** 2026-09-19. **Status:** accepted.
+
+**Decision:** `services` joins `business_name`, `business_type`, `hours` and
+`contact` in the required set: unanswered twice it defers a pass, returns, then
+pauses with go-live blocked, exactly as the other required beats do. The beat
+asks "What do you offer, and roughly what does it cost?", and an owner's rough
+price stays in the entry they typed it into. No beat renders a "Skip for now"
+chip any more - the `__skip__` sentinel, the `skip` payload field and the
+controller branch behind them are deleted, because the two-ask cap already
+resolves an optional beat by its default, or, for the owner's name alone, to a
+blank. The knowledge ask keeps one always-visible Skip chip. It is not a beat:
+it sits past the last one and never gates go-live, so declining it is a tap
+rather than a word the owner has to guess.
+
+`services` and offerings are two different things and stay that way.
+`services` is the owner's own overview, a list of lines they wrote, which may
+carry rough price ranges in their own words ("coffee, $4-$10"). Offerings are
+the catalog, with exact integer-cent prices. They may overlap. Services text
+never creates offering rows, offerings never rewrite the overview, and the
+storefront gives the "What we offer" heading to offerings whenever the catalog
+holds anything, so the two never render together. With an empty catalog the
+storefront and the owner's preview of it both render the overview instead.
+
+**Why:** A business without a stated service has no business, so the overview
+is as compulsory as the name, and "we will fill it in from an uploaded menu"
+was never true - the knowledge ask only opens after every beat completes.
+Asking for a rough price with the service is how owners describe themselves
+anyway, and refusing to record it would have pushed them into the catalog
+before they were ready. Skip UI is unnecessary where a truthful default exists
+and dishonest where it does not: W-2 added the chip, W-7 removed it as robotic,
+PR #42 brought it back for resumable skips, and the cap plus defaults now cover
+every case it was carrying. The owner's name is not a business fact - any staff
+member may be holding the phone - so it stays optional and Home falls back to
+the business name, then "admin".
+
+**Boundary:** The overview is copied, never computed. Nothing parses a price
+out of it, nothing quotes from it, and every amount the product states still
+comes from the pricing engine in integer cents (C-1, unchanged). Services text
+is owner-authored content like any other profile field: no code branches on
+what is in it, and no vertical is inferred from it.

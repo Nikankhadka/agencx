@@ -45,10 +45,17 @@ live in the ticket files, not here.
 ## What is next
 
 - [ ] M-7 storefront redesign: no-image-first rebuild with one persistent
-  chat entry. `Active - awaiting review` on `feat/m7-storefront-redesign`
-  (PR #41); ticket file
+  chat entry. Merged to `development` as PR #41; ticket file
   [17-storefront-redesign.md](spec/active/17-storefront-redesign.md).
   Founder mobile and desktop walkthrough remains.
+- [ ] Required services, price-aware overview, knowledge Skip chip: `services`
+  joins the required set and asks for a rough price with it, no beat renders
+  "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
+  knowledge ask keeps one always-visible Skip chip, and the storefront and its
+  owner preview read the overview back when nothing is priced yet. Built on
+  `feat/20-required-services` off M-7's base; ticket file
+  [20-required-services.md](spec/active/20-required-services.md), ADR D30.
+  Merged to `development` as PR #45; founder preview walkthrough remains.
 - [ ] Intent architecture and escalation-scoped contact capture: three intent
   families (information/offer/support) and four actions
   (respond/offer_followup/escalate/handoff) classified by the existing
@@ -58,7 +65,8 @@ live in the ticket files, not here.
   [19-intent-and-identity.md](spec/active/19-intent-and-identity.md). Founder
   preview walkthrough remains.
 - [ ] Resumable owner input and offering normalization: optional beats can
-  be skipped and stay skipped, name proposals are confirmed rather than
+  be skipped and stay skipped (ticket 20 retired the chip that did it), name
+  proposals are confirmed rather than
   assumed, services are a normalized list, offering suggestions stay private
   until the owner reviews them, and categories are tenant-scoped rows
   (migration `0031`). Code in `development`, founder walkthrough on the

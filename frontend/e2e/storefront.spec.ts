@@ -31,6 +31,60 @@ test.describe("the public storefront", () => {
     await expect(page.getByRole("heading", { name: "Phones", exact: true })).toBeVisible();
   });
 
+  /**
+   * 20: the regression this ticket opened on. `services` is a list of the
+   * owner's own lines, and the storefront read model used to publish it
+   * through a string helper - so the subtitle rendered the list's Python repr,
+   * brackets and quotes and all, on the page a customer actually lands on.
+   * Only the browser proves what got rendered, so it is checked here.
+   */
+  test("publishes the owner's services as their own words, not a list repr", async ({
+    page,
+  }) => {
+    await page.goto("/lumident");
+
+    const subtitle = page
+      .getByRole("heading", { level: 1 })
+      .locator("xpath=following-sibling::p[1]");
+    await expect(subtitle).toHaveText("General dentistry, Cleanings, Fillings, Crowns");
+    await expect(page.locator("body")).not.toContainText("['General dentistry'");
+  });
+
+  /**
+   * 20: services is required now, so a business with nothing priced yet is the
+   * ordinary state rather than the bare one, and the owner's own overview is
+   * what the page says meanwhile. Both seeded tenants carry a catalog, so the
+   * empty case is served to the owner's preview of the page - the one screen
+   * that promises to be the page as a customer finds it.
+   */
+  test("the preview falls back to the owner's overview with nothing priced", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.route("**/api/business/page", (route) =>
+      route.fulfill({
+        json: {
+          slug: "bytefix",
+          name: "Bytefix",
+          tagline: null,
+          has_cover: false,
+          links: {},
+          offerings: [],
+          services: ["coffee, $4 to $10", "toasties, about $12"],
+        },
+      }),
+    );
+    await page.goto("/business/page");
+
+    await expect(page.getByTestId("offerings-summary")).toHaveCount(0);
+    const overview = page.getByTestId("services-overview");
+    await expect(overview).toBeVisible();
+    // Copied, in the owner's words, price text and all - nothing reformats it.
+    await expect(overview).toContainText("coffee, $4 to $10");
+    await expect(overview).toContainText("toasties, about $12");
+  });
+
   test("a customer can open a conversation from the page", async ({ page }) => {
     await page.goto("/bytefix");
 

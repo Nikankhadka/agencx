@@ -3,9 +3,9 @@
  *
  * Surface: tenant-admin (http://localhost:3000)
  *
- * What only a browser can prove here: the skip survives a reload (the client
- * reads the beat it lands on from the server's checkpoint, not from state it
- * kept in memory), and rejecting a proposed name costs no server turn at all -
+ * What only a browser can prove here: the knowledge decline survives a reload
+ * (the client reads what it lands on from the server's checkpoint, not from
+ * state it kept in memory), and rejecting a proposed name costs no server turn -
  * the composer is prefilled and focused in the browser. The route stubs are
  * stateful, the way knowledge-review-mocks.ts stubs are, so the reload sees the
  * world the skip left behind rather than a canned reply.
@@ -22,19 +22,20 @@ function composer(page: Page) {
   return page.getByTestId("onboarding-composer");
 }
 
-test("a skipped beat stays skipped across a reload", async ({ page, request }) => {
-  // The server's checkpoint, as a test double: the skip mutates it, and the
-  // reload's GET reads it back.
+test("the knowledge Skip chip closes the ask across a reload", async ({ page, request }) => {
+  // 20: the knowledge ask is the one place a Skip chip survives, because it is
+  // the one step that never gates go-live. The server's checkpoint is a test
+  // double: the decline mutates it, and the reload's GET reads it back.
   const checkpoint = {
-    stage: "services",
-    prompt: "What do you offer?",
-    skipped: [] as string[],
+    stage: "knowledge",
+    prompt: "Do you have a website or any documents?",
     revision: 4,
-    history: [{ role: "assistant", content: "What do you offer?" }],
+    can_confirm: false,
+    history: [{ role: "assistant", content: "Do you have a website or any documents?" }],
   };
   const skipChip = {
     label: "Skip for now",
-    value: "__skip__",
+    value: "skip",
     dashed: true,
     widget: null,
   };
@@ -42,15 +43,15 @@ test("a skipped beat stays skipped across a reload", async ({ page, request }) =
     return onboardingState({
       stage: checkpoint.stage,
       prompt: checkpoint.prompt,
-      skipped: checkpoint.skipped,
       revision: checkpoint.revision,
+      can_confirm: checkpoint.can_confirm,
       history: checkpoint.history,
-      // Only the optional beat offers the skip, so the reload proves the beat
-      // moved on rather than proving the stub always sends the same chips.
-      input: {
-        ...textInputSpec("or type…"),
-        chips: checkpoint.stage === "services" ? [skipChip] : [],
-      },
+      // Only the knowledge ask offers the chip, so the reload proves the ask
+      // closed rather than proving the stub always sends the same chips.
+      input:
+        checkpoint.stage === "knowledge"
+          ? { ...textInputSpec("Paste a link or attach a file…"), chips: [skipChip] }
+          : null,
     });
   }
 
@@ -59,40 +60,39 @@ test("a skipped beat stays skipped across a reload", async ({ page, request }) =
   const selections: unknown[] = [];
   await page.route("**/api/onboarding/message", (route) => {
     selections.push(JSON.parse(route.request().postData() ?? "{}"));
-    checkpoint.skipped = [...checkpoint.skipped, "services"];
-    checkpoint.stage = "hours";
-    checkpoint.prompt = "When are you open?";
+    checkpoint.stage = "confirm";
+    checkpoint.prompt = "Your assistant is ready to go live.";
+    checkpoint.can_confirm = true;
     checkpoint.revision += 1;
     checkpoint.history = [
       ...checkpoint.history,
       { role: "user", content: "Skip for now" },
-      { role: "assistant", content: "When are you open?" },
+      { role: "assistant", content: "Your assistant is ready to go live." },
     ];
     return route.fulfill({ json: serve() });
   });
 
   await loginAsTenantAdmin(page, request, BYTEFIX);
 
-  await expect(composer(page).getByTestId("onboarding-chip-__skip__")).toBeVisible();
-  await composer(page).getByTestId("onboarding-chip-__skip__").click();
+  await expect(composer(page).getByTestId("onboarding-chip-skip")).toBeVisible();
+  await composer(page).getByTestId("onboarding-chip-skip").click();
 
-  // The skip travels as the beat's own selection, carrying the sentinel the
-  // server persists - it is an answer to this beat, not a separate verb.
+  // The decline travels as a selection on the ask itself, the same shape any
+  // chip sends - there is no separate skip verb on the payload any more.
   await expect
     .poll(() => selections)
-    .toEqual([{ selection: { beat: "services", values: ["__skip__"] } }]);
+    .toEqual([{ selection: { beat: "knowledge", values: ["skip"] } }]);
 
   const thread = page.getByTestId("onboarding-thread");
-  await expect(thread).toContainText("When are you open?");
+  await expect(thread).toContainText("ready to go live");
 
-  // The reload is the point: nothing is carried over in the client, so the
-  // beat on screen is whatever the checkpoint says it is.
+  // The reload is the point: nothing is carried over in the client, so what is
+  // on screen is whatever the checkpoint says it is.
   await page.reload();
-  await expect(thread).toContainText("When are you open?");
-  // The skip is in the transcript, and the beat it closed is not asked again:
-  // the question itself stays in the history, as every answered beat's does.
+  await expect(thread).toContainText("ready to go live");
+  // The decline is in the transcript, and the ask is not repeated.
   await expect(thread).toContainText("Skip for now");
-  await expect(composer(page).getByTestId("onboarding-chip-__skip__")).toHaveCount(0);
+  await expect(composer(page).getByTestId("onboarding-chip-skip")).toHaveCount(0);
 });
 
 test("saying No to a proposed name prefills the composer without a server turn", async ({
