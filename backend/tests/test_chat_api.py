@@ -61,6 +61,23 @@ class FakeChatProvider(ToolAwareFakeProvider):
             yield delta
 
 
+class StreamedDeltasProvider(FakeChatProvider):
+    """FakeChatProvider whose draft is exactly the given deltas, so a test can
+    assert on the text the customer actually receives."""
+
+    def __init__(self, deltas: list[str]) -> None:
+        super().__init__()
+        self._deltas = deltas
+
+    async def chat_stream(self, messages: list[Any]) -> AsyncIterator[str]:
+        for delta in self._deltas:
+            yield delta
+
+
+UUID_A = "295feb16-a7f3-49e7-b771-e3b18fa0e76f"
+UUID_B = "2d3b5827-2d62-40b2-8b4a-210ad29cee99"
+
+
 class ControllableReranker(Reranker):
     def __init__(self, score: float) -> None:
         self._score = score
@@ -180,10 +197,12 @@ async def test_chat_happy_path_streams_citations_and_tokens(
 
     prose = _without_progress(events)
     types = [event["type"] for event in prose]
-    assert types == ["conversation", "citations"] + ["token"] * 7 + ["done"]
+    # The controller coalesces the draft's deltas into one sanitized token
+    # event; the citations event still carries the graph's internal grounding.
+    assert types == ["conversation", "citations", "token", "done"]
     assert prose[1]["citations"][0]["source"] == "faq.md"
     full_text = "".join(e["text"] for e in events if e["type"] == "token")
-    assert full_text == "Sure, here's the answer [1]."
+    assert full_text == "Sure, here's the answer."
 
 
 async def test_chat_persists_customer_and_assistant_messages(
@@ -207,11 +226,63 @@ async def test_chat_persists_customer_and_assistant_messages(
     )
     assert [r["role"] for r in rows] == ["customer", "assistant"]
     assert rows[0]["content"] == "What are your hours?"
-    assert rows[1]["content"] == "Sure, here's the answer [1]."
+    # Persisted text is the sanitized text the customer saw - markers never
+    # reach the transcript.
+    assert rows[1]["content"] == "Sure, here's the answer."
     # F-3: the trace's author column is populated by the graph, not only by
     # seeds - this knowledge turn went through the search tool, so the draft
     # node authored the answer.
     assert rows[1]["agent_node"] == "draft"
+
+
+@pytest.mark.parametrize(
+    "deltas",
+    [
+        pytest.param(["An answer [1]."], id="bare-index"),
+        pytest.param([f"An answer [1, {UUID_A}]."], id="index-and-uuid"),
+        pytest.param([f"An answer [{UUID_A}]."], id="bare-uuid"),
+        pytest.param([f"An answer [catalog_id={UUID_A}]."], id="catalog-id-prefix"),
+        pytest.param(["An answer [9]."], id="no-matching-source"),
+        pytest.param(
+            [f"with salsa [1, {UUID_A}, ", f"{UUID_B}]."],
+            id="marker-split-across-deltas",
+        ),
+    ],
+)
+async def test_chat_never_streams_citation_markers_to_the_customer(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any], deltas: list[str]
+) -> None:
+    """The customer surface shows no citation syntax: every bracket is stripped
+    before the flush and before persistence, whichever malformed shape the
+    model produced and however the deltas split it."""
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_llm_provider] = lambda: StreamedDeltasProvider(deltas)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+    )
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+
+    token_texts = [e["text"] for e in events if e["type"] == "token"]
+    streamed = "".join(token_texts)
+    assert "[" not in streamed and "]" not in streamed
+    assert UUID_A not in streamed and UUID_B not in streamed
+    # One coalesced token event per draft; the graph's citations event still
+    # fires - it is internal grounding now, with no markers left to pair.
+    assert len(token_texts) == 1
+    assert any(event["type"] == "citations" for event in events)
+
+    conversation_id = events[0]["conversation_id"]
+    persisted = await superuser_conn.fetchval(
+        "select content from messages where tenant_id = $1 and conversation_id = $2 "
+        "and role = 'assistant'",
+        tenant_id,
+        uuid.UUID(conversation_id),
+    )
+    assert persisted == streamed
 
 
 async def test_an_information_answer_never_requires_customer_contact(
@@ -232,7 +303,7 @@ async def test_an_information_answer_never_requires_customer_contact(
     prose = _without_progress(events)
     assert prose[-1]["type"] == "done"
     assert "".join(e["text"] for e in events if e["type"] == "token") == (
-        "Sure, here's the answer [1]."
+        "Sure, here's the answer."
     )
     conversation_id = events[0]["conversation_id"]
 
@@ -242,7 +313,7 @@ async def test_an_information_answer_never_requires_customer_contact(
         tenant_id,
         uuid.UUID(conversation_id),
     )
-    assert assistant == "Sure, here's the answer [1]."
+    assert assistant == "Sure, here's the answer."
 
     contact = await superuser_conn.fetchrow(
         "select customer_ref, customer_email from conversations where id = $1",

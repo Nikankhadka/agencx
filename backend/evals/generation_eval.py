@@ -19,9 +19,12 @@ SPECIFIC chunk cited at that bracket index actually support THAT sentence
 Unlike evals/leakage_eval.py, this eval requires a real LLM provider - it
 is a quality measurement, not a structural security proof, so it is not
 CI-deterministic by nature and is not the never-skipped release criterion
-T-022 is. Score whatever the customer would actually see: the graph runs
-Inspection (T-021) too, so a case's final draft may already be a redraft
-or an escalation handoff, not just the Knowledge node's first attempt.
+T-022 is. Score the graph's final draft: the graph runs Inspection (T-021)
+too, so a case's final draft may already be a redraft or an escalation
+handoff, not just the Knowledge node's first attempt. That draft carries its
+internal `[n]` citation markers - the customer surface strips them at the
+chat controller, which is deliberately outside this eval's path, so citation
+faithfulness still has markers to score.
 """
 
 from __future__ import annotations

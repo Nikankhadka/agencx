@@ -362,7 +362,7 @@ Every component takes only semantic tokens. Each lists its required states.
 | `Thread` (O-5) | the ONBOARDING thread idiom, a separate design: `Thread`, `LedeMessage`, `AgentLine` (bare prose), `OwnerBubble` (20px, tip bottom-right), `TypingLine`, `ThreadPill`, `ThreadVeil`. Never merge with `ChatBubble` | static, streaming, pending |
 | `StreamingText` | renders SSE tokens, `aria-live="polite"` | streaming, done, interrupted |
 | `TypingIndicator` | **NEW (P-5):** three pulsing dots (600-800ms) shown while a turn is in flight, sustained through the failover window - never a spinner, never a blank | active |
-| `CitationChip` | inline `[1]` chip; popover shows source + snippet | default, hover |
+| `CitationChip` | retained but no surface renders it - customer answers carry no citation markers (stripped at the chat boundary, see `architecture.md` section 11); deletion is a cleanup follow-up | - |
 | `QuoteCard` | renders **pricing-engine output verbatim**; money formatted from integer cents in `src/lib/money.ts` - no arithmetic in components | default, sent |
 | `TraceTree` | collapsible run tree (console only), mono font | loading, error, empty |
 | `EscalationBanner` | in-chat handoff state | active |
@@ -682,7 +682,7 @@ entered address so a retry succeeds without restarting onboarding.
 | Suspended tenant | "This page is currently unavailable." caption, composer hidden. Says nothing about why - a customer is not owed the tenant's billing state (PRD 13; the wording also carried "assistant" until B-3's E-3 sweep) |
 | Empty conversation | Tenant-configured greeting as the first assistant bubble; starter chips if configured |
 | Streaming | StreamingText in assistant bubble; TypingIndicator through the failover window (P-5); composer disabled with "answering..." hint; stop button |
-| Citations | CitationChips on grounded sentences |
+| Grounded answers | Plain prose only - no citation markers or chips render; citation machinery is internal |
 | Escalated (limit only) | EscalationBanner replaces composer-state messaging; conversation stays readable |
 | Error / disconnect | Inline retry in the failed bubble, never a blank screen |
 

@@ -259,6 +259,12 @@ The refusal is calm and honest ("I don't have an answer for that from the
 business's own material"). The refusal path is scored 0.0 on positive eval cases
 and 1.0 on negative cases.
 
+Citation markers are internal: a draft tags its claims with `[n]` so Inspection
+and the citation-faithfulness eval can verify them, and every bracket marker is
+stripped from the text before it is streamed to a customer or written to the
+transcript (`app/shared/text.py::strip_citation_markers`, applied at the chat
+controller's inspection flush).
+
 ### Deterministic services
 
 These call no model at all. They are plain functions that inspect, gate, or

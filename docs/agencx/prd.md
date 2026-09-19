@@ -133,7 +133,8 @@ is not planned or ticketed until Stage 1 reports back.
 6. **The anonymous visit.** Off-hours, an incognito visitor asks a plain-language
    question.
 7. **The grounded answer.** The assistant answers from the profile and the
-   uploaded material, with citations; when nothing relevant exists, it refuses
+   uploaded material, in its own voice; citations ground and score the answer
+   internally but are never rendered. When nothing relevant exists, it refuses
    and records the ask.
 8. **The money guardrail.** A figure may be stated only when that exact figure
    appears in owner-supplied material or is the output of the deterministic
@@ -231,7 +232,7 @@ tickets P-2, P-3, P-5 in `spec/`.
 | Signal | Measure | Action |
 |---|---|---|
 | Activation | % of visitors who reach "live" in one conversation; drop-off recovery rate | keep - the thesis holds or the interview is trimmer |
-| Trust | public page answers carry citations; refusal rate stays sane (unmet asks are visible) | keep when grounded; pivot the tone/rules if answers read as evasive |
+| Trust | public page answers stay grounded (citation machinery internal); refusal rate stays sane (unmet asks are visible) | keep when grounded; pivot the tone/rules if answers read as evasive |
 | **The money guardrail** | adversarial "a price anyway" attempts can never produce a number | keep; a single invented figure is a **stop-and-fix-the-panel** run, not a bug ticket |
 | **Latency** | % of turns under 10s; failover trigger rate | keep when the cap holds; a persistently slow answer is a stop-and-fix, not a tuning ticket |
 | Generalization | a cleaner and a dental clinic onboard via the public path alone with zero code change | keep; a code change required = bug in I8 |
@@ -290,7 +291,7 @@ $10/month (decision D16).
 | **get_business_context(tenant_id, query)** | The single entry point for grounded context; whole-corpus fast path below the token threshold, hybrid retrieval above it |
 | **context package** | The pre-loaded, cached bundle (system prompt + profile + corpus) assembled when the chat opens, keyed by `(tenant_id, knowledge_version)` |
 | **knowledge_version** | A derived version of the tenant's knowledge (max document update); invalidates the context package on re-ingest |
-| **citation** | A reference to the exact chunk a fact came from; rendered as an inline chip |
+| **citation** | A reference to the exact chunk a fact came from; used internally to ground and score answers, never rendered on the customer surface |
 
 ### Evaluation
 

@@ -2,7 +2,7 @@
 
 Next.js 16 + React 19 + TypeScript 5 + Tailwind v4. One app, three surfaces via route groups:
 
-- **Customer chat** at `{slug}.wren.app` - streaming Q&A with citations, quotes, escalation
+- **Customer chat** at `{slug}.wren.app` - streaming Q&A (citation machinery is internal and never rendered), quotes, escalation
 - **Tenant admin** at `app.wren.app` - onboarding, knowledge, conversations, pricing, dashboards
 - **Platform owner** at `admin.wren.app` - all-tenants view, provisioning, suspend/reactivate
 
