@@ -58,8 +58,10 @@ export function StorefrontHero({
         <h1 className="mt-3 min-w-0 wrap-anywhere text-title-1 font-bold text-text">
           {storefront.name}
         </h1>
-        {storefront.services ? (
-          <p className="mt-2 max-w-prose text-body text-text-secondary">{storefront.services}</p>
+        {storefront.services?.length ? (
+          <p className="mt-2 max-w-prose text-body text-text-secondary">
+            {storefront.services.join(", ")}
+          </p>
         ) : null}
         {storefront.business_type || storefront.hours ? (
           <div className="mt-3 flex max-w-full flex-wrap gap-2">

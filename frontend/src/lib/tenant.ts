@@ -90,7 +90,7 @@ export interface StorefrontData {
    * the two should never matter. `contact` is never published. */
   business_type?: string | null;
   hours?: string | null;
-  services?: string | null;
+  services?: string[];
   links: Record<string, string>;
   offerings: StorefrontOffering[];
   has_cover: boolean;

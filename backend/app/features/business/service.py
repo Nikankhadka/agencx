@@ -704,7 +704,9 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
         "tagline": profile_tagline(profile),
         "business_type": profile_field(profile, "business_type"),
         "hours": profile_field(profile, "hours"),
-        "services": profile_field(profile, "services"),
+        # 20: services is the owner's own overview and a list since W-12 -
+        # `profile_field` would publish `str(["coffee"])` onto the page.
+        "services": read_services(profile.get("services", [])),
         "links": {
             key: value
             for key, value in (brand.get("links") or {}).items()

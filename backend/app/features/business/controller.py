@@ -7,6 +7,7 @@ from uuid import UUID
 
 from app.features.business import service
 from app.features.tenants import service as tenant_service
+from app.onboarding.flow import read_services
 
 
 async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
@@ -40,6 +41,9 @@ async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
             fallback=tenant["name"],
         ),
         "tagline": service.profile_tagline(profile),
+        # 20: the catalog-empty overview block renders from this, so the
+        # preview has to carry what the public storefront carries.
+        "services": read_services(profile.get("services", [])),
         "links": await service.read_links(tenant_id=tenant_id),
         "has_cover": await service.has_cover(tenant_id=tenant_id),
         "cover_url": await service.read_cover_url(tenant_id=tenant_id, role=service.COVER_KIND),

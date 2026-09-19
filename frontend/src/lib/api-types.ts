@@ -1017,6 +1017,8 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
+            /** Services */
+            services?: string[];
             /** Links */
             links: {
                 [key: string]: string;
@@ -1961,7 +1963,7 @@ export interface components {
             /** Hours */
             hours?: string | null;
             /** Services */
-            services?: string | null;
+            services?: string[];
             /** Links */
             links: {
                 [key: string]: string;

@@ -67,7 +67,7 @@ describe("Storefront profile facts", () => {
     tagline: "Dog grooming in Newtown · Mon to Sat 9am to 5pm",
     business_type: "Dog grooming",
     hours: "Mon to Sat 9am to 5pm",
-    services: "Dog grooming in Newtown",
+    services: ["Dog grooming in Newtown"],
   };
 
   it("publishes type, hours, and services", () => {
