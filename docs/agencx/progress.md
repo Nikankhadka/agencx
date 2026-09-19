@@ -45,9 +45,10 @@ live in the ticket files, not here.
 ## What is next
 
 - [ ] M-7 storefront redesign: no-image-first rebuild with one persistent
-  chat entry. `Active - in progress` on `feat/m7-storefront-redesign`;
-  ticket file lands with that branch. Founder mobile and desktop
-  walkthrough is the remaining step before merge.
+  chat entry. `Active - awaiting review` on `feat/m7-storefront-redesign`
+  (PR #41); ticket file
+  [17-storefront-redesign.md](spec/active/17-storefront-redesign.md).
+  Founder mobile and desktop walkthrough remains.
 - [ ] Intent architecture and escalation-scoped contact capture: three intent
   families (information/offer/support) and four actions
   (respond/offer_followup/escalate/handoff) classified by the existing
@@ -90,6 +91,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
+| [spec/active/17-storefront-redesign.md](spec/active/17-storefront-redesign.md) | `Active - awaiting review` | M-7 storefront redesign (PR #41) |
 | [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases |
 

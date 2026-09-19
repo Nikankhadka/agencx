@@ -1017,6 +1017,8 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
+            /** Services */
+            services?: string[];
             /** Links */
             links: {
                 [key: string]: string;
@@ -1956,6 +1958,12 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
+            /** Business Type */
+            business_type?: string | null;
+            /** Hours */
+            hours?: string | null;
+            /** Services */
+            services?: string[];
             /** Links */
             links: {
                 [key: string]: string;

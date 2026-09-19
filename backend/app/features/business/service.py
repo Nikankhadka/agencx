@@ -618,6 +618,12 @@ def profile_tagline(profile: dict[str, Any]) -> str | None:
     return " · ".join(kept) if kept else None
 
 
+def profile_field(profile: dict[str, Any], key: str) -> str | None:
+    """One publishable profile fact, stripped; None when the owner never gave it."""
+    value = str(profile.get(key, "")).strip()
+    return value or None
+
+
 def display_name(
     *, brand: dict[str, Any], business_name: Any, profile: dict[str, Any], fallback: Any
 ) -> str:
@@ -696,6 +702,11 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             fallback=tenant["name"],
         ),
         "tagline": profile_tagline(profile),
+        "business_type": profile_field(profile, "business_type"),
+        "hours": profile_field(profile, "hours"),
+        # 20: services is the owner's own overview and a list since W-12 -
+        # `profile_field` would publish `str(["coffee"])` onto the page.
+        "services": read_services(profile.get("services", [])),
         "links": {
             key: value
             for key, value in (brand.get("links") or {}).items()

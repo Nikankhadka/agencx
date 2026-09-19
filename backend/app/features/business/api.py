@@ -50,6 +50,7 @@ class BookingPageResponse(BaseModel):
     slug: str
     name: str
     tagline: str | None
+    services: list[str] = Field(default_factory=list)
     links: dict[str, str]
     has_cover: bool
     cover_url: str | None = None

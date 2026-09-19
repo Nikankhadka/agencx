@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.features.business import service
 from app.features.business.media import OfferingMedia
@@ -34,6 +34,11 @@ class PublicOffering(BaseModel):
 class StorefrontResponse(BaseModel):
     name: str
     tagline: str | None
+    # Publishable profile facts for the M-7 composition. ``contact`` is
+    # deliberately absent - it stays private until its own ticket says so.
+    business_type: str | None = None
+    hours: str | None = None
+    services: list[str] = Field(default_factory=list)
     links: dict[str, str]
     offerings: list[PublicOffering]
     has_cover: bool

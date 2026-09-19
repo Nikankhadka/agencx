@@ -51,6 +51,25 @@ test.describe("the public storefront", () => {
     await expect(page.getByRole("button", { name: "Ask a question" })).toHaveCount(0);
   });
 
+  /**
+   * M-7 US-6: the fixed bottom Ask bar is gone - the header button is the
+   * only chat entry, at any viewport. The chat and offering sheets are
+   * themselves always-mounted `fixed inset-0` containers (Sheet.tsx) while
+   * closed, so this only counts a bar outside that inert/aria-hidden state.
+   */
+  test("has no fixed bottom bar", async ({ page }) => {
+    await page.goto("/bytefix");
+    const fixedBottomBars = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("body *")).filter((el) => {
+          if (el.closest('[aria-hidden="true"]') || el.closest("[inert]")) return false;
+          const style = getComputedStyle(el);
+          return style.position === "fixed" && style.bottom === "0px";
+        }).length,
+    );
+    expect(fixedBottomBars).toBe(0);
+  });
+
   // D26: the stored tenant accent is accepted but no longer rendered. Both demo
   // tenants have one, so a re-injected override would show as a non-Rausch fill.
   test("the stored tenant accent does not recolor the chat entry", async ({ page }) => {
@@ -102,5 +121,100 @@ test.describe("the public storefront", () => {
     // `notFound()` after the first byte still returns 200 with the error shell
     // - the same trap the deploy smoke test documents (deploy.md, B-4).
     await expect(page.getByText("There's no business here.")).toBeVisible();
+  });
+
+  /**
+   * M-7 US-1/US-4: bytefix is the no-photo base - 15 offerings, zero media.
+   * The page leads with profile facts, rows reserve no media space, and the
+   * seeded contact address never reaches the customer surface.
+   */
+  test("the no-photo base shows profile facts and no contact", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    // next dev streams this page: for a beat after load the server tree and
+    // the client tree are both in the DOM (typing-indicator.spec.ts's ask()) -
+    // duplicate facts and a strict-mode violation for anything addressing one
+    // of them. Retrying the whole read together is what waits for it to settle.
+    await expect(async () => {
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
+      await expect(page.getByText("phone repair shop")).toBeVisible();
+      await expect(
+        page.getByText(
+          "Phone and laptop repairs, screen replacements, battery replacements, data recovery",
+        ),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Monday to Friday 9am to 6pm, Saturday 10am to 2pm"),
+      ).toBeVisible();
+      await expect(page.getByText("owner@bytefix.dev")).toHaveCount(0);
+      // The veil band stands in the cover's place, and no image is reserved.
+      await expect(page.getByTestId("hero-veil")).toBeVisible();
+      await expect(page.locator("main img")).toHaveCount(0);
+    }).toPass({ timeout: 15_000 });
+  });
+
+  test("the hero monogram overlaps the veil band", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    // next dev streams this page: for a beat after load the server tree and
+    // the client tree are both in the DOM (typing-indicator.spec.ts's ask()) -
+    // two veils/marks, so a bounding box read before it settles can be stale.
+    // Retrying the whole read together is what waits for it to settle.
+    let band: { y: number; height: number } | null = null;
+    let mark: { y: number } | null = null;
+    await expect(async () => {
+      // v4 fallback B: the mark sits on the band, not below it. A block-level
+      // wrapper carries the -mt-12; an inline one silently fails to shift.
+      band = await page.getByTestId("hero-veil").boundingBox();
+      mark = await page.getByTestId("hero-mark").boundingBox();
+      expect(band).not.toBeNull();
+      expect(mark).not.toBeNull();
+    }).toPass({ timeout: 15_000 });
+    expect(band!.y + band!.height - mark!.y).toBeGreaterThan(20);
+  });
+
+  test("rows carry no reserved media space", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    // The old composition held every row at min-h-36 (144px) for media that
+    // was never coming. A text-only row is only as tall as its text.
+    const row = page.getByRole("button", { name: /iPhone 11 \(Refurbished, 64GB\)/ });
+    await expect(row).toBeVisible();
+    const box = await row.boundingBox();
+    expect(box, "text-only row must not reserve thumbnail space").not.toBeNull();
+    expect(box!.height).toBeLessThan(144);
+  });
+
+  /**
+   * M-7 US-5 frame 3b: bytefix has zero media, so every detail sheet it opens
+   * is the no-media frame - tightened, with no empty media box reserved.
+   */
+  test("the detail sheet reserves no media box when the offering has none", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    await page.getByRole("button", { name: /iPhone 11 \(Refurbished, 64GB\)/ }).click();
+    const sheet = page.getByRole("dialog", { name: /iPhone 11 \(Refurbished, 64GB\)/ });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator("img")).toHaveCount(0);
+    await expect(sheet.locator("video")).toHaveCount(0);
+    await expect(sheet.locator("iframe")).toHaveCount(0);
+  });
+
+  test("the desktop category nav follows the menu", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    const repairs = page.locator("aside").getByRole("link", { name: "Repairs" });
+    await repairs.click();
+    await expect(repairs).toHaveAttribute("aria-current", "true");
+  });
+
+  test("the header identity returns to the top", async ({ page }) => {
+    await page.goto("/bytefix");
+
+    await page.locator("aside").getByRole("link", { name: "Repairs" }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "Back to top" }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   });
 });

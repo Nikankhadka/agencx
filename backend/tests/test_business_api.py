@@ -488,9 +488,13 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
     ]
     assert "about" not in body
     assert "reviews" not in body
+    assert "contact" not in body
+    # A fresh signup has no profile yet: facts read None, never empty strings.
+    assert body["business_type"] is None
+    assert body["hours"] is None
+    assert body["services"] == []
     assert body["links"] == {"website": "https://example.com"}
     assert body["has_cover"] is True
-
     image = await client.get(f"/api/public/tenant/{slug}/cover")
     assert image.status_code == 200
     assert image.content == PNG_1PX
@@ -500,6 +504,68 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
     assert "public" in cache_control
     assert "must-revalidate" in cache_control
     assert image.headers["etag"]
+
+
+async def test_storefront_publishes_profile_facts_but_not_contact(
+    client: httpx.AsyncClient,
+) -> None:
+    """M-7: the storefront composition reads business_type, hours, and services
+    from the profile. Contact stays private - publishing it needs its own ticket."""
+    import json
+
+    headers, tenant_id = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set config = jsonb_set(config, '{profile}', $2::jsonb, true) "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps(
+                {
+                    "business_type": "phone repair shop",
+                    "hours": "Mon to Sat 9am to 5pm",
+                    "services": "Screen and battery replacement",
+                    "contact": "0412 345 678",
+                }
+            ),
+        )
+
+    body = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+
+    assert body["business_type"] == "phone repair shop"
+    assert body["hours"] == "Mon to Sat 9am to 5pm"
+    assert body["services"] == ["Screen and battery replacement"]
+    assert "contact" not in body
+
+
+async def test_storefront_publishes_services_as_a_list_with_owner_price_text(
+    client: httpx.AsyncClient,
+) -> None:
+    """20: `services` is the owner's own overview, stored as a list since W-12.
+
+    Reading it with `profile_field` stringified the list onto the page
+    (`"['coffee', 'tea']"`). It is a `list[str]`, and any rough price the owner
+    typed survives verbatim - the profile is an allowed money source because no
+    model produced the figure and nothing sums it (C-1).
+    """
+    import json
+
+    headers, tenant_id = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set config = jsonb_set(config, '{profile}', $2::jsonb, true) "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps({"services": ["coffee, $4-$10", "toasties, about $12"]}),
+        )
+
+    body = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+    assert body["services"] == ["coffee, $4-$10", "toasties, about $12"]
+
+    # The owner's own preview reads the same field, from the same profile.
+    preview = (await client.get("/api/business/page", headers=headers)).json()
+    assert preview["services"] == ["coffee, $4-$10", "toasties, about $12"]
 
 
 async def test_a_priceless_offering_reaches_the_storefront_with_no_price(
@@ -699,6 +765,25 @@ async def test_services_are_owner_editable_as_a_deduplicated_list(
     config = await _config_of(tenant_id)
     assert config["profile"]["services"] == ["Meat", "Desserts"]
     assert config["onboarding"]["draft"]["services"] == ["Meat", "Desserts"]
+
+
+async def test_an_edited_service_keeps_the_owners_own_price_text(
+    client: httpx.AsyncClient,
+) -> None:
+    """20: the overview may carry a rough price in the owner's words. It is
+    stored and returned verbatim - never parsed, rounded, or turned into a
+    catalog row, which is what keeps it clear of the deterministic-pricing
+    rule (only the pricing engine ever computes an amount)."""
+    headers, tenant_id = await _signup(client)
+    saved = await client.patch(
+        "/api/business/profile",
+        json={"services": ["coffee, $4-$10", "toasties, about $12"]},
+        headers=headers,
+    )
+    assert saved.status_code == 200
+    assert saved.json()["services"] == ["coffee, $4-$10", "toasties, about $12"]
+    config = await _config_of(tenant_id)
+    assert config["profile"]["services"] == ["coffee, $4-$10", "toasties, about $12"]
 
 
 async def test_a_cleared_abn_is_the_stated_no(client: httpx.AsyncClient) -> None:

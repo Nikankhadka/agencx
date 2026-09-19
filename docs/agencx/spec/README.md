@@ -31,10 +31,8 @@ Per-ticket header pattern:
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record | `Active - todo` (U part shipped, walkthrough remains) |
+| [active/17-storefront-redesign.md](active/17-storefront-redesign.md) | M-7 storefront redesign: no-image-first base, Uber Eats-style mature state, one persistent chat entry | `Active - awaiting review` (PR #41; founder preview walkthrough remains) |
 | [active/19-intent-and-identity.md](active/19-intent-and-identity.md) | Intent families and actions, escalation-scoped contact capture | `Active - awaiting review` (merged as 5300586, PR #43; founder walkthrough remains) |
-
-M-7 storefront redesign ships on `feat/m7-storefront-redesign`; its ticket
-file `active/17-storefront-redesign.md` lands with that branch.
 
 ## Completed work
 
@@ -50,7 +48,7 @@ review W-11, and auth OTP W-12/W-13 - with the walkthrough evidence logs.
 | Prototype | Status |
 |---|---|
 | [agencx-prototype-v6.html](../design/prototypes/agencx-prototype-v6.html) | Current app reference |
-| `agencx-storefront-customer-v4.html` | Current storefront reference for M-7, lands with `feat/m7-storefront-redesign` |
+| `agencx-storefront-customer-v4.html` | Current storefront reference (M-7: no-image-first base, Uber Eats-style mature state, single header chat entry) |
 | [archived v3 storefront](../../archive/prototypes/agencx-storefront-customer-v3.html) | Interaction vocabulary only |
 
 No v7 prototype exists - the refinement design intent in
