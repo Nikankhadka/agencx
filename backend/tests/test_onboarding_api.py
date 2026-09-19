@@ -823,13 +823,9 @@ async def test_the_knowledge_skip_chip_closes_the_ask_without_a_model_call(
         body = await _send(client, headers, text=step[1])
 
     assert body["stage"] == "knowledge"
-    assert [(c["label"], c["value"]) for c in body["input"]["chips"]] == [
-        ("Skip for now", "skip")
-    ]
+    assert [(c["label"], c["value"]) for c in body["input"]["chips"]] == [("Skip for now", "skip")]
 
-    final = await _send(
-        client, headers, selection={"beat": "knowledge", "values": ["skip"]}
-    )
+    final = await _send(client, headers, selection={"beat": "knowledge", "values": ["skip"]})
     assert final["stage"] == "confirm"
     assert final["can_confirm"] is True
     assert final["history"][-2] == {"role": "user", "content": "Skip for now"}
