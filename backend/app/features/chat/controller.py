@@ -47,6 +47,7 @@ from app.shared.limits import (
     TenantLimits,
     TimeLimitedProvider,
 )
+from app.shared.text import strip_citation_markers
 
 logger = logging.getLogger("app.features.chat.controller")
 
@@ -59,6 +60,35 @@ HISTORY_MESSAGES = 10
 
 def _ms_since(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 1)
+
+
+def _strip_buffered_prose(buffer: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The approved draft as the customer will see it.
+
+    The customer surface never shows citation syntax (see
+    ``app.shared.text.strip_citation_markers``), but the strip cannot run per
+    token event: streaming deltas split a marker like ``[1, <uuid>]`` across
+    events, so only the joined run is a complete string. This is that join,
+    done at the one point where the whole draft and the buffered events exist
+    together, before the flush and before persistence. Consecutive token
+    events collapse into one sanitized event in place; every other event
+    (structured cards, refusals, handoffs) passes through untouched. The
+    graph's own ``draft_response`` deliberately keeps its markers - Inspection
+    and the citation evals read that, never this.
+    """
+    rebuilt: list[dict[str, object]] = []
+    pending: list[str] = []
+    for event in buffer:
+        if event["type"] == "token":
+            pending.append(str(event["text"]))
+            continue
+        if pending:
+            rebuilt.append({"type": "token", "text": strip_citation_markers("".join(pending))})
+            pending = []
+        rebuilt.append(event)
+    if pending:
+        rebuilt.append({"type": "token", "text": strip_citation_markers("".join(pending))})
+    return rebuilt
 
 
 def initial_state(
@@ -310,6 +340,13 @@ async def stream_chat_response(
                                 e["type"] in ("token", "refusal") for e in buffer
                             ):
                                 first_prose_ms = _ms_since(turn_started)
+                            # Sanitize before the flush and before persistence,
+                            # so what the customer reads, what is stored, and
+                            # what the model sees as history are one text.
+                            buffer = _strip_buffered_prose(buffer)
+                            full_text = "".join(
+                                str(e["text"]) for e in buffer if e["type"] in ("token", "refusal")
+                            )
                             for buffered_event in buffer:
                                 yield buffered_event
                             buffer = []
