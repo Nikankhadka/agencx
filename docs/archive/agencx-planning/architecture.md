@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/architecture.md`.
 # Agencx Architecture
 
 The technical ceiling. Invariants, seams, agents, retrieval, evaluation, stack, and decisions that must not be re-litigated.

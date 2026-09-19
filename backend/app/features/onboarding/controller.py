@@ -8,6 +8,8 @@ so extraction cannot desynchronise a beat.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 from collections.abc import AsyncIterator
@@ -27,21 +29,24 @@ from app.onboarding import beats
 from app.onboarding.agent import (
     OnboardingRecord,
     confirm_pending_name,
+    is_affirmative,
     prepare_turn,
     prepare_url_turn,
     progress,
+    propose_name_replacement,
     resume_paused_beat,
     run_turn,
     selection_reply,
     stream_reply,
 )
 from app.onboarding.flow import (
+    FieldCorrection,
     PendingOffering,
     ProfileDraft,
     customer_voice_for,
     merge_offerings,
 )
-from app.onboarding.tools import request_finalize
+from app.onboarding.tools import request_finalize, save_profile
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
 
 logger = logging.getLogger("app.onboarding.controller")
@@ -134,6 +139,9 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         else None,
         "offering_candidates": record_data.get("offering_candidates", []),
         "paused_beat": record.paused_beat,
+        "pending_confirmation": record.pending_name,
+        "skipped": record.skipped,
+        "revision": record.revision,
     }
 
 
@@ -190,7 +198,51 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         ),
         "offering_candidates": onboarding.to_jsonb().get("offering_candidates", []),
         "paused_beat": onboarding.paused_beat,
+        "pending_confirmation": onboarding.pending_name,
+        "skipped": onboarding.skipped,
+        "revision": onboarding.revision,
     }
+
+
+def _fingerprint(kind: str, value: object) -> str:
+    payload = json.dumps([kind, value], sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _already_applied(record: OnboardingRecord, *, key: str | None, fingerprint: str) -> bool:
+    return bool(
+        (key and record.last_action_key == key)
+        or (not key and record.last_action_fingerprint == fingerprint)
+    )
+
+
+def _mark_action(record: OnboardingRecord, *, key: str | None, fingerprint: str) -> None:
+    record.last_action_key = key
+    record.last_action_fingerprint = fingerprint
+
+
+_CONFLICT_DETAIL = "Your setup moved on in another tab. Reload to pick it up there."
+
+
+async def _checkpoint(tenant_id: UUID, record: OnboardingRecord) -> dict[str, Any]:
+    """Persist one checkpoint and carry the new revision back onto the record.
+
+    ``service.save_record`` compare-and-swaps on the stored revision and bumps
+    it on the dict it writes. A turn that saves the same in-memory record twice
+    (every streamed turn does) therefore has to carry that bump back, and doing
+    it by hand at each call site meant one missed line was one 500. The read
+    back from the written dict is the same value the row now holds.
+    """
+    record_data = record.to_jsonb()
+    try:
+        await service.save_record(tenant_id=tenant_id, record=record_data)
+    except service.RevisionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_CONFLICT_DETAIL,
+        ) from exc
+    record.revision = int(record_data["revision"])
+    return record_data
 
 
 def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
@@ -217,11 +269,61 @@ async def load_record_state(*, tenant_id: UUID) -> dict[str, Any]:
     return response
 
 
+async def load_offering_suggestions(*, tenant_id: UUID) -> dict[str, Any]:
+    """Return only private candidates still waiting for owner review."""
+    record = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
+    candidates = [item for item in record.offering_candidates if item.review_status == "pending"]
+    return {"count": len(candidates), "candidates": candidates}
+
+
+async def save_offering_suggestions(
+    *, tenant_id: UUID, candidates: list[PendingOffering], embedder: Embedder
+) -> dict[str, Any]:
+    """Save review decisions and publish newly approved suggestions when live."""
+    record = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
+    existing = {item.candidate_id: item for item in record.offering_candidates}
+    for candidate in candidates:
+        if candidate.candidate_id not in existing:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="suggestion is no longer available",
+            )
+
+    updated: list[PendingOffering] = []
+    submitted = {candidate.candidate_id: candidate for candidate in candidates}
+    for current in record.offering_candidates:
+        replacement = submitted.get(current.candidate_id)
+        if replacement is not None:
+            updated.append(replacement)
+        elif current.review_status == "pending":
+            updated.append(current.model_copy(update={"review_status": "rejected"}))
+        else:
+            updated.append(current)
+    record.offering_candidates = updated
+    await _checkpoint(tenant_id, record)
+
+    if record.completed:
+        await service.publish_reviewed_offerings(
+            tenant_id=tenant_id,
+            offerings=[item for item in candidates if item.review_status == "approved"],
+            embedder=embedder,
+        )
+    return await load_offering_suggestions(tenant_id=tenant_id)
+
+
 async def run_message(
-    *, tenant_id: UUID, text: str, provider: LLMProvider, embedder: Embedder
+    *,
+    tenant_id: UUID,
+    text: str,
+    provider: LLMProvider,
+    embedder: Embedder,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("text", text)
+    if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
+        return onboarding.to_jsonb()
     if onboarding.completed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -232,6 +334,20 @@ async def run_message(
             status_code=status.HTTP_409_CONFLICT,
             detail="finish the paused field before sending another answer",
         )
+    if onboarding.pending_name and is_affirmative(text):
+        bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+        updated, _reply = await run_turn(admin_message=text, record=onboarding, provider=bounded)
+        _mark_action(updated, key=idempotency_key, fingerprint=fingerprint)
+        return await _checkpoint(tenant_id, updated)
+    if onboarding.pending_name:
+        bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+        _accepted, reply = await propose_name_replacement(
+            record=onboarding, value=text, provider=bounded
+        )
+        onboarding.history.append({"role": "user", "content": text})
+        onboarding.history.append({"role": "assistant", "content": reply})
+        _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+        return await _checkpoint(tenant_id, onboarding)
     url = _find_url(text)
     if url is not None:
         return await _run_url_message(
@@ -240,21 +356,31 @@ async def run_message(
             onboarding=onboarding,
             provider=provider,
             embedder=embedder,
+            idempotency_key=idempotency_key,
+            action_fingerprint=fingerprint,
         )
     # ponytail: use the platform default timeout rather than resolving the
     # tenant's per-tenant llm_timeout_s; resolve TenantLimits like
     # features/chat/controller.py if onboarding ever needs per-tenant overrides.
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
     updated, _reply = await run_turn(admin_message=text, record=onboarding, provider=bounded)
-    record_data = updated.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
-    return record_data
+    _mark_action(updated, key=idempotency_key, fingerprint=fingerprint)
+    return await _checkpoint(tenant_id, updated)
 
 
-async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) -> dict[str, Any]:
+async def run_selection(
+    *,
+    tenant_id: UUID,
+    beat_key: str,
+    values: list[str],
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
     """Apply the current beat's fixed answer without an LLM call."""
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("selection", {"beat": beat_key, "values": values})
+    if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
+        return onboarding.to_jsonb()
     if onboarding.completed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -274,6 +400,10 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
         if onboarding.pending_name
         else (current.key if current is not None else "confirm")
     )
+    if stage != beat_key and (
+        beat_key in onboarding.skipped or (beat_key in onboarding.draft and values == ["yes"])
+    ):
+        return onboarding.to_jsonb()
     if stage != beat_key:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -291,6 +421,17 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
             )
         user_message = "Yes"
         ack = f"Saved as {confirm_pending_name(onboarding)}."
+    elif values == ["__skip__"]:
+        beat = beats.BEATS.get(beat_key)
+        if beat is None or not beat.optional:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="that field cannot be skipped",
+            )
+        if beat_key not in onboarding.skipped:
+            onboarding.skipped.append(beat_key)
+        user_message = "Skip for now"
+        ack = "Skipped for now."
     else:
         try:
             user_message = beats.apply_selection(onboarding.draft, beat_key, values)
@@ -303,15 +444,71 @@ async def run_selection(*, tenant_id: UUID, beat_key: str, values: list[str]) ->
     reply = selection_reply(onboarding, ack)
     onboarding.history.append({"role": "user", "content": user_message})
     onboarding.history.append({"role": "assistant", "content": reply})
-    record_data = onboarding.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
-    return record_data
+    _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+    return await _checkpoint(tenant_id, onboarding)
 
 
-async def run_resume(*, tenant_id: UUID) -> dict[str, Any]:
+async def run_correction(
+    *,
+    tenant_id: UUID,
+    correction: FieldCorrection,
+    provider: LLMProvider,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Apply a typed correction without re-running the onboarding extractor."""
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("correction", correction.model_dump())
+    if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
+        return onboarding.to_jsonb()
+    if onboarding.completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="onboarding already confirmed"
+        )
+    target = correction.field
+    value = correction.value.strip()
+    if target == "unresolved_name":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="choose whether this is your name or the business name",
+        )
+    beat = beats.BEATS.get(target)
+    if beat is None or target in {"customer_voice_preset", "customer_voice_custom_style"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="field cannot be corrected",
+        )
+    if beat.valid is not None and not beat.valid(value):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=beat.reject)
+
+    if target in {"owner_display_name", "business_name"}:
+        accepted, reply = await propose_name_replacement(
+            record=onboarding,
+            value=value,
+            provider=TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S),
+            target=target,
+        )
+        if not accepted:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=reply)
+    else:
+        onboarding.draft = save_profile(
+            onboarding.draft, ProfileDraft.model_validate({target: value})
+        )
+        reply = f"Updated {beat.label}."
+
+    onboarding.history.append({"role": "user", "content": correction.raw or correction.value})
+    onboarding.history.append({"role": "assistant", "content": reply})
+    _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+    return await _checkpoint(tenant_id, onboarding)
+
+
+async def run_resume(*, tenant_id: UUID, idempotency_key: str | None = None) -> dict[str, Any]:
     """Resume a required field paused after both interview passes."""
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("resume", True)
+    if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
+        return onboarding.to_jsonb()
     if onboarding.completed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="onboarding already confirmed"
@@ -321,9 +518,8 @@ async def run_resume(*, tenant_id: UUID) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     onboarding.history.append({"role": "assistant", "content": reply})
-    record_data = onboarding.to_jsonb()
-    await service.save_record(tenant_id=tenant_id, record=record_data)
-    return record_data
+    _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+    return await _checkpoint(tenant_id, onboarding)
 
 
 async def _run_url_message(
@@ -333,6 +529,8 @@ async def _run_url_message(
     onboarding: OnboardingRecord,
     provider: LLMProvider,
     embedder: Embedder,
+    idempotency_key: str | None,
+    action_fingerprint: str,
 ) -> dict[str, Any]:
     """Non-streamed URL turn: scrape + ingest, extract, return the read-back
     state. A failed scrape degrades to a calm ask-to-describe."""
@@ -348,19 +546,24 @@ async def _run_url_message(
         logger.info("url scrape failed reason=%s", _url_failure_code(exc))
         onboarding.history.append({"role": "user", "content": url})
         onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
-        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
-        return onboarding.to_jsonb()
+        _mark_action(onboarding, key=idempotency_key, fingerprint=action_fingerprint)
+        return await _checkpoint(tenant_id, onboarding)
 
     if document:
         _merge_document_candidates(onboarding, document.get("offering_candidates", []))
     plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
     plan.record.history.append({"role": "assistant", "content": plan.summary or ""})
-    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
-    return plan.record.to_jsonb()
+    _mark_action(plan.record, key=idempotency_key, fingerprint=action_fingerprint)
+    return await _checkpoint(tenant_id, plan.record)
 
 
 async def run_message_stream(
-    *, tenant_id: UUID, text: str, provider: LLMProvider, embedder: Embedder
+    *,
+    tenant_id: UUID,
+    text: str,
+    provider: LLMProvider,
+    embedder: Embedder,
+    idempotency_key: str | None = None,
 ) -> AsyncIterator[dict[str, object]]:
     """Streams one text turn as SSE-shaped events.
 
@@ -372,6 +575,11 @@ async def run_message_stream(
     """
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("text", text)
+    if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
+        yield _state_event(onboarding)
+        yield {"type": "done"}
+        return
     if onboarding.completed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -382,6 +590,22 @@ async def run_message_stream(
             status_code=status.HTTP_409_CONFLICT,
             detail="finish the paused field before sending another answer",
         )
+    if onboarding.pending_name and not is_affirmative(text):
+        _accepted, reply = await propose_name_replacement(
+            record=onboarding,
+            value=text,
+            provider=TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S),
+        )
+        onboarding.history.append({"role": "user", "content": text})
+        onboarding.history.append({"role": "assistant", "content": reply})
+        _mark_action(onboarding, key=idempotency_key, fingerprint=fingerprint)
+        await _checkpoint(tenant_id, onboarding)
+        yield {"type": "progress", "stage": "processing"}
+        yield {"type": "token", "text": reply}
+        yield {"type": "reply", "text": reply}
+        yield _state_event(onboarding)
+        yield {"type": "done"}
+        return
     url = _find_url(text)
     if url is not None:
         async for event in _stream_url_turn(
@@ -390,13 +614,16 @@ async def run_message_stream(
             onboarding=onboarding,
             provider=provider,
             embedder=embedder,
+            idempotency_key=idempotency_key,
+            action_fingerprint=fingerprint,
         ):
             yield event
         return
     # ponytail: platform default timeout (see run_message above).
     bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
     plan = await prepare_turn(admin_message=text, record=onboarding, provider=bounded)
-    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    _mark_action(plan.record, key=idempotency_key, fingerprint=fingerprint)
+    await _checkpoint(tenant_id, plan.record)
 
     yield {"type": "progress", "stage": "processing"}
 
@@ -412,7 +639,7 @@ async def run_message_stream(
     yield {"type": "reply", "text": full}
 
     plan.record.history.append({"role": "assistant", "content": full})
-    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    await _checkpoint(tenant_id, plan.record)
 
     yield _state_event(plan.record)
     yield {"type": "done"}
@@ -425,6 +652,8 @@ async def _stream_url_turn(
     onboarding: OnboardingRecord,
     provider: LLMProvider,
     embedder: Embedder,
+    idempotency_key: str | None,
+    action_fingerprint: str,
 ) -> AsyncIterator[dict[str, object]]:
     """Streams the site-as-shortcut turn (O-3): scrape + ingest, then extract
     the profile fields from the page and reply with a read-back for the owner
@@ -441,11 +670,12 @@ async def _stream_url_turn(
     except ValueError as exc:
         logger.info("url scrape failed reason=%s", _url_failure_code(exc))
         onboarding.history.append({"role": "user", "content": url})
-        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        _mark_action(onboarding, key=idempotency_key, fingerprint=action_fingerprint)
+        await _checkpoint(tenant_id, onboarding)
         yield {"type": "token", "text": _URL_SCRAPE_FAILED}
         yield {"type": "reply", "text": _URL_SCRAPE_FAILED}
         onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
-        await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        await _checkpoint(tenant_id, onboarding)
         yield _state_event(onboarding)
         yield {"type": "done"}
         return
@@ -453,7 +683,8 @@ async def _stream_url_turn(
     if document:
         _merge_document_candidates(onboarding, document.get("offering_candidates", []))
     plan = await prepare_url_turn(url=url, page_text=page_text, record=onboarding, provider=bounded)
-    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    _mark_action(plan.record, key=idempotency_key, fingerprint=action_fingerprint)
+    await _checkpoint(tenant_id, plan.record)
 
     full = ""
     async for kind, payload in stream_reply(plan=plan, provider=bounded):
@@ -466,7 +697,7 @@ async def _stream_url_turn(
     yield {"type": "reply", "text": full}
 
     plan.record.history.append({"role": "assistant", "content": full})
-    await service.save_record(tenant_id=tenant_id, record=plan.record.to_jsonb())
+    await _checkpoint(tenant_id, plan.record)
 
     yield _state_event(plan.record)
     yield {"type": "done"}
@@ -502,8 +733,10 @@ async def save_onboarding_knowledge(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
 
     onboarding = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
-    onboarding.offering_candidates = offerings
-    await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+    onboarding.offering_candidates = [
+        item.model_copy(update={"review_status": "approved"}) for item in offerings
+    ]
+    await _checkpoint(tenant_id, onboarding)
     return record, offerings
 
 
@@ -622,10 +855,23 @@ async def save_onboarding_knowledge_batch(
         or not set(offering.supporting_document_ids) <= hard_failure_ids
     ]
 
-    onboarding = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
-    onboarding.offering_candidates = offering_candidates
-    await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
-    return published, failed, offering_candidates
+    # Unlike an interview turn, this checkpoint carries nothing computed from the
+    # record it read: the candidates come from the request. A turn that lands
+    # between the read and the write therefore costs nothing but a re-read, so
+    # overlapping batches settle last-writer-wins on the candidate list instead
+    # of telling the owner their setup moved on.
+    approved = [
+        item.model_copy(update={"review_status": "approved"}) for item in offering_candidates
+    ]
+    for _ in range(3):
+        onboarding = OnboardingRecord.from_jsonb(await service.load_record(tenant_id=tenant_id))
+        onboarding.offering_candidates = approved
+        try:
+            await service.save_record(tenant_id=tenant_id, record=onboarding.to_jsonb())
+        except service.RevisionConflictError:
+            continue
+        return published, failed, offering_candidates
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_CONFLICT_DETAIL)
 
 
 async def confirm(
@@ -675,7 +921,9 @@ async def confirm(
             # fact, a price, or an escalation rule.
             customer_voice=customer_voice_for(profile),
             completed_record=onboarding.to_jsonb(),
-            offering_candidates=onboarding.offering_candidates,
+            offering_candidates=[
+                item for item in onboarding.offering_candidates if item.review_status == "approved"
+            ],
             embedder=embedder,
         )
     except service.PublicSlugTakenError as exc:

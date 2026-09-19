@@ -9,15 +9,15 @@ maintained. It is reference material for history, evidence, and provenance.
 | Path | What it was | Where the info lives now |
 |---|---|---|
 | `PROGRESS.md` | Wren ticket tracker (T-001..T-044, phases 0-5) | `docs/agencx/progress.md` carries every ticket forward with BUILT status + commit evidence |
-| `DEMO.md` | Wren demo walkthrough (tenants, credentials, troubleshooting) | Operationally still true while the demo world exists; the rebrand (B-1) and login-in-chat (O-2) will supersede it |
+| `DEMO.md` | Wren demo walkthrough (tenants, credentials, troubleshooting) | Superseded by `docs/agencx/running.md` |
 | `source/` | Frozen Wren planning: `product-requirements.md`, `architecture.md` | `docs/agencx/prd.md` + `docs/agencx/architecture.md` (rewritten) |
 | `agencx-planning/` | The pre-merge Agencx plan: PRD, architecture, design (incl. HTML prototypes), phases 0-5, stage-2 backlog | Rewritten from scratch into the new set; ticket-level detail is re-cut in `docs/agencx/spec/` |
 | `wren-design/` | Wren implementation truth: `database.md`, `frontend.md` | `docs/agencx/design/database.md` + `design/frontend.md` (rewritten) |
 | `plan/agencx-merge.md` | The merge plan that scoped this restructure | Its locked decisions and flow design are the spine of the new set |
-| `artifacts/` | Wren build evidence: eval report, security write-up, generalization proof (+ stray `Untitled` dictation file) | Referenced from `docs/agencx/progress.md`; the evidence still stands |
-| `industry-standard-gap.md` | Point-in-time Agencx industry-standard assessment | The current gap summary is in `docs/agencx/architecture.md` and the build dashboard |
-| `phase1-complete/12-refinement-r1-r2.md` | Completed R-1 and R-2 refinement records | Active refinement work is in `docs/agencx/spec/active/12-refinement.md` |
-| `prototypes/agencx-storefront-customer-v3.html` | Superseded storefront prototype | The current prototype is in `docs/agencx/design/prototypes/` |
+| `artifacts/` | Wren build evidence: eval report, security write-up, generalization proof | Referenced from `docs/agencx/progress.md`; the evidence still stands |
+| `industry-standard-gap.md` | Point-in-time Agencx industry-standard assessment | The current gap summary is in `docs/agencx/architecture.md`; open items in `docs/agencx/spec/active/12-refinement.md` R-5 |
+| `phase1-complete/` | Delivered Phase 1 ticket records ([index](phase1-complete/README.md)): foundation through auth OTP, R-1/R-2, walkthrough evidence | Active work is in `docs/agencx/spec/active/`; status in `docs/agencx/progress.md` |
+| `prototypes/agencx-storefront-customer-v3.html` | Superseded storefront prototype | Current app reference is `docs/agencx/design/prototypes/agencx-prototype-v6.html`; v4 storefront lands with `feat/m7-storefront-redesign` |
 
 ## Retired content notes
 
@@ -26,5 +26,7 @@ maintained. It is reference material for history, evidence, and provenance.
   reworked (crimson identity, monogram mark, Sababa copy, D18 bottom tab bar) on
   2026-08-21; the pre-rework cleaning copy, teal accent, and Hivee emblem here are
   retained for provenance only.
-- `Untitled` is a stray dictation file of the restructure request itself; kept for
-  provenance, it is not documentation.
+- Every file under `source/`, `wren-design/`, `agencx-planning/`, plus
+  `PROGRESS.md`, `DEMO.md`, and `industry-standard-gap.md`, carries a
+  SUPERSEDED banner naming its live replacement. The stray `Untitled`
+  dictation file was deleted 2026-09-18.

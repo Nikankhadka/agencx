@@ -1,6 +1,6 @@
 > **NAVIGATION:** Always binding - this is the one source doc every session obeys in full (root `AGENTS.md` summarizes it).
 
-# WREN - Agent Conventions
+# Agencx - Agent Conventions
  > **Version:** 2.0 | **Applies to:** any AI agent executing work against the Agencx PRD (`docs/agencx/prd.md`) and Architecture Doc (`docs/agencx/architecture.md`).
  > Read this alongside those documents, not instead of them. Where a ticket's acceptance criteria and this document seem to conflict, this document wins on *how* work is done; the PRD/Architecture docs win on *what* is being built.
 
@@ -91,7 +91,7 @@ A change to a working user-facing flow - the onboarding interview script or beat
 
 Whenever end-to-end testing the product (the customer chat surface, the tenant admin console, the platform-owner surface, the escalation flow, the dashboards), be exacting about the UI. If something looks visibly off - misaligned, inconsistent spacing, a broken state, a confusing empty state - fix it along the way even if it isn't related to the current ticket. This applies most directly to E10/E11/E12 (the three surfaces) and the Week 4 polish pass.
 
-Building a screen is a separate discipline from testing one: **UI is ported from the prototype, never designed from ticket text.** Every Phase 1 screen already exists in `docs/agencx/design/prototypes/` (`agencx-prototype-v6.html` is current for the console surfaces; `agencx-storefront-customer-v4.html` is the current storefront, superseding the archived `agencx-storefront-customer-v3.html`, which is good for interaction vocabulary only), and each UI ticket names its exact screen or render function in a "Design reference" section. Read that screen before writing the component and match its structure, states, and interaction vocabulary. Spacing, type, radii, and elevation come from `docs/agencx/design/tokens.md` (D27), which wins where the two disagree - except the tokenized prototype geometry the tokens file names as exceptions. Take behaviour, never strings (prototype copy is demo copy), and never hex values - visual values land as `theme.css` tokens, which CI enforces.
+Building a screen is a separate discipline from testing one: **UI is ported from the prototype, never designed from ticket text.** Every Phase 1 screen already exists in `docs/agencx/design/prototypes/` (`agencx-prototype-v6.html` is current for the console surfaces; `agencx-storefront-customer-v4.html` is the current storefront, superseding the archived `agencx-storefront-customer-v3.html`, which is good for interaction vocabulary only), and each UI ticket names its exact screen or render function in a "Design reference" section. Read that screen before writing the component and match its structure, states, and interaction vocabulary. Spacing, type, radii, and elevation come from `docs/agencx/design/frontend.md` section 4 (D27), which wins where the two disagree - except the tokenized prototype geometry that section names as exceptions. Take behaviour, never strings (prototype copy is demo copy), and never hex values - visual values land as `theme.css` tokens, which CI enforces.
 
 ## 7. Engineering hygiene
 
@@ -111,7 +111,7 @@ If any ticket's implementation would let a model-authored number reach a custome
 
 ## 9. The domain-agnostic invariant (hard rule, never relaxed)
 
-Wren is one codebase serving any business vertical - a dentist, a butcher, a phone repair shop, an online store - through per-tenant configuration and uploaded knowledge alone. This holds at three layers:
+Agencx is one codebase serving any business vertical - a dentist, a butcher, a phone repair shop, an online store - through per-tenant configuration and uploaded knowledge alone. This holds at three layers:
 
 - **Agent layer**: no agent, prompt template, tool, or routing rule ever branches on a vertical name or business type (no `if vertical == "dentist"` or equivalent, anywhere). Behavior differences come from `tenant_config`, `offerings`, `pricing_rules`, and uploaded knowledge, never from code.
 - **Data layer**: schema fields describe generic concepts (services, items, rules, thresholds), never vertical-specific ones. If a field name only makes sense for one vertical, it's modeled wrong - push it into a config/knowledge value instead.
@@ -130,7 +130,7 @@ A single vertical-branch in agent or tool logic invalidates the platform's centr
 
 - Keep open tickets in `docs/agencx/spec/active/`.
 - When every ticket in a phase is complete, move its file to
-  `docs/agencx/spec/completed/` with `git mv`.
+  `docs/archive/phase1-complete/` with `git mv` and index it there.
 - When a ticket ships, update `docs/agencx/progress.md` with its status and
   evidence.
 - When a decision, assessment, or prototype is superseded, preserve it under

@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/architecture.md` (gap summary); open hardening items: `docs/agencx/spec/active/12-refinement.md` R-5.
 # Agencx: Current State vs Industry Standard - Gap Analysis
 
 **Date written:** 2026-08-28

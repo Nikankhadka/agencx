@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/prd.md`.
 > **NAVIGATION:** Frozen source document (v2.0). This file wins on scope questions only. For implementation detail see `docs/design/`, for progress see `docs/PROGRESS.md`. `docs/conventions.md` governs how work gets done.
 
 # WREN - Charter & Product Requirements Document

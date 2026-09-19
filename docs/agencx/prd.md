@@ -18,8 +18,9 @@ in code** (invariant I8): a shawarma restaurant, a cleaner and a dental clinic
 all run the same software; the difference is the data they supply and the
 configuration that shapes the interview that gathers it.
 
-Agencx is the continuation of the shipped Wren build, re-scoped around three
-screens and a lean-by-default toolset. Everything Wren proved - grounded
+Agencx builds on a shipped prior build, re-scoped around three
+screens and a lean-by-default toolset (background in
+[history.md](history.md)). Everything the prior build proved - grounded
 answers, cross-tenant isolation, the deterministic money boundary, the
 generalization proof - carries over; the advanced machinery (quoting,
 recommendations, order lookup, the pricing engine) becomes per-tenant opt-in
@@ -102,7 +103,7 @@ build and prove I8:
 
 A code change required to onboard any tenant is a bug in I8, not a feature
 request. (Proof 2 is delivered: the dental clinic went live on identical code in
-the Wren build; evidence in `docs/archive/artifacts/generalization-proof.md`.)
+the prior build; evidence in `docs/archive/artifacts/generalization-proof.md`.)
 
 ## 5. The two stages
 
@@ -149,7 +150,7 @@ is not planned or ticketed until Stage 1 reports back.
 | S2 | **Business** | tenant app tab 3 | the show-back surface (profile + knowledge), editable - NOT a settings tree |
 | S3 | **Public page** | anonymous | per-tenant slug, share link + QR; the only customer surface in Stage 1 |
 
-The advanced Wren surfaces (conversations with traces, dashboards, escalations
+The advanced surfaces (conversations with traces, dashboards, escalations
 queue, pricing editor) are hidden from the tenant app navigation, not deleted.
 They stay reachable by code and by the platform owner until Stage 2 re-lands
 them with a purpose.
@@ -333,7 +334,7 @@ $10/month (decision D16).
   whether they're talking to a human or an AI is answered honestly - the
   exemption above is about the noun used in routine copy, never a license to
   mislead when asked outright. (Amended 2026-09-06, W-9 - see
-  `spec/completed/13-walkthrough.md` Amendment 3; the original blanket rule
+  `../archive/phase1-complete/13-walkthrough.md` Amendment 3; the original blanket rule
   predates both mandated openings.)
 - Lead with outcomes, not features
 - Plain dash, never the em dash (U+2014)

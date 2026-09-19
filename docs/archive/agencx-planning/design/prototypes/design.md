@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/design/frontend.md`.
 # Agencx Design
 
 Frontend design system and database schema. The build's visual and data specifications.

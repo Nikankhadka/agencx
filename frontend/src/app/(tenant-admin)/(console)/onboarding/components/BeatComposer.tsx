@@ -9,6 +9,7 @@ import { formatAbn } from "@/lib/abn";
 import {
   ACCEPTED_UPLOAD_EXTENSIONS,
   type InputSpec,
+  type PendingConfirmation,
   type WidgetKind,
 } from "@/lib/onboarding";
 
@@ -27,6 +28,7 @@ export interface BeatComposerProps {
    * supplies the value, because only the client has it.
    */
   ownerEmail?: string | null;
+  pendingConfirmation?: PendingConfirmation | null;
 }
 
 /**
@@ -59,13 +61,19 @@ export function BeatComposer({
   onStop,
   onFiles,
   ownerEmail,
+  pendingConfirmation,
 }: BeatComposerProps) {
   const [text, setText] = useState("");
   const [masked, setMasked] = useState("");
+  const [dismissedProposal, setDismissedProposal] = useState<string | null>(null);
   // Which widget a chip has swapped us into, if any. No reset needed on beat
   // change: page.tsx remounts this component on `key={stage}`.
   const [swapped, setSwapped] = useState<WidgetKind | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // The `No` chip prefills the composer and has to put the cursor in it. The
+  // chip row unmounts on that tap while the pill stays mounted, so an autoFocus
+  // prop would never fire - the focus has to be imperative, as in CodeInput.
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   function submitText(value: string) {
     const trimmed = value.trim();
@@ -118,7 +126,7 @@ export function BeatComposer({
           collapse and pop back. min-h-11 (44px) is the same floor Chip.tsx
           gives its own touch target, so an empty row occupies exactly the
           height a full one would. */}
-      {chips.length > 0 ? (
+      {chips.length > 0 && dismissedProposal !== pendingConfirmation?.proposal ? (
         <div className="flex min-h-11 flex-wrap gap-2">
           {busy
             ? null
@@ -131,6 +139,12 @@ export function BeatComposer({
                   disabled={busy}
                   data-testid={`onboarding-chip-${chip.value}`}
                   onClick={() => {
+                    if (chip.value === "no" && pendingConfirmation) {
+                      setDismissedProposal(pendingConfirmation.proposal);
+                      setText(pendingConfirmation.proposal);
+                      composerRef.current?.focus();
+                      return;
+                    }
                     if (!chip.widget) {
                       if (chip.serverOwned) onSelection([chip.value], chip.label);
                       else submitText(chip.label);
@@ -184,6 +198,9 @@ export function BeatComposer({
               busy={busy}
               onStop={onStop}
               onAttach={onFiles ? () => fileRef.current?.click() : undefined}
+              inputRef={(node) => {
+                composerRef.current = node;
+              }}
             />
             {/* The thread has no dropzone - the prototype attaches from inside
                 the pill, so the picker is a hidden input the "+" opens. */}

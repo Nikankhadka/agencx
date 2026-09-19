@@ -80,6 +80,7 @@ async def get_conversation_detail(
     return {
         "id": conversation["id"],
         "customer_ref": conversation["customer_ref"],
+        "customer_email": conversation["customer_email"],
         "channel": conversation["channel"],
         "status": conversation["status"],
         "created_at": conversation["created_at"],

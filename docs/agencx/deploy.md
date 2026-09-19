@@ -16,7 +16,7 @@ replaced by a single Vercel project running two container services.
 | Backend (FastAPI) | Vercel, `backend` container service | $0 |
 | DB + Auth (Postgres + pgvector + GoTrue + RLS) | hosted Supabase | $0 (7-day idle pause) |
 | Chat LLM | Google AI Studio + Groq + OpenRouter | $0 |
-| Embeddings | Google `text-embedding-004` | $0 / credits |
+| Embeddings | Google `gemini-embedding-001` | $0 / credits |
 | Reranker | Cohere | $0 free tier |
 | Storefront media | Cloudinary signed Upload API | free tier during Stage 1 |
 | Login-in-chat email | SMTP relay (Brevo) or `console` | $0 |
@@ -32,7 +32,7 @@ Three decisions shape the rest:
    point a domain at later (B-2).
 2. The production image stays **lean** (no `sentence-transformers`/`torch`), so
    embeddings and reranking are hosted, not local. Embeddings use Google
-   `text-embedding-004` truncated to 384 dims (matches the schema, no
+   `gemini-embedding-001` truncated to 384 dims (matches the schema, no
    re-ingest); reranking uses Cohere.
 3. The product ships on the **auto URL** first (`<project>.vercel.app`).
    Buying `agencx.app` and pointing it at the project is ticket B-2, deferred -
@@ -180,6 +180,18 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
      -e DATABASE_URL='<pooler url>' \
      backend python -m seeds.seed_tenant1_phoneshop
    ```
+
+    To add Sabbaba (slug `sababa`) without touching the other tenants:
+
+    ```bash
+    docker compose run --rm \
+      -e DATABASE_URL='<pooler url>' \
+      backend python -m seeds.seed_sababa
+    ```
+
+    This wipe-and-recreates only the `sababa` slug. Do not run the full
+    `seeds.seed_demo` against the hosted database: it wipes and recreates
+    every demo tenant, which would destroy the live `bytefix` rows.
 5. **Auth dashboard configuration (D23, `design/decisions.md`) - blocking, not
    optional.** Login-in-chat's OTP is issued by GoTrue itself now, not by the
    backend, so this project's Auth settings are the only thing standing between
@@ -328,7 +340,6 @@ LLM_FAILOVER_BASE_URL=https://openrouter.ai/api/v1
 LLM_FAILOVER_API_KEY=<OpenRouter key, optional>
 LLM_FAILOVER_MODEL=google/gemma-4-26b-a4b-it:free
 EMBEDDER=google
-GOOGLE_EMBED_MODEL=text-embedding-004
 EMBEDDING_DIM=384
 RERANKER=cohere
 COHERE_API_KEY=<Cohere key>
@@ -337,7 +348,8 @@ ENVIRONMENT=production
 ```
 
 `GOOGLE_EMBED_MODEL` is not in the list because `config.py` already defaults it
-to `text-embedding-004`; set it only to move off that model.
+to `gemini-embedding-001` (text-embedding-004 is retired and 404s); set it only
+to move off that model.
 
 Every one of these is load-bearing, but a few of them fail in ways that do not
 look like a missing variable, so check them by name after any project rebuild:
@@ -346,7 +358,8 @@ look like a missing variable, so check them by name after any project rebuild:
 `WREN_APP_DB_PASSWORD` (below).
 
 `WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
-database role's password. It is created by migration `0002_roles.sql` at first
+database role's password. (`wren_*` names are standing names kept from the
+prior build - see `history.md`.) It is created by migration `0002_roles.sql` at first
 migrate, and the deployed backend connects as `wren_app` with whatever value
 Vercel hands it. If the two ever disagree, the app answers 500
 (`password authentication failed for user "wren_app"`) while `migrate` itself
@@ -458,33 +471,17 @@ VERCEL_TOKEN=<token scoped to the project's team>
 
 ## What the repo changes deliver
 
-The founder steps above are external. The code that makes them work is B-4
-(`docs/agencx/spec/completed/10-deploy.md`, branch `feat/deploy-containers-cicd`):
+The founder steps above are external. The code that makes them work is B-4;
+the full delivery record is archived in
+[`10-deploy.md`](../../archive/phase1-complete/10-deploy.md) (branch
+`feat/deploy-containers-cicd`). Two of its decisions remain live constraints
+worth stating here:
 
-1. `vercel.json` - the two services and the rewrites that route them. The
-   branch filter lives in the dashboard as the Ignored Build Step, not here -
-   see the warning under Branches.
-2. `frontend/Dockerfile` + `output: "standalone"` in `next.config.ts` - the
-   frontend as a self-contained container.
-3. `backend/Dockerfile` - retargeted off ECS, `PORT`-driven, plus a `test` stage
-   CI runs the suite in.
-4. `backend/app/llm/embedder.py` - a `GoogleEmbedder` (native `embedContent`,
-   `outputDimensionality=384`) and a `'google'` branch in `get_embedder`;
-   `backend/app/shared/config.py` accepts `'google'` and adds
-   `google_embed_model`.
-5. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` narrowed to `localhost`,
+1. `backend/app/main.py` - `_ALLOWED_ORIGIN_REGEX` narrowed to `localhost`,
    because production is same-origin and has no preflight to allow.
-6. `backend/app/features/knowledge/api.py` - the upload cap lowered to 4MB, so
+2. `backend/app/features/knowledge/api.py` - the upload cap lowered to 4MB, so
    an oversized file gets the backend's own 422 rather than the platform's
    opaque 413.
-7. `.github/workflows/` - `ci.yml` gates `staging`/`development` and runs the
-   backend suite in the image's `test` stage; `deploy.yml` drops the AWS build
-   and push entirely and smoke-tests the live origin instead; `keep-warm.yml`
-   pings `/health` and `/login` every 10 minutes so a visitor is unlikely to
-   wake a cold container; `registry-cleanup.yml` prunes old container-registry
-   images so the hobby 50-image cap cannot block deploys (Step 6).
-8. `.env.example` - documents `EMBEDDER=google`, `RERANKER=cohere` and the
-   pooler `DATABASE_URL`.
 
 `ci.yml` remains the gate on every push and PR. `deploy.yml` fires via
 `workflow_run` only after CI is green on `staging`.

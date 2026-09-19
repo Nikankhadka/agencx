@@ -73,7 +73,8 @@ async def get_conversation(
     when the conversation does not belong to this tenant."""
     async with db.tenant_context(tenant_id, role) as conn:
         conversation = await conn.fetchrow(
-            "select id, customer_ref, channel, status, created_at from conversations "
+            "select id, customer_ref, customer_email, channel, status, created_at "
+            "from conversations "
             "where tenant_id = $1 and id = $2",
             tenant_id,
             conversation_id,

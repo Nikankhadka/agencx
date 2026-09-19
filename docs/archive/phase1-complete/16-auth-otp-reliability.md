@@ -1,5 +1,8 @@
 # Phase 16: authentication OTP reliability
 
+**Status:** Done - merged.
+**Phase 1 area:** Auth OTP reliability.
+
 This phase closes two authentication reliability gaps found in the real login
 surface. The product contract remains D23: email verification codes are six
 digits. W-13 corrects configuration drift first, then W-12 makes recovery from

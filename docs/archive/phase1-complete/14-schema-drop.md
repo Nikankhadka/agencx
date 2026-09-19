@@ -1,5 +1,8 @@
 # Phase 14: schema drop (W)
 
+**Status:** Done - merged.
+**Phase 1 area:** Schema drop.
+
 One ticket, and it exists only to finish something W-9 deliberately left
 half-done. W-9 stopped every application code path from reading
 `tenant_config.system_prompt` and `.tone`, backfilled the structured
@@ -48,7 +51,7 @@ reader of the seeds cannot tell which of the two marker copies the injection
 eval actually scores.
 
 Same shape as
-[`0025_schema_cleanup.sql:33`](../../../../backend/migrations/0025_schema_cleanup.sql#L33),
+[`0025_schema_cleanup.sql:33`](../../../backend/migrations/0025_schema_cleanup.sql#L33),
 which dropped `tenant_config.escalation_threshold` after the code that read it
 had already gone.
 
@@ -77,20 +80,20 @@ Do not start until all three hold:
 **Writers to delete.** Each of these is a write with no reader:
 
 - `system_prompt_for`
-  ([flow.py:61](../../../../backend/app/onboarding/flow.py#L61)) - the only
+  ([flow.py:61](../../../backend/app/onboarding/flow.py#L61)) - the only
   producer of the string. Delete the function.
-- [`controller.py:545`](../../../../backend/app/features/onboarding/controller.py#L545)
+- [`controller.py:545`](../../../backend/app/features/onboarding/controller.py#L545)
   computes it on confirm and passes it down. Delete the call and the argument.
 - `apply_confirmation`'s `system_prompt` parameter and the `set system_prompt=$2`
   clause in its update
-  ([service.py:58,84-93](../../../../backend/app/features/onboarding/service.py#L58)).
+  ([service.py:58,84-93](../../../backend/app/features/onboarding/service.py#L58)).
   The `config->profile` and `config->customer_voice` writes in the same
   statement stay exactly as they are, in the same transaction.
 - `seeds/_helpers.py`'s `system_prompt` and `tone` parameters and both insert
   statements that name those columns.
 - `seed_injection_probe.py`'s `SYSTEM_PROMPT` constant. `LEAK_MARKER` stays
   imported from
-  [`app/agents/contract.py`](../../../../backend/app/agents/contract.py), which is
+  [`app/agents/contract.py`](../../../backend/app/agents/contract.py), which is
   where the copy the injection eval scores has lived since W-9.
 
 **Migration `0029_drop_tenant_prompt_columns.sql`.** Two statements, no

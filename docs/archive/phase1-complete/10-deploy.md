@@ -1,6 +1,10 @@
 # Phase 10 - Deployment (B)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Deployment.
+
+Current procedure lives in [deploy.md](../../agencx/deploy.md); this file is the
+delivery record.
 
 Shipping the built product to a URL. Everything before this phase is proven in
 containers on a laptop; this is the phase where the link an owner can hand out

@@ -28,10 +28,10 @@ mechanism, and money as the one thing a model never touches.
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Backend | Python 3.12+ / FastAPI / uv | The proven Wren modules, carried forward; ported, never rewritten (decision 2) |
+| Backend | Python 3.12+ / FastAPI / uv | Proven modules, ported per decision 2 (background in `history.md`) |
 | Database | Postgres + pgvector, Supabase CLI for local dev | RLS is the isolation mechanism of I5 |
 | Orchestration | LangGraph, assistant graph only; onboarding is a plain tool loop | Decision 4 - Stage 2 specialists are nodes on the same graph |
-| Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced) |
+| Frontend | Next.js + TypeScript + Tailwind | One app, three surfaces; tokens in `frontend/src/styles/theme.css` (CI-enforced), rhythm owned by `design/frontend.md` section 4 |
 | Retrieval | Dense (pgvector HNSW) + sparse (Postgres FTS) + RRF (k=60) + cross-encoder rerank | One `retrieve()` behind `get_business_context`; whole-corpus fast path below the token threshold |
 | Identity | Email + 6-digit code issued and verified inside the chat | Decision 6; zero paid dependencies in Stage 1 |
 | Storefront media | Cloudinary signed Upload API | Backend-only credentials; tenant_media stores delivery metadata, not secrets |
@@ -81,8 +81,8 @@ The anonymous public page resolves a tenant before any auth exists:
 
 - Every public URL carries a slug
 - Resolution goes through `resolve_tenant_slug()`: a `SECURITY DEFINER` function
-  owned by `wren_resolver` (the code keeps the Wren role name; see the standing
-  names note in the set README) - the single, audited RLS bypass in the system
+  owned by `wren_resolver` (a standing name kept from the prior build - see
+  `history.md`) - the single, audited RLS bypass in the system
 - Returns only `(id, business_name, status, brand)`, never more
 - Unknown slug: calm 404 ("There's no business here."). Suspended: "This
   assistant is currently unavailable."
@@ -117,9 +117,8 @@ full hybrid pipeline - same code path, different data volume.
 
 The customer-facing flow is a **supervisor with tools** - one model call per
 turn in the common case, not a multi-node route. This is the re-scoped Phase 1
-design (decision D13), and it directly fixes the measured Wren latency problem
-(3-5 serial LLM calls per turn, 37s knowledge turns - see `progress.md` for the
-measurement).
+design (decision D13), and it directly fixes the measured prior-build latency
+problem (3-5 serial LLM calls per turn, 37s knowledge turns).
 
 ```
 customer message
@@ -149,7 +148,7 @@ from 2026-07-28); with one call per turn the buffer's cost is one call, not four
 **Phase 2 (mid-large businesses, >50k corpus + structured commerce):** the same
 supervisor gains the full tool set - search, recommend, quote, order-status,
 escalate - built from the tenant's enabled set (section 8). The shape never
-changes: one call, tools as needed. The specialists Wren built become tool
+changes: one call, tools as needed. The specialists become tool
 implementations, not separate graph nodes.
 
 **Why LangGraph, and why only for the assistant:** the ported agent layer was
@@ -163,10 +162,13 @@ The assistant's available tools are built from `tenant_config.enabled_tools`,
 never a fixed list. The lean default:
 
 - `answer_from_knowledge` (the grounded Q&A path - context package + guardrail)
-- `escalate` (terminal human handoff)
+- `escalate` (non-terminal human handoff - the conversation stays open; only a tenant limit stop is terminal, C-5/D20)
 
 Optional, off by default: recommendations, quoting, order/ticket lookup. The
-pricing engine runs only when quoting is enabled. Enforcement points:
+pricing engine runs only when quoting is enabled. `set_customer_contact` is
+always on regardless of the enabled set: it is bookkeeping for the preferred
+name and email the customer gives at handoff, touches neither retrieval nor
+money, and never changes how an answer is grounded. Enforcement points:
 
 - Agent layer: the tool registry is built from the tenant's enabled set
 - Validation layer: inspection rejects any reply that used a disabled tool
@@ -174,7 +176,7 @@ pricing engine runs only when quoting is enabled. Enforcement points:
 
 ## 9. Context assembly and the agent-ready pre-load
 
-The single biggest latency lever in the measured Wren build was the number of
+The single biggest latency lever in the measured prior build was the number of
 serial LLM calls per turn; the second was the retrieval round-trip before any
 drafting. Phase 1 eliminates both for small corpora:
 
@@ -241,6 +243,8 @@ skipped for the rest of the session.
   exception, deliberately).
 
 ## 11. Agent contracts and the forbidden-output table
+
+Error and stream-failure shapes are owned by `design/api-contract.md`.
 
 | Agent | Job | Forbidden |
 |---|---|---|
@@ -313,12 +317,12 @@ Three families run through the real stack:
 - Indirect-chunk: a poisoned knowledge document whose content is retrieved as
   ground truth
 
-Gate: injection pass rate >= the golden record (Wren's 29/30 = 0.967 as
+Gate: injection pass rate >= the golden record (prior 29/30 = 0.967 as
 reference).
 
-### Wren's measured baselines (precedent, not guarantees)
+### Prior-build measured baselines (precedent, not guarantees)
 
-| Metric | Wren measured | Notes |
+| Metric | Measured | Notes |
 |---|---|---|
 | recall@5 | 1.000 | Deterministic, on a 50-case golden set; single tenant corpus |
 | recall@3 | 0.955 | As above |
@@ -327,7 +331,7 @@ reference).
 | Leakage | 12/12 each direction | Deterministic, both directions, positive controls included |
 | Injection | 0.967 (29/30) | Direct + direct-tool 1.000; the one miss is a documented indirect-chunk canary |
 
-Agencx's own gates are the ones above; the Wren numbers show what the same
+Agencx's own gates are the ones above; the prior numbers show what the same
 machinery measured, including honest failures. Full methodology in
 `docs/archive/artifacts/eval-report.md`.
 
@@ -382,12 +386,13 @@ active refinement work is tracked in
 | Settings tree | Decision 7: the Business tab is the surface for seeing/correcting what the agent knows | If the Business tab fails the trust test in a cohort - logged, not assumed |
 | Multi-call turn flow | Phase 1 is one call per turn with pre-loaded context; the measured 37s turn was 3-5 serial calls | When the corpus exceeds the threshold and the hybrid path needs tools (Phase 2) |
 
-## 15. Port map (from Wren)
+## 15. Port map (from the prior build)
 
-The Wren build already delivers nearly every module below; the Agencx tickets
-in `spec/` adapt, gate, hide, or extend - they do not rebuild.
+The prior build (background in `history.md`) already delivers nearly every
+module below; the Agencx tickets in `spec/` adapt, gate, hide, or extend -
+they do not rebuild.
 
-| Area | Wren module | Agencx treatment |
+| Area | Existing module | Agencx treatment |
 |---|---|---|
 | Tenancy + auth | `app/shared/auth.py`, migrations, `resolve_tenant_slug()`, Supabase | Kept (O-2 adds login-in-chat on the tenant surface) |
 | Onboarding | `app/onboarding/agent.py` (`run_turn` / `TurnDirective`, `extract()` DraftUpdate pattern, completeness gate) | Kept (O-1: one tool to save profile fields + LLM turn loop) |

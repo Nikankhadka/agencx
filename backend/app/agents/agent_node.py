@@ -40,6 +40,8 @@ from pydantic import BaseModel, Field
 from app.agents.contract import contract_prelude
 from app.agents.draft_node import citation_source
 from app.agents.drafting import MONEY_GUIDANCE
+from app.agents.escalation import normalize_email
+from app.agents.intent import ESCALATION_REASONS, as_intent, intent_for_route, intent_for_tools
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
@@ -89,7 +91,13 @@ _TOOL_GUIDANCE = (
     "If the customer asks to speak to a person, call create_escalation straight "
     "away - do not try to talk them out of it. Tell them someone from the "
     "business has been notified, and carry on helping with anything else they "
-    "ask in the meantime."
+    "ask in the meantime.\n"
+    "When the customer gives their name or email, store it with "
+    "set_customer_contact rather than only repeating it back. If you have passed "
+    "their request to the business and they give only a name while asking about an "
+    "order, a quote, or a booking, ask once for their email so the business can "
+    "follow up - a name alone is fine for anything else. Never ask for a phone "
+    "number or any other personal detail."
 )
 
 # The customer bubble renders plain text with citation chips - it does not parse
@@ -139,6 +147,13 @@ def _tool_result(spotlight: Spotlight, payload: dict[str, Any]) -> str:
     return spotlight.wrap(json.dumps(payload))
 
 
+def _clean_contact(value: str | None, *, limit: int) -> str:
+    """One line, no stray whitespace, capped. The value is replayed in prompts."""
+    if not value:
+        return ""
+    return " ".join(value.split())[:limit]
+
+
 class _SearchKnowledgeArgs(BaseModel):
     query: str = Field(description="What to search the knowledge base for")
 
@@ -176,7 +191,13 @@ class _LookupOrderArgs(BaseModel):
 
 
 class _CreateEscalationArgs(BaseModel):
-    reason: str = Field(description="Why this needs human attention")
+    reason: str = Field(
+        description=(
+            "Why this needs human attention. Suggested values: "
+            + ", ".join(ESCALATION_REASONS)
+            + ". Free text is fine."
+        )
+    )
     # C-6: what the owner reads in their Chats list instead of a reason code.
     # Captured in the tool call the model is already making - no extra call,
     # no second prompt pass. Optional so an older/edge model that omits it
@@ -186,6 +207,30 @@ class _CreateEscalationArgs(BaseModel):
         description=(
             "One plain line of what the customer wants, for the business owner "
             "to read - e.g. 'Catering for 20 on Friday, wants a price'"
+        ),
+    )
+    intent: str | None = Field(
+        default=None,
+        description=(
+            "The customer's goal behind this handoff: 'information', 'offer', or "
+            "'support'. Omit if unsure - the handoff still happens either way."
+        ),
+    )
+
+
+class _SetCustomerContactArgs(BaseModel):
+    name: str | None = Field(
+        default=None,
+        description=(
+            "The customer's preferred first name, exactly as they gave it. Only "
+            "store what they actually told you - never guess a name."
+        ),
+    )
+    email: str | None = Field(
+        default=None,
+        description=(
+            "The customer's email address, exactly as they gave it. Only store "
+            "what they actually told you."
         ),
     )
 
@@ -296,19 +341,51 @@ async def _create_escalation_impl(
     conversation_id: UUID,
     reason: str,
     summary: str = "",
+    intent: str | None = None,
 ) -> None:
     # C-5: records the handoff, does not end the conversation. The status flip
     # that used to live here is gone from every agent-side path - see
     # app/agents/escalation.py for why. Only limit escalations still terminate.
     await conn.execute(
-        "insert into escalations (tenant_id, conversation_id, reason, summary) "
-        "values ($1, $2, $3, $4) "
+        "insert into escalations (tenant_id, conversation_id, reason, summary, intent) "
+        "values ($1, $2, $3, $4, $5) "
         "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
         tenant_id,
         conversation_id,
         reason,
         summary or None,
+        as_intent(intent),
     )
+
+
+async def _set_customer_contact_impl(
+    conn: Any,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    name: str | None,
+    email: str | None,
+) -> dict[str, Any]:
+    # One call can set either or both. coalesce keeps whichever half is absent,
+    # so a later correction replaces the old value instead of erasing the other.
+    # An out-of-vocab value can never block anything here: an unusable email
+    # raises a tool error the model can re-ask about, and a name-only call is
+    # always valid.
+    clean_name = _clean_contact(name, limit=80) if name else ""
+    clean_email = normalize_email(email) if email else None
+    if email and clean_email is None:
+        raise ValueError("that email does not look valid - ask the customer to repeat it")
+    if not clean_name and not clean_email:
+        raise ValueError("provide the customer's name or email")
+    await conn.execute(
+        "update conversations set customer_ref = coalesce($3, customer_ref), "
+        "customer_email = coalesce($4, customer_email) "
+        "where id = $1 and tenant_id = $2",
+        conversation_id,
+        tenant_id,
+        clean_name or None,
+        clean_email,
+    )
+    return {"name": clean_name or None, "email": clean_email}
 
 
 def _determine_route(called_tools: set[str], *, has_corpus: bool = False) -> str:
@@ -458,6 +535,16 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
             description="Hand off to someone at the business when you cannot help confidently",
             args_schema=_CreateEscalationArgs,
         ),
+        ToolSpec(
+            name="set_customer_contact",
+            description=(
+                "Remember the customer's preferred first name and email when they "
+                "give them, so the business can follow up. Call only with what the "
+                "customer actually said; never ask for a phone number or any other "
+                "personal detail."
+            ),
+            args_schema=_SetCustomerContactArgs,
+        ),
     ]
     if package.fast_path:
         return tools
@@ -514,11 +601,22 @@ async def run(state: AgentState) -> dict[str, Any]:
     answer_text = ""
     structured_response: dict[str, Any] | None = None
     deterministic_text: str | None = None
+    escalation_intent: str | None = None
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
         # P-3: assembled at chat open and cached by (tenant, knowledge_version),
         # so this is normally a version check, not an assembly.
         package = await get_package(conn, ctx.tenant_id)
+        contact = await conn.fetchrow(
+            "select customer_ref, customer_email from conversations "
+            "where id = $1 and tenant_id = $2",
+            UUID(state["conversation_id"]),
+            ctx.tenant_id,
+        )
+        customer_name = _clean_contact(contact["customer_ref"] if contact else None, limit=80)
+        customer_email = _clean_contact(contact["customer_email"] if contact else None, limit=254)
+        name_known = bool(customer_name)
+        email_known = bool(customer_email)
         # W-5/W-9: state-borne for the same reason as offerings_text below - the
         # draft node re-enters on a redraft with no package of its own, and
         # re-reading the tenant there is the per-turn query this ticket removes.
@@ -528,6 +626,23 @@ async def run(state: AgentState) -> dict[str, Any]:
         followup_context = _structured_followup_context(state["messages"])
         if followup_context:
             system_prompt += "\n\n" + followup_context
+        if name_known or email_known:
+            known: list[str] = []
+            if name_known:
+                known.append(f"The customer's name is {spotlight.wrap(customer_name)}.")
+            if email_known:
+                known.append(f"The customer's email is {spotlight.wrap(customer_email)}.")
+            if name_known and email_known:
+                never_ask = "their name and email"
+            elif name_known:
+                never_ask = "their name"
+            else:
+                never_ask = "their email"
+            system_prompt += (
+                "\n\n"
+                + " ".join(known)
+                + f" Use them naturally when they fit; never ask for {never_ask} again."
+            )
         messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
         tail = state["messages"][-_HISTORY_MESSAGES:]
         for m in tail:
@@ -744,12 +859,14 @@ async def run(state: AgentState) -> dict[str, Any]:
                         )
                     elif call.name == "create_escalation":
                         ce_args = _CreateEscalationArgs.model_validate(call.args)
+                        escalation_intent = ce_args.intent
                         await _create_escalation_impl(
                             conn,
                             ctx.tenant_id,
                             UUID(state["conversation_id"]),
                             ce_args.reason,
                             ce_args.summary,
+                            intent=ce_args.intent,
                         )
                         writer({"type": "handoff"})
                         result_text = _tool_result(
@@ -761,6 +878,32 @@ async def run(state: AgentState) -> dict[str, Any]:
                                 "name": "create_escalation",
                                 "arguments": call.args,
                                 "result": {"escalated": True},
+                                "success": True,
+                                "latency_ms": int((time.perf_counter() - started) * 1000),
+                            }
+                        )
+                    elif call.name == "set_customer_contact":
+                        sc_args = _SetCustomerContactArgs.model_validate(call.args)
+                        stored = await _set_customer_contact_impl(
+                            conn,
+                            ctx.tenant_id,
+                            UUID(state["conversation_id"]),
+                            sc_args.name,
+                            sc_args.email,
+                        )
+                        if stored["name"]:
+                            customer_name = stored["name"]
+                            name_known = True
+                        if stored["email"]:
+                            customer_email = stored["email"]
+                            email_known = True
+                        result_text = _tool_result(spotlight, stored)
+                        writer(
+                            {
+                                "type": "tool_call",
+                                "name": "set_customer_contact",
+                                "arguments": call.args,
+                                "result": {"stored": True},
                                 "success": True,
                                 "latency_ms": int((time.perf_counter() - started) * 1000),
                             }
@@ -828,7 +971,11 @@ async def run(state: AgentState) -> dict[str, Any]:
             ):
                 break
 
-    route = _determine_route(called_tools, has_corpus=bool(package.chunks))
+    # set_customer_contact is bookkeeping, not retrieval or money: it must not
+    # cost the turn its one-call fast path or change how the answer is grounded.
+    routing_tools = called_tools - {"set_customer_contact"}
+    route = _determine_route(routing_tools, has_corpus=bool(package.chunks))
+    contact_state = {"customer_name_known": name_known, "customer_email_known": email_known}
 
     if structured_response is not None or deterministic_text is not None:
         response_text = deterministic_text or (
@@ -849,6 +996,9 @@ async def run(state: AgentState) -> dict[str, Any]:
             "offerings_text": package.offerings_text(),
             "contract": contract,
             "author_node": "agent",
+            "intent": intent_for_route("structured"),
+            "action": "respond",
+            **contact_state,
         }
 
     if route == "escalation":
@@ -856,9 +1006,12 @@ async def run(state: AgentState) -> dict[str, Any]:
             "route": route,
             "escalated": True,
             "escalation_reason": "tool_requested",
+            "intent": as_intent(escalation_intent) or intent_for_tools(routing_tools),
+            "action": "escalate",
+            **contact_state,
         }
 
-    if answer_text and not called_tools:
+    if answer_text and not routing_tools:
         # P-3: the model answered straight from the package, so its prose is the
         # draft and the draft node is skipped - one LLM call for the whole turn.
         #
@@ -908,6 +1061,9 @@ async def run(state: AgentState) -> dict[str, Any]:
             "offerings_text": package.offerings_text(),
             "contract": contract,
             "author_node": "agent",
+            "intent": intent_for_route(route),
+            "action": "respond",
+            **contact_state,
         }
 
     if route == "knowledge" and not retrieved_chunks:
@@ -929,4 +1085,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         "owner_material": package.owner_material(),
         "offerings_text": package.offerings_text(),
         "contract": contract,
+        "intent": intent_for_route(route),
+        "action": "respond",
+        **contact_state,
     }

@@ -1,5 +1,8 @@
 # Phase 15: document review and privacy workflow
 
+**Status:** Done - merged.
+**Phase 1 area:** Document review.
+
 This ticket follows W-9's customer-agent contract work. It gives onboarding
 and Business > Knowledge one retained document-review workspace, reliable
 multi-file processing, safe replacement and retry behavior, partial

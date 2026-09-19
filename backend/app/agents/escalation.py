@@ -28,6 +28,7 @@ from uuid import UUID
 from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
+from app.agents.intent import as_intent
 from app.agents.state import AgentState, GraphContext
 from app.shared import db
 
@@ -35,6 +36,49 @@ from app.shared import db
 # sign-off: "someone will get back to you" reads as the end of a conversation,
 # and after C-5 the conversation is not over.
 HANDOFF_MESSAGE = "I’ve forwarded your query to the business. They can reply to you here."
+
+
+def contact_ask(*, name_known: bool, email_known: bool) -> str:
+    """The one-time ask for escalation contact details.
+
+    One ask covers name and email together; a name-only answer is always
+    accepted. The email is what lets the business follow up on an order,
+    quote, or booking, so a name-only reply to one of those gets one more
+    ask - that is the caller's job, not this helper's.
+    """
+    if name_known and email_known:
+        return ""
+    if name_known:
+        return "Can I get your email so the business can follow up?"
+    if email_known:
+        return "Can I get your name so the business can follow up?"
+    return "Can I get your name and email so the business can follow up?"
+
+
+def handoff_message(*, name_known: bool, email_known: bool) -> str:
+    """The handoff text, plus a contact ask only when something is missing."""
+    ask = contact_ask(name_known=name_known, email_known=email_known)
+    return f"{HANDOFF_MESSAGE} {ask}" if ask else HANDOFF_MESSAGE
+
+
+def normalize_email(value: str | None) -> str | None:
+    """Store what the customer said, or nothing - never a half-parsed address.
+
+    Deliberately lenient (one '@', non-empty sides, no whitespace, <= 254
+    chars): the tool asks again when this returns None, so a false negative
+    costs one question, while a false positive would store garbage the owner
+    cannot use.
+    """
+    if value is None:
+        return None
+    trimmed = value.strip()
+    parts = trimmed.split("@")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    if any(ch.isspace() for ch in trimmed) or len(trimmed) > 254:
+        return None
+    return trimmed
+
 
 _DEFAULT_REASON = "unspecified"
 
@@ -45,6 +89,7 @@ async def run(state: AgentState) -> dict[str, Any]:
     writer = get_stream_writer()
 
     reason = state.get("escalation_reason") or _DEFAULT_REASON
+    intent = as_intent(state.get("intent"))
     conversation_id = UUID(state["conversation_id"])
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
@@ -55,11 +100,13 @@ async def run(state: AgentState) -> dict[str, Any]:
         # nothing to the owner's queue - which is what C-5 wants, since the
         # conversation now continues and may well hand off again.
         await conn.execute(
-            "insert into escalations (tenant_id, conversation_id, reason) values ($1, $2, $3) "
+            "insert into escalations (tenant_id, conversation_id, reason, intent) "
+            "values ($1, $2, $3, $4) "
             "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
             ctx.tenant_id,
             conversation_id,
             reason,
+            intent,
         )
     # A producing node upstream (price_gate on its second violation) may have
     # already streamed and set a handoff message - don't stream a second one.
@@ -67,6 +114,10 @@ async def run(state: AgentState) -> dict[str, Any]:
         writer({"type": "handoff"})
         return {"escalated": True}
 
-    writer({"type": "refusal", "text": HANDOFF_MESSAGE})
+    message = handoff_message(
+        name_known=state.get("customer_name_known", False),
+        email_known=state.get("customer_email_known", False),
+    )
+    writer({"type": "refusal", "text": message})
     writer({"type": "handoff"})
-    return {"escalated": True, "draft_response": HANDOFF_MESSAGE, "author_node": "escalation"}
+    return {"escalated": True, "draft_response": message, "author_node": "escalation"}

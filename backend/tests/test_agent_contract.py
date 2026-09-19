@@ -106,6 +106,21 @@ def test_contract_states_the_contact_channel_rule() -> None:
     ) in contract
 
 
+def test_contract_scopes_contact_capture_to_the_handoff() -> None:
+    """Escalation-scoped contact capture: no phone number or other contact
+    details ever, one ask for name and email at handoff, a name-only answer
+    accepted and never blocking, and the email chased once more only for an
+    order, a quote, or a booking. The deterministic half lives in the
+    set_customer_contact tool; this is the prompt rule that keeps the model
+    from over-asking before a handoff exists."""
+    contract = customer_contract("Bytefix Repairs")
+    assert "Never ask for a phone number or any other contact details." in contract
+    assert "At handoff, ask once for the customer's name and email" in contract
+    assert "A name on its own is accepted and never blocks." in contract
+    assert "an order, a quote, or a booking" in contract
+    assert "ask once more for it so the business can follow up" in contract
+
+
 def test_contract_carries_the_copy_rule_amendment_verbatim() -> None:
     """Amendment 3: "assistant" names the surface, the other four words stay out
     of routine copy, and a direct question is still answered honestly."""

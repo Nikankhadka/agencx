@@ -3,7 +3,9 @@
 The decision ledger: every consequential choice, old and new, with the reason it
 was made. Nothing changes silently. The 11 decisions below were carried from
 the planning phase (reasons condensed); D12 onward are the decisions that shape
-the Agencx build.
+the Agencx build. Background on the pre-Agencx build lives in
+`../history.md`; related reading on conversational input handling is
+`../research/owner-input-and-conversational-agent-architecture.md`.
 
 ## The carried decisions (1-11)
 
@@ -21,7 +23,7 @@ the Agencx build.
 | 10 | Hosting "chosen" (Cloudflare) | **Closed by B-4:** both services are containers in one Vercel project behind one origin. The ECS Terraform stays dormant, still CI-validated, deployed by nothing | The frontend host stayed open until its own phase could decide it; B-4 is that phase, and it closed the backend target too - one provider, one origin, no CORS surface |
 | 11 | Wren copy ported verbatim | Copy rewritten inside the porting ticket, never "later" | Wren surfaces said "AI"/"agent"; user-facing copy never does |
 
-## New decisions (D12-D17)
+## New decisions (D12 onward)
 
 ### D12: Lean-first flow - whole-corpus fast path, hybrid RAG deferred
 
@@ -115,7 +117,7 @@ contract, not from any single provider's SLA.
 ### D17: Rebrand - Agencx name, crimson primary, Plus Jakarta Sans
 
 **Decision:** The product is **Agencx** on every user-facing surface (B-1, B-2).
-The visual identity is the existing Wren Material 3 system with its **crimson
+The visual identity is the existing Material 3 system with its **crimson
 primary** (already the shipped M3 tonal ramps in `frontend/src/styles/theme.css`,
 CI-enforced by `check:tokens`) and **Plus Jakarta Sans** via `next/font` (a
 token-level swap: `--font-sans` re-point, no component changes). The teal accent
@@ -124,11 +126,11 @@ from the Agencx planning design is retired, not carried forward. Copy never says
 amendment of 2026-09-06 took "assistant" off that list and put "virtual" on it,
 because both mandated openings name the assistant as what the surface is).
 
-**Why:** The merge decision locked "AgenCX PRD/design, Wren's Supabase auth +
-crimson primary". The Wren rebrand proved the tokens-only path (a full visual
+**Why:** The merge decision locked "AgenCX PRD/design, Supabase auth +
+crimson primary". The earlier rebrand proved the tokens-only path (a full visual
 rebrand with zero component code changes); reusing it keeps the Agencx look
 consistent with the platform the code already ships. The repo, roles, and env
-names stay `wren` (renaming is churn with no user value - see the set README).
+names stay `wren` (renaming is churn with no user value - see `../history.md`).
 The mobile-first structure does return - see D18.
 
 **Amended by D25 (2026-09-11):** the crimson primary is superseded; the Agencx name and Plus Jakarta Sans stand.
@@ -291,7 +293,7 @@ which the free-tier provider failed into on its first run.
 
 **Consequence for the owner surface:** the escalations queue stops being a
 separate destination - it is the "Action needed" filter on the Chats list, where
-the owner already is. The Wren-era `/escalations` and `/conversations` screens
+the owner already is. The legacy `/escalations` and `/conversations` screens
 stay mounted for E-2 to hide.
 
 ---
@@ -353,7 +355,8 @@ are paths on one origin, not three host patterns:
 | Platform | `admin.agencx.app` | `agencx.app/admin` |
 
 Host resolution is gone, not made configurable: `resolveHost`, `surfaceUrl`,
-`BASE_HOSTS`, the `x-wren-surface`/`x-wren-slug` request headers and
+`BASE_HOSTS`, the retired `x-wren-surface`/`x-wren-slug` request headers (standing
+names, see `../history.md`) and
 `frontend/src/proxy.ts` itself are all deleted. The customer page is a plain
 dynamic segment (`app/[slug]/page.tsx`) that reads `params`.
 
@@ -487,7 +490,7 @@ write path the seed scripts depend on.
 after that session ran out of usage before it could write anything down -
 provenance below). **Status:** `M-1`, `M-2`, `M-3`, and `M-4` built; live
 Cloudinary smoke testing remains credential-dependent - see
-`docs/agencx/spec/completed/11-offerings-media.md`.
+`docs/archive/phase1-complete/11-offerings-media.md`.
 Closes G5.1 in `industry-standard-gap.md`, broadened past that ticket's
 original scope. `FLAG: new external service` (Cloudinary). `FLAG: schema
 change` (`tenant_assets` widens or is replaced).
@@ -782,14 +785,14 @@ its consumers moved to neutral borders. The warning wash is the founder-set
 **Date:** 2026-09-15 (founder ruling, rolled out on
 `feat/design-system-consistency`). **Status:** accepted.
 
-**Decision:** `docs/agencx/design/tokens.md` is the single rhythm authority
+**Decision:** `docs/agencx/design/frontend.md` section 4 is the single rhythm authority
 for spacing, typography, and layout recipes. The allowed spacing steps are
 `0 1 2 3 4 5 6 8 12 16 24` (0/4/8/12/16/20/24/32/48/64/96 px); the page gutter
 is 24px at every breakpoint; there is one uppercase label role (`text-label`
-11/11); page, card, row, and control geometry follow the recipes the tokens
-file gives. Where the v6 prototype and the tokens file disagree, the tokens
-file wins. The prototype's values survive only as the tokenized geometry the
-tokens file names as exceptions (thread gaps, topbar/tabbar/icon/send/code-cell
+11/11); page, card, row, and control geometry follow the recipes that section
+gives. Where the v6 prototype and section 4 disagree, section 4
+wins. The prototype's values survive only as the tokenized geometry that
+section names as exceptions (thread gaps, topbar/tabbar/icon/send/code-cell
 sizes, radii, shadows, safe-area expressions) - anything not on that list is
 not an exception. Plus Jakarta Sans loads 400/500/600/700. The warning pair is
 `#8A5A00` on `#FDF4E3`, set by the founder. `check-tokens.mjs` fails the build
@@ -805,17 +808,80 @@ produced the drift. One scale, one label role, two primitives (`Card`,
 `Container`), and a guard that fails the build is cheaper than a third audit.
 
 **Boundary:** no color, copy, flow, or state changes. The named visual shifts
-are small and listed in `design/tokens.md` so nobody reverts them as drift:
-bubble text 14/20 to 15/21, card padding to 16/24, chats and Wren-era pages
+are small and listed in `design/frontend.md` section 4.8 so nobody reverts them as drift:
+bubble text 14/20 to 15/21, card padding to 16/24, chats and legacy pages
 centered at 1024/640 on desktop, admin gutter 32 to 24, sheet radius 28 to 24,
 tab gap 3 to 4, scroll tails 80 to 64. The v6 prototype file itself is
 untouched - D26's color-only exception stands, and the prototype keeps its
 off-grid values as the record of what was.
 
-**Provenance.** Rolled out on `feat/design-system-consistency`: new
-`design/tokens.md`, `frontend.md` section 4 reduced to a summary with a
-pointer, type tokens renamed and retired with all consumers migrated in the
+**Provenance.** Rolled out on `feat/design-system-consistency` as
+`design/tokens.md` (absorbed into `design/frontend.md` section 4 on
+2026-09-18, one file instead of two): type tokens renamed and retired with all consumers migrated in the
 same commits, `Card` and `Container` primitives added with the duplicated
 recipes migrated onto them, the warning wash re-pointed to `#FDF4E3`, and the
 token guard extended to spacing and type. `docs/agencx/progress.md` records
 the rollout.
+
+## D28: Server checkpoints own resumable onboarding and private suggestions
+
+**Date:** 2026-09-18. **Status:** accepted.
+
+**Decision:** Onboarding writes its accepted draft, skipped beats, pending name
+confirmation, review state, and retry metadata to the tenant's JSON checkpoint.
+Optional offering candidates stay there as private drafts. Go live publishes
+only approved candidates; after go live, the same owner-only suggestion
+boundary is used to review and publish them.
+
+**Why:** A browser-local conversation can be lost or replayed, while a second
+draft system would split authority from the existing knowledge review flow.
+The tenant checkpoint is already the durable seam, and the existing review
+sheet is the right owner interaction for candidate edits. Stable category IDs
+and a compatibility label keep the catalog readable while legacy rows migrate.
+
+**Boundary:** The model may classify or judge plausibility, but it never
+rewrites names or creates monetary values. Category matching is tenant-scoped
+and deterministic; uncertain candidates remain uncategorized or private until
+the owner decides.
+
+## D29: Intent is descriptive metadata, and contact is captured at escalation
+
+**Date:** 2026-09-18. **Status:** accepted.
+
+**Decision:** A customer turn carries one of three intent families
+(`information`, `offer`, `support`) and one of four actions (`respond`,
+`offer_followup`, `escalate`, `handoff`). Escalation is an action, not an
+intent: any family can escalate, and the two are recorded independently. The
+existing inspection extract call classifies both alongside its compliance
+verdicts - no new LLM call and no graph node - and a turn's intent falls back
+to the route mapping when the classifier is silent, while any action other than
+`respond`/`offer_followup` coerces to `respond` because the graph outcome is
+authoritative. Intent is persisted on `escalations.intent` (migration `0032`)
+and on `messages.metadata.intent`/`action`; limit stops are tagged
+`action="handoff"` with no intent because no classifier ran. Contact is
+captured at the point of escalation, not at conversation start: one ask covers
+name and email together, a name-only answer is accepted, the email is chased
+once more only for an order, quote, or booking, no phone number is ever asked
+for, and the escalation row is written first so the ask never gates the
+handoff. The captured name lives in `conversations.customer_ref` and the email
+in `conversations.customer_email` (migration `0033`), which only the owner
+conversation detail and Chats thread read.
+
+**Why:** The intent families and actions name mechanics that already existed -
+the escalation row, the handoff message, the inspection pass. Making them
+explicit gives one shared, code-pinned vocabulary for the assistant, the owner
+surfaces, and future evaluation without adding a classifier call or a graph
+node, and it keeps a missing or unknown value from ever blocking a turn.
+Identity is captured where the business actually needs it: at the handoff that
+requires a follow-up, with no opening-phase friction and no field the owner
+cannot act on. The earlier name-only stance was about not collecting contact
+during the opening flow; escalation-scoped capture supersedes it by design
+rather than by accident.
+
+**Boundary:** Intent never triggers an escalation and never touches money -
+nothing routes or gates on a family or an action, and only a tenant limit stop
+is terminal (C-5/D20). No code branches on a business vertical; intent is
+derived from the route, the tools, or the classifier, never from the industry.
+The email is owner-visible only and never appears on the public customer
+surface, and a missing email is never a reason to withhold an answer or a
+handoff.

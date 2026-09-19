@@ -18,6 +18,41 @@ interface Offering {
   media?: { url: string } | null;
 }
 
+interface OfferingCategory {
+  id: string;
+  name: string;
+  normalized_key: string;
+}
+
+interface OfferingGroup {
+  label: string;
+  /** The category row behind the label, when one owns it. A legacy label that
+   *  no category row matches still groups, it just cannot be renamed. */
+  category: OfferingCategory | null;
+  offerings: Offering[];
+}
+
+function groupOfferings(offerings: Offering[], categories: OfferingCategory[]): OfferingGroup[] {
+  const groups = new Map<string, Offering[]>();
+  for (const offering of offerings) {
+    const label = offering.category?.trim() || UNCATEGORIZED;
+    groups.set(label, [...(groups.get(label) ?? []), offering]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => {
+      if (left === UNCATEGORIZED) return 1;
+      if (right === UNCATEGORIZED) return -1;
+      return left.localeCompare(right);
+    })
+    .map(([label, items]) => ({
+      label,
+      category: categories.find((category) => category.name === label) ?? null,
+      offerings: items.sort((left, right) => left.name.localeCompare(right.name)),
+    }));
+}
+
+const UNCATEGORIZED = "Uncategorized";
+
 interface FormValues {
   name: string;
   description: string;
@@ -58,7 +93,10 @@ function formFor(offering: Offering): FormValues {
 
 export function OfferingsList() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
+  const [categories, setCategories] = useState<OfferingCategory[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [categoryEditing, setCategoryEditing] = useState<string | null>(null);
+  const [categoryDraft, setCategoryDraft] = useState("");
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -67,10 +105,16 @@ export function OfferingsList() {
   // the owner already closed.
   const [loadError, setLoadError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const groups = groupOfferings(offerings, categories);
 
   async function load() {
     try {
-      setOfferings(await apiFetch<Offering[]>("/api/business/offerings"));
+      const [nextOfferings, nextCategories] = await Promise.all([
+        apiFetch<Offering[]>("/api/business/offerings"),
+        apiFetch<OfferingCategory[]>("/api/business/offering-categories"),
+      ]);
+      setOfferings(nextOfferings);
+      setCategories(nextCategories);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.detail : "Couldn't load what you offer.");
@@ -82,9 +126,13 @@ export function OfferingsList() {
   // rejects it. Written as a visible callback, the rule is satisfied and the
   // behaviour is identical. `load()` stays for the mutation handlers below.
   useEffect(() => {
-    apiFetch<Offering[]>("/api/business/offerings")
-      .then((rows) => {
+    Promise.all([
+      apiFetch<Offering[]>("/api/business/offerings"),
+      apiFetch<OfferingCategory[]>("/api/business/offering-categories"),
+    ])
+      .then(([rows, nextCategories]) => {
         setOfferings(rows);
+        setCategories(nextCategories);
         setLoadError(null);
       })
       .catch((err) =>
@@ -108,6 +156,52 @@ export function OfferingsList() {
 
   function close() {
     if (!working) setEditing(null);
+  }
+
+  function beginCategory(category: OfferingCategory) {
+    setCategoryEditing(category.id);
+    setCategoryDraft(category.name);
+  }
+
+  async function saveCategory(category: OfferingCategory) {
+    const name = categoryDraft.trim();
+    if (!name || working) return;
+    setWorking(true);
+    try {
+      await apiFetch(`/api/business/offering-categories/${category.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      setCategoryEditing(null);
+      await load();
+      toast.success("Category renamed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.detail : "Couldn't rename that category.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function removeCategory(category: OfferingCategory) {
+    if (working) return;
+    await confirm({
+      title: `Delete ${category.name}?`,
+      description: "Its offerings will move to Uncategorized.",
+      confirmLabel: "Delete category",
+      tone: "danger",
+      onConfirm: async () => {
+        setWorking(true);
+        try {
+          await apiFetch(`/api/business/offering-categories/${category.id}`, { method: "DELETE" });
+          await load();
+          toast.success("Category deleted");
+        } catch (err) {
+          toast.error(err instanceof ApiError ? err.detail : "Couldn't delete that category.");
+        } finally {
+          setWorking(false);
+        }
+      },
+    });
   }
 
   async function save() {
@@ -212,45 +306,94 @@ export function OfferingsList() {
       </div>
 
       {offerings.length > 0 ? (
-        <ul className="mt-3 divide-y divide-hairline" data-testid="offerings-list">
-          {offerings.map((offering) => (
-            <li key={offering.id} className="flex items-center gap-3 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-card-hl font-medium text-text">{offering.name}</span>
-                {offering.description ? (
-                  <span className="mt-1 block truncate text-meta text-ink-a40">
-                    {offering.description}
-                  </span>
+        <div className="mt-3" data-testid="offerings-list">
+          {groups.map((group) => {
+            const category = group.category;
+            return (
+              <section key={group.label} className="mb-5 last:mb-0" aria-labelledby={`offerings-${group.label}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 id={`offerings-${group.label}`} className="text-label font-medium uppercase text-ink-a40">
+                    {group.label}
+                  </h3>
+                  {category ? (
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => beginCategory(category)}
+                        className="text-action text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void removeCategory(category)}
+                        className="text-action text-ink-a40 transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {category && category.id === categoryEditing ? (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      autoFocus
+                      value={categoryDraft}
+                      onChange={(event) => setCategoryDraft(event.target.value)}
+                      aria-label={`Rename ${group.label}`}
+                      className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text"
+                    />
+                    <Button size="sm" loading={working} onClick={() => void saveCategory(category)}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setCategoryEditing(null)}>
+                      Cancel
+                    </Button>
+                  </div>
                 ) : null}
-                {offering.price_cents !== null ? (
-                  <span className="mt-1 block text-meta text-ink-a40">
-                    ${(offering.price_cents / 100).toFixed(2)}
-                  </span>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                onClick={() => begin(offering)}
-                disabled={working}
-                aria-label={`Edit ${offering.name}`}
-                data-testid="offering-edit"
-                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-              >
-                <Icon name="edit" size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove(offering)}
-                disabled={working}
-                aria-label={`Remove ${offering.name}`}
-                data-testid="offering-remove"
-                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-              >
-                <Icon name="delete" size={18} />
-              </button>
-            </li>
-          ))}
-        </ul>
+                <ul className="mt-1 divide-y divide-hairline">
+                  {group.offerings.map((offering) => (
+                    <li key={offering.id} className="flex items-center gap-3 py-3">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-card-hl font-medium text-text">{offering.name}</span>
+                        {offering.description ? (
+                          <span className="mt-1 block truncate text-meta text-ink-a40">
+                            {offering.description}
+                          </span>
+                        ) : null}
+                        {offering.price_cents !== null ? (
+                          <span className="mt-1 block text-meta text-ink-a40">
+                            ${(offering.price_cents / 100).toFixed(2)}
+                          </span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => begin(offering)}
+                        disabled={working}
+                        aria-label={`Edit ${offering.name}`}
+                        data-testid="offering-edit"
+                        className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                      >
+                        <Icon name="edit" size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void remove(offering)}
+                        disabled={working}
+                        aria-label={`Remove ${offering.name}`}
+                        data-testid="offering-remove"
+                        className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                      >
+                        <Icon name="delete" size={18} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       ) : editing === null ? (
         <p className="mt-3 text-prose text-ink-a40">Nothing added yet.</p>
       ) : null}

@@ -34,7 +34,7 @@ checked without writing with `npm run gen:types -- --check`.
 
 ## Knowledge review contract (Phase 13, W-8)
 
-The Phase 13 refinements (`spec/completed/13-walkthrough.md`, amended 2026-09-05)
+The Phase 13 refinements (`../../archive/phase1-complete/13-walkthrough.md`, amended 2026-09-05)
 define the contract used by onboarding and later knowledge review.
 
 - **Draft offering identity, description, provenance, and source references.**
@@ -64,6 +64,36 @@ define the contract used by onboarding and later knowledge review.
   boundaries.** A turn that corrects previously captured fields is expressed
   through the existing onboarding message/update shapes; no new correction
   endpoint is planned (W-9).
+
+## Resumable owner input and normalized offerings
+
+The onboarding record is the authoritative private checkpoint. Every accepted
+message, fixed selection, skip, pending name confirmation, and offering review
+decision is written to `tenant_config.config->onboarding` before the response
+returns. `revision`, `last_action_key`, and `last_action_fingerprint` make a
+retry converge on the same checkpoint instead of advancing twice.
+
+- `POST /api/onboarding/message` accepts exactly one of `text`, `selection`,
+  `resume`, typed `correction`, or `skip`. Optional beats expose a `Skip for
+  now` chip and persist the skipped key.
+- Name proposals expose `pending_confirmation`. `Yes` commits the exact
+  proposal; `No` is a client-only edit affordance; a replacement is shape
+  checked and then receives a constrained plausibility verdict without being
+  rewritten.
+- Profile `services` is a normalized `string[]`, with a compatibility reader
+  for legacy strings. `PendingOffering` retains source wording, proposed
+  category, description origin, review status, and provenance.
+- `GET /api/onboarding/suggestions` returns only pending private candidates.
+  `PUT /api/onboarding/suggestions` stores owner review decisions and publishes
+  approved candidates immediately for an already-live tenant.
+- `offering_categories` is tenant-scoped and RLS protected. Offerings carry a
+  nullable `category_id` while retaining the category label for compatibility;
+  public and retrieval projections use the category label resolved from the
+  tenant category.
+
+Unapproved candidates never enter `offerings`, the storefront, or customer
+context. Go live publishes only approved candidates; optional unreviewed drafts
+remain private and can be opened later from Home or What you offer.
 
 No unrelated API redesign, new relational entities, or full pricing schema is
 planned; the broader R-3 schema audit stays separate.

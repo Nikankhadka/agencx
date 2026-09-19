@@ -1,3 +1,4 @@
+> **SUPERSEDED - frozen archive, do not cite as current.** live version: `docs/agencx/design/database.md`.
 # WREN - Database Design
 
 > The implementation truth for schema shape. Supabase Postgres 15+ with `pgvector`. SQL below is meant to be pasted into migrations nearly verbatim.

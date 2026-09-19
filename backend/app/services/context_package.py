@@ -41,6 +41,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from app.onboarding.flow import read_services
 from app.retrieval.types import RetrievedChunk
 from app.services.knowledge_version import knowledge_version
 from app.services.retrieval import corpus_chars, fits_fast_path, whole_corpus
@@ -75,7 +76,7 @@ _PROFILE_LABELS: tuple[tuple[str, str], ...] = (
 # lives in ``app/agents/contract.py``, which this module may not import (the
 # import contracts in backend/pyproject.toml forbid app.services -> app.agents),
 # so the size is pinned here and held to it by a test in test_agent_contract.py.
-_CONTRACT_OVERHEAD_CHARS = 4000
+_CONTRACT_OVERHEAD_CHARS = 4400
 
 
 @dataclass(frozen=True)
@@ -145,9 +146,11 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     business_name = str(profile.get("business_name") or "").strip()
     voice = voice_from_config(config)
     offering_rows = await conn.fetch(
-        "select id, name, description, category, price_cents from offerings "
-        "where tenant_id = $1 and active "
-        "order by position, created_at, id",
+        "select o.id, o.name, o.description, coalesce(c.name, o.category) as category, "
+        "o.price_cents from offerings o left join offering_categories c "
+        "on c.tenant_id=o.tenant_id and c.id=o.category_id "
+        "where o.tenant_id = $1 and o.active "
+        "order by o.position, o.created_at, o.id",
         tenant_id,
     )
     offerings = [
@@ -196,10 +199,12 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
 
 
 def _profile_text(profile: dict[str, Any]) -> str:
+    values = dict(profile)
+    values["services"] = ", ".join(read_services(values.get("services", [])))
     lines = [
-        f"- {label}: {profile[key]}"
+        f"- {label}: {values[key]}"
         for key, label in _PROFILE_LABELS
-        if str(profile.get(key) or "").strip()
+        if str(values.get(key) or "").strip()
     ]
     return "\n".join(lines)
 

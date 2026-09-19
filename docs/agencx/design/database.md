@@ -168,7 +168,7 @@ create table tenant_config (
 it sounds is the structured `config->customer_voice`
 (`{"preset": ..., "custom_style": ...}`) that migration `0027` back-filled from
 `tone` before `0029` removed it
-(`docs/agencx/spec/completed/14-schema-drop.md`).
+(`docs/archive/phase1-complete/14-schema-drop.md`).
 
 **CHANGING (D-1, D-2):** `enabled_tools` defaults to the full advanced set today
 (`["search_knowledge","recommend_items","lookup_order_or_ticket","get_quote_inputs","create_escalation"]`).
@@ -217,7 +217,7 @@ small image per tenant, capped at 2MB by the API and resized client-side
 before upload, fits a row fine and needs no new dependency or credential in
 local dev (there was no object store available to every surface at the time).
 `kind` is hard-CHECK-constrained to `'cover'` only, so this table cannot hold
-a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/agencx/spec/completed/11-offerings-media.md`),
+a gallery as-is - **the upgrade path is D24/`M-2`** (`docs/archive/phase1-complete/11-offerings-media.md`),
 which moves business media (a capped gallery + per-offering photos) to
 Cloudinary and either widens or replaces this table.
 
@@ -328,6 +328,17 @@ deleted offering no longer has an `updated_at` value for this formula to read.
 ## 5. Commerce (the deterministic-pricing tables; per-tenant optional in Agencx)
 
 ```sql
+create table offering_categories (
+  id              uuid primary key default gen_random_uuid(),
+  tenant_id       uuid not null references tenants(id) on delete cascade,
+  name            text not null check (length(trim(name)) > 0),
+  normalized_key  text not null,                          -- normalize_name: casefolded, punctuation to space, collapsed
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  unique (tenant_id, id),                                 -- the composite target offerings points at
+  unique (tenant_id, normalized_key)
+);
+
 create table offerings (
   id           uuid primary key default gen_random_uuid(),
   tenant_id    uuid not null references tenants(id) on delete cascade,
@@ -336,8 +347,12 @@ create table offerings (
   price_cents  integer check (price_cents is null or price_cents >= 0),  -- null = priced via a rule
   active       boolean not null default true,             -- false = retired, never deleted
   position     integer not null default 0,               -- M-4: the owner's storefront order
+  category     text,                                     -- 0025 label, legacy; read-only compatibility
+  category_id  uuid,                                     -- 0031: the durable identity new writes use
   created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  updated_at   timestamptz not null default now(),
+  foreign key (tenant_id, category_id)
+    references offering_categories (tenant_id, id) on delete set null
 );
 create index offerings_storefront_order on offerings (tenant_id, active, position, created_at);
 
@@ -369,6 +384,12 @@ create table quotes (
 );
 ```
 
+A category is a row the owner renames once, not a label repeated on every
+offering (D28). The foreign key is composite - `(tenant_id, category_id)` -
+so a category can never be borrowed across tenants even if an id leaks, and
+`on delete set null` is what "uncategorized" means: deleting a category keeps
+its offerings.
+
 All Shape A. **Only the pricing engine writes `quotes`** - it computes
 `line_items/subtotal/tax/total`; no other code path constructs those values. In
 Agencx these tables exist but are dormant for lean tenants (D-1): the engine
@@ -381,7 +402,8 @@ enabled set.
 create table conversations (
   id            uuid primary key default gen_random_uuid(),
   tenant_id     uuid not null references tenants(id) on delete cascade,
-  customer_ref  text,                                   -- anonymous session id or handle; no auth at core scope
+  customer_ref  text,                                   -- anonymous session id, or the preferred name captured at handoff
+  customer_email text,                                  -- 0033: captured at handoff (escalation-scoped); owner-only, never on the public surface
   channel       text not null default 'web' check (channel in ('web')),
   status        text not null default 'open' check (status in ('open', 'escalated', 'closed')),
   created_at    timestamptz not null default now(),
@@ -433,6 +455,8 @@ create table escalations (
   conversation_id  uuid not null,
   foreign key (tenant_id, conversation_id) references conversations (tenant_id, id) on delete cascade,
   reason           text not null,
+  -- 0032: descriptive metadata only (information/offer/support); never a gate
+  intent           text check (intent is null or intent in ('information', 'offer', 'support')),
   status           text not null default 'open' check (status in ('open', 'claimed', 'resolved')),
   created_at       timestamptz not null default now(),
   resolved_at      timestamptz
@@ -522,10 +546,13 @@ applied in order by a plain runner (no heavy framework):
 0028_document_failure_metadata.sql  documents failure_stage, failure_retryable, failed_at (W-11a)
 0029_drop_tenant_prompt_columns.sql  drops the retired tenant_config.system_prompt and tone (W-10)
 0030_document_failure_metadata_check.sql  keeps failure metadata null on non-failed rows, legacy-safe (W-11a correction)
+0031_offering_categories.sql  offering_categories + offerings.category_id, backfilled from the legacy label (D28)
+0032_escalation_intent.sql  escalations.intent - descriptive information/offer/support family; never a gate (ticket 19)
+0033_conversations_customer_email.sql  conversations.customer_email captured at escalation; owner-only, never on the public surface (ticket 19)
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,
-`docs/agencx/spec/completed/11-offerings-media.md`, D24) adds `tenant_media` for the
+`docs/archive/phase1-complete/11-offerings-media.md`, D24) adds `tenant_media` for the
 Cloudinary-backed cover and per-offering visuals while retaining legacy
 `tenant_assets` reads during rollout.
 

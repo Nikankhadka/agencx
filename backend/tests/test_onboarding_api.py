@@ -8,6 +8,7 @@ server selection path.
 
 from __future__ import annotations
 
+import copy
 import json
 import time
 import uuid
@@ -147,6 +148,26 @@ class _NameFake(BaseFakeProvider):
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         yield "Noted."
+
+
+class _CountingFake(OnboardingFakeProvider):
+    """Records every model call, so a path that claims to make none can prove it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        self.calls += 1
+        return await super().extract(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        self.calls += 1
+        return await super().chat(messages)
 
 
 class OffTopicFakeProvider(BaseFakeProvider):
@@ -341,8 +362,14 @@ async def test_paused_required_field_blocks_publish_and_resumes_in_place(
         "In a few words, what kind of business is it?"
     )
 
+    # A second tap on Resume is the same action again, so it replays: the owner
+    # gets the state the first one produced instead of a conflict about a pause
+    # that is already over, and the beat is not asked twice.
     duplicate = await client.post("/api/onboarding/message", json={"resume": True}, headers=headers)
-    assert duplicate.status_code == 409
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["history"] == resumed["history"]
+    assert duplicate.json()["stage"] == "business_type"
+    assert duplicate.json()["paused_beat"] is None
 
 
 async def test_every_beat_still_accepts_typed_text(client: httpx.AsyncClient) -> None:
@@ -374,13 +401,11 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
 
     states = await _walk_states(client, headers)
 
-    assert labels(states["headcount"]) == ["Just me", "Got a team"]
+    assert labels(states["headcount"]) == ["Just me", "Got a team", "Skip for now"]
     # A chipped beat invites typing past the chips, never blocks it.
     assert states["headcount"]["input"]["placeholder"] == "or type…"
 
-    # W-7: the skip chip is gone; the beat resolves on its own after two asks,
-    # and the catalog is editable later at Business > What you offer.
-    assert labels(states["services"]) == []
+    assert labels(states["services"]) == ["Skip for now"]
     # W-3: a non-chipped beat's placeholder is blank - the assistant's question
     # already in the thread is the context carrier, not a repeated placeholder.
     assert states["services"]["input"]["placeholder"] == ""
@@ -393,6 +418,7 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
         "Clear and professional",
         "Direct and concise",
         "Describe it myself",
+        "Skip for now",
     ]
     assert voice["input"]["chips"][3]["widget"] == "text"
 
@@ -402,15 +428,13 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     assert states["contact"]["input"]["chips"][0]["widget"] == "phone"
     assert states["contact"]["input"]["suggest_owner_email"] is True
 
-    assert labels(states["abn"]) == ["Yes", "No"]
+    assert labels(states["abn"]) == ["Yes", "No", "Skip for now"]
     assert states["abn"]["input"]["chips"][0]["widget"] == "masked"
     assert states["abn"]["input"]["mask"] == "XX XXX XXX XXX"
     assert states["abn"]["input"]["prefix"] == "ABN"
 
-    assert labels(states["gst"]) == ["Yes", "Not yet"]
-    # W-9 US-1: while a name waits on its yes, the beat's own composer carries
-    # the confirmation chip - one tap, and typing past it is a new proposal.
-    assert labels(states["owner_display_name"]) == ["Yes"]
+    assert labels(states["gst"]) == ["Yes", "Not yet", "Skip for now"]
+    assert labels(states["owner_display_name"]) == ["Yes", "No"]
 
 
 async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClient) -> None:
@@ -432,7 +456,8 @@ async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClien
     resumed = await client.get("/api/onboarding/state", headers=headers)
     assert resumed.json()["stage"] == "owner_display_name"
     assert resumed.json()["input"]["chips"] == [
-        {"label": "Yes", "value": "yes", "dashed": False, "widget": None}
+        {"label": "Yes", "value": "yes", "dashed": False, "widget": None},
+        {"label": "No", "value": "no", "dashed": False, "widget": None},
     ]
 
     confirmed = await _send(client, headers, text="yes")
@@ -645,6 +670,103 @@ async def test_message_requires_exactly_one_of_text_or_selection(
     assert neither.status_code == 422
 
 
+async def test_a_replayed_idempotency_key_leaves_the_checkpoint_untouched(
+    client: httpx.AsyncClient,
+) -> None:
+    """A retried turn is the same turn: a dropped response or a reconnect must
+    not answer the beat twice."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {"text": "I'm Sam", "idempotency_key": "turn-1"}
+
+    first = await client.post("/api/onboarding/message", json=payload, headers=headers)
+    assert first.status_code == 200
+    replay = await client.post("/api/onboarding/message", json=payload, headers=headers)
+    assert replay.status_code == 200
+
+    assert replay.json() == first.json()
+    # The replay is not a second write: the stored revision has not moved.
+    state = await client.get("/api/onboarding/state", headers=headers)
+    assert state.json()["revision"] == first.json()["revision"]
+
+
+async def test_a_stale_checkpoint_is_a_conflict_not_a_crash(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two tabs, one tenant: the second write to land on an already-moved
+    revision is told to reload, not handed a 500."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _send(client, headers, text="I'm Sam")
+
+    stale = await onboarding_service.load_record(tenant_id=tenant_id)
+    snapshot: dict[str, Any] = copy.deepcopy(stale)
+    # The other tab checkpoints first, moving the stored revision past `stale`.
+    await onboarding_service.save_record(tenant_id=tenant_id, record=stale)
+
+    async def _load_stale(*, tenant_id: uuid.UUID) -> dict[str, Any]:
+        return copy.deepcopy(snapshot)
+
+    monkeypatch.setattr(onboarding_service, "load_record", _load_stale)
+    conflict = await client.post("/api/onboarding/message", json={"text": "yes"}, headers=headers)
+    assert conflict.status_code == 409
+    assert "another tab" in conflict.json()["detail"].casefold()
+
+
+async def test_a_required_beat_cannot_be_skipped(client: httpx.AsyncClient) -> None:
+    """`Skip for now` is offered only on optional beats; the server is what
+    enforces that, not the chip the client happened to render."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_until(client, headers, "business_name")
+
+    refused = await client.post(
+        "/api/onboarding/message",
+        json={"skip": {"beat": "business_name"}},
+        headers=headers,
+    )
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == "that field cannot be skipped"
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    assert state.json()["stage"] == "business_name"
+    assert state.json()["skipped"] == []
+
+
+async def test_a_typed_correction_updates_one_field_without_extraction(
+    client: httpx.AsyncClient,
+) -> None:
+    """W-9 US-3: the owner said which field they meant, so there is nothing for
+    the extractor to work out - and nothing else in the draft moves."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    before = await _walk_until(client, headers, "services")
+    assert before["draft"]["hours"] == "Mon-Fri 9-6"
+
+    counting = _CountingFake()
+    app.dependency_overrides[get_llm_provider] = lambda: counting
+    corrected = await client.post(
+        "/api/onboarding/message",
+        json={
+            "correction": {
+                "field": "hours",
+                "value": "Tue-Sat 10-4",
+                "raw": "actually we open Tue to Sat, 10 to 4",
+            }
+        },
+        headers=headers,
+    )
+    assert corrected.status_code == 200
+    assert counting.calls == 0
+
+    draft = corrected.json()["draft"]
+    assert draft["hours"] == "Tue-Sat 10-4"
+    assert {key: value for key, value in draft.items() if key != "hours"} == {
+        key: value for key, value in before["draft"].items() if key != "hours"
+    }
+    assert corrected.json()["history"][-1]["content"] == "Updated opening hours."
+
+
 async def test_knowledge_ask_then_skip_advances_to_confirm(
     client: httpx.AsyncClient,
 ) -> None:
@@ -702,7 +824,7 @@ async def test_full_flow_confirm_writes_profile(
         "business_type": "a neighborhood phone repair shop",
         "headcount": "just me and one technician",
         "hours": "Mon-Fri 9-6",
-        "services": "screen repairs, battery replacements",
+        "services": ["screen repairs", "battery replacements"],
         # W-9: typed on the voice beat, validated by the server, never by a
         # model - the owner's own words, bounded, under the custom preset.
         "customer_voice_preset": "custom",
@@ -766,12 +888,14 @@ async def test_confirm_reconciles_reviewed_offerings_once(
             "description": "Freshly brewed",
             "price_cents": 450,
             "sources": ["owner", "document"],
+            "review_status": "approved",
         },
         {
             "name": "Pita bowls",
             "description": "A filling lunch",
             "price_cents": 1200,
             "sources": ["document"],
+            "review_status": "approved",
         },
     ]
     await superuser_conn.execute(
@@ -802,6 +926,72 @@ async def test_confirm_reconciles_reviewed_offerings_once(
     )
     assert catalog is not None
     assert catalog["status"] == "ready"
+
+
+async def test_suggestions_stay_private_until_review_then_publish(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_to_confirm(client, token)
+
+    onboarding = await superuser_conn.fetchval(
+        "select config->'onboarding' from tenant_config where tenant_id = $1", tenant_id
+    )
+    record = json.loads(onboarding)
+    record["offering_candidates"] = [
+        {
+            "name": "Lamb shoulder",
+            "description": "Slow-cooked",
+            "price_cents": 2400,
+            "sources": ["owner"],
+            "proposed_category": "Dinner",
+        }
+    ]
+    await superuser_conn.execute(
+        "update tenant_config set config = jsonb_set(config, '{onboarding}', $2::jsonb, true) "
+        "where tenant_id = $1",
+        tenant_id,
+        json.dumps(record),
+    )
+
+    suggestions = await client.get("/api/onboarding/suggestions", headers=headers)
+    assert suggestions.status_code == 200
+    candidate = suggestions.json()["candidates"][0]
+    assert suggestions.json()["count"] == 1
+
+    confirmed = await client.post(
+        "/api/onboarding/confirm", json={"slug": _page_slug(tenant_id)}, headers=headers
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from offerings where tenant_id = $1 and name = 'Lamb shoulder'",
+            tenant_id,
+        )
+        == 0
+    )
+
+    candidate["review_status"] = "approved"
+    reviewed = await client.put(
+        "/api/onboarding/suggestions",
+        json={"candidates": [candidate]},
+        headers=headers,
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json() == {"count": 0, "candidates": []}
+    row = await superuser_conn.fetchrow(
+        "select name, description, price_cents, category from offerings "
+        "where tenant_id = $1 and name = 'Lamb shoulder'",
+        tenant_id,
+    )
+    assert row is not None
+    assert dict(row) == {
+        "name": "Lamb shoulder",
+        "description": "Slow-cooked",
+        "price_cents": 2400,
+        "category": "Dinner",
+    }
 
 
 async def test_confirm_before_complete_is_conflict(client: httpx.AsyncClient) -> None:
@@ -1036,7 +1226,7 @@ async def test_url_message_scrapes_ingests_and_reads_back(
 
     # The page pre-filled the profile fields the read-back covers.
     assert body["draft"]["business_type"] == "phone repair shop"
-    assert body["draft"]["services"] == "screen repairs, battery replacements"
+    assert body["draft"]["services"] == ["screen repairs", "battery replacements"]
     assert body["draft"]["hours"] == "Mon-Fri 9-6"
 
     assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]

@@ -1,6 +1,6 @@
 > This file was amended four times: 2026-09-05 folded a second walkthrough round
-> and its planning into the phase (record starts at
-> [Amendment 2](#amendment-2-onboarding-completion-and-refinement-2026-09-05));
+> and its planning into the phase (record lives in
+> [13-walkthrough-round-2.md](evidence/13-walkthrough-round-2.md));
 > 2026-09-06 rewrote W-9 into the single authoritative onboarding and
 > customer-assistant contract ticket and corrected stale delivery-status
 > language left over from the first amendment (record starts at
@@ -13,6 +13,10 @@
 > evidence remain open, so this ticket stays active.
 
 # Phase 13: walkthrough fixes (W)
+
+**Status:** Done - merged.
+**Phase 1 area:** Walkthrough fixes.
+**Evidence:** [13-walkthrough-round-2.md](evidence/13-walkthrough-round-2.md).
 
 A founder walkthrough of the deployed build surfaced defects across three
 surfaces: the owner's home escalation queue, the onboarding interview, and
@@ -57,108 +61,12 @@ to the behavior it refines instead of duplicating its acceptance criteria):
 
 ---
 
-## Amendment 2: onboarding completion and refinement (2026-09-05)
+## Second-round observation log - moved
 
-A second founder walkthrough of the running onboarding and document-review
-flow, supported by repository scans and planning, refined the phase. This
-section records the walkthrough's observations, the founder's clarified
-preferences, the current implementation evidence, and the boundary between
-reported symptoms, confirmed code behavior, suspected causes, and
-outstanding browser verification. It is the single evidence home for the
-refinements; the tickets below reference this section rather than restating
-it. The original PDF behind the 40-row review output is unavailable, so the
-pasted review output is preserved here as reported but cannot establish which
-prices, descriptions, or offerings correctly reflect the source - an
-explicit verification boundary, not a gap in this record.
-
-### The founder's clarified preferences
-
-The agreed product decisions preserved in the refined tickets:
-
-- Keep the existing business-information, hours, location, policies, and
-  other-information sections; improve their readability and editing without
-  discarding factual detail.
-- Show five offerings initially. "Review all" opens the editor with five
-  offerings per page.
-- Suggest possible duplicates and let the owner combine them or keep both.
-- Preserve complex pricing context and flag ambiguity instead of inventing a
-  flat price.
-- Let uploads process responsively while the owner remains on the page.
-- Correct clear spelling mistakes in ordinary descriptions and offerings using
-  the existing model call; preserve personal names and brand names unless
-  explicitly corrected.
-- Quotation functionality and a full pricing-rule editor remain future work.
-
-### Reported observations (from the pasted review output and walkthrough)
-
-The pasted review output proves what the owner reported seeing. The concrete
-defects and phrasing flags in it:
-
-- Offering names rendered as sentence fragments or prose joins
-  (`"Bowl is,"`, `"the,"`, `"Plate and Pita Pocket both run"`), none of which
-  is a sellable item.
-- A possible duplicate pair reported for review (`"coffe"` alongside
-  `"coffee drinks"`), where the owner's preferred outcome - keep both, or
-  merge only on explicit choice - is not yet reflected in how the sheet
-  behaves.
-- Displayed amounts in the output. Because the original PDF is unavailable,
-  which amount (if any) is correct is not established; the amounts are
-  recorded as reported and flagged for re-extraction from source when the
-  PDF regression fixture becomes available.
-
-The full 40-row pasted output is greater than the examples above; only the
-observations the notes name are transcribed here because the paste itself is
-not preserved verbatim. Where a later step reproduces the source, the
-regression fixture replaces this table as the authority.
-
-| # | Reported (pasted review) | Ticket | Classification |
-|---|---|---|---|
-| 1 | Offering name fragments: "Bowl is", "the" | W-6 | Symptom |
-| 2 | Prose-joined offering names: "Plate and Pita Pocket both run" | W-6 | Symptom |
-| 3 | Possible duplicate pair: "coffe" / "coffee drinks" | W-6, W-8 | Symptom |
-| 4 | Displayed amounts (source-correctness not established) | W-6 | Symptom |
-| 5 | Whole catalogue or raw sections in the review sheet | W-8 | Symptom |
-| 6 | Complex price context (ranges, "from", units) flattened or dropped | W-6 | Symptom |
-| 7 | Descriptions missing or invented | W-6 | Symptom |
-| 8 | Review sheet hard to scan when many candidates | W-8 | Symptom |
-| 9 | Same text twice within a single reply (duplicated names) | W-9 | Symptom |
-
-### Confirmed code behavior, suspected causes, and outstanding verification
-
-A repository scan separated what is real in the code from what remains a
-runtime hypothesis. This is read-only evidence; none of it is a shipped fix.
-
-| Area | Status | Evidence |
-|---|---|---|
-| Reply context includes the current owner message twice | Confirmed code | [agent.py:688-713](../../../../backend/app/onboarding/agent.py#L688-L713): `record.history.append({...admin_message})` (line 691) runs before `reply_msgs` is built, whose `record.history[-3:]` loop (lines 711-712) includes that just-appended message, then `admin_message` is appended again (line 713). Its relationship to the reported duplicated names is a **suspected cause** pending browser reproduction |
-| Review-return paths skip slug prefill | Confirmed code | `saveKnowledge`/`discardKnowledge` set confirm state without running `applyStateFields`' slug prefill (see [page.tsx:458-499](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L458-L499) and [page.tsx:141-157](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L141-L157)). Requires browser reproduction against the go-live screen to call the runtime cause established |
-| Upload stamp is client-side only, non-streamed | Confirmed code | [page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417) - a static `"adding…"` stamp over a single non-streamed `POST /api/knowledge/drafts/upload`; no progress events, so any progress shown is client-side animation, never fabricated percentages |
-| Review sheet renders every candidate in one scroll | Confirmed code | [ReviewSheet.tsx:134-212](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L134-L212) - a single `offerings.map`, no pagination; duplicates are a hard save block (`hasDuplicateNames`, [ReviewSheet.tsx:257-264](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L257-L264)), not combine/keep-both choices; price conflicts surface as a "choose one" option row |
-| Candidate price/description/provenance fields | Confirmed code | [flow.py:56-76](../../../../backend/app/onboarding/flow.py#L56-L76) - `PendingOffering` carries `name, description, price_cents, sources`; no identity, provenance, source-reference, complex-price-context, review-issue, or possible-match fields yet (proposed in W-6/W-8 contract extensions) |
-| Merge rule for overlapping candidate | Confirmed code | [flow.py:78-99](../../../../backend/app/onboarding/flow.py#L78-L99) - document values win an overlap; [agent.py:228-246](../../../../backend/app/onboarding/agent.py#L228-L246) re-merges by `normalize_name` |
-| Extraction is heading-limited / prose-splitting | Confirmed code | `offering_candidates.py` derives candidates deterministically from `"What we offer"`/`"Prices"`; no whole-source, section-spanning item extraction or reference-resolution price pass yet (scope of W-6) |
-| SSE vs ordinary request split | Confirmed code | typed answers stream over SSE; chip, resume, and upload use ordinary requests (see [page.tsx:398-425](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L425) for the non-streamed upload). A `fetch` entry in DevTools is not evidence of polling |
-| "Answering…" duplicate pending indicator | Outstanding browser verification | The status line's "Answering…" and the thread's thinking dots are candidate duplicates (W-3); reproduce in the browser before runtime claim |
-
-Outstanding browser verification is required before any of the above is
-declared the established runtime cause. Bug fixes begin with an E2E
-reproduction through the owner-facing surface; none of the W-3 through W-9
-specs claim a runtime fix from these scans.
-
-### Requirement ownership
-
-One owning ticket per requirement, with dependency links instead of duplicated
-acceptance criteria:
-
-| Concern | Owning ticket |
-|---|---|
-| SSE versus polling; pending indicators; repeated input placeholder | [W-3](#w-3-keep-the-onboarding-thread-clear-and-responsive) |
-| Slug prefill, review-return paths, and actionable go-live errors | [W-4](#w-4-complete-go-live-address-handling) |
-| Customer answers combining confirmed offerings and knowledge | [W-5](#w-5-answer-from-confirmed-offerings-and-knowledge-together) |
-| Offering names, descriptions, source-backed prices, duplicate proposals | [W-6](#w-6-extract-accurate-offerings-from-the-complete-source) |
-| Five-item preview, pagination, editing, duplicate decisions | [W-8](#w-8-review-a-large-import-without-losing-information) |
-| Readable, editable knowledge sections | [W-8](#w-8-review-a-large-import-without-losing-information) |
-| Repeated names, conservative wording cleanup, conversational corrections, the customer-assistant contract and voice | [W-9](#w-9-definitive-onboarding-and-customer-assistant-contract) |
+The 2026-09-05 second walkthrough round record (observations, clarified
+preferences, code-behavior evidence, requirement ownership) moved to
+[13-walkthrough-round-2.md](evidence/13-walkthrough-round-2.md).
+The tickets below reference that file rather than restating it.
 
 ---
 
@@ -259,7 +167,8 @@ assistant and the public customer assistant, replacing per-tenant prompt prose
 with a code-owned contract, adding structured customer voice, and correcting
 onboarding's name-capture behavior end to end. This amendment is the evidence
 and definitions record for that ticket; W-9 itself references it rather than
-restating it, the same relationship Amendment 2's tickets have to Amendment 2.
+restating it, the same relationship the refined tickets have to the
+[round-2 evidence](evidence/13-walkthrough-round-2.md).
 
 ### Why this became one ticket instead of several
 
@@ -309,7 +218,7 @@ conflates them (`agent.py:269`):
 
 ### Copy-rule amendment
 
-[`prd.md` section 13](../../prd.md#13-copy-rules) reads "Never say 'AI',
+[`prd.md` section 13](../../agencx/prd.md#13-copy-rules) reads "Never say 'AI',
 'agent', 'automated' or 'assistant' in user-facing copy." That rule predates
 both mandated opening lines below, which name "assistant" as the surface's own
 identity, and is amended for both surfaces as of this ticket:
@@ -326,8 +235,8 @@ identity, and is amended for both surfaces as of this ticket:
 
 | Surface | Before | After |
 |---|---|---|
-| Onboarding | "Hi! I'm your Agencx setup assistant. I'll help you get your business ..." ([controller.py:164](../../../../backend/app/features/onboarding/controller.py#L164)), then the `name` beat's own ask | "Hi, I'm the Agencx setup assistant. I'll help set up your business. Before we start, what should I call you?" |
-| Customer chat | `greeting ?? "Hi! How can I help you with {name} today?"` ([CustomerChat.tsx:76](../../../../frontend/src/app/[slug]/CustomerChat.tsx#L76)) | "Hi, I'm [Business]'s assistant. How can I help today?" - fixed, composed first; any configured welcome message is optional following content, normalized so it never doubles the greeting |
+| Onboarding | "Hi! I'm your Agencx setup assistant. I'll help you get your business ..." ([controller.py:164](../../../backend/app/features/onboarding/controller.py#L164)), then the `name` beat's own ask | "Hi, I'm the Agencx setup assistant. I'll help set up your business. Before we start, what should I call you?" |
+| Customer chat | `greeting ?? "Hi! How can I help you with {name} today?"` ([CustomerChat.tsx:76](../../../frontend/src/app/[slug]/CustomerChat.tsx#L76)) | "Hi, I'm [Business]'s assistant. How can I help today?" - fixed, composed first; any configured welcome message is optional following content, normalized so it never doubles the greeting |
 
 ### Regression inputs
 
@@ -352,18 +261,18 @@ discrepancy between the panel's own comment and the token it uses.
 
 ### Why
 
-[WaitingPanel.tsx:34](../../../../frontend/src/app/(tenant-admin)/(console)/home/components/WaitingPanel.tsx#L34)
+[WaitingPanel.tsx:34](../../../frontend/src/app/(tenant-admin)/(console)/home/components/WaitingPanel.tsx#L34)
 hard-codes `COLLAPSED_ROWS = 3` regardless of viewport, so a desktop window
 with room for eight rows still shows three behind a "Show all" tap.
-Separately, [QueryProvider.tsx:22-25](../../../../frontend/src/components/QueryProvider.tsx#L22-L25)
+Separately, [QueryProvider.tsx:22-25](../../../frontend/src/components/QueryProvider.tsx#L22-L25)
 sets `staleTime: 30_000` with no `refetchInterval`, so the panel and the
 Chats tab badge (both driven by `/api/conversations`, per
-[layout.tsx:85-91](../../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L85-L91))
+[layout.tsx:85-91](../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L85-L91))
 keep showing a resolved escalation as waiting until the owner navigates away
 and back. The panel's own comment at
-[WaitingPanel.tsx:20](../../../../frontend/src/app/(tenant-admin)/(console)/home/components/WaitingPanel.tsx#L20)
+[WaitingPanel.tsx:20](../../../frontend/src/app/(tenant-admin)/(console)/home/components/WaitingPanel.tsx#L20)
 claims the count pill uses "the prototype's actual amber, `--amber-400`", but
-[theme.css:270](../../../../frontend/src/styles/theme.css#L270) points
+[theme.css:270](../../../frontend/src/styles/theme.css#L270) points
 `--color-highlight` at `--amber-300`.
 
 ### User stories
@@ -397,7 +306,7 @@ reload the page.
 - The `/api/conversations` query underlying both surfaces refetches on an
   interval while the console is open, matching the cadence the conversation
   thread page already polls at
-  ([chats/[id]/page.tsx:28](../../../../frontend/src/app/(tenant-admin)/(console)/chats/[id]/page.tsx#L28),
+  ([chats/[id]/page.tsx:28](../../../frontend/src/app/(tenant-admin)/(console)/chats/[id]/page.tsx#L28),
   4 seconds).
 
 ### Design reference
@@ -416,8 +325,8 @@ current the data behind it is.
   Render every row inside one `overflow-y-auto` container whose collapsed
   `max-height` is sized for roughly three rows by default and roughly five
   at `lg:` (the console's one mobile/desktop switch, per
-  [layout.tsx:109](../../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L109)
-  and [TabBar.tsx:57](../../../../frontend/src/components/ui/TabBar.tsx#L57)).
+  [layout.tsx:109](../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L109)
+  and [TabBar.tsx:57](../../../frontend/src/components/ui/TabBar.tsx#L57)).
   The existing expanded caps (`max-h-[288px] lg:max-h-[432px]`, one row taller
   each) are the reference for computing a per-row height; the collapsed cap
   is the same formula at the lower row count.
@@ -432,13 +341,13 @@ current the data behind it is.
   reveal.
 - Add `refetchInterval: 4000` to the `useApiQuery<ConversationSummary[]>("/api/conversations")` call.
   Both call sites share the query key, so one option change covers
-  [home/page.tsx:49](../../../../frontend/src/app/(tenant-admin)/(console)/home/page.tsx#L49)
-  and [layout.tsx:85](../../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L85).
+  [home/page.tsx:49](../../../frontend/src/app/(tenant-admin)/(console)/home/page.tsx#L49)
+  and [layout.tsx:85](../../../frontend/src/app/(tenant-admin)/(console)/layout.tsx#L85).
   Confirm `useApiQuery` (wherever it wraps `useQuery`) passes an
   options-object override through; if it does not yet, add the pass-through
   rather than hard-coding the interval inside the hook.
 - Resolve the token discrepancy: either repoint `--color-highlight` at
-  `--amber-400` in [theme.css:270](../../../../frontend/src/styles/theme.css#L270),
+  `--amber-400` in [theme.css:270](../../../frontend/src/styles/theme.css#L270),
   or correct the WaitingPanel comment to name `--amber-300`. Pick whichever
   matches the prototype's literal `--c-amber:#F5A623` (prototype line 13);
   `--amber-400` is `#F5A623` and `--amber-300` is not, so the fix is to
@@ -500,36 +409,36 @@ apologizing without correcting course:
 > Got it - pita, coffee, wraps, and more. Thanks for sharing! ... **What's
 > the name of your business?**
 
-Root cause: [beats.py:182-187](../../../../backend/app/onboarding/beats.py#L182-L187)
+Root cause: [beats.py:182-187](../../../backend/app/onboarding/beats.py#L182-L187)
 (`next_beat`) picks the next unanswered slot deterministically and
-correctly, but [agent.py:420-432](../../../../backend/app/onboarding/agent.py#L420-L432)
+correctly, but [agent.py:420-432](../../../backend/app/onboarding/agent.py#L420-L432)
 hands that choice to a second LLM call as advisory prose (a directive string
-built by `as_prompt()` at [agent.py:50-57](../../../../backend/app/onboarding/agent.py#L50-L57),
+built by `as_prompt()` at [agent.py:50-57](../../../backend/app/onboarding/agent.py#L50-L57),
 `"Ask for: {ask_for}"`) which composes the visible question freely, with only
 a three-message history window
-([agent.py:428](../../../../backend/app/onboarding/agent.py#L428)) and a
+([agent.py:428](../../../backend/app/onboarding/agent.py#L428)) and a
 system prompt that lists every field by name
-([agent.py:60-67](../../../../backend/app/onboarding/agent.py#L60-L67)).
+([agent.py:60-67](../../../backend/app/onboarding/agent.py#L60-L67)).
 Nothing checks that the emitted text actually asks for `ask_for`. This design
 has been in place since the first onboarding commit (`e919435`) and has never
 been changed; the one place that already emits the beat's question verbatim
 is the chip-selection path
-([agent.py:241-244](../../../../backend/app/onboarding/agent.py#L241-L244)),
+([agent.py:241-244](../../../backend/app/onboarding/agent.py#L241-L244)),
 which free text does not go through.
 
 Two supporting defects feed the same symptom:
 
 - **Conditional persistence can rewind the pointer.**
-  [agent.py:402](../../../../backend/app/onboarding/agent.py#L402) only
+  [agent.py:402](../../../backend/app/onboarding/agent.py#L402) only
   persists a turn when `acknowledged` is non-empty or the turn was not flagged
   off-topic. `offering_names` is not counted toward `acknowledged`
-  ([agent.py:397-398](../../../../backend/app/onboarding/agent.py#L397-L398)),
+  ([agent.py:397-398](../../../backend/app/onboarding/agent.py#L397-L398)),
   so a turn that yields only offering names and is flagged off-topic is
   computed, shown to the owner, and never saved. Because `next_beat` rescans
   `BEAT_ORDER` from index 0 every call with no forward cursor, the next turn
   reloads the older database row and can land back on an earlier beat.
 - **The extractor cannot route an offer answer into `services`.** The
-  extraction prompt ([agent.py:77-84](../../../../backend/app/onboarding/agent.py#L77-L84))
+  extraction prompt ([agent.py:77-84](../../../backend/app/onboarding/agent.py#L77-L84))
   tells the model to list named offerings under `offering_names`, separate
   from `profile.services`, and never instructs it to also fill `services`
   when the reply is answering the offer question. An answer can leave
@@ -596,7 +505,7 @@ way forward.
 As a business owner, answering the hours question tells the assistant both
 when I am open in a day and which days of the week I am active, in one turn.
 
-- [beats.py:127](../../../../backend/app/onboarding/beats.py#L127)'s `ask`
+- [beats.py:127](../../../backend/app/onboarding/beats.py#L127)'s `ask`
   changes from "When are you open?" to a question that names both hours and
   days, for example: "What are your opening hours, and which days of the
   week are you open?"
@@ -613,7 +522,7 @@ ticket is entirely about which text the assistant emits and when.
 ### Technical spec
 
 - **Beat-aware, still-open extraction.** Add the current beat's key and `ask`
-  text to `_extraction_input` ([agent.py:262-270](../../../../backend/app/onboarding/agent.py#L262-L270))
+  text to `_extraction_input` ([agent.py:262-270](../../../backend/app/onboarding/agent.py#L262-L270))
   as context, not a filter: "The question asked this turn was: {ask}." Instruct
   the model to fill that field when the reply answers it, and separately to
   fill whatever other field(s) the reply actually answers when it answers
@@ -621,23 +530,23 @@ ticket is entirely about which text the assistant emits and when.
   beat hint only helps it disambiguate an ambiguous reply, it never narrows
   what can be captured.
 - **Server-owned question text.** Change the reply-composition prompt at
-  [agent.py:420-432](../../../../backend/app/onboarding/agent.py#L420-L432)
+  [agent.py:420-432](../../../backend/app/onboarding/agent.py#L420-L432)
   so the model is asked to write only a short acknowledgment sentence of what
   was captured this turn (or of any off-beat information captured this turn), and
   explicitly told not to ask a question. The server appends `nxt.ask`
   verbatim after the model's acknowledgment:
   `reply = f"{ack} {nxt.ask}".strip()`. This is the same shape as the
-  existing chip path ([agent.py:241-244](../../../../backend/app/onboarding/agent.py#L241-L244)),
+  existing chip path ([agent.py:241-244](../../../backend/app/onboarding/agent.py#L241-L244)),
   applied to free text. Update `_COPILOT`
-  ([agent.py:60-67](../../../../backend/app/onboarding/agent.py#L60-L67)) so
+  ([agent.py:60-67](../../../backend/app/onboarding/agent.py#L60-L67)) so
   it no longer implies the model chooses or phrases the question.
 - **Fill `services` from `offering_names` deterministically.** In the merge
-  step ([agent.py:393](../../../../backend/app/onboarding/agent.py#L393) /
+  step ([agent.py:393](../../../backend/app/onboarding/agent.py#L393) /
   `_merge_owner_offerings`), when `update.offering_names` is non-empty and
   `draft.get("services")` is empty, set `draft["services"]` to the
   comma-joined names. No extra model call; this is a plain server-side join.
 - **Extraction prompt examples for unpunctuated lists.** Add one example pair
-  to the prompt at [agent.py:77-84](../../../../backend/app/onboarding/agent.py#L77-L84)
+  to the prompt at [agent.py:77-84](../../../backend/app/onboarding/agent.py#L77-L84)
   showing an input like "we offer pita coffee and wraps" mapped to
   `offering_names: ["pita", "coffee", "wraps"]`.
 - **Repeat guard.** Add an `ask_count: dict[str, int]` (or a single
@@ -647,20 +556,20 @@ ticket is entirely about which text the assistant emits and when.
   At count 2, the reply-composition directive includes an instruction to
   rephrase and give a concrete example. At count 3, the directive offers to
   move on; a reply recognized as declining (already-handled "skip" vocabulary
-  from the knowledge-offer path, [agent.py:218-223](../../../../backend/app/onboarding/agent.py#L218-L223),
+  from the knowledge-offer path, [agent.py:218-223](../../../backend/app/onboarding/agent.py#L218-L223),
   is the precedent) sets the field to an explicit placeholder that satisfies
   `beat.complete` (for text-shaped beats, the literal string the owner used,
   or a sentinel the Business tab already knows to render as "not set").
   `OnboardingRecord.from_jsonb`'s version gate
-  ([agent.py:105-132](../../../../backend/app/onboarding/agent.py#L105-L132))
+  ([agent.py:105-132](../../../backend/app/onboarding/agent.py#L105-L132))
   needs its `version` literal bumped so old records reset cleanly rather than
   crashing on the new field's absence - this is the existing migration
   pattern, not a new one.
 - **Persist every turn.** Remove the conditional at
-  [agent.py:402](../../../../backend/app/onboarding/agent.py#L402); always
+  [agent.py:402](../../../backend/app/onboarding/agent.py#L402); always
   call `service.save_record` after a turn (streaming and non-streaming paths
-  both, per [controller.py:331-333](../../../../backend/app/features/onboarding/controller.py#L331-L333)
-  and [controller.py:227-233](../../../../backend/app/features/onboarding/controller.py#L227-L233)).
+  both, per [controller.py:331-333](../../../backend/app/features/onboarding/controller.py#L331-L333)
+  and [controller.py:227-233](../../../backend/app/features/onboarding/controller.py#L227-L233)).
   This guarantees the emitted `state` event and the stored record never
   disagree, closing the rewind path described above.
 - **Hours beat rewording.** Update `beats.py:127`'s `ask` per US-5, and widen
@@ -670,7 +579,7 @@ ticket is entirely about which text the assistant emits and when.
 
 The founder asked, in the walkthrough, for a standing rule that a working
 conversational flow is not changed without a flagged confirmation. Add a new
-subsection to [conventions.md](../../design/conventions.md), placed after
+subsection to [conventions.md](../../agencx/design/conventions.md), placed after
 section 5 (bug-fix protocol), which it extends:
 
 > ### 5.1 Flow-change confirmation
@@ -719,7 +628,7 @@ Backend, in `backend/tests/test_onboarding_agent.py` or the equivalent
 - [x] A two-times-unanswered beat resolves or defers instead of repeating.
 - [x] The hours beat asks for both hours and days.
 - [x] Every turn persists regardless of extraction outcome.
-- [x] [conventions.md](../../design/conventions.md) carries the new
+- [x] [conventions.md](../../agencx/design/conventions.md) carries the new
       flow-change confirmation subsection.
 - [x] `make check` green.
 
@@ -773,18 +682,18 @@ A second walkthrough round restated and sharpened W-3's original concerns, and
 a repository scan confirmed the current shape:
 
 - The status line below the composer renders `"Answering…"`
-  ([page.tsx:595-607](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607))
+  ([page.tsx:595-607](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607))
   while `TypingLine` already renders thinking dots for the same turn
-  ([Thread.tsx:129-135](../../../../frontend/src/components/ui/Thread.tsx#L129-L135)).
+  ([Thread.tsx:129-135](../../../frontend/src/components/ui/Thread.tsx#L129-L135)).
   Two indicators, one operation.
 - The composer swaps widget per beat
-  ([BeatComposer.tsx:129-179](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/components/BeatComposer.tsx#L129-L179)),
+  ([BeatComposer.tsx:129-179](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/components/BeatComposer.tsx#L129-L179)),
   and the plain textarea auto-grows with content
-  ([CommandPill.tsx:28](../../../../frontend/src/components/ui/CommandPill.tsx#L28),
-  [CommandPill.tsx:56-63](../../../../frontend/src/components/ui/CommandPill.tsx#L56-L63)),
+  ([CommandPill.tsx:28](../../../frontend/src/components/ui/CommandPill.tsx#L28),
+  [CommandPill.tsx:56-63](../../../frontend/src/components/ui/CommandPill.tsx#L56-L63)),
   so the composer reads as randomly resizing between turns.
 - An attached file gets one static stamp, `"${file.name} · adding…"`
-  ([page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417)),
+  ([page.tsx:398-417](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417)),
   over a single non-streamed `POST /api/knowledge/drafts/upload`, with no
   animated processing state and no explicit failure recovery prose while the
   document is read and structured.
@@ -843,8 +752,8 @@ explicit success or failure with a usable recovery path.
 
 ### Design reference
 
-`ThinkingDots` ([ThinkingDots.tsx:21-33](../../../../frontend/src/components/ui/ThinkingDots.tsx#L21-L33))
-and `ProcessingLine` ([Thread.tsx:144-150](../../../../frontend/src/components/ui/Thread.tsx#L144-L150))
+`ThinkingDots` ([ThinkingDots.tsx:21-33](../../../frontend/src/components/ui/ThinkingDots.tsx#L21-L33))
+and `ProcessingLine` ([Thread.tsx:144-150](../../../frontend/src/components/ui/Thread.tsx#L144-L150))
 are the existing motion primitives this ticket reuses; no new component or
 dependency. The composer's visual shell is unchanged - only its height
 stability and placeholder behavior.
@@ -855,7 +764,7 @@ stability and placeholder behavior.
   labels and the in-thread question as the context carriers. Preserve chip,
   phone, numeric, and multiline behaviors.
 - Delete the `"Answering…"` branch from the status line at
-  [page.tsx:595-607](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607),
+  [page.tsx:595-607](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L595-L607),
   leaving `{error ?? ""}`. Keep the element mounted as the `role="status"`
   live region and the error slot (danger styling per W-4).
 - Give the `BeatComposer` root or widget wrapper a fixed minimum height
@@ -868,7 +777,7 @@ stability and placeholder behavior.
   carries a usable recovery path (retry the upload). Do not add percentage
   progress, queues, workers, background-job polling, or resumable processing.
   Keep submission serialization: the busy guard in the upload path
-  ([page.tsx:398-417](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417))
+  ([page.tsx:398-417](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L398-L417))
   blocks conflicting submissions until the current one settles.
 
 ### Transport verification
@@ -876,7 +785,7 @@ stability and placeholder behavior.
 Document the current split and prove it with a browser network trace. Typed
 answers stream over SSE; chip answers, resume actions, and uploads use
 ordinary requests (see the non-streamed upload at
-[page.tsx:401-406](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L401-L406)).
+[page.tsx:401-406](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L401-L406)).
 A `fetch` entry in DevTools is not evidence of polling.
 
 Acceptance requires a browser network trace showing:
@@ -941,24 +850,24 @@ address only, prefilled to the real slug, with a "Going live as X" read-back.
 What remains is that the prefill and its failures are not handled on every
 path that can flip the confirm step open:
 
-- `applyStateFields` ([page.tsx:135-143](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L135-L143))
+- `applyStateFields` ([page.tsx:135-143](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L135-L143))
   is the only place that prefills `publicSlug` from `suggested_slug`, and it
   runs only from the initial load and the turn handlers. `saveKnowledge`
-  ([page.tsx:437-448](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L437-L448))
+  ([page.tsx:437-448](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L437-L448))
   and `discardKnowledge`
-  ([page.tsx:456-465](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L456-L465))
+  ([page.tsx:456-465](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L456-L465))
   set confirm state directly, bypassing it, so the review-save and
   review-discard paths reach confirmation without the slug synchronization the
   initial-load path gets.
 - A confirm failure lands in the shared status line
-  ([page.tsx:472-503](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
+  ([page.tsx:472-503](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
   grey and low-visibility, rather than the slug `Input`'s own danger state
-  ([Input.tsx:34-46](../../../../frontend/src/components/ui/Input.tsx#L34-L46)).
+  ([Input.tsx:34-46](../../../frontend/src/components/ui/Input.tsx#L34-L46)).
 - Client-side shape/length validation is absent, so an owner sees only the
   generic 422
-  ([errors.py:77](../../../../backend/app/shared/errors.py#L77)) the frontend
+  ([errors.py:77](../../../backend/app/shared/errors.py#L77)) the frontend
   never reads the `errors[]` detail from
-  ([api.ts:44-62](../../../../frontend/src/lib/api.ts#L44-L62)).
+  ([api.ts:44-62](../../../frontend/src/lib/api.ts#L44-L62)).
 
 The scan confirmed the review save/discard paths update confirmation state
 without the same slug synchronization as initial loading. This is recorded as
@@ -1004,9 +913,9 @@ field itself shows why, and a retry can succeed without restarting onboarding.
 ### Design reference
 
 No new screen. The slug `Input` and `Button` are the existing go-live
-components ([page.tsx:561-581](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L561-L581));
+components ([page.tsx:561-581](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L561-L581));
 this ticket wires up states they already support (`Input`'s `error` prop, the
-app-wide `Toaster` ([Toaster.tsx](../../../../frontend/src/components/Toaster.tsx)))
+app-wide `Toaster` ([Toaster.tsx](../../../frontend/src/components/Toaster.tsx)))
 rather than building new ones.
 
 ### Technical spec
@@ -1020,14 +929,14 @@ rather than building new ones.
   across unrelated state updates.
 - Add slug field error state to `Input`'s `error` prop and fire a
   `toast.error(...)` in the confirm failure path
-  ([page.tsx:472-503](../../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
+  ([page.tsx:472-503](../../../frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx#L472-L503)),
   covering invalid, reserved, and taken slugs as actionable field errors.
 - Add client-side shape/length validation before `POST /api/onboarding/confirm`
-  mirroring [slug.py:16](../../../../backend/app/features/tenants/slug.py#L16)
-  and [slug.py:62](../../../../backend/app/features/tenants/slug.py#L62). Do
+  mirroring [slug.py:16](../../../backend/app/features/tenants/slug.py#L16)
+  and [slug.py:62](../../../backend/app/features/tenants/slug.py#L62). Do
   not duplicate the reserved list client-side; the server's specific message
   for it stays authoritative. Keep the existing 409 taken-error text
-  ([controller.py:495](../../../../backend/app/features/onboarding/controller.py#L495))
+  ([controller.py:495](../../../backend/app/features/onboarding/controller.py#L495))
   as an actionable field error too.
 - On a network failure, keep the draft and the entered address in place so a
   retry can succeed without restarting onboarding. Backend validation remains
@@ -1102,10 +1011,10 @@ correctly, but two mechanisms still stop a single reply from combining it
 with uploaded knowledge:
 
 - **The prompt instructs the model to lead with the catalog and stop there.**
-  [agent_node.py:325-333](../../../../backend/app/agents/agent_node.py#L325-L333)
+  [agent_node.py:325-333](../../../backend/app/agents/agent_node.py#L325-L333)
   says the catalog is "authoritative for what the business currently offers"
   and to "enumerate the complete catalog before offering to share more
-  detail." [agent_node.py:78-80](../../../../backend/app/agents/agent_node.py#L78-L80)
+  detail." [agent_node.py:78-80](../../../backend/app/agents/agent_node.py#L78-L80)
   reinforces this by telling the model not to reach for a tool for exactly
   this question. On the fast path, the document's chunks are in the very same
   prompt as the offerings block, yet the model does what it is told and
@@ -1113,17 +1022,17 @@ with uploaded knowledge:
   behavior exactly.
 - **On the hybrid path, the two sources can never reach one generation.**
   `search_knowledge` returns only a chunk count to the model
-  ([agent_node.py:507](../../../../backend/app/agents/agent_node.py#L507));
+  ([agent_node.py:507](../../../backend/app/agents/agent_node.py#L507));
   the retrieved chunks are drafted separately by
-  `_build_knowledge_prompt` ([draft_node.py:67-89](../../../../backend/app/agents/draft_node.py#L67-L89)),
+  `_build_knowledge_prompt` ([draft_node.py:67-89](../../../backend/app/agents/draft_node.py#L67-L89)),
   which reads `retrieved_chunks` only, never
   `ContextPackage.offerings`, and is instructed to answer "using ONLY the
   numbered context below." `get_business_context`
-  ([retrieval.py:151-159](../../../../backend/app/services/retrieval.py#L151-L159))
+  ([retrieval.py:151-159](../../../backend/app/services/retrieval.py#L151-L159))
   also excludes catalog-kind chunks from that retrieval, per the fix M-1
   made for a different reason (keeping catalog text out of the fast-path
   whole-corpus block).
-- `_FAST_PATH_GUIDANCE` ([agent_node.py:102-103](../../../../backend/app/agents/agent_node.py#L102-L103))
+- `_FAST_PATH_GUIDANCE` ([agent_node.py:102-103](../../../backend/app/agents/agent_node.py#L102-L103))
   additionally overclaims that the corpus block "is everything the business
   has published" - it is not, since `whole_corpus` strips catalog chunks by
   design; the offerings block is the (currently insufficient) compensation
@@ -1162,10 +1071,10 @@ the row the owner actively maintains.
   share more detail" sequencing that causes the two-step answer.
 - Confirmed structured prices retain their existing authority.
 - The deterministic-pricing invariant
-  ([conventions.md section 8](../../design/conventions.md)) is unaffected:
+  ([conventions.md section 8](../../agencx/design/conventions.md)) is unaffected:
   no new path lets a model author a price. `owner_material()` remains the
   provenance source for the money gate
-  ([agent_node.py:730](../../../../backend/app/agents/agent_node.py#L730)),
+  ([agent_node.py:730](../../../backend/app/agents/agent_node.py#L730)),
   and the pricing and inspection rules continue to be enforced.
 
 #### US-4 Unconfirmed imports stay out of customer answers
@@ -1185,23 +1094,23 @@ No UI change; this is a backend prompt-assembly and grounding fix.
 ### Technical spec
 
 - Rewrite the offerings-block instruction at
-  [agent_node.py:325-333](../../../../backend/app/agents/agent_node.py#L325-L333):
+  [agent_node.py:325-333](../../../backend/app/agents/agent_node.py#L325-L333):
   keep "authoritative for names, availability, and prices"; keep "use
   reviewed knowledge for additional descriptions and supporting details";
   remove "enumerate the complete catalog before offering to share more
   detail" and replace it with an instruction to answer from both sources
   together in one reply when both are relevant, naming the relevant
   offerings rather than enumerating the complete catalog.
-- Soften [agent_node.py:78-80](../../../../backend/app/agents/agent_node.py#L78-L80)
+- Soften [agent_node.py:78-80](../../../backend/app/agents/agent_node.py#L78-L80)
   so it still discourages an unnecessary tool call but no longer implies the
   catalog alone is a complete answer to "what do you offer."
 - Correct `_FAST_PATH_GUIDANCE`'s claim
-  ([agent_node.py:102-103](../../../../backend/app/agents/agent_node.py#L102-L103))
+  ([agent_node.py:102-103](../../../backend/app/agents/agent_node.py#L102-L103))
   that the corpus block is everything published - state instead that it is
   everything published except the confirmed catalog, which is provided
   separately above.
 - Pass `package.offerings_text()` into `_build_knowledge_prompt`
-  ([draft_node.py:67-89](../../../../backend/app/agents/draft_node.py#L67-L89))
+  ([draft_node.py:67-89](../../../backend/app/agents/draft_node.py#L67-L89))
   as a second grounded block alongside the numbered chunks, and change its
   "using ONLY the numbered context below" instruction to also admit the
   offerings block, naming both explicitly (for example: "using ONLY the
@@ -1211,10 +1120,10 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   thread `package.offerings` the same way rather than re-fetching from the
   database.
 - Reuse the existing context package; do not extend
-  [fuse.py](../../../../backend/app/retrieval/fuse.py) to rank catalog rows
+  [fuse.py](../../../backend/app/retrieval/fuse.py) to rank catalog rows
   against knowledge chunks, and do not add a third retrieval source or a new
   catalog query. The catalog is small and already loaded whole by
-  `build_package` ([context_package.py:128-141](../../../../backend/app/services/context_package.py#L128-L141));
+  `build_package` ([context_package.py:128-141](../../../backend/app/services/context_package.py#L128-L141));
   it belongs in the prompt directly, the same way it already does on the
   fast path, not through the scored-retrieval pipeline.
 - Unconfirmed imports remain outside `offerings` until publish; the customer
@@ -1233,7 +1142,7 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   check exists for provenance (inspection/price gate), confirming the
   combined answer does not trip the money-gate or provenance checks.
 - Backend: `test_fast_path_prompt_lists_the_complete_confirmed_catalog`
-  ([test_context_package.py:391](../../../../backend/tests/test_context_package.py#L391))
+  ([test_context_package.py:391](../../../backend/tests/test_context_package.py#L391))
   stays green; extend its assertion or add a sibling asserting the
   instruction text no longer contains "before offering to share more detail".
 - Backend: an unconfirmed (draft or unsaved) import is not available to the
@@ -1249,7 +1158,7 @@ No UI change; this is a backend prompt-assembly and grounding fix.
   additional menu detail, then ask the storefront chat "what services do you
   offer?" once, and confirm the single reply lists items from both sources.
   Per the bug-fix protocol
-  ([conventions.md section 5](../../design/conventions.md)), reproduce this
+  ([conventions.md section 5](../../agencx/design/conventions.md)), reproduce this
   through the actual customer chat surface before considering the fix
   verified, not only via a unit test.
 
@@ -1312,7 +1221,7 @@ complete. The review usability that this richer candidate data feeds is W-8.
 Today, document-derived offering candidates come only from two hard-coded
 section headings ("What we offer", "Prices") and are split at the first
 monetary figure in each line
-([offering_candidates.py:76-159](../../../../backend/app/features/business/offering_candidates.py#L76-L159)).
+([offering_candidates.py:76-159](../../../backend/app/features/business/offering_candidates.py#L76-L159)).
 `description` is never populated from a document - `PendingOffering.description`
 defaults to empty and is only ever filled by hand in the review sheet. A
 business document that describes its menu in prose, under a business-specific
@@ -1409,10 +1318,10 @@ W-8.
 ### Technical spec
 
 - **Stage one, unchanged.** `structure_document`
-  ([structuring.py:139-174](../../../../backend/app/features/knowledge/structuring.py#L139-L174))
+  ([structuring.py:139-174](../../../backend/app/features/knowledge/structuring.py#L139-L174))
   already reorganizes the raw document into the fixed headings under the
   `figures_preserved` money guard
-  ([structuring.py:120-128](../../../../backend/app/features/knowledge/structuring.py#L120-L128)),
+  ([structuring.py:120-128](../../../backend/app/features/knowledge/structuring.py#L120-L128)),
   which discards the model's structured output entirely (falling back to
   `AS_WRITTEN`) if it invents a figure. Keep this stage and this guard exactly
   as they are - they are the existing enforcement of the
@@ -1450,7 +1359,7 @@ W-8.
   safe to trust for price extraction). For an accepted reference, run
   `extract_monetary_figures` on the source block to get `price_cents` the same
   way `derive()` does today
-  ([knowledge/service.py:223-234](../../../../backend/app/features/knowledge/service.py#L223-L234)).
+  ([knowledge/service.py:223-234](../../../backend/app/features/knowledge/service.py#L223-L234)).
 - **Complex prices conservatively.** Preserve the context for ranges, "from"
   prices, units, variants, bundles, surcharges, and currency. Populate
   `price_cents` only when the existing offering representation can preserve
@@ -1469,7 +1378,7 @@ W-8.
 - **Fold into `PendingOffering`.** Produce `PendingOffering(name, description,
   price_cents, sources=["document"])` from the accepted candidates, merging by
   `normalize_name` the same way `_merge_owner_offerings`
-  ([agent.py:162-185](../../../../backend/app/onboarding/agent.py#L162-L185))
+  ([agent.py:162-185](../../../backend/app/onboarding/agent.py#L162-L185))
   already merges owner-typed names, so a document candidate and an
   owner-typed chip candidate with the same normalized name combine into one
   reviewable row rather than duplicating - subject to the precedence policy
@@ -1491,7 +1400,7 @@ W-8.
   `description`; if not, that is the one wire-shape gap to close.
 - **Retrieval consumer.** No change needed beyond W-5: once these
   document-sourced rows are confirmed into `offerings` at publish
-  (`reconcile_offerings_batch`, [business/service.py:187-244](../../../../backend/app/features/business/service.py#L187-L244)),
+  (`reconcile_offerings_batch`, [business/service.py:187-244](../../../backend/app/features/business/service.py#L187-L244)),
   they are projected into the vector store by the existing
   `ingest_offerings` pipeline and answered from by the same catalog block
   W-5 already wired into both the fast and hybrid prompts. This ticket's job is
@@ -1691,9 +1600,9 @@ require that formatting and editing preserve factual distinctions.
 
 The 40-row pasted review output showed an import that a single-page review
 cannot manage: every candidate renders inline
-([ReviewSheet.tsx:134-212](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L134-L212)),
+([ReviewSheet.tsx:134-212](../../../frontend/src/components/knowledge/ReviewSheet.tsx#L134-L212)),
 duplicate names are a hard save block rather than a decision
-(`hasDuplicateNames`, [ReviewSheet.tsx:257-264](../../../../frontend/src/components/knowledge/ReviewSheet.tsx#L257-L264)),
+(`hasDuplicateNames`, [ReviewSheet.tsx:257-264](../../../frontend/src/components/knowledge/ReviewSheet.tsx#L257-L264)),
 and the knowledge sections are single textareas that drift from their source.
 The founder asked for a review that scales to a real business document without
 losing information: a bounded preview, a paginated editor, explicit duplicate
@@ -1773,7 +1682,7 @@ formatting preserves the facts, not a lossy summary.
 ### Design reference
 
 The current `ReviewSheet`
-([ReviewSheet.tsx](../../../../frontend/src/components/knowledge/ReviewSheet.tsx))
+([ReviewSheet.tsx](../../../frontend/src/components/knowledge/ReviewSheet.tsx))
 is the base; the prototype and design tokens in `theme.css` set the layout,
 spacing, controls, and states. Keyboard access and mobile behavior are
 verified alongside desktop presentation. No new rich-text editor dependency
@@ -1883,7 +1792,7 @@ references that record rather than restating it.
 
 ### Why
 
-The repository scan behind Amendment 2 confirmed the reply-context duplication
+The repository scan behind the [round-2 evidence](evidence/13-walkthrough-round-2.md) confirmed the reply-context duplication
 (`agent.py:690` appends the owner's message to history, then the `[-3:]` slice
 at 710-711 always includes it, then line 712 appends it a second time - every
 turn, both paths) but stopped short of a fix. Separately, the founder's own
@@ -1893,7 +1802,7 @@ close: the owner's typed name silently becoming a business-name fallback
 way to correct a captured field without re-triggering the beat that captured
 it. On the customer side, three of six prose routes never saw the tenant's
 configured prompt at all
-([draft_node.py](../../../../backend/app/agents/draft_node.py) - conversation,
+([draft_node.py](../../../backend/app/agents/draft_node.py) - conversation,
 recommendation, and quoting are code-only today), the same
 `system_prompt`/`tone` pair is read by three independent, only-partly-cached
 call sites, and the prompt-leakage eval's canary is planted directly in the
@@ -1927,7 +1836,7 @@ business's name, and asks me which one I mean when a correction is ambiguous.
 - "Change the name" with both names on file asks a focused clarification
   before applying anything.
 - `owner_display_name` never reaches the customer-facing prompt
-  (`_PROFILE_LABELS`, [context_package.py:57-64](../../../../backend/app/services/context_package.py#L57-L64),
+  (`_PROFILE_LABELS`, [context_package.py:57-64](../../../backend/app/services/context_package.py#L57-L64),
   stays exclusive of it).
 
 #### US-3 A correction works from any beat, without losing my place
@@ -1938,7 +1847,7 @@ and does not cost me an attempt at the question I'm actually being asked.
 
 - A correction to a previously captured field is recognized as a correction,
   not an answer to the pending question, and does not touch `ask_count`
-  bookkeeping ([agent.py:640-652](../../../../backend/app/onboarding/agent.py#L640-L652)).
+  bookkeeping ([agent.py:640-652](../../../backend/app/onboarding/agent.py#L640-L652)).
   This applies during every beat, not only the beat that first captured the
   field.
 - An invalid correction keeps the previous valid value; unrelated fields and
@@ -1953,7 +1862,7 @@ As a business owner, adding, renaming, removing, and explicitly replacing an
 offering are distinct actions; renaming one leaves its siblings, description,
 price, and provenance untouched.
 
-- Reuses `merge_offerings` ([flow.py:78-99](../../../../backend/app/onboarding/flow.py#L78-L99))
+- Reuses `merge_offerings` ([flow.py:78-99](../../../backend/app/onboarding/flow.py#L78-L99))
   as the single precedence statement W-6 established - no second rule is
   added anywhere.
 - Every W-6 provenance/source field survives a rename.
@@ -1997,7 +1906,7 @@ escalation, tool behavior, or identity.
 - All six customer prose routes (direct conversation, knowledge,
   recommendation, quote explanation, redraft, refusal/handoff) run the same
   code-owned contract with tenant data appended after it as lower-authority
-  input - three of six ([draft_node.py](../../../../backend/app/agents/draft_node.py)'s
+  input - three of six ([draft_node.py](../../../backend/app/agents/draft_node.py)'s
   conversation/recommendation/quoting) currently skip the tenant prompt
   entirely, which this ticket ends by making all six consistent.
 - A hostile custom-voice string cannot override the money guardrail,
@@ -2028,20 +1937,20 @@ do, and tells me the truth if I ask whether it's human or AI.
 
 No new customer-facing screen beyond the voice editor, which follows the ABN
 sheet's own visual pattern
-([`AbnSheet.tsx`](../../../../frontend/src/app/(tenant-admin)/(console)/business/details/components/AbnSheet.tsx))
+([`AbnSheet.tsx`](../../../frontend/src/app/(tenant-admin)/(console)/business/details/components/AbnSheet.tsx))
 rather than a new prototype screen - a `Chip` group for the four presets, the
 fourth opening a bounded text field, `role="alert"` for validation, keyed on
 current values so an abandoned edit discards on close. The onboarding thread
 itself gains no new screen; the name-confirmation Yes action is a chip on the
 existing thread, following the vocabulary the existing chip beats already use
-(`apply_selection`, [beats.py:355-377](../../../../backend/app/onboarding/beats.py#L355-L377)).
+(`apply_selection`, [beats.py:355-377](../../../backend/app/onboarding/beats.py#L355-L377)).
 
 ### Technical spec
 
 **Onboarding record.** Bump `OnboardingRecord.version` from the literal `3` to
-`4` ([agent.py:140,172,201](../../../../backend/app/onboarding/agent.py#L140)).
+`4` ([agent.py:140,172,201](../../../backend/app/onboarding/agent.py#L140)).
 The existing `from_jsonb` branch drops any record that isn't exactly v3
-([agent.py:162-197](../../../../backend/app/onboarding/agent.py#L162-L197)) -
+([agent.py:162-197](../../../backend/app/onboarding/agent.py#L162-L197)) -
 add a v3-to-v4 upgrade that renames `draft["name"]` to
 `draft["owner_display_name"]` and carries every other field forward untouched
 (`history`, `offering_candidates`, `skipped`, `deferred`, `ask_beat`,
@@ -2055,29 +1964,29 @@ beat key and its ask text), and the confirm write
 Add pending-name-confirmation state: raw input, the visible proposal, and
 which name it targets. The rejection path already pops a bad value back out of
 the draft with no memory of what it replaced
-([agent.py:608](../../../../backend/app/onboarding/agent.py#L608)) - that seam
+([agent.py:608](../../../backend/app/onboarding/agent.py#L608)) - that seam
 is where "keep the previous valid value on an invalid correction" attaches.
 
 **Extraction schema.** `DraftUpdate`
-([flow.py:54-72](../../../../backend/app/onboarding/flow.py#L54-L72)) gains
+([flow.py:54-72](../../../backend/app/onboarding/flow.py#L54-L72)) gains
 correction targets, offering `add | rename | remove | replace` operations, raw
 evidence, and normalization type, alongside the existing `answered_asked`
 (W-7). No schema anywhere gains a numeric field - W-6's frozen-money-index
 discipline is unconditional.
 
 **Prompt restructuring.** `_COPILOT`
-([agent.py:100-106](../../../../backend/app/onboarding/agent.py#L100-L106))
+([agent.py:100-106](../../../backend/app/onboarding/agent.py#L100-L106))
 and `Directive.as_prompt()` (83-97) become Role/Goal/Success
 Criteria/Constraints/Conversation Rules/Output/Stop Rules. Fix the message
-duplication at [agent.py:690,710-712](../../../../backend/app/onboarding/agent.py#L690)
+duplication at [agent.py:690,710-712](../../../backend/app/onboarding/agent.py#L690)
 so the owner's current message appears exactly once in `reply_msgs`, on both
 `stream_reply` and `run_turn`. Wire up `Beat.reject`
-([beats.py:116](../../../../backend/app/onboarding/beats.py#L116), populated
+([beats.py:116](../../../backend/app/onboarding/beats.py#L116), populated
 on six beats, read by nothing today) as the deterministic reply-validation
 fallback text, and fix the stale module docstring
-([beats.py:22-25](../../../../backend/app/onboarding/beats.py#L22-L25)) that
+([beats.py:22-25](../../../backend/app/onboarding/beats.py#L22-L25)) that
 already claims this exists. Replace the salon-flavored services-beat example
-([beats.py:257](../../../../backend/app/onboarding/beats.py#L257)) with
+([beats.py:257](../../../backend/app/onboarding/beats.py#L257)) with
 domain-neutral guidance. Add the voice beat as a chip beat after `services` in
 `BEAT_ORDER`, validated server-side through `apply_selection` with no model
 call, matching every other chip beat.
@@ -2097,7 +2006,7 @@ routes (`agent_node.py`'s one-call turn, and `draft_node.py`'s conversation,
 knowledge, recommendation, quoting, redraft). Tenant profile, offerings,
 knowledge, and the new structured voice ride in after the contract as
 lower-authority data; tool-specific instructions stay in the `ToolSpec`
-descriptions ([agent_node.py:364-408](../../../../backend/app/agents/agent_node.py#L364-L408)),
+descriptions ([agent_node.py:364-408](../../../backend/app/agents/agent_node.py#L364-L408)),
 not in prompt prose (`_TOOL_GUIDANCE`'s own comment at 64-73 already explains
 why a per-tool bullet list was removed - it is not reintroduced here).
 Deterministic strings (`REFUSAL_MESSAGE`, the order-status templates,
@@ -2125,30 +2034,30 @@ it does not drop them (see Migration below).
 **Greeting.** The fixed identity greeting composes first; any configured
 `config->customer.greeting` becomes optional following content, normalized so
 the two never double up. This is a frontend change
-([CustomerChat.tsx:74-77](../../../../frontend/src/app/[slug]/CustomerChat.tsx#L74-L77))
+([CustomerChat.tsx:74-77](../../../frontend/src/app/[slug]/CustomerChat.tsx#L74-L77))
 plus a second invalidation path: the greeting travels through
 `/api/tenants/resolve`'s own 60-second slug cache
-([tenants/service.py:145-165](../../../../backend/app/features/tenants/service.py#L145-L165)),
+([tenants/service.py:145-165](../../../backend/app/features/tenants/service.py#L145-L165)),
 which is separate from `knowledge_version` - a voice or greeting write must
 call `invalidate_slug_cache` directly, not rely on the version bump alone.
 
 **Voice editor.** Follows the ABN pattern end to end:
 `PROFILE_FIELDS`/`write_profile`
-([business/service.py:721,741-764](../../../../backend/app/features/business/service.py#L721))
+([business/service.py:721,741-764](../../../backend/app/features/business/service.py#L721))
 extended with the voice fields, a `ProfileUpdate` extension with
-`extra="forbid"` ([business/api.py:276-342](../../../../backend/app/features/business/api.py#L276-L342)),
+`extra="forbid"` ([business/api.py:276-342](../../../backend/app/features/business/api.py#L276-L342)),
 generated types via `npm run gen:types`, aliased in `api-schemas.ts` (the R-3
 direction) rather than hand-declared, and a sheet modeled on `AbnSheet.tsx`.
 
 **Prompt-leak canary.** `check_prompt_leak`
-([inspection.py:98-106](../../../../backend/app/agents/inspection.py#L98-L106))
+([inspection.py:98-106](../../../backend/app/agents/inspection.py#L98-L106))
 currently substring-matches against `tenant_config.system_prompt` lines; it is
 re-pointed at the code-owned contract text, which is a stable, testable set of
 lines rather than free tenant prose. `LEAK_MARKER =
-"SYSPROMPT-LEAK-MARKER"` ([seed_injection_probe.py:41-47](../../../../backend/seeds/seed_injection_probe.py#L41-L47)),
+"SYSPROMPT-LEAK-MARKER"` ([seed_injection_probe.py:41-47](../../../backend/seeds/seed_injection_probe.py#L41-L47)),
 scored by eight cases in `injection_set.jsonl`, moves into the contract render
 path so those cases keep their teeth. The judge prompt's "matches the stated
-tone" clause ([inspection.py:236,245](../../../../backend/app/agents/inspection.py#L236))
+tone" clause ([inspection.py:236,245](../../../backend/app/agents/inspection.py#L236))
 is dropped - tone-as-prose no longer reaches the judge; tone/praise/concision
 quality checks live only in transcript evaluations (below), never in a
 production turn.
@@ -2160,7 +2069,7 @@ This ships as: backfill `customer_voice`, stop every application code path
 from reading the two columns, keep the columns and their seed writes in place.
 A separate, small follow-up ticket drops them after production verification -
 the same shape as
-[`0025_schema_cleanup.sql:33`](../../../../backend/migrations/0025_schema_cleanup.sql#L33)
+[`0025_schema_cleanup.sql:33`](../../../backend/migrations/0025_schema_cleanup.sql#L33)
 dropping `escalation_threshold`. This resolves a genuine conflict in the
 original request between "deliver as one commit" and "deploy
 forward-compatible code before the destructive migration" - a single
@@ -2181,7 +2090,7 @@ squash-merge cannot do both, so the destructive half moves to its own ticket.
   correction target.
 - `reply_msgs` contains the current owner message exactly once, asserted
   directly (no test does this today -
-  [test_onboarding_agent.py:483](../../../../backend/tests/test_onboarding_agent.py#L483)
+  [test_onboarding_agent.py:483](../../../backend/tests/test_onboarding_agent.py#L483)
   only checks it's `None`) - on both SSE and non-streamed paths, both
   persisting exactly one assistant response.
 - Every customer prose route against the same identity/behavior contract;
@@ -2195,9 +2104,9 @@ squash-merge cannot do both, so the destructive half moves to its own ticket.
   without losing history, progress, or confirmed data; `customer_voice` is
   populated per the backfill rule.
 - Update tests pinned to the old signatures:
-  [`test_money_prompt.py:60-71`](../../../../backend/tests/test_money_prompt.py#L60-L71)
+  [`test_money_prompt.py:60-71`](../../../backend/tests/test_money_prompt.py#L60-L71)
   (positional `tenant_prompt`/`tone` args),
-  [`test_onboarding_api.py:586-594`](../../../../backend/tests/test_onboarding_api.py#L586-L594)
+  [`test_onboarding_api.py:586-594`](../../../backend/tests/test_onboarding_api.py#L586-L594)
   (asserts `tone == "friendly"` post-confirm), `test_context_package.py`'s
   `package.system_prompt`/`tone` assertions, and confirm `test_schema_audit.py`
   / `test_migrations.py:44,57` stay green through the backfill migration.
@@ -2229,7 +2138,7 @@ sheet, the composed opening), `1e66910` (phase 4a: tests and E2E), and
 3,682 characters at its longest (a 300-character custom voice), against the
 202-character prompt `system_prompt_for` used to produce, and
 `_CONTRACT_OVERHEAD_CHARS`
-([context_package.py:78](../../../../backend/app/services/context_package.py#L78))
+([context_package.py:78](../../../backend/app/services/context_package.py#L78))
 carries that cost into the fast-path budget alongside the profile and the
 offerings text. A tenant whose corpus sat within about 3,500 characters of that
 budget therefore takes the hybrid path where it used to take the fast path.
@@ -2239,23 +2148,23 @@ in a commit message.
 
 **`_CONTRACT_OVERHEAD_CHARS` is a pin, not a measurement.** It reads 3,800
 against a longest render of 3,682. The import contract
-in [`backend/pyproject.toml`](../../../../backend/pyproject.toml) forbids
+in [`backend/pyproject.toml`](../../../backend/pyproject.toml) forbids
 `app.services` from importing `app.agents`, so `context_package.py` cannot ask
 the contract how long it is. The pin is held honest by
 `test_the_pinned_prompt_overhead_covers_the_longest_render`
-([test_agent_contract.py:206](../../../../backend/tests/test_agent_contract.py#L206)),
+([test_agent_contract.py:206](../../../backend/tests/test_agent_contract.py#L206)),
 which imports both and fails the moment the contract outgrows the number.
 Parking agent policy in `app.shared` to route around the contract would honor
 its letter and break its intent, so it was not done.
 
 **`MONEY_GUIDANCE` stays off the quoting route, deliberately.** Quoting already
 forbids the model stating any figure at all, and `MONEY_GUIDANCE`
-([drafting.py:28](../../../../backend/app/agents/drafting.py#L28)) permits
+([drafting.py:28](../../../backend/app/agents/drafting.py#L28)) permits
 repeating a figure that is published in the material. Adding the general rule to
 the stricter route would have licensed exactly the figures that route forbids.
 The contract's own money clause covers quoting alongside the stricter rule, and
 `test_every_prose_route_carries_a_money_rule`
-([test_money_prompt.py:71](../../../../backend/tests/test_money_prompt.py#L71))
+([test_money_prompt.py:71](../../../backend/tests/test_money_prompt.py#L71))
 pins the whole arrangement, quoting's stricter wording included.
 
 **A scraped business name still persists without a Yes chip.** US-1 is written
@@ -2288,11 +2197,11 @@ What that leaves proven and unproven:
 
 **One eval failure was diagnosed and is not a regression.** The second run shows
 `SelectionError: malformed catalog item id: 'tempered-glass-screen-protector'`
-from [`pricing/engine.py:110`](../../../../backend/app/pricing/engine.py#L110):
+from [`pricing/engine.py:110`](../../../backend/app/pricing/engine.py#L110):
 the model passed a slugified offering name where the quoting tool wanted a
 catalog item id. That is pre-existing, not something this ticket caused.
 `format_offerings`
-([context_package.py:208-221](../../../../backend/app/services/context_package.py#L208-L221))
+([context_package.py:208-221](../../../backend/app/services/context_package.py#L208-L221))
 puts an offering's name, description, and price into the prompt and never its
 id, and this branch does not change that function, so the model has never had an
 id to pass. The failure is also the money invariant working rather than leaking:
@@ -2302,7 +2211,7 @@ one's to fix.
 
 #### Defects the reproduction found that this ticket had not named
 
-The phase 0 drive ([`evidence/w-9-reproduction.md`](../evidence/w-9-reproduction.md),
+The phase 0 drive ([`evidence/w-9-reproduction.md`](evidence/w-9-reproduction.md),
 screenshots `frontend/e2e/screenshots/w9-*.png`) reproduced five of the six
 failures the ticket names and surfaced four more that it did not:
 
@@ -2315,12 +2224,12 @@ failures the ticket names and surfaced four more that it did not:
 2. **The model answered its own pending question.** Observed: "It's just me. Is
    it just you, or do you work with a team?" - a headcount asserted one turn
    before the owner gave it. `_reply_ok`
-   ([agent.py:781](../../../../backend/app/onboarding/agent.py#L781)) now
+   ([agent.py:781](../../../backend/app/onboarding/agent.py#L781)) now
    rejects a reply that borrows the pending beat's own chips or example.
 3. **The assistant emitted em dashes**, against conventions.md section 1. Fixed
    in the prompts and, because a prompt rule did not hold on three drives out of
    three, normalized deterministically in both output paths through
-   `plain_dashes` ([text.py](../../../../backend/app/shared/text.py)).
+   `plain_dashes` ([text.py](../../../backend/app/shared/text.py)).
 4. **A typed value landed nowhere.** `middle eastern cafe`, typed while the
    headcount beat was pending, was neither captured nor acknowledged. Covered by
    US-3's corrections and W-2's off-beat capture together.
@@ -2328,7 +2237,7 @@ failures the ticket names and surfaced four more that it did not:
 One structural half of item 1 is still open and is recorded rather than claimed
 closed: the second-ask nudge still interpolates `e.g. {nxt.example}` into a
 model-composed directive
-([agent.py:1151-1154](../../../../backend/app/onboarding/agent.py#L1151-L1154)).
+([agent.py:1151-1154](../../../backend/app/onboarding/agent.py#L1151-L1154)).
 What stops the example reaching the owner is the deterministic reply check in
 item 2, not the absence of the example from the prompt.
 
@@ -2345,14 +2254,14 @@ anyway; no user-visible bug was fixed by removing it.
       renames the beat key in every place a beat key is stored - the draft, the
       skip and deferral lists, the ask cursor, the pause, and the pending-name
       target
-      ([agent.py:330-347](../../../../backend/app/onboarding/agent.py#L330-L347)) -
+      ([agent.py:330-347](../../../backend/app/onboarding/agent.py#L330-L347)) -
       not only the draft.
 - [x] A typed name shows a visible proposal and requires explicit Yes before
       persisting; a typed reply is a new correction; unusual confirmed names
       are accepted unless they violate storage/safety limits. `confirm_pending_name`
       assigns the proposal and never concatenates onto the raw value, so
       `sababa` stays `sababa`
-      ([agent.py:519](../../../../backend/app/onboarding/agent.py#L519)). A name
+      ([agent.py:519](../../../backend/app/onboarding/agent.py#L519)). A name
       recovered from a website scrape is out of scope, per the Record above.
 - [x] Owner name and business name are never confused; the `agent.py:269`
       fallback is removed; ambiguous correction targets are clarified. The
@@ -2368,7 +2277,7 @@ anyway; no user-visible bug was fixed by removing it.
       assistant response is persisted on both SSE and non-streamed paths; one
       acknowledgement with consistent spelling. Both halves are asserted
       directly, the second in
-      [`test_onboarding_api.py`](../../../../backend/tests/test_onboarding_api.py).
+      [`test_onboarding_api.py`](../../../backend/tests/test_onboarding_api.py).
 - [x] Clear wording cleanup runs through the existing extraction call; names,
       brands, identifiers, contacts, and money are preserved unless explicitly
       corrected; ambiguous input is never guessed. No second model call was
@@ -2377,28 +2286,28 @@ anyway; no user-visible bug was fixed by removing it.
       structured `customer_voice` config changes expression only and cannot
       override grounding, pricing, identity, escalation, or tools. The six-route
       sweep in
-      [`test_agent_contract.py`](../../../../backend/tests/test_agent_contract.py)
+      [`test_agent_contract.py`](../../../backend/tests/test_agent_contract.py)
       drives the real graph per route and asserts the contract text, the leak
       marker, and the voice block in the prompt the provider actually received,
       with the hostile voice fixture positioned after `# HARD CONSTRAINTS`.
 - [x] The deterministic customer opening composes first; a configured welcome
       is optional following content, never a duplicate greeting. Composition and
       the drop rule are unit-tested in
-      [`greeting.test.ts`](../../../../frontend/src/lib/greeting.test.ts) and
+      [`greeting.test.ts`](../../../frontend/src/lib/greeting.test.ts) and
       driven for both demo tenants in
-      [`storefront.spec.ts`](../../../../frontend/e2e/storefront.spec.ts).
+      [`storefront.spec.ts`](../../../frontend/e2e/storefront.spec.ts).
 - [x] `tenant_config.system_prompt`/`.tone` are backfilled into
       `customer_voice` and read by no application code path; the columns
       themselves are not dropped (follow-up ticket). Backfill is
-      [`0027_customer_voice.sql`](../../../../backend/migrations/0027_customer_voice.sql);
+      [`0027_customer_voice.sql`](../../../backend/migrations/0027_customer_voice.sql);
       the drop is [W-10](14-schema-drop.md).
 - [x] The prompt-leak canary and its eight `injection_set.jsonl` cases keep
       their teeth against the code-owned contract. `check_prompt_leak`
-      ([inspection.py:98](../../../../backend/app/agents/inspection.py#L98))
+      ([inspection.py:98](../../../backend/app/agents/inspection.py#L98))
       matches against the contract the turn actually ran, `LEAK_MARKER` lives in
-      [`contract.py`](../../../../backend/app/agents/contract.py) and renders
+      [`contract.py`](../../../backend/app/agents/contract.py) and renders
       into every contract, and
-      [`seed_injection_probe.py`](../../../../backend/seeds/seed_injection_probe.py)
+      [`seed_injection_probe.py`](../../../backend/seeds/seed_injection_probe.py)
       imports it from there so the two cannot drift. Eight cases in
       `injection_set.jsonl` score that string. What is verified here is
       structural: the marker the cases hunt for is in the prompt. The eval's own
@@ -2413,14 +2322,14 @@ anyway; no user-visible bug was fixed by removing it.
       pinned: on the backend in `test_quoting_agent.py`, against `name`,
       `category`, `description` and the summary `label`, and on the frontend in
       the first tests either card has ever had
-      ([`CatalogCard.test.tsx`](../../../../frontend/src/components/ui/CatalogCard.test.tsx),
-      [`PriceSummaryCard.test.tsx`](../../../../frontend/src/components/ui/PriceSummaryCard.test.tsx)),
+      ([`CatalogCard.test.tsx`](../../../frontend/src/components/ui/CatalogCard.test.tsx),
+      [`PriceSummaryCard.test.tsx`](../../../frontend/src/components/ui/PriceSummaryCard.test.tsx)),
       which assert no id reaches the rendered markup.
 - [x] Amendment 4: fixed-price basket requests use one validated pricing-engine
       selection, emit one `price_summary` payload, persist it in
       `messages.metadata.response`, and create no quote row. The graph-level
       case was already covered; the missing HTTP-boundary case is now in
-      [`test_chat_api.py`](../../../../backend/tests/test_chat_api.py), driving
+      [`test_chat_api.py`](../../../backend/tests/test_chat_api.py), driving
       `/api/chat` and reading the persisted row back.
 - [x] Amendment 4: ambiguous, unsupported, unpriced, mixed-priceability, and
       commitment requests never produce a partial total or a substituted item.
@@ -2443,7 +2352,7 @@ anyway; no user-visible bug was fixed by removing it.
       streamed one and both feed the same components. A catalog turn through
       `/api/chat` asserts the persisted `metadata.response` equals the SSE
       event, ordered and including the unpriced row, and
-      [`StructuredResponse.test.tsx`](../../../../frontend/src/components/ui/StructuredResponse.test.tsx)
+      [`StructuredResponse.test.tsx`](../../../frontend/src/components/ui/StructuredResponse.test.tsx)
       asserts it renders byte-identical output to the cards the live customer
       view uses.
 - [x] Amendment 4: follow-up add, remove, and quantity changes recalculate the

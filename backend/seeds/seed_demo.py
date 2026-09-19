@@ -1,4 +1,4 @@
-"""Demo world seed: both tenants, auth users, membership, and realistic
+"""Demo world seed: all three tenants, auth users, membership, and realistic
 conversations/escalations/costs - the data the demo surfaces show.
 
 Run with ``make dev && make seed`` (or ``./scripts/dev.sh --seed``). It is
@@ -8,10 +8,10 @@ known state.
 Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
 
 1. Bytefix (Tenant 1) via ``seed_tenant1_phoneshop.seed`` - its existing
-   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs). Both tenants
-   are seeded already-onboarded (profile + business_name + persona + completed
-   onboarding record), so the demo world lands in the console, not the
-   interview.
+   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs). All three
+   tenants are seeded already-onboarded (profile + business_name + persona
+   + completed onboarding record), so the demo world lands in the console,
+   not the interview.
 2. Three GoTrue auth users (find-or-create by email), via an injected
    ``create_auth_user`` callable so tests run GoTrue-free with deterministic
    UUIDs. The default calls the GoTrue Admin API (POST /auth/v1/admin/users
@@ -53,7 +53,7 @@ import httpx
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
-from seeds import _helpers, seed_tenant1_phoneshop
+from seeds import _helpers, seed_sababa, seed_tenant1_phoneshop
 from seeds.supabase_keys import mint_key
 
 if TYPE_CHECKING:
@@ -64,6 +64,7 @@ if TYPE_CHECKING:
 # banner, docs/archive/DEMO.md, and the tests' fake create_auth_user.
 BYTEFIX_OWNER_EMAIL = "owner@bytefix.dev"
 LUMIDENT_OWNER_EMAIL = "owner@lumident.dev"
+SABABA_OWNER_EMAIL = "owner@sababa.dev"
 FOUNDER_EMAIL = "founder@wren.dev"
 DEMO_PASSWORD = "wren-demo"
 
@@ -80,7 +81,7 @@ LUMIDENT_PROFILE = {
     "business_type": "family dental practice",
     "headcount": "6",
     "hours": "Monday to Friday 8am to 5pm, Saturday 9am to 12pm",
-    "services": "General dentistry, cleanings, fillings, crowns",
+    "services": ["General dentistry", "Cleanings", "Fillings", "Crowns"],
     "contact": "owner@lumident.dev",
     "abn": "none",
     "gst": "no",
@@ -203,6 +204,24 @@ CreateAuthUser = Callable[[str, str], Awaitable[UUID]]
 # --- GoTrue Admin API: the default create_auth_user (tests inject a fake) -------
 
 
+def _gotrue_service_token() -> str:
+    """The bearer GoTrue's Admin API accepts.
+
+    Prefer the real ``SUPABASE_SERVICE_ROLE_KEY`` when set: hosted projects
+    that sign sessions with asymmetric keys (ES256/RS256) reject a locally
+    minted HS256 service token with 401, and the real key is the only way in
+    (same reason the deployed backend presents it - deploy.md step 1). Local
+    dev has no service role key and mints from the symmetric JWT secret, which
+    is what local GoTrue expects.
+    """
+    settings = get_settings()
+    if settings.supabase_service_role_key:
+        return settings.supabase_service_role_key
+    if settings.supabase_jwt_secret:
+        return mint_key("service_role", settings.supabase_jwt_secret)
+    return ""
+
+
 def _make_gotrue_create_auth_user() -> CreateAuthUser:
     """Build the default create_auth_user from settings (GoTrue Admin API).
 
@@ -215,13 +234,13 @@ def _make_gotrue_create_auth_user() -> CreateAuthUser:
     """
     settings = get_settings()
     base = settings.supabase_url.rstrip("/")
-    secret = settings.supabase_jwt_secret
-    if not base or not secret:
+    service_token = _gotrue_service_token()
+    if not base or not service_token:
         raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_JWT_SECRET must be set to seed demo auth "
-            "users (run scripts/demo.sh, or inject create_auth_user in tests)."
+            "SUPABASE_URL plus either SUPABASE_SERVICE_ROLE_KEY or "
+            "SUPABASE_JWT_SECRET must be set to seed demo auth users "
+            "(run scripts/demo.sh, or inject create_auth_user in tests)."
         )
-    service_token = mint_key("service_role", secret)
     headers = {
         "Authorization": f"Bearer {service_token}",
         "apikey": service_token,
@@ -354,6 +373,8 @@ async def _seed_membership(
     bytefix_owner: UUID,
     lumident_id: UUID,
     lumident_owner: UUID,
+    sababa_id: UUID,
+    sababa_owner: UUID,
     founder: UUID,
 ) -> None:
     # A tenant wipe cascades its membership rows, but a previous partial seed
@@ -364,7 +385,7 @@ async def _seed_membership(
     # writes to the users table.
     user_tenants: dict[UUID, UUID] = {}
     async with db.tenant_context(None, "platform_admin") as conn:
-        for user_id in (bytefix_owner, lumident_owner):
+        for user_id in (bytefix_owner, lumident_owner, sababa_owner):
             tenant_id = await conn.fetchval("select tenant_id from users where id = $1", user_id)
             if tenant_id is not None:
                 user_tenants[user_id] = tenant_id
@@ -383,6 +404,12 @@ async def _seed_membership(
             "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",
             lumident_owner,
             lumident_id,
+        )
+    async with db.tenant_context(sababa_id, "tenant_admin") as conn:
+        await conn.execute(
+            "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",
+            sababa_owner,
+            sababa_id,
         )
     # platform_admins is not tenant-scoped and survives a tenant wipe, so
     # delete-then-insert by user_id for idempotency (matches test_auth_api's
@@ -675,6 +702,82 @@ def _lumident_conversations(now: datetime) -> list[dict[str, Any]]:
     ]
 
 
+def _sababa_conversations(now: datetime) -> list[dict[str, Any]]:
+    return [
+        {
+            "customer_ref": "diner.a",
+            "status": "closed",
+            "created_at": now - timedelta(days=3, hours=3),
+            "messages": [
+                (
+                    "customer",
+                    "How much is the Super Plate?",
+                    None,
+                    None,
+                    0,
+                ),
+                (
+                    "assistant",
+                    "The Super Plate is $37, with a choice of two proteins, four "
+                    "seasonal salads and two dips. Want me to quote one with a "
+                    "soft drink alongside?",
+                    "draft",
+                    {
+                        "inspection": {
+                            "grounding": {
+                                "passed": True,
+                                "reason": "Price matches the catalog and pricing engine.",
+                            }
+                        }
+                    },
+                    11,
+                ),
+            ],
+            "tool_calls": [
+                {
+                    "on_message_index": 1,
+                    "tool_name": "get_quote_inputs",
+                    "arguments": {"rule_codes": ["super-plate"]},
+                    "result": {
+                        "line_items": [
+                            {"code": "super-plate", "quantity": 1},
+                        ]
+                    },
+                    "success": True,
+                    "latency_ms": 29,
+                }
+            ],
+            "escalation": None,
+        },
+        {
+            "customer_ref": "diner.b",
+            "status": "open",
+            "created_at": now - timedelta(days=1, hours=5),
+            "messages": [
+                ("customer", "When are you open?", None, None, 0),
+                (
+                    "assistant",
+                    "We are open Monday to Sunday, roughly 11am to 8pm most days. "
+                    "Holiday hours can differ, so check with us before coming on "
+                    "a public holiday [1].",
+                    "draft",
+                    {
+                        "inspection": {
+                            "grounding": {
+                                "passed": True,
+                                "reason": "Matches the FAQ's hours entry.",
+                            }
+                        }
+                    },
+                    12,
+                ),
+            ],
+            "tool_calls": [],
+            "escalation": None,
+        },
+    ]
+
+
 async def _seed_conversations(
     conn: AppConnection,
     tenant_id: UUID,
@@ -800,10 +903,12 @@ async def seed(
         # 2. Auth users (find-or-create by email).
         bytefix_owner = await user_factory(BYTEFIX_OWNER_EMAIL, DEMO_PASSWORD)
         lumident_owner = await user_factory(LUMIDENT_OWNER_EMAIL, DEMO_PASSWORD)
+        sababa_owner = await user_factory(SABABA_OWNER_EMAIL, DEMO_PASSWORD)
         founder = await user_factory(FOUNDER_EMAIL, DEMO_PASSWORD)
         print(
             f"auth users: owner@bytefix={bytefix_owner} "
-            f"owner@lumident={lumident_owner} founder={founder}"
+            f"owner@lumident={lumident_owner} owner@sababa={sababa_owner} "
+            f"founder={founder}"
         )
 
         # 3. Lumident (Tenant 2) - wipe + recreate, config + catalog + knowledge.
@@ -813,9 +918,22 @@ async def seed(
         await _seed_lumident_knowledge(lumident_id, resolved_embedder)
         print(f"seeded lumident (tenant_id={lumident_id})")
 
+        # 3b. Sabbaba (Tenant 3) - wipe + recreate via its standalone seed so
+        # the same module seeds staging without touching the other tenants.
+        sababa_id = await seed_sababa.seed(embedder=resolved_embedder)
+        print(f"seeded sababa (tenant_id={sababa_id})")
+
         # 4. Membership rows.
-        await _seed_membership(bytefix_id, bytefix_owner, lumident_id, lumident_owner, founder)
-        print("seeded membership (2 owners + 1 platform admin)")
+        await _seed_membership(
+            bytefix_id,
+            bytefix_owner,
+            lumident_id,
+            lumident_owner,
+            sababa_id,
+            sababa_owner,
+            founder,
+        )
+        print("seeded membership (3 owners + 1 platform admin)")
 
         # 5. Conversations, tool calls, costs, escalations.
         now = datetime.now(UTC)
@@ -823,20 +941,28 @@ async def seed(
             await _seed_conversations(conn, bytefix_id, _bytefix_conversations(now))
         async with db.tenant_context(lumident_id, "tenant_admin") as conn:
             await _seed_conversations(conn, lumident_id, _lumident_conversations(now))
-        print("seeded conversations (5 bytefix + 2 lumident), tool calls, costs, escalations")
+        async with db.tenant_context(sababa_id, "tenant_admin") as conn:
+            await _seed_conversations(conn, sababa_id, _sababa_conversations(now))
+        print(
+            "seeded conversations (5 bytefix + 2 lumident + 2 sababa), "
+            "tool calls, costs, escalations"
+        )
 
         print(
             "\ndemo world ready. Logins (password wren-demo):\n"
             f"  tenant console: http://localhost:3000/login  {BYTEFIX_OWNER_EMAIL}\n"
             f"  tenant console: http://localhost:3000/login  {LUMIDENT_OWNER_EMAIL}\n"
+            f"  tenant console: http://localhost:3000/login  {SABABA_OWNER_EMAIL}\n"
             f"  platform:       http://localhost:3000/admin  {FOUNDER_EMAIL}\n"
-            f"  customer pages: http://localhost:3000/bytefix, /lumident"
+            f"  customer pages: http://localhost:3000/bytefix, /lumident, /sababa"
         )
         return {
             "bytefix_id": bytefix_id,
             "lumident_id": lumident_id,
+            "sababa_id": sababa_id,
             "bytefix_owner": bytefix_owner,
             "lumident_owner": lumident_owner,
+            "sababa_owner": sababa_owner,
             "founder": founder,
         }
 

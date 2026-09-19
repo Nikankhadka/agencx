@@ -34,6 +34,11 @@ export interface PendingOffering {
   possible_matches?: string[];
   /** W-6: competing amounts when two sources price one item differently. */
   price_options?: number[];
+  source_wording?: string;
+  proposed_category?: string;
+  description_origin?: "owner" | "document" | "generated" | "none";
+  review_status?: "pending" | "approved" | "rejected";
+  provenance?: Record<string, unknown>;
 }
 
 /** W-6: the server sends the full shape now - the merge that used to add

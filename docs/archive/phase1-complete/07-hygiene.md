@@ -1,6 +1,7 @@
 # Phase 1 - Hygiene (F)
 
-**Status: complete.**
+**Status:** Done - merged.
+**Phase 1 area:** Hygiene.
 
 Dead-code cleanup after the supervisor-with-tools topology (P-3) lands. The
 one topology survives; superseded fixed-specialist routing is deleted.

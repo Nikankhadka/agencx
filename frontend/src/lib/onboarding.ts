@@ -47,7 +47,26 @@ export interface InputSpec {
  * The captured business profile: one string per field, keyed by field name
  * (O-1 - the flat draft that replaced the per-section objects).
  */
-export type OnboardingDraft = Record<string, string>;
+export interface OnboardingDraft {
+  owner_display_name?: string;
+  business_name?: string;
+  business_type?: string;
+  headcount?: string;
+  hours?: string;
+  services?: string[];
+  contact?: string;
+  abn?: string;
+  gst?: string;
+  customer_voice_preset?: string;
+  customer_voice_custom_style?: string;
+  [key: string]: string | string[] | undefined;
+}
+
+export interface PendingConfirmation {
+  target: "owner_display_name" | "business_name";
+  raw: string;
+  proposal: string;
+}
 
 export interface OnboardingState {
   /** The current beat key, or "confirm" when every beat is satisfied. */
@@ -62,6 +81,9 @@ export interface OnboardingState {
   can_confirm: boolean;
   suggested_slug: string | null;
   paused_beat: string | null;
+  pending_confirmation?: PendingConfirmation | null;
+  skipped?: string[];
+  revision?: number;
   offering_candidates?: {
     name: string;
     description: string;
@@ -84,6 +106,9 @@ export type OnboardingStreamEvent =
       can_confirm: boolean;
       suggested_slug: string | null;
       paused_beat: string | null;
+      pending_confirmation?: PendingConfirmation | null;
+      skipped?: string[];
+      revision?: number;
       offering_candidates?: OnboardingState["offering_candidates"];
     }
   | { type: "done" }

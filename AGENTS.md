@@ -68,7 +68,7 @@ Run `make help` for the full list with descriptions.
 
 ## Structure
 
-- `docs/agencx/` - the canonical build docs: `prd.md` (product authority), `architecture.md` (technical ceiling), `progress.md` (build dashboard), `design/` (database, frontend, decisions/ADRs), `spec/active/` and `spec/completed/` (the change tickets with user stories).
+- `docs/agencx/` - the canonical build docs: `prd.md` (product authority), `architecture.md` (technical ceiling), `progress.md` (build dashboard), `design/` (database, frontend, decisions/ADRs), `spec/active/` (open change tickets; delivered tickets are indexed in `docs/archive/phase1-complete/README.md`).
 - `docs/archive/` - historical and point-in-time material, kept for provenance only; never load it into context, never edit it.
 - `docs/agencx/design/conventions.md` - binding conventions.
 - `frontend/` - Next.js app (three surfaces via route groups; tokens in `src/styles/theme.css`)
