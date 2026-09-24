@@ -22,6 +22,7 @@ merged to `development` or `staging`, with its verification narrative.
 | [14-schema-drop.md](14-schema-drop.md) | W-10 | Schema drop of `tenant_config.system_prompt`/`.tone`, migration `0029` |
 | [15-document-review.md](15-document-review.md) | W-11a, W-11b, W-11c | Document review workspace + privacy disclosure |
 | [16-auth-otp-reliability.md](16-auth-otp-reliability.md) | W-12, W-13 | Auth OTP config-drift + resend/cooldown fixes, hosted-verified |
+| [17-storefront-redesign.md](17-storefront-redesign.md) | M-7 | Final storefront: no-image-first base, compact catalogs through six offerings, mature browse state from seven, and one header chat entry |
 
 Evidence:
 

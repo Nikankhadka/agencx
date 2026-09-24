@@ -1,10 +1,11 @@
 # 17 - Storefront redesign: no-image-first base, Uber Eats-style mature state (M-7)
 
-**Status:** the original M-7 build merged to `development` as PR #41. The
-sparse-catalog amendment is implemented and locally verified; it awaits the
-founder's mobile and desktop walkthrough. Prototype
-[`agencx-storefront-customer-v5.html`](../design/prototypes/agencx-storefront-customer-v5.html)
-is the review target; v4 remains the record of the approved original rebuild.
+**Status:** Done - merged. The original M-7 build merged to `development` as
+PR #41, the sparse-catalog amendment landed as `e8faeba`, and the founder
+accepted the implemented V4/V5 storefront on 2026-09-24. Prototype
+[`agencx-storefront-customer-v5.html`](../prototypes/agencx-storefront-customer-v5.html)
+is the final sparse-catalog record; v4 remains the record of the approved
+original rebuild.
 
 Founder request: the customer storefront at `/{slug}` reads unfinished for a
 business with no photos. The hero reserves a `min-h-36` band for a cover that
@@ -16,12 +17,13 @@ serves the whole page.
 
 ## Design reference
 
-`docs/agencx/design/prototypes/agencx-storefront-customer-v5.html`, which adds
-the sparse-catalog state to the reviewed v4 rebuild. The original screenshots,
-edge cases, and decision record remain in v4. Port structure, states, and
-vocabulary from v5; take behaviour, never strings, except where the artifact's
-words specify a state (no "nothing published" notice); visual values are
-`theme.css` tokens only, no new tokens.
+The archived
+[`agencx-storefront-customer-v5.html`](../prototypes/agencx-storefront-customer-v5.html)
+adds the sparse-catalog state to the reviewed
+[`agencx-storefront-customer-v4.html`](../prototypes/agencx-storefront-customer-v4.html)
+rebuild. V4 retains the original screenshots, edge cases, and decision record.
+The implemented storefront is now authoritative; the prototypes preserve the
+accepted structure, states, and interaction vocabulary.
 
 Review decisions (hero fallback amended in founder review 2026-09-17):
 
@@ -193,6 +195,6 @@ Sparse-catalog amendment from the founder walkthrough on 2026-09-24:
 - [x] All six stories meet their acceptance signals.
 - [x] `make lint`, `make typecheck`, `make test`, `make eval-skip-llm`
   green; E2E suite green including the new mobile spec.
-- [ ] Founder walkthrough of `/{slug}` on mobile and desktop against v5.
+- [x] Founder accepted the implemented V4/V5 storefront on 2026-09-24.
 - [x] One commit on `feat/m7-storefront-redesign`, PR to `development`
   ([#41](https://github.com/Nikankhadka/agencx/pull/41)).

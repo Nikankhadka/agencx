@@ -649,7 +649,9 @@ share link is how a customer gets here (E-6 removed the QR).
 **M-4 made this a storefront, not just a chat.** It had been a message list and
 a composer, which meant a customer arriving from a shared link had to know what
 to ask before the page told them anything. **M-7 rebuilt it no-image-first
-(see `17-storefront-redesign.md`, prototype `agencx-storefront-customer-v5.html`):**
+(delivered record `docs/archive/phase1-complete/17-storefront-redesign.md`,
+archived prototype
+`docs/archive/prototypes/agencx-storefront-customer-v5.html`):**
 the no-photo state is the base foundation, not an empty state - plain identity
 (monogram, name, services subtitle), `business_type` chip and `hours` facts,
 category nav, and compact offering rows with no reserved media space. Tenants
@@ -749,11 +751,12 @@ codebase, responsive; no native app, no PWA shell in Stage 1.
   screen inventory, states, interaction vocabulary, and the bottom tab bar
   pattern, now carrying the shipped Airbnb identity, the monogram mark, and
 the Sababa reference tenant (D17, D18, D25). The companion storefront surface
-(`docs/agencx/design/prototypes/agencx-storefront-customer-v5.html`) is the
-current M-7 reference: no-image-first base, compact sparse state, Uber
-Eats-style mature state, and one header chat entry. The earlier
-(`docs/archive/prototypes/agencx-storefront-customer-v3.html`) is a retired pre-D18 surface kept for
-storefront interaction vocabulary only
+(`docs/archive/prototypes/agencx-storefront-customer-v5.html`) is the final M-7
+record: no-image-first base, compact sparse state, Uber Eats-style mature
+state, and one header chat entry. The implementation under
+`frontend/src/app/[slug]/` is authoritative. The earlier
+(`docs/archive/prototypes/agencx-storefront-customer-v3.html`) is a retired
+pre-D18 surface kept for storefront interaction vocabulary only.
 
 ## 8. SSE event contract
 

@@ -22,13 +22,13 @@ per-tenant tool registry and toggle UI (B-2, D-1, D-3).
 
 ## What is done
 
-Delivered tickets (A through W-13: onboarding, chat spine and grounding,
-console, storefront, polish, deploy, walkthrough closeout) are archived
-in `docs/archive/phase1-complete/README.md`. Detail in [progress.md](progress.md).
+Delivered tickets (A through W-13 and M-7: onboarding, chat spine and grounding,
+console, finalized storefront, polish, deploy, walkthrough closeout) are
+archived in `docs/archive/phase1-complete/README.md`. Detail in
+[progress.md](progress.md).
 
 ## What is next
 
-M-7 storefront redesign (`Active - in progress`, lands with its branch);
 U-1 through U-4 shipped, walkthrough remains; R-3 backlog; R-4 remainder
 (judge calibration, prod evidence); R-5 remainder (backups, error
 tracking, E2E in CI, dep scan); RF-1 through RF-17 product refinement

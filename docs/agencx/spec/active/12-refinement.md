@@ -14,8 +14,8 @@ consistency record (formerly `spec/active/15-ux-consistency.md`, removed
 2026-09-18 - code in `development`, walkthrough pending). Completed R-1 and
 R-2 records are preserved in
 `docs/archive/phase1-complete/12-refinement-r1-r2.md`. This file is
-distinct from the M-7 storefront redesign (`active/17-storefront-redesign.md`,
-lands with `feat/m7-storefront-redesign`).
+distinct from the completed M-7 storefront redesign
+(`docs/archive/phase1-complete/17-storefront-redesign.md`).
 
 Canonical vocabulary, binding in UI copy and code identifiers:
 **Business page, offering, preferred name, conversation, conversation

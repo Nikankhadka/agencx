@@ -31,7 +31,6 @@ Per-ticket header pattern:
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record | `Active - todo` (U part shipped, walkthrough remains) |
-| [active/17-storefront-redesign.md](active/17-storefront-redesign.md) | M-7 storefront redesign: no-image-first base, Uber Eats-style mature state, one persistent chat entry | `Active - awaiting review` (PR #41; founder preview walkthrough remains) |
 | [active/19-intent-and-identity.md](active/19-intent-and-identity.md) | Intent families and actions, escalation-scoped contact capture | `Active - awaiting review` (merged as 5300586, PR #43; founder walkthrough remains) |
 | [active/21-category-management.md](active/21-category-management.md) | Category management: controlled-vocabulary input, multi-category offerings with one primary | `Active - todo` |
 
@@ -42,14 +41,16 @@ All delivered tickets live in
 foundation, onboarding, chat spine, chat grounding, business page, polish,
 hygiene, developer experience, deployment, offerings and media, R-1/R-2
 refinement, walkthrough fixes W-1 through W-9, schema drop W-10, document
-review W-11, and auth OTP W-12/W-13 - with the walkthrough evidence logs.
+review W-11, auth OTP W-12/W-13, and the finalized M-7 storefront - with the
+walkthrough evidence logs.
 
-## Prototype currency
+## Prototype status
 
 | Prototype | Status |
 |---|---|
 | [agencx-prototype-v6.html](../design/prototypes/agencx-prototype-v6.html) | Current app reference |
-| [agencx-storefront-customer-v5.html](../design/prototypes/agencx-storefront-customer-v5.html) | Current storefront reference (M-7: no-image-first base, compact sparse state, mature browse state, single header chat entry) |
+| [archived v5 storefront](../../archive/prototypes/agencx-storefront-customer-v5.html) | Final accepted M-7 record; implemented storefront code is authoritative |
+| [archived v4 storefront](../../archive/prototypes/agencx-storefront-customer-v4.html) | Approved original M-7 rebuild, preserved for its screenshots and decision record |
 | [archived v3 storefront](../../archive/prototypes/agencx-storefront-customer-v3.html) | Interaction vocabulary only |
 
 No v7 prototype exists - the refinement design intent in

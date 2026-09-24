@@ -6,6 +6,13 @@
 
 ## Key Architectural Decisions (still in effect)
 
+- **M-7 storefront is final** (2026-09-24, founder): V4 defined the
+  no-image-first storefront and mature browse state; V5 added the adaptive
+  catalog boundary. One through six total offerings use one compact "What we
+  offer" region with quiet category labels, while seven or more retain mature
+  browse sections and navigation when more than one category exists. The
+  implementation under `frontend/src/app/[slug]/` is authoritative. The M-7
+  ticket and V4/V5 prototypes are archived under `docs/archive/`.
 - **Login-in-chat is GoTrue-owned, end to end** (2026-08-28, D23 - supersedes the O-2/2026-08-21 entries this replaces): GoTrue's own OTP (`signInWithOtp`/`verifyOtp`, type `email`) issues, mails and verifies the code - `auth_codes` (0017), `services/{auth_codes,email,email_address,identity}.py`, `features/auth/`, and the localStorage "manual session" bridge (`auth-session.ts`) are all deleted (0022 drops the table). The session is GoTrue's own (1h access + rotating refresh token), stored in a cookie via `@supabase/ssr`'s `createBrowserClient`/`createServerClient`, not localStorage. `shared/auth.py::verify_token` now verifies HS256 (local GoTrue, shared secret) or ES256/RS256 via the project's JWKS (hosted), selected by the token's `alg` header. `frontend/src/proxy.ts` (new; unrelated to the host-routing `proxy.ts` D22 deleted) refreshes the session and redirects before render for a signed-out console/`/admin` request - UX only, the backend Bearer check + RLS remain the real enforcement boundary.
 - **New-user provisioning via `POST /api/tenants`, not a dedicated endpoint** (2026-08-28, D23): the endpoint absorbed login-in-chat's first-login provisioning instead of adding a second route - already "authed user -> provision tenant" with the audited service-role write path the seed scripts depend on. Empty body = provisioning shape (create-or-return the caller's tenant, slug/name derived from the token's email if creating); `slug`+`name` given = the explicit seed-script shape (409 on conflict, unchanged). O-1's go-live still writes the real name/slug over the provisional values.
 - **`services/` deterministic layer** (2026-08-21, O-2; auth modules removed 2026-08-28): plain functions that never ask a model for words (F-2 machine-checks this: `app.services` may not import `app.llm.provider` or `app.agents`; `app.llm.embedder` IS allowed, since `services/retrieval.py` needs vectors and an embedder authors nothing) - per architecture.md section 4's named-but-until-now-absent `services/` folder. Now holds `context_package.py`, `knowledge_version.py`, `retrieval.py` - the auth-code/email/identity modules that used to live here are gone (GoTrue owns that now).

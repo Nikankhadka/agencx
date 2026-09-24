@@ -16,8 +16,10 @@ maintained. It is reference material for history, evidence, and provenance.
 | `plan/agencx-merge.md` | The merge plan that scoped this restructure | Its locked decisions and flow design are the spine of the new set |
 | `artifacts/` | Wren build evidence: eval report, security write-up, generalization proof | Referenced from `docs/agencx/progress.md`; the evidence still stands |
 | `industry-standard-gap.md` | Point-in-time Agencx industry-standard assessment | The current gap summary is in `docs/agencx/architecture.md`; open items in `docs/agencx/spec/active/12-refinement.md` R-5 |
-| `phase1-complete/` | Delivered Phase 1 ticket records ([index](phase1-complete/README.md)): foundation through auth OTP, R-1/R-2, walkthrough evidence | Active work is in `docs/agencx/spec/active/`; status in `docs/agencx/progress.md` |
-| `prototypes/agencx-storefront-customer-v3.html` | Superseded storefront prototype | Current app reference is `docs/agencx/design/prototypes/agencx-prototype-v6.html`; v4 storefront lands with `feat/m7-storefront-redesign` |
+| `phase1-complete/` | Delivered Phase 1 ticket records ([index](phase1-complete/README.md)): foundation through auth OTP, R-1/R-2, walkthrough evidence, and M-7 storefront | Active work is in `docs/agencx/spec/active/`; status in `docs/agencx/progress.md` |
+| `prototypes/agencx-storefront-customer-v3.html` | Superseded storefront prototype | Interaction vocabulary only |
+| `prototypes/agencx-storefront-customer-v4.html` | Approved original M-7 storefront rebuild | Implemented in `frontend/src/app/[slug]/` and finalized by v5 |
+| `prototypes/agencx-storefront-customer-v5.html` | Final M-7 sparse-catalog amendment | Implemented in `frontend/src/app/[slug]/`; archived after founder acceptance on 2026-09-24 |
 
 ## Retired content notes
 

@@ -38,18 +38,12 @@ live in the ticket files, not here.
 |---|---|
 | Foundation and tenancy | A-1, A-2 |
 | Onboarding, login, chat spine, grounding, money and escalation safety | O-1 through O-12, P-1 through P-5, C-1 through C-6 |
-| Tenant console, storefront and media, product polish and hygiene | E-1 through E-6, M-1 through M-6, B-1, B-3, D-2, F-1 through F-3, G-1 |
+| Tenant console, storefront and media, product polish and hygiene | E-1 through E-6, M-1 through M-7, B-1, B-3, D-2, F-1 through F-3, G-1 |
 | Developer experience, deployment, security and API reliability | K-1, B-4, R-1, R-2, R-4 US-1, R-5 US-1 |
 | Walkthrough fixes, schema drop, document review, auth OTP | W-1 through W-13, migration `0029`, hosted-verified |
 
 ## What is next
 
-- [ ] M-7 storefront redesign: no-image-first rebuild with one persistent
-  chat entry. The sparse-catalog amendment compacts one through six offerings
-  into one adaptive region and keeps browse navigation for mature catalogs.
-  The original rebuild merged to `development` as PR #41; ticket file
-  [17-storefront-redesign.md](spec/active/17-storefront-redesign.md).
-  Founder mobile and desktop walkthrough against v5 remains.
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -108,10 +102,9 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
-| [spec/active/17-storefront-redesign.md](spec/active/17-storefront-redesign.md) | `Active - awaiting review` | M-7 storefront redesign (PR #41) |
 | [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
 | [spec/active/21-category-management.md](spec/active/21-category-management.md) | `Active - todo` | Category management and multi-category offerings (analysis and phased proposal) |
-| [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases |
+| [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
 are validated or explicitly accepted as deferred.
