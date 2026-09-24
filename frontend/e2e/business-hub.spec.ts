@@ -99,7 +99,8 @@ test.describe("Business hub", () => {
     await page.getByTestId("offering-add").click();
     await page.getByTestId("offering-name").fill("M1 test offering");
     await page.getByText("Add details", { exact: true }).click();
-    await page.getByTestId("offering-category").fill("Screen repairs");
+    await page.getByRole("textbox", { name: "Search categories" }).fill("Repairs");
+    await page.getByRole("button", { name: "Repairs", exact: true }).click();
     await page.getByTestId("offering-description").fill("Most models");
     await page.getByTestId("offering-price").fill("89.50");
     await page.getByTestId("offering-media-url").fill("https://youtu.be/example");
@@ -150,6 +151,94 @@ test.describe("Business hub", () => {
     // Retiring it takes it off the storefront too, not just out of the editor.
     await page.goto("/bytefix");
     await expect(page.getByRole("main").last()).not.toContainText("M1 test offering");
+  });
+
+  test("an owner manages multi-category membership and primary promotion", async ({
+    page,
+    request,
+  }) => {
+    const offeringName = "Category journey offering";
+    const firstCategory = "E2E Device care";
+    const secondCategory = "E2E Featured repairs";
+
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/offerings");
+    await expect(
+      page.getByTestId("offerings-list").or(page.getByText("Nothing added yet.")),
+    ).toBeVisible();
+
+    const staleOffering = page.getByRole("button", { name: `Remove ${offeringName}` });
+    while ((await staleOffering.count()) > 0) {
+      await staleOffering.first().click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(staleOffering).toHaveCount(0);
+    }
+    for (const categoryName of [firstCategory, secondCategory]) {
+      const staleCategory = page.getByRole("button", { name: `Delete ${categoryName}` });
+      if (await staleCategory.count()) {
+        await staleCategory.click();
+        await page.getByTestId("confirm-accept").click();
+        await expect(staleCategory).toHaveCount(0);
+      }
+    }
+
+    const categorySection = page.getByRole("region", { name: "Categories" });
+    const categoryInput = categorySection.getByRole("textbox", { name: "New category" });
+    for (const categoryName of [firstCategory, secondCategory]) {
+      await categoryInput.fill(categoryName);
+      await categorySection.getByRole("button", { name: "Add", exact: true }).click();
+      await expect(page.getByTestId("categories-list")).toContainText(categoryName);
+    }
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill(offeringName);
+    await page.getByText("Add details", { exact: true }).click();
+    const categorySearch = page.getByRole("textbox", { name: "Search categories" });
+    for (const categoryName of [firstCategory, secondCategory]) {
+      await categorySearch.fill(categoryName);
+      await page.getByRole("button", { name: categoryName, exact: true }).click();
+    }
+    await page.getByRole("button", { name: `Make ${secondCategory} primary` }).click();
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering added", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("offerings-list")).toContainText(firstCategory);
+    await expect(
+      page.getByTestId("offerings-list").getByRole("heading", {
+        name: secondCategory,
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.goto("/bytefix");
+    await expect(
+      page.getByRole("heading", { name: firstCategory, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: secondCategory, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: offeringName, exact: true })).toHaveCount(2);
+
+    await page.goto("/business/offerings");
+    await page.getByRole("button", { name: `Delete ${secondCategory}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByText("Category deleted", { exact: true })).toBeVisible();
+    await expect(
+      page.getByTestId("offerings-list").getByRole("heading", {
+        name: firstCategory,
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.goto("/bytefix");
+    await expect(page.getByRole("heading", { name: secondCategory, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: offeringName, exact: true })).toHaveCount(1);
+
+    await page.goto("/business/offerings");
+    await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await page.getByRole("button", { name: `Delete ${firstCategory}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByRole("button", { name: `Delete ${firstCategory}` })).toHaveCount(0);
   });
 
   test("escape closes the remove confirm without touching the backend", async ({

@@ -31,6 +31,7 @@ EXPECTED_TABLES = {
     "tenant_assets",
     "tenant_media",
     "offering_categories",
+    "offering_category_memberships",
 }
 
 
@@ -72,8 +73,10 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # tenant-scoped offering_categories table and offerings.category_id, so a
     # category is a row the owner can rename once rather than a label repeated on
     # every offering; 0032 adds the escalation's intent family; 0033 adds
-    # conversations.customer_email, the escalation-scoped contact column.
-    assert len(on_disk) == 33, "expected migrations 0001-0033"
+    # conversations.customer_email, the escalation-scoped contact column; 0034
+    # adds multi-category offering memberships while retaining the 0031 primary
+    # category columns as a compatibility projection.
+    assert len(on_disk) == 34, "expected migrations 0001-0034"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
@@ -111,6 +114,73 @@ async def test_every_designed_table_exists(superuser_conn: asyncpg.Connection[An
     tables = {r["tablename"] for r in rows}
     missing = EXPECTED_TABLES - tables
     assert not missing, f"tables missing from migrations: {missing}"
+
+
+async def test_offering_memberships_enforce_tenant_primary_and_cascades(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    first_tenant = await superuser_conn.fetchval(
+        "insert into tenants (slug, name) values ('membership-a', 'Membership A') returning id"
+    )
+    second_tenant = await superuser_conn.fetchval(
+        "insert into tenants (slug, name) values ('membership-b', 'Membership B') returning id"
+    )
+    offering_id = await superuser_conn.fetchval(
+        "insert into offerings (tenant_id, name) values ($1, 'Repair') returning id",
+        first_tenant,
+    )
+    first_category = await superuser_conn.fetchval(
+        "insert into offering_categories (tenant_id, name, normalized_key) "
+        "values ($1, 'Repairs', 'repairs') returning id",
+        first_tenant,
+    )
+    second_category = await superuser_conn.fetchval(
+        "insert into offering_categories (tenant_id, name, normalized_key) "
+        "values ($1, 'Screen care', 'screen care') returning id",
+        first_tenant,
+    )
+    foreign_category = await superuser_conn.fetchval(
+        "insert into offering_categories (tenant_id, name, normalized_key) "
+        "values ($1, 'Foreign', 'foreign') returning id",
+        second_tenant,
+    )
+    await superuser_conn.execute(
+        "insert into offering_category_memberships "
+        "(tenant_id, offering_id, category_id, position, is_primary) "
+        "values ($1, $2, $3, 0, true)",
+        first_tenant,
+        offering_id,
+        first_category,
+    )
+    with pytest.raises(asyncpg.UniqueViolationError):
+        await superuser_conn.execute(
+            "insert into offering_category_memberships "
+            "(tenant_id, offering_id, category_id, position, is_primary) "
+            "values ($1, $2, $3, 1, true)",
+            first_tenant,
+            offering_id,
+            second_category,
+        )
+    with pytest.raises(asyncpg.ForeignKeyViolationError):
+        await superuser_conn.execute(
+            "insert into offering_category_memberships "
+            "(tenant_id, offering_id, category_id, position, is_primary) "
+            "values ($1, $2, $3, 1, false)",
+            first_tenant,
+            offering_id,
+            foreign_category,
+        )
+    await superuser_conn.execute("delete from offerings where id=$1", offering_id)
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from offering_category_memberships where offering_id=$1",
+            offering_id,
+        )
+        == 0
+    )
+    await superuser_conn.execute(
+        "delete from tenants where id=any($1::uuid[])", [first_tenant, second_tenant]
+    )
 
 
 async def test_rls_enabled_and_forced_everywhere(

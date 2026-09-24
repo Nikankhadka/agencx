@@ -66,4 +66,28 @@ describe("CatalogCard", () => {
 
     expect(html).toContain("$123.45");
   });
+
+  it("groups an offering under every confirmed category", () => {
+    const catalog: CatalogPayload = {
+      offerings: [
+        {
+          id: "repair",
+          name: "Screen replacement",
+          description: "",
+          category: "Repairs",
+          categories: [
+            { id: "repairs", name: "Repairs", position: 0, is_primary: true },
+            { id: "screens", name: "Screen care", position: 1, is_primary: false },
+          ],
+          price_cents: 9900,
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(<CatalogCard catalog={catalog} />);
+
+    expect(html).toContain("Repairs");
+    expect(html).toContain("Screen care");
+    expect(html.match(/Screen replacement/g) ?? []).toHaveLength(2);
+  });
 });

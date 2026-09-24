@@ -313,13 +313,16 @@ No new table. `knowledge_version` is derived:
 select greatest(
   coalesce((select max(updated_at) from documents where tenant_id = :tenant_id), 'epoch'::timestamptz),
   coalesce((select max(updated_at) from offerings where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select max(updated_at) from offering_categories where tenant_id = :tenant_id), 'epoch'::timestamptz),
+  coalesce((select max(updated_at) from offering_category_memberships where tenant_id = :tenant_id), 'epoch'::timestamptz),
   coalesce((select updated_at from tenant_config where tenant_id = :tenant_id), 'epoch'::timestamptz)
 )
 ```
 
 Any upload, re-ingest, status change, or a profile/system-prompt/brand write
-to `tenant_config` bumps it (both tables have carried a touch trigger since
-0003/0018). The context-package cache (architecture section 9) is keyed by
+to `tenant_config` bumps it. Category rename and offering membership changes
+also bump it through their touch triggers. The context-package cache
+(architecture section 9) is keyed by
 `(tenant_id, knowledge_version)`; a bumped version invalidates the cache on
 the next lookup. `offerings.updated_at` is included because `M-1` lets owners
 write it directly. Deletion also touches `tenant_config.updated_at`, because a
@@ -352,9 +355,28 @@ create table offerings (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   foreign key (tenant_id, category_id)
-    references offering_categories (tenant_id, id) on delete set null
+    references offering_categories (tenant_id, id)
 );
 create index offerings_storefront_order on offerings (tenant_id, active, position, created_at);
+
+create table offering_category_memberships (
+  tenant_id    uuid not null references tenants(id) on delete cascade,
+  offering_id  uuid not null,
+  category_id  uuid not null,
+  position     integer not null default 0 check (position >= 0),
+  is_primary   boolean not null default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  primary key (tenant_id, offering_id, category_id),
+  unique (tenant_id, offering_id, position),
+  foreign key (tenant_id, offering_id)
+    references offerings (tenant_id, id) on delete cascade,
+  foreign key (tenant_id, category_id)
+    references offering_categories (tenant_id, id) on delete cascade
+);
+create unique index offering_category_memberships_one_primary
+  on offering_category_memberships (tenant_id, offering_id)
+  where is_primary;
 
 create table pricing_rules (
   id                 uuid primary key default gen_random_uuid(),
@@ -385,10 +407,14 @@ create table quotes (
 ```
 
 A category is a row the owner renames once, not a label repeated on every
-offering (D28). The foreign key is composite - `(tenant_id, category_id)` -
-so a category can never be borrowed across tenants even if an id leaks, and
-`on delete set null` is what "uncategorized" means: deleting a category keeps
-its offerings.
+offering (D28). An offering joins zero or more categories through
+`offering_category_memberships`; each non-empty service-written membership set
+has exactly one primary (D31). Composite foreign keys prevent cross-tenant
+membership even if an id leaks. The compatibility `offerings.category_id` and
+`offerings.category` columns mirror the primary membership during the rollout
+window. Category deletion cascades memberships while the service first clears
+or promotes that compatibility projection; deleting the final membership
+means Uncategorized.
 
 All Shape A. **Only the pricing engine writes `quotes`** - it computes
 `line_items/subtotal/tax/total`; no other code path constructs those values. In
@@ -549,6 +575,7 @@ applied in order by a plain runner (no heavy framework):
 0031_offering_categories.sql  offering_categories + offerings.category_id, backfilled from the legacy label (D28)
 0032_escalation_intent.sql  escalations.intent - descriptive information/offer/support family; never a gate (ticket 19)
 0033_conversations_customer_email.sql  conversations.customer_email captured at escalation; owner-only, never on the public surface (ticket 19)
+0034_offering_category_memberships.sql  many-to-many offering categories, ordered membership and one primary (D31)
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,

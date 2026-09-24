@@ -14,19 +14,40 @@ interface Section {
 const COMPACT_CATALOG_MAX_ITEMS = 6;
 
 function sectionsOf(offerings: StorefrontOffering[]): Section[] {
-  const categories = Array.from(
-    new Set(offerings.map((item) => item.category).filter(Boolean)),
-  ) as string[];
-  const hasUncategorized = offerings.some((item) => !item.category);
-  const grouped =
-    categories.length > 1 ? [...categories, ...(hasUncategorized ? ["More"] : [])] : ["More"];
-  return grouped.map((category, index) => ({
+  const names: string[] = [];
+  for (const offering of offerings) {
+    const memberships = offering.categories?.length
+      ? offering.categories
+      : offering.category
+        ? [{ name: offering.category }]
+        : [];
+    for (const category of memberships) {
+      if (!names.includes(category.name)) names.push(category.name);
+    }
+  }
+  const uncategorized = offerings.filter(
+    (offering) => !(offering.categories?.length || offering.category),
+  );
+  if (names.length <= 1 && !uncategorized.length) {
+    return [{ id: "offer-category-1", label: "What we offer", offerings }];
+  }
+  const sections = names.map((name, index) => ({
     id: `offer-category-${index + 1}`,
-    label: categories.length <= 1 ? "What we offer" : category,
-    offerings: offerings.filter(
-      (item) => categories.length <= 1 || (item.category || "More") === category,
+    label: name,
+    offerings: offerings.filter((offering) =>
+      (offering.categories?.length
+        ? offering.categories.some((category) => category.name === name)
+        : offering.category === name),
     ),
   }));
+  if (uncategorized.length) {
+    sections.push({
+      id: `offer-category-${sections.length + 1}`,
+      label: names.length ? "More" : "What we offer",
+      offerings: uncategorized,
+    });
+  }
+  return sections;
 }
 
 /**

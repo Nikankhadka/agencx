@@ -96,10 +96,25 @@ retry converge on the same checkpoint instead of advancing twice.
 - `GET /api/onboarding/suggestions` returns only pending private candidates.
   `PUT /api/onboarding/suggestions` stores owner review decisions and publishes
   approved candidates immediately for an already-live tenant.
-- `offering_categories` is tenant-scoped and RLS protected. Offerings carry a
-  nullable `category_id` while retaining the category label for compatibility;
-  public and retrieval projections use the category label resolved from the
-  tenant category.
+- `offering_categories` is tenant-scoped and RLS protected. An offering accepts
+  `category_ids: UUID[]` plus `primary_category_id: UUID | null`; duplicate IDs,
+  a primary outside the list, and malformed combinations are rejected. On a
+  PATCH, omitted category fields preserve membership and an explicit empty list
+  clears it. When a non-empty list omits the primary, its first item becomes
+  primary.
+- Offering, booking-page, storefront, and catalog responses return
+  `categories: [{id, name, position, is_primary}]`, primary first. The singular
+  `category` and `category_id` fields remain during the compatibility window and
+  mirror the primary membership.
+- `GET /api/business/offering-categories` returns category objects with an
+  active `offering_count`. `POST /api/business/offering-categories` creates an
+  explicit owner-confirmed category; PATCH renames and DELETE removes it.
+  Normalized create or rename collisions return 409. Missing and cross-tenant
+  IDs return 404.
+- Deleting a primary category promotes the remaining lowest-position
+  membership. Deleting the final membership leaves the offering Uncategorized.
+  A model's `proposed_category` is private review metadata only: persistence
+  requires an owner-confirmed category selection or explicit creation.
 
 Unapproved candidates never enter `offerings`, the storefront, or customer
 context. Go live publishes only approved candidates; optional unreviewed drafts

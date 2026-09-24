@@ -16,9 +16,10 @@ from typing import Annotated
 from urllib.parse import urlparse
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.features.business import controller, service
 from app.features.business.media import Cloudinary, MediaUploadError, OfferingMedia
@@ -36,6 +37,13 @@ MAX_COVER_BYTES = 2 * 1024 * 1024
 ALLOWED_COVER_MIME = ("image/jpeg", "image/png", "image/webp")
 
 
+class OfferingCategoryMembershipResponse(BaseModel):
+    id: UUID
+    name: str
+    position: int
+    is_primary: bool
+
+
 class BookingPageOffering(BaseModel):
     id: UUID
     name: str
@@ -43,6 +51,7 @@ class BookingPageOffering(BaseModel):
     price_cents: int | None
     category: str | None = None
     category_id: UUID | None = None
+    categories: list[OfferingCategoryMembershipResponse] = Field(default_factory=list)
     media: OfferingMedia | None = None
 
 
@@ -113,6 +122,7 @@ class OfferingResponse(BaseModel):
     price_cents: int | None
     category: str | None = None
     category_id: UUID | None = None
+    categories: list[OfferingCategoryMembershipResponse] = Field(default_factory=list)
     media: OfferingMedia | None = None
 
 
@@ -120,6 +130,7 @@ class OfferingCategoryResponse(BaseModel):
     id: UUID
     name: str
     normalized_key: str
+    offering_count: int
 
 
 class OfferingCreate(BaseModel):
@@ -128,8 +139,8 @@ class OfferingCreate(BaseModel):
     name: str
     description: str = ""
     price_dollars: Decimal | None = None
-    category: str | None = Field(default=None, max_length=80)
-    category_id: UUID | None = None
+    category_ids: list[UUID] = Field(default_factory=list)
+    primary_category_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -148,6 +159,11 @@ class OfferingCreate(BaseModel):
     def _price(cls, value: object) -> Decimal | None:
         return _offering_price(value)
 
+    @model_validator(mode="after")
+    def _categories(self) -> OfferingCreate:
+        _validate_categories(self.category_ids, self.primary_category_id)
+        return self
+
 
 class OfferingUpdate(BaseModel):
     """A partial edit: an absent key means "leave this alone".
@@ -163,8 +179,8 @@ class OfferingUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     price_dollars: Decimal | None = None
-    category: str | None = Field(default=None, max_length=80)
-    category_id: UUID | None = None
+    category_ids: list[UUID] | None = None
+    primary_category_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -185,6 +201,19 @@ class OfferingUpdate(BaseModel):
     def _price(cls, value: object) -> Decimal | None:
         return _offering_price(value)
 
+    @model_validator(mode="after")
+    def _categories(self) -> OfferingUpdate:
+        if (
+            "primary_category_id" in self.model_fields_set
+            and "category_ids" not in self.model_fields_set
+        ):
+            raise ValueError("primary_category_id requires category_ids")
+        if "category_ids" in self.model_fields_set:
+            if self.category_ids is None:
+                raise ValueError("category_ids must be a list")
+            _validate_categories(self.category_ids, self.primary_category_id)
+        return self
+
     def updates(self) -> dict[str, object]:
         updates: dict[str, object] = {}
         if "name" in self.model_fields_set:
@@ -193,11 +222,18 @@ class OfferingUpdate(BaseModel):
             updates["description"] = self.description
         if "price_dollars" in self.model_fields_set:
             updates["price_cents"] = _price_cents(self.price_dollars)
-        if "category" in self.model_fields_set:
-            updates["category"] = self.category.strip() if self.category else None
-        if "category_id" in self.model_fields_set:
-            updates["category_id"] = self.category_id
+        if "category_ids" in self.model_fields_set:
+            updates["categories_supplied"] = True
+            updates["category_ids"] = self.category_ids
+            updates["primary_category_id"] = self.primary_category_id
         return updates
+
+
+def _validate_categories(category_ids: list[UUID], primary_category_id: UUID | None) -> None:
+    if len(category_ids) != len(set(category_ids)):
+        raise ValueError("category_ids must be unique")
+    if primary_category_id is not None and primary_category_id not in category_ids:
+        raise ValueError("primary_category_id must be included in category_ids")
 
 
 class OfferingCategoryUpdate(BaseModel):
@@ -208,7 +244,13 @@ class OfferingCategoryUpdate(BaseModel):
     @field_validator("name")
     @classmethod
     def _name(cls, value: str) -> str:
-        return value.strip()
+        if not (normalized := value.strip()):
+            raise ValueError("name must not be blank")
+        return normalized
+
+
+class OfferingCategoryCreate(OfferingCategoryUpdate):
+    """An explicitly requested tenant category."""
 
 
 @router.get("/page", response_model=BookingPageResponse)
@@ -249,15 +291,38 @@ async def list_offering_categories(
     return [OfferingCategoryResponse.model_validate(row) for row in rows]
 
 
+@router.post(
+    "/offering-categories",
+    response_model=OfferingCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_offering_category(
+    body: OfferingCategoryCreate,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> OfferingCategoryResponse:
+    try:
+        row = await service.create_category(tenant_id=admin.tenant_id, name=body.name)
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="category already exists"
+        ) from exc
+    return OfferingCategoryResponse.model_validate(row)
+
+
 @router.patch("/offering-categories/{category_id}", response_model=OfferingCategoryResponse)
 async def patch_offering_category(
     category_id: UUID,
     body: OfferingCategoryUpdate,
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> OfferingCategoryResponse:
-    row = await service.rename_category(
-        tenant_id=admin.tenant_id, category_id=category_id, name=body.name
-    )
+    try:
+        row = await service.rename_category(
+            tenant_id=admin.tenant_id, category_id=category_id, name=body.name
+        )
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="category already exists"
+        ) from exc
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="category not found")
     return OfferingCategoryResponse.model_validate(row)
@@ -289,8 +354,8 @@ async def post_offering(
             name=body.name,
             description=body.description,
             price_cents=_price_cents(body.price_dollars),
-            category=body.category.strip() if body.category else None,
-            category_id=body.category_id,
+            category_ids=body.category_ids,
+            primary_category_id=body.primary_category_id,
             embedder=embedder,
         )
     except ValueError as exc:

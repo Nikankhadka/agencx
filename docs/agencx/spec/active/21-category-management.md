@@ -1,7 +1,7 @@
 # 21: Category management and multi-category offerings
 
-**Status:** Active - todo. Not scheduled. Written 2026-09-24 from the
-founder's category audit; no code changed.
+**Status:** Done - verified. Shipped with migration `0034` and ADR D31.
+`make ci`, seeded E2E, and responsive owner/storefront visual checks are green.
 **Phase 1 area:** Offerings, storefront, and catalog.
 
 Numbering note: 17 is reserved for the M-7 storefront redesign, 18 was
@@ -24,11 +24,10 @@ canonical placement per item plus many-to-many browse membership, or a
 primary category plus collections or tags. Every platform researched lands on
 the same shape, summarized in [Industry standard](#industry-standard-research-2026-09-24).
 
-Two phases are proposed. Phase A adds vocabulary control to the existing
-input with no schema change. Phase B adds a membership join table so one
-offering can appear in several categories with one primary. Nothing is
-locked: the founder schedules this ticket, picks the phases, and answers the
-open questions.
+Both originally proposed phases are implemented together: vocabulary control
+in every owner review surface and a membership join table so one offering can
+appear in several categories with one owner-selected primary. Legacy category
+columns remain synchronized during the compatibility window.
 
 ## Why
 
@@ -54,7 +53,7 @@ warrants a tenant-scoped category table with a stable foreign key, "plus a
 join table if membership becomes many-to-many". Membership is now the open
 need.
 
-## Current behavior
+## Pre-ticket behavior (historical)
 
 ### Data model
 
@@ -187,37 +186,35 @@ Constraints that bind either phase:
 - The owner console stays show-back, so the preview cannot disagree with the
   storefront.
 
-## Open questions (founder decisions pending)
+## Locked decisions
 
-1. Phase A alone, or A and B together?
-2. Separators: reject the save, offer a two-category split, or warn only?
-3. Primary category: chosen by the owner, or the first membership wins?
-4. Do model-suggested categories write memberships, or prime the owner's
-   choice only?
-5. Category guardrails: adopt the WooCommerce-style guidance (5-15
-   categories, several offerings each), or leave the count to the owner?
-6. Storefront with multi-membership: show the offering on every shelf it
-   joins, the industry norm, or pin it to the primary only?
+1. Phase A and Phase B ship together.
+2. Separator-like input offers split chips and a separate exact-label action.
+3. The first selection defaults to primary, and the owner may change it.
+4. Model suggestions remain private until the owner selects an existing
+   category or explicitly creates the suggestion.
+5. Guidance replaces a hard category-count limit.
+6. An offering appears once on every joined storefront and chat shelf.
 
-## Acceptance criteria (draft; final once the founder picks phases)
+## Acceptance criteria
 
 Phase A:
 
-- [ ] The category field lists existing categories while typing.
-- [ ] Creating a new category requires an explicit confirmation step.
-- [ ] A separator inside one label is caught before save.
-- [ ] Backend and frontend tests cover the three cases above.
-- [ ] `make check` green.
+- [x] The category field lists existing categories while typing.
+- [x] Creating a new category requires an explicit action.
+- [x] A separator inside one label offers split and exact-label actions.
+- [x] Backend and frontend tests cover the three cases above.
+- [x] `make check` green.
 
 Phase B:
 
-- [ ] A migration adds the join table, backfills from `category_id`, and
+- [x] A migration adds the join table, backfills from `category_id`, and
       keeps the legacy columns readable.
-- [ ] The offerings API returns the membership list with one primary.
-- [ ] The storefront renders an offering under each category once.
-- [ ] The agent context lists every membership.
-- [ ] RLS and isolation tests cover the new table.
-- [ ] `make check` green.
+- [x] The offerings API returns the membership list with one primary.
+- [x] The storefront renders an offering under each category once.
+- [x] The agent context lists every membership.
+- [x] RLS and isolation tests cover the new table.
+- [x] `make check` green.
 
 ## References
 
@@ -237,17 +234,12 @@ Internal:
 
 External: the platform documentation linked in the industry table above.
 
-When a direction is locked, record it as ADR D31, the next free decision
-number ([decisions.md:889](../../design/decisions.md#L889)), and update
-[design/database.md](../../design/database.md) section 5 and
-[design/api-contract.md](../../design/api-contract.md) with the schema and
-payload changes.
+The locked direction is recorded in ADR D31, database section 5, and the API
+contract.
 
 ## Definition of done
 
-Draft, to be finalized with the phase choice:
-
-- The chosen phases are built as scoped, with no unrequested extras.
+- Both phases are built as scoped, with no unrequested extras.
 - Categories remain tenant-owned; no vertical taxonomy enters the code.
 - No category carries money; the pricing engine and the money guardrail are
   untouched.

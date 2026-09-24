@@ -113,13 +113,29 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
 ) -> None:
     headers, tenant_id = await _signup(client)
 
+    screen = await client.post(
+        "/api/business/offering-categories",
+        json={"name": "Screen repairs"},
+        headers=headers,
+    )
+    assert screen.status_code == 201, screen.text
+    screen_id = screen.json()["id"]
+    care = await client.post(
+        "/api/business/offering-categories",
+        json={"name": "Screen care"},
+        headers=headers,
+    )
+    assert care.status_code == 201, care.text
+    care_id = care.json()["id"]
+
     created = await client.post(
         "/api/business/offerings",
         json={
             "name": "Screen repair",
             "description": "Most models",
             "price_dollars": "89.50",
-            "category": "Screen repairs",
+            "category_ids": [screen_id, care_id],
+            "primary_category_id": screen_id,
         },
         headers=headers,
     )
@@ -135,7 +151,11 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "description": "Most models",
             "price_cents": 8950,
             "category": "Screen repairs",
-            "category_id": offering["category_id"],
+            "category_id": screen_id,
+            "categories": [
+                {"id": screen_id, "name": "Screen repairs", "position": 0, "is_primary": True},
+                {"id": care_id, "name": "Screen care", "position": 1, "is_primary": False},
+            ],
             "media": None,
         }
     ]
@@ -157,7 +177,11 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "description": "Most models",
             "price_cents": 9900,
             "category": "Screen repairs",
-            "category_id": offering["category_id"],
+            "category_id": screen_id,
+            "categories": [
+                {"id": screen_id, "name": "Screen repairs", "position": 0, "is_primary": True},
+                {"id": care_id, "name": "Screen care", "position": 1, "is_primary": False},
+            ],
             "media": None,
         }
     ]
@@ -173,17 +197,41 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
         assert await knowledge_version(conn, tenant_id) > after_update
 
 
-async def test_category_rename_and_delete_moves_offerings_to_uncategorized(
+async def test_category_crud_and_primary_deletion_promotes_the_next_membership(
     client: httpx.AsyncClient,
 ) -> None:
     headers, _ = await _signup(client)
+    primary = await client.post(
+        "/api/business/offering-categories", json={"name": "Desserts"}, headers=headers
+    )
+    secondary = await client.post(
+        "/api/business/offering-categories", json={"name": "Takeaway"}, headers=headers
+    )
+    assert primary.status_code == 201
+    assert secondary.status_code == 201
+    category_id = primary.json()["id"]
+    secondary_id = secondary.json()["id"]
+    duplicate = await client.post(
+        "/api/business/offering-categories", json={"name": " desserts "}, headers=headers
+    )
+    assert duplicate.status_code == 409
+
     created = await client.post(
         "/api/business/offerings",
-        json={"name": "Baklava", "category": "Desserts"},
+        json={
+            "name": "Baklava",
+            "category_ids": [category_id, secondary_id],
+            "primary_category_id": category_id,
+        },
         headers=headers,
     )
     assert created.status_code == 201, created.text
-    category_id = created.json()["category_id"]
+
+    counts = (await client.get("/api/business/offering-categories", headers=headers)).json()
+    assert {item["name"]: item["offering_count"] for item in counts} == {
+        "Desserts": 1,
+        "Takeaway": 1,
+    }
 
     renamed = await client.patch(
         f"/api/business/offering-categories/{category_id}",
@@ -201,17 +249,29 @@ async def test_category_rename_and_delete_moves_offerings_to_uncategorized(
     )
     assert deleted.status_code == 204
     offering = (await client.get("/api/business/offerings", headers=headers)).json()[0]
-    assert offering["category"] is None
-    assert offering["category_id"] is None
+    assert offering["category"] == "Takeaway"
+    assert offering["category_id"] == secondary_id
+    assert offering["categories"] == [
+        {"id": secondary_id, "name": "Takeaway", "position": 1, "is_primary": True}
+    ]
 
     # A category this tenant no longer owns is a 404, not a 500 from the
     # service's own lookup.
     stale = await client.patch(
         f"/api/business/offerings/{offering['id']}",
-        json={"category_id": category_id},
+        json={"category_ids": [category_id]},
         headers=headers,
     )
     assert stale.status_code == 404
+
+    cleared = await client.patch(
+        f"/api/business/offerings/{offering['id']}",
+        json={"category_ids": []},
+        headers=headers,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["categories"] == []
+    assert cleared.json()["category_id"] is None
 
 
 async def test_youtube_offering_media_does_not_require_cloudinary(
@@ -483,6 +543,8 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
             "description": "Repairs for common phone screens.",
             "price_cents": 8950,
             "category": None,
+            "category_id": None,
+            "categories": [],
             "media": None,
         }
     ]
@@ -589,6 +651,8 @@ async def test_a_priceless_offering_reaches_the_storefront_with_no_price(
             "description": "",
             "price_cents": None,
             "category": None,
+            "category_id": None,
+            "categories": [],
             "media": None,
         }
     ]

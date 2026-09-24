@@ -64,49 +64,49 @@ SABABA_PROFILE = {
 
 # --- offerings: flat menu figures only; ranged items carry no price --------
 
-CATALOG_ITEMS: list[tuple[str, str, int | None, str | None]] = [
-    ("Bowl", "Salads and dips with pita on the side", 2700, "Plates & Bowls"),
+CATALOG_ITEMS: list[tuple[str, str, int | None, list[str]]] = [
+    ("Bowl", "Salads and dips with pita on the side", 2700, ["Plates & Bowls"]),
     (
         "Super Plate",
         "Choice of two proteins, four seasonal salads and two dips",
         3700,
-        "Plates & Bowls",
+        ["Plates & Bowls"],
     ),
     (
         "Plate",
         "Salads and dips with one pita, priced $20-$30 depending on build",
         None,
-        "Plates & Bowls",
+        ["Plates & Bowls"],
     ),
     (
         "Pita Pocket",
         "Salads and dips wrapped in pita, priced $20-$30 depending on build",
         None,
-        "Pitas",
+        ["Pitas"],
     ),
     (
         "Sabbaba Pita Pocket",
         "House pita with the full four-salad, four-dip combo",
         2000,
-        "Pitas",
+        ["Pitas"],
     ),
     (
         "Larnaca Pita",
         "Olives, green chilli and shredded halloumi",
         1990,
-        "Pitas",
+        ["Pitas"],
     ),
-    ("Algerian Pita", "Chickpeas and eggplant", 1990, "Pitas"),
-    ("Tunisian Pita", "Marrakech salad and sweet potato", 2000, "Pitas"),
+    ("Algerian Pita", "Chickpeas and eggplant", 1990, ["Pitas"]),
+    ("Tunisian Pita", "Marrakech salad and sweet potato", 2000, ["Pitas"]),
     (
         "Cancun Pita",
         "Salsa, sour cream, guacamole, jalapenos, corn chips and cheese",
         2190,
-        "Pitas",
+        ["Pitas"],
     ),
-    ("Hot Chips", "Famous lightly seasoned chips", 1000, "Sides"),
-    ("Six Falafel", "Six falafel pieces", 1090, "Sides"),
-    ("Soft Drink Can", "A can of soft drink", 450, "Drinks"),
+    ("Hot Chips", "Famous lightly seasoned chips", 1000, ["Sides"]),
+    ("Six Falafel", "Six falafel pieces", 1090, ["Sides"]),
+    ("Soft Drink Can", "A can of soft drink", 450, ["Drinks"]),
 ]
 
 # --- pricing_rules: one per flat-priced offering ----------------------------

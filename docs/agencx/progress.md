@@ -84,13 +84,13 @@ live in the ticket files, not here.
 - [ ] Provider-backed `make eval` has no valid baseline: deterministic
   gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
   attempts). Needs a paid tier or a smaller eval slice.
-- [ ] Category management analysis: free-text single categories fragment the
-  catalog (the founder's "breakfast / drinks" against "drinks" case), and one
-  offering cannot sit on two shelves. The industry standard, the current
-  behavior, and a two-phase proposal (controlled-vocabulary input, then a
-  membership join table) are recorded in
+- [x] Category management and multi-category offerings: controlled category
+  objects, explicit owner confirmation, ordered many-to-many membership with
+  one primary, multi-shelf storefront and chat rendering, and generic food,
+  dental, and repair seeds shipped with migration `0034` and ADR D31.
+  Automated gates and responsive owner/storefront visual checks are green;
+  evidence is recorded in
   [21-category-management.md](spec/active/21-category-management.md).
-  `Active - todo`, not scheduled.
 - [ ] Ops: add the GitHub `VERCEL_TOKEN` secret; configure Brevo SMTP on
   the hosted project (built-in mailer is member-only); automate hosted
   migrations (`deploy.yml` runs no migrate step). Procedure is in
@@ -103,7 +103,7 @@ live in the ticket files, not here.
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
 | [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
-| [spec/active/21-category-management.md](spec/active/21-category-management.md) | `Active - todo` | Category management and multi-category offerings (analysis and phased proposal) |
+| [spec/active/21-category-management.md](spec/active/21-category-management.md) | `Done - verified` | Category management and multi-category offerings (migration `0034`, ADR D31) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

@@ -79,6 +79,8 @@ export interface StorefrontOffering {
    */
   price_cents: number | null;
   category?: string | null;
+  category_id?: string | null;
+  categories?: Array<{ id: string; name: string; position: number; is_primary: boolean }>;
   media?: { type: string; provider: string; url: string; poster_url?: string | null } | null;
 }
 

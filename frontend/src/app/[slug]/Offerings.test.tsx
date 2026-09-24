@@ -123,4 +123,24 @@ describe("Offerings catalog density", () => {
     expect(html.match(/What we offer/g) ?? []).toHaveLength(1);
     expect(html).not.toContain(">More<");
   });
+
+  it("shows one offering once on each confirmed category shelf", () => {
+    const html = catalogHtml([
+      offering({
+        id: "repair",
+        name: "Screen replacement",
+        category: "Repairs",
+        categories: [
+          { id: "repairs", name: "Repairs", position: 0, is_primary: true },
+          { id: "screens", name: "Screen care", position: 1, is_primary: false },
+        ],
+      }),
+      offering({ id: "case", name: "Phone case", category: "Accessories" }),
+    ]);
+
+    expect(html).toContain("Repairs");
+    expect(html).toContain("Screen care");
+    expect(html).toContain("Accessories");
+    expect(html.match(/Screen replacement/g) ?? []).toHaveLength(2);
+  });
 });

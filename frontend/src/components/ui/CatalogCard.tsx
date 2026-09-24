@@ -6,6 +6,7 @@ export interface CatalogOffering {
   name: string;
   description: string;
   category: string | null;
+  categories?: Array<{ id: string; name: string; position: number; is_primary: boolean }>;
   price_cents: number | null;
 }
 
@@ -16,10 +17,14 @@ export interface CatalogPayload {
 export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
   const groups: Array<[string, CatalogOffering[]]> = [];
   for (const offering of catalog.offerings) {
-    const heading = offering.category?.trim() || "Offerings";
-    const group = groups.find(([name]) => name === heading);
-    if (group) group[1].push(offering);
-    else groups.push([heading, [offering]]);
+    const headings = offering.categories?.length
+      ? offering.categories.map((category) => category.name)
+      : [offering.category?.trim() || "Offerings"];
+    for (const heading of headings) {
+      const group = groups.find(([name]) => name === heading);
+      if (group && !group[1].some((item) => item.id === offering.id)) group[1].push(offering);
+      else if (!group) groups.push([heading, [offering]]);
+    }
   }
 
   return (

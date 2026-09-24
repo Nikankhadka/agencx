@@ -799,6 +799,15 @@ async def run(state: AgentState) -> dict[str, Any]:
                                     "name": offering.name,
                                     "description": offering.description,
                                     "category": offering.category,
+                                    "categories": [
+                                        {
+                                            "id": category.id,
+                                            "name": category.name,
+                                            "position": category.position,
+                                            "is_primary": category.is_primary,
+                                        }
+                                        for category in offering.categories
+                                    ],
                                     "price_cents": offering.price_cents,
                                 }
                                 for offering in package.offerings

@@ -114,17 +114,17 @@ async def insert_tenant_core(
 async def insert_offerings(
     conn: AppConnection,
     tenant_id: UUID,
-    catalog: list[tuple[str, str, int | None, str | None]],
+    catalog: list[tuple[str, str, int | None, list[str]]],
 ) -> None:
-    """(name, description, price_cents, category) rows, position = list order.
+    """(name, description, price_cents, ordered categories) rows.
 
     The label is written beside the category row it belongs to (D28), so a
     seeded world has the shape production writes and an owner can rename a
     seeded category the same way they rename one they created.
     """
-    for position, (name, description, price_cents, category) in enumerate(catalog):
-        category_id = None
-        if category and category.strip():
+    for position, (name, description, price_cents, categories) in enumerate(catalog):
+        category_rows: list[tuple[UUID, str]] = []
+        for category in categories:
             category_id = await conn.fetchval(
                 "insert into offering_categories (tenant_id, name, normalized_key) "
                 "values ($1, $2, $3) on conflict (tenant_id, normalized_key) "
@@ -133,18 +133,30 @@ async def insert_offerings(
                 category.strip(),
                 normalize_name(category),
             )
-        await conn.execute(
+            category_rows.append((category_id, category.strip()))
+        offering_id = await conn.fetchval(
             "insert into offerings "
             "(tenant_id, name, description, price_cents, position, category, category_id) "
-            "values ($1, $2, $3, $4, $5, $6, $7)",
+            "values ($1, $2, $3, $4, $5, $6, $7) returning id",
             tenant_id,
             name,
             description,
             price_cents,
             position,
-            category,
-            category_id,
+            category_rows[0][1] if category_rows else None,
+            category_rows[0][0] if category_rows else None,
         )
+        for category_position, (category_id, _) in enumerate(category_rows):
+            await conn.execute(
+                "insert into offering_category_memberships "
+                "(tenant_id, offering_id, category_id, position, is_primary) "
+                "values ($1, $2, $3, $4, $5)",
+                tenant_id,
+                offering_id,
+                category_id,
+                category_position,
+                category_position == 0,
+            )
 
 
 async def insert_pricing_rules(

@@ -187,6 +187,10 @@ class PendingOffering(BaseModel):
     # document drafts remain readable through pydantic defaults.
     source_wording: str = Field(default="", max_length=2000)
     proposed_category: str = Field(default="", max_length=80)
+    # ``None`` means the owner made no category decision and reconciliation
+    # must preserve existing memberships. An empty list is an explicit clear.
+    category_ids: list[UUID] | None = None
+    primary_category_id: UUID | None = None
     description_origin: Literal["owner", "document", "generated", "none"] = "none"
     review_status: Literal["pending", "approved", "rejected"] = "pending"
     provenance: dict[str, Any] = Field(default_factory=dict)
@@ -210,8 +214,22 @@ class PendingOffering(BaseModel):
         # cannot encode a UUID, so the wire form is always the string.
         return [str(item) for item in value]
 
+    @field_serializer("category_ids")
+    def _serialize_category_ids(self, value: list[UUID] | None) -> list[str] | None:
+        return None if value is None else [str(item) for item in value]
+
+    @field_serializer("primary_category_id")
+    def _serialize_primary_category_id(self, value: UUID | None) -> str | None:
+        return str(value) if value is not None else None
+
     @model_validator(mode="after")
     def _default_candidate_id(self) -> PendingOffering:
+        if self.category_ids is not None and len(self.category_ids) != len(set(self.category_ids)):
+            raise ValueError("category ids must be unique")
+        if self.primary_category_id is not None and (
+            self.category_ids is None or self.primary_category_id not in self.category_ids
+        ):
+            raise ValueError("primary category must be selected")
         if not self.candidate_id:
             self.candidate_id = stable_candidate_id(self.name)
         return self
@@ -305,6 +323,13 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
     name = document.name if document else existing.name
     offered = [item.price_cents for item in pair if item.price_cents is not None]
     conflicting = sorted({*offered, *existing.price_options, *incoming.price_options})
+    confirmed_categories = list(
+        dict.fromkeys([*(existing.category_ids or []), *(incoming.category_ids or [])])
+    )
+    categories_decided = existing.category_ids is not None or incoming.category_ids is not None
+    primary_category_id = existing.primary_category_id or incoming.primary_category_id
+    if primary_category_id is None and confirmed_categories:
+        primary_category_id = confirmed_categories[0]
     return PendingOffering(
         name=name,
         candidate_id=document.candidate_id if document else existing.candidate_id,
@@ -326,6 +351,8 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
         proposed_category=next(
             (item.proposed_category for item in preferred if item.proposed_category), ""
         ),
+        category_ids=confirmed_categories if categories_decided else None,
+        primary_category_id=primary_category_id,
         description_origin=next(
             (item.description_origin for item in preferred if item.description_origin != "none"),
             "none",

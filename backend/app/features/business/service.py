@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 from uuid import UUID
-
-from pydantic import BaseModel, Field
 
 from app.features.business.media import Cloudinary, MediaUploadError, UploadedMedia, classify_url
 from app.features.business.offering_candidates import normalize_name
 from app.features.tenants.service import invalidate_slug_cache
 from app.ingestion.pipeline import ingest_offerings
-from app.llm.dependency import get_llm_provider
 from app.llm.embedder import Embedder
-from app.llm.provider import LLMProvider
 from app.onboarding.flow import read_services
 from app.shared import db
 from app.shared.config import get_settings
@@ -28,70 +23,125 @@ LINK_KEYS = ("website", "google", "facebook", "instagram")
 COVER_KIND = "cover"
 
 
-class _CategorySuggestion(BaseModel):
-    category: str | None = Field(default=None, max_length=80)
-
-
-async def _suggest_category(
-    *, name: str, description: str, preferred: list[str], provider: LLMProvider
-) -> str | None:
-    try:
-        result = await asyncio.wait_for(
-            provider.extract(
-                system_prompt=(
-                    "Suggest one short, business-agnostic catalogue category. "
-                    "Return null if uncertain. Prefer one of these existing categories "
-                    "when suitable: "
-                    f"{', '.join(preferred) or 'none'}. Never include prices."
-                ),
-                user_input=f"Name: {name}\nDescription: {description}",
-                schema=_CategorySuggestion,
-            ),
-            timeout=4,
-        )
-    except Exception:
-        return None
-    value = (result.category or "").strip()
-    return value or None
-
-
-async def _ensure_category(
-    *,
-    conn: db.AppConnection,
-    tenant_id: UUID,
-    name: str | None = None,
-    category_id: UUID | None = None,
-) -> tuple[UUID | None, str | None]:
-    """Resolve one tenant-owned category, creating labels only on explicit input."""
-    if category_id is not None:
-        row = await conn.fetchrow(
-            "select id, name from offering_categories where tenant_id=$1 and id=$2",
-            tenant_id,
-            category_id,
-        )
-        if row is None:
-            raise ValueError("category not found")
-        return row["id"], row["name"]
-    label = name.strip() if name else ""
-    if not label:
-        return None, None
-    key = normalize_name(label)
-    row = await conn.fetchrow(
-        "insert into offering_categories (tenant_id, name, normalized_key) values ($1, $2, $3) "
-        "on conflict (tenant_id, normalized_key) do update set name=offering_categories.name "
-        "returning id, name",
+async def _categories_by_offering(
+    conn: db.AppConnection, *, tenant_id: UUID, offering_ids: list[UUID]
+) -> dict[UUID, list[dict[str, Any]]]:
+    grouped: dict[UUID, list[dict[str, Any]]] = {offering_id: [] for offering_id in offering_ids}
+    if not offering_ids:
+        return grouped
+    rows = await conn.fetch(
+        "select m.offering_id, c.id, c.name, m.position, m.is_primary "
+        "from offering_category_memberships m join offering_categories c "
+        "on c.tenant_id=m.tenant_id and c.id=m.category_id "
+        "where m.tenant_id=$1 and m.offering_id=any($2::uuid[]) "
+        "order by m.offering_id, m.is_primary desc, m.position, c.id",
         tenant_id,
-        label,
-        key,
+        offering_ids,
     )
-    return (row["id"], row["name"]) if row is not None else (None, None)
+    for row in rows:
+        grouped[row["offering_id"]].append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "position": row["position"],
+                "is_primary": row["is_primary"],
+            }
+        )
+    return grouped
+
+
+async def _attach_categories(
+    conn: db.AppConnection, *, tenant_id: UUID, rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    grouped = await _categories_by_offering(
+        conn, tenant_id=tenant_id, offering_ids=[row["id"] for row in rows]
+    )
+    for row in rows:
+        categories = grouped[row["id"]]
+        row["categories"] = categories
+        primary = next((category for category in categories if category["is_primary"]), None)
+        row["category"] = primary["name"] if primary else None
+        row["category_id"] = primary["id"] if primary else None
+    return rows
+
+
+async def _replace_category_memberships(
+    conn: db.AppConnection,
+    *,
+    tenant_id: UUID,
+    offering_id: UUID,
+    category_ids: list[UUID],
+    primary_category_id: UUID | None,
+) -> None:
+    """Replace one offering's complete browse membership and primary projection."""
+    if len(category_ids) != len(set(category_ids)):
+        raise ValueError("category ids must be unique")
+    if primary_category_id is not None and primary_category_id not in category_ids:
+        raise ValueError("primary category must be selected")
+    primary_category_id = primary_category_id or (category_ids[0] if category_ids else None)
+    if category_ids:
+        rows = await conn.fetch(
+            "select id, name from offering_categories where tenant_id=$1 and id=any($2::uuid[])",
+            tenant_id,
+            category_ids,
+        )
+        categories = {row["id"]: row["name"] for row in rows}
+        if len(categories) != len(category_ids):
+            raise ValueError("category not found")
+    else:
+        categories = {}
+
+    await conn.execute(
+        "delete from offering_category_memberships where tenant_id=$1 and offering_id=$2",
+        tenant_id,
+        offering_id,
+    )
+    for position, category_id in enumerate(category_ids):
+        await conn.execute(
+            "insert into offering_category_memberships "
+            "(tenant_id, offering_id, category_id, position, is_primary) "
+            "values ($1, $2, $3, $4, $5)",
+            tenant_id,
+            offering_id,
+            category_id,
+            position,
+            category_id == primary_category_id,
+        )
+    await conn.execute(
+        "update offerings set category_id=$3, category=$4 where tenant_id=$1 and id=$2",
+        tenant_id,
+        offering_id,
+        primary_category_id,
+        categories.get(primary_category_id),
+    )
+
+
+async def create_category(*, tenant_id: UUID, name: str) -> dict[str, Any]:
+    label = name.strip()
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            "insert into offering_categories (tenant_id, name, normalized_key) "
+            "values ($1, $2, $3) returning id, name, normalized_key",
+            tenant_id,
+            label,
+            normalize_name(label),
+        )
+    if row is None:
+        raise RuntimeError("category insert returned no row")
+    return {**dict(row), "offering_count": 0}
 
 
 async def list_categories(*, tenant_id: UUID) -> list[dict[str, Any]]:
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
-            "select id, name, normalized_key from offering_categories "
-            "where tenant_id=$1 order by lower(name), id",
+            "select c.id, c.name, c.normalized_key, "
+            "count(distinct o.id) filter (where o.active)::int as offering_count "
+            "from offering_categories c "
+            "left join offering_category_memberships m "
+            "on m.tenant_id=c.tenant_id and m.category_id=c.id "
+            "left join offerings o on o.tenant_id=m.tenant_id and o.id=m.offering_id "
+            "where c.tenant_id=$1 group by c.id, c.name, c.normalized_key "
+            "order by lower(c.name), c.id",
             tenant_id,
         )
     return [dict(row) for row in rows]
@@ -118,7 +168,22 @@ async def rename_category(
                 category_id,
                 label,
             )
-    return dict(row) if row is not None else None
+    if row is None:
+        return None
+    count = await _category_offering_count(tenant_id=tenant_id, category_id=category_id)
+    return {**dict(row), "offering_count": count}
+
+
+async def _category_offering_count(*, tenant_id: UUID, category_id: UUID) -> int:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        value = await conn.fetchval(
+            "select count(*)::int from offering_category_memberships m "
+            "join offerings o on o.tenant_id=m.tenant_id and o.id=m.offering_id "
+            "where m.tenant_id=$1 and m.category_id=$2 and o.active",
+            tenant_id,
+            category_id,
+        )
+    return int(value or 0)
 
 
 async def delete_category(*, tenant_id: UUID, category_id: UUID) -> bool:
@@ -130,6 +195,12 @@ async def delete_category(*, tenant_id: UUID, category_id: UUID) -> bool:
         )
         if not exists:
             return False
+        affected = await conn.fetch(
+            "select offering_id from offering_category_memberships "
+            "where tenant_id=$1 and category_id=$2",
+            tenant_id,
+            category_id,
+        )
         await conn.execute(
             "update offerings set category_id=null, category=null "
             "where tenant_id=$1 and category_id=$2",
@@ -141,6 +212,39 @@ async def delete_category(*, tenant_id: UUID, category_id: UUID) -> bool:
             tenant_id,
             category_id,
         )
+        for affected_row in affected:
+            offering_id = affected_row["offering_id"]
+            primary = await conn.fetchrow(
+                "select m.category_id, c.name, m.is_primary from offering_category_memberships m "
+                "join offering_categories c on c.tenant_id=m.tenant_id and c.id=m.category_id "
+                "where m.tenant_id=$1 and m.offering_id=$2 "
+                "order by m.is_primary desc, m.position, m.category_id limit 1",
+                tenant_id,
+                offering_id,
+            )
+            if primary is None:
+                await conn.execute(
+                    "update offerings set category_id=null, category=null "
+                    "where tenant_id=$1 and id=$2",
+                    tenant_id,
+                    offering_id,
+                )
+                continue
+            if not primary["is_primary"]:
+                await conn.execute(
+                    "update offering_category_memberships set is_primary=true "
+                    "where tenant_id=$1 and offering_id=$2 and category_id=$3",
+                    tenant_id,
+                    offering_id,
+                    primary["category_id"],
+                )
+            await conn.execute(
+                "update offerings set category_id=$3, category=$4 where tenant_id=$1 and id=$2",
+                tenant_id,
+                offering_id,
+                primary["category_id"],
+                primary["name"],
+            )
     return True
 
 
@@ -155,30 +259,30 @@ async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
             "select o.id, o.name, o.description, o.price_cents, "
-            "coalesce(c.name, o.category) as category, o.category_id, o.active, o.position, "
+            "o.category, o.category_id, o.active, o.position, "
             "m.type as media_type, m.provider as media_provider, m.url as media_url, m.poster_url "
             "from offerings o left join tenant_media m on m.offering_id = o.id "
             "and m.role = 'offering' "
-            "left join offering_categories c on c.tenant_id=o.tenant_id and c.id=o.category_id "
             f"where o.tenant_id = $1 {active_filter} order by o.position, o.created_at, o.id",  # noqa: S608
             tenant_id,
         )
-    result = []
-    for row in rows:
-        item = dict(row)
-        media_url = item.pop("media_url", None)
-        if media_url:
-            item["media"] = {
-                "type": item.pop("media_type"),
-                "provider": item.pop("media_provider"),
-                "url": media_url,
-                "poster_url": item.pop("poster_url", None),
-            }
-        else:
-            for key in ("media_type", "media_provider", "poster_url"):
-                item.pop(key, None)
-            item["media"] = None
-        result.append(item)
+        result = []
+        for row in rows:
+            item = dict(row)
+            media_url = item.pop("media_url", None)
+            if media_url:
+                item["media"] = {
+                    "type": item.pop("media_type"),
+                    "provider": item.pop("media_provider"),
+                    "url": media_url,
+                    "poster_url": item.pop("poster_url", None),
+                }
+            else:
+                for key in ("media_type", "media_provider", "poster_url"):
+                    item.pop(key, None)
+                item["media"] = None
+            result.append(item)
+        await _attach_categories(conn, tenant_id=tenant_id, rows=result)
     return result
 
 
@@ -189,8 +293,8 @@ async def create_offering(
     description: str,
     price_cents: int | None,
     embedder: Embedder,
-    category: str | None = None,
-    category_id: UUID | None = None,
+    category_ids: list[UUID] | None = None,
+    primary_category_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Create one offering at the end of the list, then rebuild its projection."""
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
@@ -202,8 +306,8 @@ async def create_offering(
                     "name": name,
                     "description": description,
                     "price_cents": price_cents,
-                    "category": category,
-                    "category_id": category_id,
+                    "category_ids": category_ids or [],
+                    "primary_category_id": primary_category_id,
                 }
             ],
             embedder=embedder,
@@ -225,23 +329,6 @@ async def create_offerings_batch(
         "select name from offerings where tenant_id = $1 and active", tenant_id
     )
     existing = {normalize_name(str(row["name"])) for row in existing_rows}
-    existing_categories = sorted(
-        {
-            str(row["category"]).strip()
-            for row in await conn.fetch(
-                "select distinct category from offerings "
-                "where tenant_id=$1 and category is not null",
-                tenant_id,
-            )
-        }
-    )
-    settings = get_settings()
-    category_provider = (
-        get_llm_provider()
-        if settings.environment == "production"
-        and (settings.llm_api_key or settings.azure_openai_api_key)
-        else None
-    )
     position = await conn.fetchval(
         "select coalesce(max(position) + 1, 0) from offerings where tenant_id = $1", tenant_id
     )
@@ -251,39 +338,30 @@ async def create_offerings_batch(
         key = normalize_name(name)
         if not name or key in existing:
             continue
-        category = str(item.get("category") or "").strip() or None
-        if category is None and category_provider is not None:
-            category = await _suggest_category(
-                name=name,
-                description=str(item.get("description", "")),
-                preferred=existing_categories,
-                provider=category_provider,
-            )
-        category_id, category = await _ensure_category(
-            conn=conn,
-            tenant_id=tenant_id,
-            name=category,
-            category_id=item.get("category_id"),
-        )
         row = await conn.fetchrow(
-            "insert into offerings (tenant_id, name, description, price_cents, category, "
-            "category_id, position) "
-            "values ($1, $2, $3, $4, $5, $6, $7) returning id, name, description, price_cents, "
+            "insert into offerings (tenant_id, name, description, price_cents, position) "
+            "values ($1, $2, $3, $4, $5) returning id, name, description, price_cents, "
             "category, category_id, active, "
             "position",
             tenant_id,
             name,
             str(item.get("description", "")),
             item.get("price_cents"),
-            category,
-            category_id,
             position,
         )
         if row is not None:
+            await _replace_category_memberships(
+                conn,
+                tenant_id=tenant_id,
+                offering_id=row["id"],
+                category_ids=list(item.get("category_ids") or []),
+                primary_category_id=item.get("primary_category_id"),
+            )
             rows.append(dict(row))
             existing.add(key)
             position += 1
     if rows:
+        await _attach_categories(conn, tenant_id=tenant_id, rows=rows)
         await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
     return rows
 
@@ -314,24 +392,15 @@ async def reconcile_offerings_batch(
     for item in offerings:
         name = str(item.get("name", "")).strip()
         key = normalize_name(name)
-        category_id, category = await _ensure_category(
-            conn=conn,
-            tenant_id=tenant_id,
-            name=str(item.get("category") or item.get("proposed_category") or "") or None,
-            category_id=item.get("category_id"),
-        )
         values = (
             name,
             str(item.get("description", "")),
             item.get("price_cents"),
-            category,
-            category_id,
         )
         row = existing.get(key)
         if row is not None:
             await conn.execute(
-                "update offerings set name = $3, description = $4, price_cents = $5, "
-                "category = $6, category_id = $7 "
+                "update offerings set name = $3, description = $4, price_cents = $5 "
                 "where tenant_id = $1 and id = $2",
                 tenant_id,
                 row["id"],
@@ -339,16 +408,25 @@ async def reconcile_offerings_batch(
             )
         else:
             inserted = await conn.fetchrow(
-                "insert into offerings (tenant_id, name, description, price_cents, category, "
-                "category_id, position) "
-                "values ($1, $2, $3, $4, $5, $6, $7) returning id, name",
+                "insert into offerings (tenant_id, name, description, price_cents, position) "
+                "values ($1, $2, $3, $4, $5) returning id, name",
                 tenant_id,
                 *values,
                 position,
             )
             if inserted is not None:
                 existing[key] = inserted
+                row = inserted
                 position += 1
+        category_ids = item.get("category_ids")
+        if row is not None and category_ids is not None:
+            await _replace_category_memberships(
+                conn,
+                tenant_id=tenant_id,
+                offering_id=row["id"],
+                category_ids=list(category_ids),
+                primary_category_id=item.get("primary_category_id"),
+            )
         changed = True
     if changed:
         await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
@@ -377,38 +455,46 @@ async def update_offering(
     a 422 before reaching here.
     """
     updates = dict(updates)
+    category_ids = updates.pop("category_ids", None)
+    categories_supplied = bool(updates.pop("categories_supplied", False))
+    primary_category_id = updates.pop("primary_category_id", None)
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        if "category" in updates:
-            category_id, category = await _ensure_category(
-                conn=conn,
-                tenant_id=tenant_id,
-                name=updates["category"],
+        if updates:
+            columns = tuple(updates)
+            assignments = ", ".join(
+                f"{column} = ${index}" for index, column in enumerate(columns, start=3)
             )
-            updates["category"] = category
-            updates["category_id"] = category_id
-        elif "category_id" in updates:
-            category_id, category = await _ensure_category(
-                conn=conn,
-                tenant_id=tenant_id,
-                category_id=updates["category_id"],
+            row = await conn.fetchrow(
+                f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
+                "where tenant_id = $1 and id = $2 "
+                "returning id, name, description, price_cents, category, category_id, "
+                "active, position",
+                tenant_id,
+                offering_id,
+                *(updates[column] for column in columns),
             )
-            updates["category_id"] = category_id
-            updates["category"] = category
-        columns = tuple(updates)
-        assignments = ", ".join(
-            f"{column} = ${index}" for index, column in enumerate(columns, start=3)
-        )
-        row = await conn.fetchrow(
-            f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
-            "where tenant_id = $1 and id = $2 "
-            "returning id, name, description, price_cents, category, category_id, active, position",
-            tenant_id,
-            offering_id,
-            *(updates[column] for column in columns),
-        )
+        else:
+            row = await conn.fetchrow(
+                "select id, name, description, price_cents, category, category_id, "
+                "active, position "
+                "from offerings where tenant_id=$1 and id=$2",
+                tenant_id,
+                offering_id,
+            )
+        if row is not None and categories_supplied:
+            await _replace_category_memberships(
+                conn,
+                tenant_id=tenant_id,
+                offering_id=offering_id,
+                category_ids=list(category_ids or []),
+                primary_category_id=primary_category_id,
+            )
         if row is not None:
             await ingest_offerings(conn, tenant_id=tenant_id, embedder=embedder)
-    return dict(row) if row is not None else None
+            result = [dict(row)]
+            await _attach_categories(conn, tenant_id=tenant_id, rows=result)
+            return result[0]
+    return None
 
 
 async def deactivate_offering(*, tenant_id: UUID, offering_id: UUID, embedder: Embedder) -> bool:
@@ -657,13 +743,13 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
             tenant_id,
         )
         offerings = await conn.fetch(
-            "select o.id, o.name, o.description, o.price_cents, "
-            "coalesce(c.name, o.category) as category, o.category_id "
-            "from offerings o left join offering_categories c "
-            "on c.tenant_id=o.tenant_id and c.id=o.category_id "
+            "select o.id, o.name, o.description, o.price_cents, o.category, o.category_id "
+            "from offerings o "
             "where o.tenant_id = $1 and o.active order by o.position, o.created_at, o.id",
             tenant_id,
         )
+        offering_items = [dict(row) for row in offerings]
+        await _attach_categories(conn, tenant_id=tenant_id, rows=offering_items)
         cover = await conn.fetchval(
             "select 1 from tenant_assets where tenant_id = $1 and kind = $2",
             tenant_id,
@@ -690,8 +776,7 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
     }
     cover_media = next((dict(row) for row in media_rows if row["role"] == COVER_KIND), None)
     published_offerings = []
-    for row in offerings:
-        item = dict(row)
+    for item in offering_items:
         item["media"] = media_by_offering.get(str(item["id"]))
         published_offerings.append(item)
     return {

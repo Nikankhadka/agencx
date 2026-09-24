@@ -80,6 +80,16 @@ _CONTRACT_OVERHEAD_CHARS = 4400
 
 
 @dataclass(frozen=True)
+class ActiveOfferingCategory:
+    """One owner-confirmed browsing category for an active offering."""
+
+    id: str
+    name: str
+    position: int
+    is_primary: bool
+
+
+@dataclass(frozen=True)
 class ActiveOffering:
     """An active catalog row exposed as authoritative customer context."""
 
@@ -88,6 +98,7 @@ class ActiveOffering:
     description: str
     category: str | None
     price_cents: int | None
+    categories: list[ActiveOfferingCategory] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -146,19 +157,35 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     business_name = str(profile.get("business_name") or "").strip()
     voice = voice_from_config(config)
     offering_rows = await conn.fetch(
-        "select o.id, o.name, o.description, coalesce(c.name, o.category) as category, "
-        "o.price_cents from offerings o left join offering_categories c "
-        "on c.tenant_id=o.tenant_id and c.id=o.category_id "
+        "select o.id, o.name, o.description, o.category, o.price_cents from offerings o "
         "where o.tenant_id = $1 and o.active "
         "order by o.position, o.created_at, o.id",
         tenant_id,
     )
+    category_rows = await conn.fetch(
+        "select m.offering_id, c.id, c.name, m.position, m.is_primary "
+        "from offering_category_memberships m join offering_categories c "
+        "on c.tenant_id=m.tenant_id and c.id=m.category_id "
+        "where m.tenant_id=$1 order by m.offering_id, m.is_primary desc, m.position, c.id",
+        tenant_id,
+    )
+    categories_by_offering: dict[UUID, list[ActiveOfferingCategory]] = {}
+    for row in category_rows:
+        categories_by_offering.setdefault(row["offering_id"], []).append(
+            ActiveOfferingCategory(
+                id=str(row["id"]),
+                name=row["name"],
+                position=row["position"],
+                is_primary=row["is_primary"],
+            )
+        )
     offerings = [
         ActiveOffering(
             id=str(row["id"]),
             name=row["name"],
             description=row["description"],
             category=row["category"],
+            categories=categories_by_offering.get(row["id"], []),
             price_cents=row["price_cents"],
         )
         for row in offering_rows
@@ -222,7 +249,13 @@ def format_offerings(offerings: list[ActiveOffering]) -> str:
     lines = ["Current confirmed offerings:"]
     for offering in offerings:
         line = f"[catalog_id={offering.id}] {offering.name}"
-        if offering.category:
+        if offering.categories:
+            category_names = ", ".join(
+                f"{category.name} [primary]" if category.is_primary else category.name
+                for category in offering.categories
+            )
+            line += f" (categories: {category_names})"
+        elif offering.category:
             line += f" (category: {offering.category})"
         if offering.description:
             line += f": {offering.description}"

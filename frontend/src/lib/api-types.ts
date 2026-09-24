@@ -527,7 +527,8 @@ export interface paths {
         /** List Offering Categories */
         get: operations["list_offering_categories_api_business_offering_categories_get"];
         put?: never;
-        post?: never;
+        /** Post Offering Category */
+        post: operations["post_offering_category_api_business_offering_categories_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1007,6 +1008,8 @@ export interface components {
             category?: string | null;
             /** Category Id */
             category_id?: string | null;
+            /** Categories */
+            categories?: components["schemas"]["OfferingCategoryMembershipResponse"][];
             media?: components["schemas"]["OfferingMedia"] | null;
         };
         /** BookingPageResponse */
@@ -1422,6 +1425,28 @@ export interface components {
             /** Tool Calls */
             tool_calls: components["schemas"]["ToolCallDetail"][];
         };
+        /**
+         * OfferingCategoryCreate
+         * @description An explicitly requested tenant category.
+         */
+        OfferingCategoryCreate: {
+            /** Name */
+            name: string;
+        };
+        /** OfferingCategoryMembershipResponse */
+        OfferingCategoryMembershipResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            /** Is Primary */
+            is_primary: boolean;
+        };
         /** OfferingCategoryResponse */
         OfferingCategoryResponse: {
             /**
@@ -1433,6 +1458,8 @@ export interface components {
             name: string;
             /** Normalized Key */
             normalized_key: string;
+            /** Offering Count */
+            offering_count: number;
         };
         /** OfferingCategoryUpdate */
         OfferingCategoryUpdate: {
@@ -1450,10 +1477,10 @@ export interface components {
             description: string;
             /** Price Dollars */
             price_dollars?: number | string | null;
-            /** Category */
-            category?: string | null;
-            /** Category Id */
-            category_id?: string | null;
+            /** Category Ids */
+            category_ids?: string[];
+            /** Primary Category Id */
+            primary_category_id?: string | null;
         };
         /** OfferingMedia */
         OfferingMedia: {
@@ -1494,6 +1521,8 @@ export interface components {
             category?: string | null;
             /** Category Id */
             category_id?: string | null;
+            /** Categories */
+            categories?: components["schemas"]["OfferingCategoryMembershipResponse"][];
             media?: components["schemas"]["OfferingMedia"] | null;
         };
         /**
@@ -1512,10 +1541,10 @@ export interface components {
             description?: string | null;
             /** Price Dollars */
             price_dollars?: number | string | null;
-            /** Category */
-            category?: string | null;
-            /** Category Id */
-            category_id?: string | null;
+            /** Category Ids */
+            category_ids?: string[] | null;
+            /** Primary Category Id */
+            primary_category_id?: string | null;
         };
         /** OnboardingConfirmRequest */
         OnboardingConfirmRequest: {
@@ -1704,6 +1733,10 @@ export interface components {
              * @default
              */
             proposed_category: string;
+            /** Category Ids */
+            category_ids?: string[] | null;
+            /** Primary Category Id */
+            primary_category_id?: string | null;
             /**
              * Description Origin
              * @default none
@@ -1776,6 +1809,10 @@ export interface components {
              * @default
              */
             proposed_category: string;
+            /** Category Ids */
+            category_ids?: string[] | null;
+            /** Primary Category Id */
+            primary_category_id?: string | null;
             /**
              * Description Origin
              * @default none
@@ -1895,7 +1932,25 @@ export interface components {
             price_cents: number | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Categories */
+            categories?: components["schemas"]["PublicOfferingCategory"][];
             media?: components["schemas"]["OfferingMedia"] | null;
+        };
+        /** PublicOfferingCategory */
+        PublicOfferingCategory: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            /** Is Primary */
+            is_primary: boolean;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -3399,6 +3454,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OfferingCategoryResponse"][];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    post_offering_category_api_business_offering_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferingCategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferingCategoryResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */

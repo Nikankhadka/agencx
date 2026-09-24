@@ -15,6 +15,13 @@ from app.features.tenants import service as tenant_service
 router = APIRouter(prefix="/api/public", tags=["public"])
 
 
+class PublicOfferingCategory(BaseModel):
+    id: UUID
+    name: str
+    position: int
+    is_primary: bool
+
+
 class PublicOffering(BaseModel):
     """One offering as a customer sees it.
 
@@ -28,6 +35,8 @@ class PublicOffering(BaseModel):
     description: str
     price_cents: int | None
     category: str | None = None
+    category_id: UUID | None = None
+    categories: list[PublicOfferingCategory] = Field(default_factory=list)
     media: OfferingMedia | None = None
 
 

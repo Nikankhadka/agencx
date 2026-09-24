@@ -254,6 +254,62 @@ async def test_offering_change_invalidates_the_cached_package(
     assert after.offerings[0].price_cents == 400
 
 
+async def test_all_categories_reach_context_primary_first_and_invalidate_cache(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn, contents=(), offerings=(("Screen replacement", "Same day", 9900),)
+    )
+    offering_id = await superuser_conn.fetchval(
+        "select id from offerings where tenant_id=$1", tenant_id
+    )
+    repairs = await superuser_conn.fetchval(
+        "insert into offering_categories (tenant_id, name, normalized_key) "
+        "values ($1, 'Repairs', 'repairs') returning id",
+        tenant_id,
+    )
+    screens = await superuser_conn.fetchval(
+        "insert into offering_categories (tenant_id, name, normalized_key) "
+        "values ($1, 'Screen care', 'screen care') returning id",
+        tenant_id,
+    )
+    await superuser_conn.executemany(
+        "insert into offering_category_memberships "
+        "(tenant_id, offering_id, category_id, position, is_primary) "
+        "values ($1, $2, $3, $4, $5)",
+        [
+            (tenant_id, offering_id, repairs, 0, True),
+            (tenant_id, offering_id, screens, 1, False),
+        ],
+    )
+    await superuser_conn.execute(
+        "update offerings set category='Repairs', category_id=$3 where tenant_id=$1 and id=$2",
+        tenant_id,
+        offering_id,
+        repairs,
+    )
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await get_package(conn, tenant_id)
+
+    assert [category.name for category in before.offerings[0].categories] == [
+        "Repairs",
+        "Screen care",
+    ]
+    assert "categories: Repairs [primary], Screen care" in before.offerings_text()
+
+    await superuser_conn.execute(
+        "update offering_categories set name='Displays' where id=$1", screens
+    )
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after = await get_package(conn, tenant_id)
+
+    assert after is not before
+    assert [category.name for category in after.offerings[0].categories] == [
+        "Repairs",
+        "Displays",
+    ]
+
+
 async def test_package_without_a_profile_still_assembles(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:

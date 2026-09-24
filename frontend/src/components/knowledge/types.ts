@@ -36,6 +36,9 @@ export interface PendingOffering {
   price_options?: number[];
   source_wording?: string;
   proposed_category?: string;
+  /** Null/undefined preserves catalog memberships; [] explicitly clears them. */
+  category_ids?: string[] | null;
+  primary_category_id?: string | null;
   description_origin?: "owner" | "document" | "generated" | "none";
   review_status?: "pending" | "approved" | "rejected";
   provenance?: Record<string, unknown>;

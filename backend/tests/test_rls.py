@@ -97,10 +97,18 @@ async def _seed_tenant(conn: asyncpg.Connection[Any], slug: str, name: str) -> u
         "values ($1, 'General', 'general') returning id",
         tenant_id,
     )
-    await conn.execute(
+    offering_id: uuid.UUID = await conn.fetchval(
         "insert into offerings (tenant_id, name, price_cents, category, category_id) "
-        "values ($1, 'Widget', 500, 'General', $2)",
+        "values ($1, 'Widget', 500, 'General', $2) returning id",
         tenant_id,
+        category_id,
+    )
+    await conn.execute(
+        "insert into offering_category_memberships "
+        "(tenant_id, offering_id, category_id, position, is_primary) "
+        "values ($1, $2, $3, 0, true)",
+        tenant_id,
+        offering_id,
         category_id,
     )
     await conn.execute(
@@ -208,7 +216,7 @@ async def test_tenant_admin_sees_only_own_tenant_everywhere(
     seeded_tenants: SeedTenants,
 ) -> None:
     tables = await _tenant_scoped_tables(superuser_conn)
-    assert len(tables) == 18, f"expected 18 tenant-scoped tables, found {len(tables)}: {tables}"
+    assert len(tables) == 19, f"expected 19 tenant-scoped tables, found {len(tables)}: {tables}"
 
     async with db.tenant_context(seeded_tenants.a_id, "tenant_admin", pool=app_pool) as conn:
         for table, id_col in tables:

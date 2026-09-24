@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS } from "@/lib/onboarding";
 import { Button } from "@/components/ui/Button";
@@ -14,12 +14,18 @@ import {
 } from "./offerings";
 import type { KnowledgeRecord, KnowledgeSection, PendingOffering, ReviewOffering, ReviewWorkspace, SourceDetail } from "./types";
 import { sourceLabel } from "./types";
+import { CategoryPicker, type CategoryOption } from "@/components/business/CategoryPicker";
 
 const PAGE_SIZE = 5;
 const SECTION_ORDER = ["business_overview", "hours", "location", "other"] as const;
 
 /** Shared press feedback for the sheet's text actions: underline on hover, dim on press. */
 const TEXT_PRESS = "transition-colors duration-(--duration-fast) hover:underline active:opacity-60";
+
+const CategoryContext = createContext<{
+  categories: CategoryOption[];
+  createCategory: (name: string) => Promise<CategoryOption>;
+}>({ categories: [], createCategory: async () => { throw new Error("Category picker unavailable"); } });
 
 interface WorkingOffering extends Omit<PendingOffering, "candidate_id"> {
   candidate_id: string;
@@ -46,6 +52,8 @@ export function toWorkingOffering(item: ReviewOffering): WorkingOffering {
     support_state: item.support_state ?? "supported",
     source_wording: item.source_wording ?? "",
     proposed_category: item.proposed_category ?? "",
+    category_ids: item.category_ids ?? null,
+    primary_category_id: item.primary_category_id ?? null,
     description_origin: item.description_origin ?? "none",
     review_status: item.review_status ?? "pending",
     provenance: item.provenance ?? {},
@@ -82,6 +90,21 @@ export interface ReviewSheetProps {
 }
 
 export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, open, busy, priceConflict, onboarding = false, onClose, onSave, onSaveSuggestions, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: ReviewSheetProps) {
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    apiFetch<CategoryOption[]>("/api/business/offering-categories")
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, [open]);
+  async function createCategory(name: string) {
+    const created = await apiFetch<CategoryOption>("/api/business/offering-categories", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    setCategories((current) => [...current.filter((item) => item.id !== created.id), created].sort((left, right) => left.name.localeCompare(right.name)));
+    return created;
+  }
   const title = suggestionsOnly
     ? "Suggestions to review"
     : onboarding
@@ -89,7 +112,7 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
       : workspace?.documents[0]?.status === "draft"
         ? "Read this back"
         : "Edit what I know";
-  return <Sheet open={open} onClose={onClose} desktop title={title}>
+  return <Sheet open={open} onClose={onClose} desktop title={title}><CategoryContext.Provider value={{ categories, createCategory }}>
     {suggestionsOnly && suggestions && onSaveSuggestions ? (
       <SuggestionDocument
         key={suggestions.map((item) => item.candidate_id ?? item.name).join(",")}
@@ -99,7 +122,7 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
         onDiscard={onDiscard}
       />
     ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} confirmRemove={confirmRemove} /> : null}
-  </Sheet>;
+  </CategoryContext.Provider></Sheet>;
 }
 
 function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void }) {
@@ -330,10 +353,32 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, onSave, on
 function OfferingCard({ offering, documents, position, all, editing, inputRef, onChange, onRemove, onKeepBoth, onCombine }: { offering: WorkingOffering; documents: KnowledgeRecord[]; position: number; all: WorkingOffering[]; editing: boolean; inputRef: (node: HTMLInputElement | null) => void; onChange: (id: string, update: Partial<WorkingOffering>) => void; onRemove: (id: string) => void; onKeepBoth: (left: string, right: string) => void; onCombine: (left: string, right: string) => void }) {
   const matches = all.filter((item) => offering.possibleMatches.includes(item.candidate_id));
   return <article className={`rounded-card border p-3 ${matches.length ? "border-text bg-surface" : "border-border bg-surface"}`}><div className="flex items-start justify-between gap-2"><span className="text-meta text-ink-a40">{offeringLabel(offering, documents)}{offering.source_references?.length ? ` · ${offering.source_references.length} source ${offering.source_references.length === 1 ? "reference" : "references"}` : ""}</span>{editing ? <button type="button" onClick={() => onRemove(offering.candidate_id)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Remove</button> : null}</div>
-    {editing ? <><div className="mt-2 flex gap-2"><input ref={inputRef} value={offering.name} aria-label={`Offering ${position} name`} placeholder="Offering" onChange={(event) => onChange(offering.candidate_id, { name: event.target.value })} className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /><input value={offering.priceText} aria-label={`Offering ${position} price`} placeholder="Price" inputMode="decimal" onChange={(event) => onChange(offering.candidate_id, { priceText: event.target.value, priceOptions: [] })} className="w-24 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></div><input value={offering.proposed_category ?? ""} aria-label={`Offering ${position} category`} placeholder="Category (optional)" onChange={(event) => onChange(offering.candidate_id, { proposed_category: event.target.value })} className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /><textarea value={offering.description} aria-label={`Offering ${position} description`} placeholder="Description (optional)" rows={2} onChange={(event) => onChange(offering.candidate_id, { description: event.target.value })} className="mt-2 w-full resize-y rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></> : <><div className="mt-2 flex justify-between gap-3"><h4 className="text-row-label font-medium text-text">{offering.name}</h4><span className="shrink-0 text-row-label text-text">{offering.priceText || "Price not set"}</span></div>{offering.description ? <p className="mt-1 whitespace-pre-line text-prose text-text">{offering.description}</p> : null}</>}
+    {editing ? <><div className="mt-2 flex gap-2"><input ref={inputRef} value={offering.name} aria-label={`Offering ${position} name`} placeholder="Offering" onChange={(event) => onChange(offering.candidate_id, { name: event.target.value })} className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /><input value={offering.priceText} aria-label={`Offering ${position} price`} placeholder="Price" inputMode="decimal" onChange={(event) => onChange(offering.candidate_id, { priceText: event.target.value, priceOptions: [] })} className="w-24 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></div><ReviewCategoryControl offering={offering} onChange={onChange} /><textarea value={offering.description} aria-label={`Offering ${position} description`} placeholder="Description (optional)" rows={2} onChange={(event) => onChange(offering.candidate_id, { description: event.target.value })} className="mt-2 w-full resize-y rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></> : <><div className="mt-2 flex justify-between gap-3"><h4 className="text-row-label font-medium text-text">{offering.name}</h4><span className="shrink-0 text-row-label text-text">{offering.priceText || "Price not set"}</span></div>{offering.description ? <p className="mt-1 whitespace-pre-line text-prose text-text">{offering.description}</p> : null}</>}
     {offering.priceNote ? <p className="mt-2 rounded-field bg-warning-subtle p-2 text-meta text-text">Check this price: {offering.priceNote}</p> : null}
     {offering.priceOptions.length > 1 ? <div role="alert" className="mt-2 text-meta text-text">Choose a price: {offering.priceOptions.map((price) => <button key={price} type="button" onClick={() => onChange(offering.candidate_id, { price_cents: price, priceText: formatPrice(price), priceOptions: [] })} className={`${TEXT_PRESS} ml-2 text-action text-accent-active`}>Use {formatPrice(price)}</button>)}</div> : null}
     {matches.map((match) => <div key={match.candidate_id} className="mt-3 text-meta text-text"><p>This may be the same offering as <strong>{match.name}</strong>. Both remain separate until you decide.</p><div className="mt-2 flex gap-3"><button type="button" onClick={() => onCombine(offering.candidate_id, match.candidate_id)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Combine</button><button type="button" onClick={() => onKeepBoth(offering.candidate_id, match.candidate_id)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Keep both</button></div></div>)}</article>;
+}
+
+function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
+  const { categories, createCategory } = useContext(CategoryContext);
+  async function acceptSuggestion() {
+    const suggestion = offering.proposed_category?.trim();
+    if (!suggestion) return;
+    const match = categories.find((category) => category.name.trim().toLocaleLowerCase() === suggestion.toLocaleLowerCase());
+    const category = match ?? await createCategory(suggestion);
+    const ids = [...new Set([...(offering.category_ids ?? []), category.id])];
+    onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
+  }
+  return <div className="mt-3">
+    {offering.proposed_category ? <p className="mb-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
+    <CategoryPicker
+      categories={categories}
+      selectedIds={offering.category_ids ?? []}
+      primaryId={offering.primary_category_id ?? null}
+      onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
+      onCreate={createCategory}
+    />
+  </div>;
 }
 
 export function KnowledgeDocument({ sections, editingSection = null, onEdit, onChange, onRemove, onAddOther }: { sections: KnowledgeSection[]; editingSection?: number | null; onEdit?: (index: number | null) => void; onChange?: (index: number, update: Partial<KnowledgeSection>) => void; onRemove?: (index: number) => void; onAddOther?: () => void }) {
@@ -375,6 +420,8 @@ function toPendingOffering(item: WorkingOffering): PendingOffering {
     price_options: item.priceOptions,
     source_wording: item.source_wording,
     proposed_category: item.proposed_category,
+    category_ids: item.category_ids,
+    primary_category_id: item.primary_category_id,
     description_origin: item.description_origin,
     review_status: item.review_status,
     provenance: item.provenance,

@@ -307,6 +307,10 @@ async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
         # complete one round trips with its provenance, not just its price.
         "source_wording": "Coffee is $5 and oat milk is available.",
         "proposed_category": "Drinks",
+        # Category decisions are explicit on the wire. Null preserves any
+        # existing memberships during reconciliation; [] is an explicit clear.
+        "category_ids": None,
+        "primary_category_id": None,
         "description_origin": "document",
         "review_status": "pending",
         "provenance": {},

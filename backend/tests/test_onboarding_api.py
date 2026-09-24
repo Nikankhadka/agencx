@@ -1030,7 +1030,7 @@ async def test_suggestions_stay_private_until_review_then_publish(
         "name": "Lamb shoulder",
         "description": "Slow-cooked",
         "price_cents": 2400,
-        "category": "Dinner",
+        "category": None,
     }
 
 

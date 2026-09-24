@@ -91,39 +91,39 @@ LUMIDENT_PROFILE = {
     "customer_voice_custom_style": "",
 }
 
-LUMIDENT_CATALOG: list[tuple[str, str, int | None, str | None]] = [
+LUMIDENT_CATALOG: list[tuple[str, str, int | None, list[str]]] = [
     (
         "New Patient Exam",
         "Comprehensive exam, oral cancer screening, treatment plan",
         9500,
-        "Exams & Cleanings",
+        ["Exams & Cleanings"],
     ),
-    ("Standard Cleaning", "Routine professional cleaning and polish", 12000, "Exams & Cleanings"),
+    ("Standard Cleaning", "Routine professional cleaning and polish", 12000, ["Exams & Cleanings"]),
     (
         "Deep Cleaning (Per Quadrant)",
         "Scaling and root planing, one quadrant",
         35000,
-        "Exams & Cleanings",
+        ["Exams & Cleanings"],
     ),
     (
         "Tooth-Colored Filling",
         "Composite resin filling, one surface",
         25000,
-        "Restorative",
+        ["Restorative"],
     ),
-    ("Dental Crown", "Porcelain-fused-to-metal crown, one tooth", 110000, "Restorative"),
-    ("Root Canal", "Endodontic treatment, one tooth", 95000, "Restorative"),
+    ("Dental Crown", "Porcelain-fused-to-metal crown, one tooth", 110000, ["Restorative"]),
+    ("Root Canal", "Endodontic treatment, one tooth", 95000, ["Restorative"]),
     (
         "In-Office Whitening",
         "Single-session professional whitening",
         45000,
-        "Cosmetic & Emergency",
+        ["Cosmetic & Emergency"],
     ),
     (
         "Emergency Visit",
         "Same-day pain or trauma assessment",
         15000,
-        "Cosmetic & Emergency",
+        ["Cosmetic & Emergency"],
     ),
 ]
 

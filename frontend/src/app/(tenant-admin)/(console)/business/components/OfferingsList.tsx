@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { OfferingMediaField } from "./OfferingMediaField";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ApiError, apiFetch } from "@/lib/api";
+import { CategoryPicker, type CategoryOption } from "@/components/business/CategoryPicker";
 
 interface Offering {
   id: string;
@@ -15,24 +16,22 @@ interface Offering {
   description: string;
   price_cents: number | null;
   category?: string | null;
+  category_id?: string | null;
+  categories: Array<{ id: string; name: string; position: number; is_primary: boolean }>;
   media?: { url: string } | null;
 }
 
-interface OfferingCategory {
-  id: string;
-  name: string;
+interface OfferingCategory extends CategoryOption {
   normalized_key: string;
+  offering_count: number;
 }
 
 interface OfferingGroup {
   label: string;
-  /** The category row behind the label, when one owns it. A legacy label that
-   *  no category row matches still groups, it just cannot be renamed. */
-  category: OfferingCategory | null;
   offerings: Offering[];
 }
 
-function groupOfferings(offerings: Offering[], categories: OfferingCategory[]): OfferingGroup[] {
+function groupOfferings(offerings: Offering[]): OfferingGroup[] {
   const groups = new Map<string, Offering[]>();
   for (const offering of offerings) {
     const label = offering.category?.trim() || UNCATEGORIZED;
@@ -46,7 +45,6 @@ function groupOfferings(offerings: Offering[], categories: OfferingCategory[]): 
     })
     .map(([label, items]) => ({
       label,
-      category: categories.find((category) => category.name === label) ?? null,
       offerings: items.sort((left, right) => left.name.localeCompare(right.name)),
     }));
 }
@@ -57,7 +55,8 @@ interface FormValues {
   name: string;
   description: string;
   price: string;
-  category: string;
+  categoryIds: string[];
+  primaryCategoryId: string | null;
   mediaUrl: string;
   mediaFile: File | null;
   mediaChanged: boolean;
@@ -68,7 +67,8 @@ const EMPTY_FORM: FormValues = {
   name: "",
   description: "",
   price: "",
-  category: "",
+  categoryIds: [],
+  primaryCategoryId: null,
   mediaUrl: "",
   mediaFile: null,
   mediaChanged: false,
@@ -83,7 +83,8 @@ function formFor(offering: Offering): FormValues {
       offering.price_cents === null
         ? ""
         : (offering.price_cents / 100).toFixed(2),
-    category: offering.category ?? "",
+    categoryIds: offering.categories.map((category) => category.id),
+    primaryCategoryId: offering.category_id ?? null,
     mediaUrl: offering.media?.url ?? "",
     mediaFile: null,
     mediaChanged: false,
@@ -97,6 +98,7 @@ export function OfferingsList() {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [categoryEditing, setCategoryEditing] = useState<string | null>(null);
   const [categoryDraft, setCategoryDraft] = useState("");
+  const [newCategory, setNewCategory] = useState("");
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -105,7 +107,7 @@ export function OfferingsList() {
   // the owner already closed.
   const [loadError, setLoadError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const groups = groupOfferings(offerings, categories);
+  const groups = groupOfferings(offerings);
 
   async function load() {
     try {
@@ -182,11 +184,38 @@ export function OfferingsList() {
     }
   }
 
+  async function createCategory(name = newCategory): Promise<OfferingCategory> {
+    const created = await apiFetch<OfferingCategory>("/api/business/offering-categories", {
+      method: "POST",
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    setCategories((current) =>
+      [...current.filter((category) => category.id !== created.id), created].sort((left, right) =>
+        left.name.localeCompare(right.name),
+      ),
+    );
+    setNewCategory("");
+    return created;
+  }
+
+  async function addCategory() {
+    if (!newCategory.trim() || working) return;
+    setWorking(true);
+    try {
+      await createCategory();
+      toast.success("Category added");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.detail : "Couldn't add that category.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function removeCategory(category: OfferingCategory) {
     if (working) return;
     await confirm({
       title: `Delete ${category.name}?`,
-      description: "Its offerings will move to Uncategorized.",
+      description: "It will be removed from its offerings. Another selected category becomes primary.",
       confirmLabel: "Delete category",
       tone: "danger",
       onConfirm: async () => {
@@ -212,7 +241,8 @@ export function OfferingsList() {
       name: form.name,
       description: form.description,
       price_dollars: form.price.trim() || null,
-      category: form.category.trim() || null,
+      category_ids: form.categoryIds,
+      primary_category_id: form.primaryCategoryId,
     };
     try {
       const path = editing === "new" ? "/api/business/offerings" : `/api/business/offerings/${editing}`;
@@ -282,6 +312,80 @@ export function OfferingsList() {
   }
 
   return (
+    <>
+    <section className="border-b border-hairline px-gutter py-5" aria-labelledby="categories-heading">
+      <h2 id="categories-heading" className="text-row-label font-medium text-text">
+        Categories
+      </h2>
+      <p className="mt-1 text-meta text-ink-a40">
+        Organize how customers browse what you offer.
+      </p>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void addCategory();
+        }}
+      >
+        <input
+          value={newCategory}
+          onChange={(event) => setNewCategory(event.target.value)}
+          placeholder="New category"
+          aria-label="New category"
+          className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+        />
+        <Button type="submit" size="sm" loading={working} disabled={!newCategory.trim()}>
+          Add
+        </Button>
+      </form>
+      {categories.length ? (
+        <ul className="mt-3 divide-y divide-hairline" data-testid="categories-list">
+          {categories.map((category) => (
+            <li key={category.id} className="py-3">
+              {categoryEditing === category.id ? (
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    value={categoryDraft}
+                    onChange={(event) => setCategoryDraft(event.target.value)}
+                    aria-label={`Rename ${category.name}`}
+                    className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text"
+                  />
+                  <Button size="sm" loading={working} onClick={() => void saveCategory(category)}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setCategoryEditing(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-card-hl font-medium text-text">{category.name}</span>
+                    <span className="mt-1 block text-meta text-ink-a40">
+                      {category.offering_count} active {category.offering_count === 1 ? "offering" : "offerings"}
+                    </span>
+                  </span>
+                  <button type="button" onClick={() => beginCategory(category)} className="text-action text-accent-active hover:underline">
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void removeCategory(category)}
+                    aria-label={`Delete ${category.name}`}
+                    className="text-action text-ink-a40 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-prose text-ink-a40">No categories yet.</p>
+      )}
+    </section>
     <section className="border-b border-hairline px-gutter py-5" aria-labelledby="offerings-heading">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -307,50 +411,11 @@ export function OfferingsList() {
 
       {offerings.length > 0 ? (
         <div className="mt-3" data-testid="offerings-list">
-          {groups.map((group) => {
-            const category = group.category;
-            return (
+          {groups.map((group) => (
               <section key={group.label} className="mb-5 last:mb-0" aria-labelledby={`offerings-${group.label}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <h3 id={`offerings-${group.label}`} className="text-label font-medium uppercase text-ink-a40">
-                    {group.label}
-                  </h3>
-                  {category ? (
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => beginCategory(category)}
-                        className="text-action text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void removeCategory(category)}
-                        className="text-action text-ink-a40 transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                {category && category.id === categoryEditing ? (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      autoFocus
-                      value={categoryDraft}
-                      onChange={(event) => setCategoryDraft(event.target.value)}
-                      aria-label={`Rename ${group.label}`}
-                      className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text"
-                    />
-                    <Button size="sm" loading={working} onClick={() => void saveCategory(category)}>
-                      Save
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setCategoryEditing(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                ) : null}
+                <h3 id={`offerings-${group.label}`} className="text-label font-medium uppercase text-ink-a40">
+                  {group.label}
+                </h3>
                 <ul className="mt-1 divide-y divide-hairline">
                   {group.offerings.map((offering) => (
                     <li key={offering.id} className="flex items-center gap-3 py-3">
@@ -364,6 +429,17 @@ export function OfferingsList() {
                         {offering.price_cents !== null ? (
                           <span className="mt-1 block text-meta text-ink-a40">
                             ${(offering.price_cents / 100).toFixed(2)}
+                          </span>
+                        ) : null}
+                        {offering.categories.some((category) => !category.is_primary) ? (
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {offering.categories
+                              .filter((category) => !category.is_primary)
+                              .map((category) => (
+                                <span key={category.id} className="rounded-full bg-surface-container px-2 py-1 text-meta text-ink-a40">
+                                  {category.name}
+                                </span>
+                              ))}
                           </span>
                         ) : null}
                       </span>
@@ -391,8 +467,7 @@ export function OfferingsList() {
                   ))}
                 </ul>
               </section>
-            );
-          })}
+          ))}
         </div>
       ) : editing === null ? (
         <p className="mt-3 text-prose text-ink-a40">Nothing added yet.</p>
@@ -448,10 +523,17 @@ export function OfferingsList() {
             <summary className="cursor-pointer text-label font-medium uppercase text-ink-a40 transition-colors duration-(--duration-fast) hover:text-text active:opacity-60">
               Add details
             </summary>
-            <label className="mt-3 block text-label font-medium uppercase text-ink-a40">
-              Category <span className="normal-case">(optional)</span>
-              <input data-testid="offering-category" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
-            </label>
+            <div className="mt-3">
+              <CategoryPicker
+                categories={categories}
+                selectedIds={form.categoryIds}
+                primaryId={form.primaryCategoryId}
+                onChange={(categoryIds, primaryCategoryId) =>
+                  setForm((current) => ({ ...current, categoryIds, primaryCategoryId }))
+                }
+                onCreate={createCategory}
+              />
+            </div>
             <OfferingMediaField
               mediaUrl={form.mediaUrl}
               mediaFile={form.mediaFile}
@@ -507,5 +589,6 @@ export function OfferingsList() {
       {loadError ? <p className="mt-3 text-meta text-danger">{loadError}</p> : null}
       {confirmDialog}
     </section>
+    </>
   );
 }

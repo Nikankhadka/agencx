@@ -928,3 +928,37 @@ out of it, nothing quotes from it, and every amount the product states still
 comes from the pricing engine in integer cents (C-1, unchanged). Services text
 is owner-authored content like any other profile field: no code branches on
 what is in it, and no vertical is inferred from it.
+
+## D31: Categories are tenant-owned browse objects with ordered membership
+
+**Date:** 2026-09-25. **Status:** accepted.
+
+**Decision:** Categories remain flat, tenant-owned browsing metadata. An
+offering may join zero or more categories through
+`offering_category_memberships`, with stable membership order and exactly one
+primary whenever the set is non-empty. The primary is owner-selectable and is
+also projected into the legacy `offerings.category_id` and `offerings.category`
+columns during the compatibility window. Deleting a secondary removes only
+that membership. Deleting the primary promotes the remaining membership with
+the lowest position; no remainder means Uncategorized. Public shelves and the
+chat catalog show an offering once in every joined category, while owner lists
+and business summaries use the primary. Agent context receives every category,
+primary first, as informational metadata only.
+
+Category creation is always explicit. The owner chooses existing categories or
+creates a named object; separator-like input offers distinct categories and a
+separate exact-label choice. Model-proposed category text stays private until
+the owner selects or creates a category. Normalized duplicates conflict rather
+than silently multiplying rows. The same generic membership model serves every
+seeded business without vertical-specific code.
+
+**Why:** A single free-text label both fragments browsing and prevents one
+offering from appearing in multiple useful places. Stable tenant objects plus a
+small join table solve both problems without introducing a global taxonomy or
+making category names operational. Retaining the primary projection makes the
+rollout additive and keeps existing clients readable.
+
+**Boundary:** Categories never control price, enabled tools, fulfillment,
+tax, or business behavior. There is no global taxonomy, nesting, merging,
+automatic category writing, hard count cap, or vertical branch in this
+decision. Monetary behavior remains entirely deterministic and unchanged.
