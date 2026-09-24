@@ -33,6 +33,7 @@ Per-ticket header pattern:
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record | `Active - todo` (U part shipped, walkthrough remains) |
 | [active/17-storefront-redesign.md](active/17-storefront-redesign.md) | M-7 storefront redesign: no-image-first base, Uber Eats-style mature state, one persistent chat entry | `Active - awaiting review` (PR #41; founder preview walkthrough remains) |
 | [active/19-intent-and-identity.md](active/19-intent-and-identity.md) | Intent families and actions, escalation-scoped contact capture | `Active - awaiting review` (merged as 5300586, PR #43; founder walkthrough remains) |
+| [active/21-category-management.md](active/21-category-management.md) | Category management: controlled-vocabulary input, multi-category offerings with one primary | `Active - todo` |
 
 ## Completed work
 
