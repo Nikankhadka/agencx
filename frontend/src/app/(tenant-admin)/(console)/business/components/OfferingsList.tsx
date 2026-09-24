@@ -96,9 +96,8 @@ export function OfferingsList() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [categories, setCategories] = useState<OfferingCategory[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
-  const [categoryEditing, setCategoryEditing] = useState<string | null>(null);
+  const [categoryEditing, setCategoryEditing] = useState<string | "new" | null>(null);
   const [categoryDraft, setCategoryDraft] = useState("");
-  const [newCategory, setNewCategory] = useState("");
   const [form, setForm] = useState<FormValues>(EMPTY_FORM);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -160,31 +159,46 @@ export function OfferingsList() {
     if (!working) setEditing(null);
   }
 
-  function beginCategory(category: OfferingCategory) {
-    setCategoryEditing(category.id);
-    setCategoryDraft(category.name);
+  function beginCategory(category?: OfferingCategory) {
+    setCategoryEditing(category?.id ?? "new");
+    setCategoryDraft(category?.name ?? "");
   }
 
-  async function saveCategory(category: OfferingCategory) {
+  function closeCategory() {
+    if (!working) setCategoryEditing(null);
+  }
+
+  async function saveCategory() {
     const name = categoryDraft.trim();
-    if (!name || working) return;
+    if (!name || !categoryEditing || working) return;
+    const isNew = categoryEditing === "new";
     setWorking(true);
     try {
-      await apiFetch(`/api/business/offering-categories/${category.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
-      });
+      if (isNew) {
+        await createCategory(name);
+      } else {
+        await apiFetch(`/api/business/offering-categories/${categoryEditing}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name }),
+        });
+        await load();
+      }
       setCategoryEditing(null);
-      await load();
-      toast.success("Category renamed");
+      toast.success(isNew ? "Category added" : "Category renamed");
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.detail : "Couldn't rename that category.");
+      toast.error(
+        err instanceof ApiError
+          ? err.detail
+          : isNew
+            ? "Couldn't add that category."
+            : "Couldn't rename that category.",
+      );
     } finally {
       setWorking(false);
     }
   }
 
-  async function createCategory(name = newCategory): Promise<OfferingCategory> {
+  async function createCategory(name: string): Promise<OfferingCategory> {
     const created = await apiFetch<OfferingCategory>("/api/business/offering-categories", {
       method: "POST",
       body: JSON.stringify({ name: name.trim() }),
@@ -194,38 +208,24 @@ export function OfferingsList() {
         left.name.localeCompare(right.name),
       ),
     );
-    setNewCategory("");
     return created;
-  }
-
-  async function addCategory() {
-    if (!newCategory.trim() || working) return;
-    setWorking(true);
-    try {
-      await createCategory();
-      toast.success("Category added");
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.detail : "Couldn't add that category.");
-    } finally {
-      setWorking(false);
-    }
   }
 
   async function removeCategory(category: OfferingCategory) {
     if (working) return;
     await confirm({
-      title: `Delete ${category.name}?`,
+      title: `Remove ${category.name}?`,
       description: "It will be removed from its offerings. Another selected category becomes primary.",
-      confirmLabel: "Delete category",
+      confirmLabel: "Remove category",
       tone: "danger",
       onConfirm: async () => {
         setWorking(true);
         try {
           await apiFetch(`/api/business/offering-categories/${category.id}`, { method: "DELETE" });
           await load();
-          toast.success("Category deleted");
+          toast.success("Category removed");
         } catch (err) {
-          toast.error(err instanceof ApiError ? err.detail : "Couldn't delete that category.");
+          toast.error(err instanceof ApiError ? err.detail : "Couldn't remove that category.");
         } finally {
           setWorking(false);
         }
@@ -314,77 +314,99 @@ export function OfferingsList() {
   return (
     <>
     <section className="border-b border-hairline px-gutter py-5" aria-labelledby="categories-heading">
-      <h2 id="categories-heading" className="text-row-label font-medium text-text">
-        Categories
-      </h2>
-      <p className="mt-1 text-meta text-ink-a40">
-        Organize how customers browse what you offer.
-      </p>
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void addCategory();
-        }}
-      >
-        <input
-          value={newCategory}
-          onChange={(event) => setNewCategory(event.target.value)}
-          placeholder="New category"
-          aria-label="New category"
-          className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
-        />
-        <Button type="submit" size="sm" loading={working} disabled={!newCategory.trim()}>
-          Add
-        </Button>
-      </form>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="categories-heading" className="text-row-label font-medium text-text">
+            Categories
+          </h2>
+          <p className="mt-1 text-meta text-ink-a40">
+            Organize how customers browse what you offer.
+          </p>
+        </div>
+        {categoryEditing === null ? (
+          <button
+            type="button"
+            onClick={() => beginCategory()}
+            data-testid="category-add"
+            className="flex shrink-0 items-center gap-1 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+          >
+            <Icon name="add" size={16} />
+            Add
+          </button>
+        ) : null}
+      </div>
       {categories.length ? (
         <ul className="mt-3 divide-y divide-hairline" data-testid="categories-list">
           {categories.map((category) => (
-            <li key={category.id} className="py-3">
-              {categoryEditing === category.id ? (
-                <div className="flex gap-2">
-                  <input
-                    autoFocus
-                    value={categoryDraft}
-                    onChange={(event) => setCategoryDraft(event.target.value)}
-                    aria-label={`Rename ${category.name}`}
-                    className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text"
-                  />
-                  <Button size="sm" loading={working} onClick={() => void saveCategory(category)}>
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setCategoryEditing(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-card-hl font-medium text-text">{category.name}</span>
-                    <span className="mt-1 block text-meta text-ink-a40">
-                      {category.offering_count} active {category.offering_count === 1 ? "offering" : "offerings"}
-                    </span>
-                  </span>
-                  <button type="button" onClick={() => beginCategory(category)} className="text-action text-accent-active hover:underline">
-                    Rename
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void removeCategory(category)}
-                    aria-label={`Delete ${category.name}`}
-                    className="text-action text-ink-a40 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+            <li key={category.id} className="flex items-center gap-3 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-card-hl font-medium text-text">{category.name}</span>
+                <span className="mt-1 block text-meta text-ink-a40">
+                  {category.offering_count} active {category.offering_count === 1 ? "offering" : "offerings"}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => beginCategory(category)}
+                disabled={working}
+                aria-label={`Edit ${category.name}`}
+                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+              >
+                <Icon name="edit" size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => void removeCategory(category)}
+                disabled={working}
+                aria-label={`Remove ${category.name}`}
+                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+              >
+                <Icon name="delete" size={18} />
+              </button>
             </li>
           ))}
         </ul>
       ) : (
         <p className="mt-3 text-prose text-ink-a40">No categories yet.</p>
       )}
+      <Modal
+        open={categoryEditing !== null}
+        onClose={closeCategory}
+        title={categoryEditing === "new" ? "New category" : "Edit category"}
+      >
+        {categoryEditing !== null ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveCategory();
+            }}
+          >
+            <input
+              autoFocus
+              required
+              value={categoryDraft}
+              onChange={(event) => setCategoryDraft(event.target.value)}
+              placeholder="Category name"
+              aria-label="Category name"
+              data-testid="category-name"
+              className="w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="submit"
+                loading={working}
+                disabled={!categoryDraft.trim()}
+                data-testid="category-save"
+              >
+                Save
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeCategory} disabled={working}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
     </section>
     <section className="border-b border-hairline px-gutter py-5" aria-labelledby="offerings-heading">
       <div className="flex items-start justify-between gap-3">

@@ -158,8 +158,10 @@ test.describe("Business hub", () => {
     request,
   }) => {
     const offeringName = "Category journey offering";
-    const firstCategory = "E2E Device care";
+    const originalFirstCategory = "E2E Device care";
+    const firstCategory = "E2E Device support";
     const secondCategory = "E2E Featured repairs";
+    const cancelledCategory = "E2E Cancelled category";
 
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/offerings");
@@ -173,8 +175,8 @@ test.describe("Business hub", () => {
       await page.getByTestId("confirm-accept").click();
       await expect(staleOffering).toHaveCount(0);
     }
-    for (const categoryName of [firstCategory, secondCategory]) {
-      const staleCategory = page.getByRole("button", { name: `Delete ${categoryName}` });
+    for (const categoryName of [originalFirstCategory, firstCategory, secondCategory]) {
+      const staleCategory = page.getByRole("button", { name: `Remove ${categoryName}` });
       if (await staleCategory.count()) {
         await staleCategory.click();
         await page.getByTestId("confirm-accept").click();
@@ -183,12 +185,30 @@ test.describe("Business hub", () => {
     }
 
     const categorySection = page.getByRole("region", { name: "Categories" });
-    const categoryInput = categorySection.getByRole("textbox", { name: "New category" });
-    for (const categoryName of [firstCategory, secondCategory]) {
-      await categoryInput.fill(categoryName);
-      await categorySection.getByRole("button", { name: "Add", exact: true }).click();
+    await categorySection.getByTestId("category-add").click();
+    const newCategoryDialog = page.getByRole("dialog", { name: "New category" });
+    await newCategoryDialog.getByTestId("category-name").fill(cancelledCategory);
+    await newCategoryDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(newCategoryDialog).not.toBeVisible();
+    await expect(page.getByTestId("categories-list")).not.toContainText(cancelledCategory);
+
+    for (const categoryName of [originalFirstCategory, secondCategory]) {
+      await categorySection.getByTestId("category-add").click();
+      await newCategoryDialog.getByTestId("category-name").fill(categoryName);
+      await newCategoryDialog.getByTestId("category-save").click();
       await expect(page.getByTestId("categories-list")).toContainText(categoryName);
     }
+
+    await page.getByRole("button", { name: `Edit ${originalFirstCategory}` }).click();
+    const editCategoryDialog = page.getByRole("dialog", { name: "Edit category" });
+    await expect(editCategoryDialog.getByTestId("category-name")).toHaveValue(
+      originalFirstCategory,
+    );
+    await editCategoryDialog.getByTestId("category-name").fill(firstCategory);
+    await editCategoryDialog.getByTestId("category-save").click();
+    await expect(page.getByText("Category renamed", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("categories-list")).toContainText(firstCategory);
+    await expect(page.getByTestId("categories-list")).not.toContainText(originalFirstCategory);
 
     await page.getByTestId("offering-add").click();
     await page.getByTestId("offering-name").fill(offeringName);
@@ -219,9 +239,9 @@ test.describe("Business hub", () => {
     await expect(page.getByRole("button", { name: offeringName, exact: true })).toHaveCount(2);
 
     await page.goto("/business/offerings");
-    await page.getByRole("button", { name: `Delete ${secondCategory}` }).click();
+    await page.getByRole("button", { name: `Remove ${secondCategory}` }).click();
     await page.getByTestId("confirm-accept").click();
-    await expect(page.getByText("Category deleted", { exact: true })).toBeVisible();
+    await expect(page.getByText("Category removed", { exact: true })).toBeVisible();
     await expect(
       page.getByTestId("offerings-list").getByRole("heading", {
         name: firstCategory,
@@ -236,9 +256,9 @@ test.describe("Business hub", () => {
     await page.goto("/business/offerings");
     await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
     await page.getByTestId("confirm-accept").click();
-    await page.getByRole("button", { name: `Delete ${firstCategory}` }).click();
+    await page.getByRole("button", { name: `Remove ${firstCategory}` }).click();
     await page.getByTestId("confirm-accept").click();
-    await expect(page.getByRole("button", { name: `Delete ${firstCategory}` })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: `Remove ${firstCategory}` })).toHaveCount(0);
   });
 
   test("escape closes the remove confirm without touching the backend", async ({
