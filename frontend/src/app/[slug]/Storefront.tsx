@@ -208,7 +208,7 @@ export function Storefront({
         </div>
       )}
 
-      <footer className="mx-auto flex w-full max-w-5xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
+      <footer className="mx-auto mt-auto flex w-full max-w-5xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
         <span className="font-medium text-text">Agencx</span>
         <span>Powered by Agencx</span>
       </footer>

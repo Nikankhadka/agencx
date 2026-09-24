@@ -45,9 +45,11 @@ live in the ticket files, not here.
 ## What is next
 
 - [ ] M-7 storefront redesign: no-image-first rebuild with one persistent
-  chat entry. Merged to `development` as PR #41; ticket file
+  chat entry. The sparse-catalog amendment compacts one through six offerings
+  into one adaptive region and keeps browse navigation for mature catalogs.
+  The original rebuild merged to `development` as PR #41; ticket file
   [17-storefront-redesign.md](spec/active/17-storefront-redesign.md).
-  Founder mobile and desktop walkthrough remains.
+  Founder mobile and desktop walkthrough against v5 remains.
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the

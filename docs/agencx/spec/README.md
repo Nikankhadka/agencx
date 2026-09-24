@@ -49,7 +49,7 @@ review W-11, and auth OTP W-12/W-13 - with the walkthrough evidence logs.
 | Prototype | Status |
 |---|---|
 | [agencx-prototype-v6.html](../design/prototypes/agencx-prototype-v6.html) | Current app reference |
-| `agencx-storefront-customer-v4.html` | Current storefront reference (M-7: no-image-first base, Uber Eats-style mature state, single header chat entry) |
+| [agencx-storefront-customer-v5.html](../design/prototypes/agencx-storefront-customer-v5.html) | Current storefront reference (M-7: no-image-first base, compact sparse state, mature browse state, single header chat entry) |
 | [archived v3 storefront](../../archive/prototypes/agencx-storefront-customer-v3.html) | Interaction vocabulary only |
 
 No v7 prototype exists - the refinement design intent in

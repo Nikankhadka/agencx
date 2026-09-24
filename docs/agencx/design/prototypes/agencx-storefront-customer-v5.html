@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agencx storefront - sparse catalog amendment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&amp;display=swap" rel="stylesheet">
+<style>
+/* Hallmark - pre-emit critique: P5 H4 E4 S5 R5 V4
+ * Hallmark - genre: modern-minimal - macrostructure: adaptive storefront - no-image-first
+ * Amendment to the existing storefront system: sparse, browse, and empty states.
+ */
+:root {
+  --primary-30: #B4004E;
+  --primary-35: #E31C5F;
+  --primary-40: #FF385C;
+  --primary-90: #FFD1DA;
+  --primary-95: #FFE8ED;
+  --neutral-100: #FFFFFF;
+  --neutral-96: #F7F7F7;
+  --neutral-94: #F0F0F0;
+  --neutral-92: #EBEBEB;
+  --neutral-90: #DDDDDD;
+  --neutral-10: #222222;
+  --neutral-variant-30: #717171;
+  --neutral-variant-50: #767676;
+  --primary-40-rgb: 255 56 92;
+  --neutral-10-rgb: 34 34 34;
+  --gradient-brand: linear-gradient(to right, #E61E4D 0%, #E31C5F 50%, #D70466 100%);
+  --gradient-veil: linear-gradient(to top, #FFD1DA 0%, rgb(255 232 237 / 0) 100%);
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --color-page: var(--neutral-96);
+  --color-surface: var(--neutral-100);
+  --color-surface-muted: var(--neutral-94);
+  --color-surface-pressed: var(--neutral-92);
+  --color-border: var(--neutral-90);
+  --color-text: var(--neutral-10);
+  --color-text-secondary: var(--neutral-variant-30);
+  --color-text-tertiary: var(--neutral-variant-50);
+  --color-text-inverse: var(--neutral-100);
+  --color-accent: var(--primary-40);
+  --color-accent-hover: var(--primary-35);
+  --color-accent-active: var(--primary-30);
+  --color-accent-soft: rgb(var(--primary-40-rgb) / 0.09);
+  --color-ink-soft: rgb(var(--neutral-10-rgb) / 0.05);
+  --color-scrim: rgb(0 0 0 / 0.4);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-field: 14px;
+  --radius-card: 18px;
+  --radius-pill: 9999px;
+  --gutter: 24px;
+  --header-height: 64px;
+  --duration-fast: 150ms;
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html { scroll-behavior: smooth; }
+body {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+:focus-visible {
+  outline: 3px solid var(--color-accent-active);
+  outline-offset: 2px;
+}
+.ms {
+  font-family: "Material Symbols Outlined";
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* Review controls are outside the product surface. */
+.review-bar {
+  display: grid;
+  gap: 10px;
+  padding: 12px max(16px, env(safe-area-inset-left)) 12px max(16px, env(safe-area-inset-right));
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+.review-copy { min-width: 0; }
+.review-copy strong { display: block; font-size: 14px; }
+.review-copy span { display: block; margin-block-start: 2px; color: var(--neutral-90); font-size: 12px; }
+.state-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.state-tabs::-webkit-scrollbar { display: none; }
+.state-tab {
+  flex: 0 0 auto;
+  min-height: 44px;
+  border: 1px solid var(--neutral-variant-50);
+  border-radius: var(--radius-pill);
+  padding: 0 16px;
+  background: transparent;
+  color: var(--color-text-inverse);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.state-tab[aria-pressed="true"] { border-color: var(--color-surface); background: var(--color-surface); color: var(--color-text); }
+.state-tab:active { background: var(--neutral-variant-30); }
+.state-tab[aria-pressed="true"]:active { background: var(--neutral-90); }
+
+.storefront {
+  display: flex;
+  min-height: 0;
+  flex: 1 0 auto;
+  flex-direction: column;
+  background: var(--color-surface);
+}
+.site-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+  height: var(--header-height);
+  border-block-end: 1px solid var(--color-border);
+  background: rgb(255 255 255 / 0.95);
+  backdrop-filter: blur(8px);
+}
+.container { width: min(100%, 1024px); margin-inline: auto; padding-inline: var(--gutter); }
+.header-inner { display: flex; height: 100%; align-items: center; justify-content: space-between; gap: 12px; }
+.identity {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  padding: 4px 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+.identity-name { overflow: hidden; font-size: 18px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-brand);
+  color: var(--color-text-inverse);
+  font-size: 14px;
+  font-weight: 700;
+}
+.header-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.icon-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.icon-button.primary { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-text-inverse); }
+.icon-button:active { background: var(--color-surface-pressed); }
+.icon-button.primary:active { background: var(--color-accent-active); }
+
+.hero { padding-block-end: 28px; }
+.hero-veil { height: 96px; background: var(--gradient-veil); }
+.hero-body { margin-block-start: -28px; }
+.hero-mark {
+  width: 56px;
+  height: 56px;
+  border: 3px solid var(--color-surface);
+  font-size: 22px;
+}
+.hero h1 {
+  min-width: 0;
+  margin: 14px 0 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(28px, 6vw, 36px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.hero-subtitle { max-width: 62ch; margin: 8px 0 0; color: var(--color-text-secondary); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 16px; }
+.fact {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.fact:first-child { background: var(--primary-90); color: var(--color-accent-active); }
+.fact .ms { font-size: 16px; }
+
+.catalog-shell { flex: 1 0 auto; border-block-start: 1px solid var(--color-border); }
+.compact-catalog { width: min(100%, 760px); padding-block: 28px 40px; }
+.section-heading { margin: 0; font-size: 24px; line-height: 32px; letter-spacing: -0.01em; }
+.compact-groups { display: grid; min-width: 0; gap: 28px; margin-block-start: 24px; }
+.compact-group { min-width: 0; }
+.compact-group h3 {
+  margin: 0 0 4px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.offering-row {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  border-block-end: 1px solid var(--color-border);
+  padding: 12px 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.offering-row:last-child { border-block-end: 0; }
+.offering-main { display: block; min-width: 0; flex: 1; }
+.offering-name { display: block; font-size: 15px; font-weight: 600; }
+.offering-description { display: block; margin-block-start: 3px; color: var(--color-text-secondary); font-size: 14px; }
+.offering-price { display: block; margin-block-start: 3px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row-arrow { flex: 0 0 auto; color: var(--color-text-tertiary); }
+
+.browse-state { display: none; }
+.category-strip {
+  position: sticky;
+  inset-block-start: var(--header-height);
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border-block-end: 1px solid var(--color-border);
+  padding: 12px var(--gutter);
+  background: rgb(255 255 255 / 0.95);
+  scrollbar-width: none;
+}
+.category-strip::-webkit-scrollbar { display: none; }
+.category-link {
+  min-height: 44px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 16px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.category-link[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent-active); }
+.browse-layout { display: grid; }
+.browse-sidebar { display: none; }
+.browse-section { scroll-margin-top: 200px; border-block-end: 1px solid var(--color-border); padding-block: 28px; }
+.browse-section:last-child { border-block-end: 0; }
+.browse-section h2 { margin: 0; font-size: 22px; }
+.browse-grid { display: grid; min-width: 0; margin-block-start: 12px; }
+
+.empty-state { display: none; flex: 1 0 auto; }
+.service-overview { padding-block: 24px; }
+.service-overview h2 { margin: 0; font-size: 22px; }
+.service-list { margin: 16px 0 0; padding-inline-start: 22px; color: var(--color-text-secondary); }
+.service-list li + li { margin-block-start: 8px; }
+.assistant-wrap { display: flex; flex: 1 0 auto; align-items: center; padding-block: 32px; }
+.assistant-card { width: min(100%, 640px); border-radius: var(--radius-card); padding: 20px; background: var(--color-accent-soft); }
+.assistant-message { display: flex; align-items: flex-start; gap: 12px; }
+.assistant-message p { margin: 0; border-radius: var(--radius-card); padding: 12px 16px; background: var(--color-surface); }
+.reply-button {
+  min-height: 44px;
+  margin-block-start: 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 18px;
+  background: var(--gradient-brand);
+  color: var(--color-text-inverse);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.site-footer { margin-block-start: auto; border-block-start: 1px solid var(--color-border); }
+.footer-inner { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 16px; color: var(--color-text-tertiary); font-size: 12px; }
+.footer-inner strong { color: var(--color-text); }
+
+.storefront[data-state="browse"] .compact-state,
+.storefront[data-state="empty"] .compact-state,
+.storefront[data-state="empty"] .catalog-shell { display: none; }
+.storefront[data-state="browse"] .browse-state { display: block; }
+.storefront[data-state="empty"] .empty-state { display: flex; flex-direction: column; }
+
+dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100% - 32px), 480px);
+  max-height: min(80dvh, 640px);
+  margin: auto;
+  border: 0;
+  border-radius: var(--radius-card);
+  padding: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+dialog::backdrop { background: var(--color-scrim); }
+.dialog-body { padding: 24px; }
+.dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.dialog-head h2 { margin: 0; font-size: 22px; }
+.dialog-close { flex: 0 0 auto; }
+.dialog-body p { margin: 16px 0 0; color: var(--color-text-secondary); }
+.dialog-price { color: var(--color-text) !important; font-size: 20px; font-weight: 700; }
+.dialog-action {
+  width: 100%;
+  min-height: 48px;
+  margin-block-start: 20px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--gradient-brand);
+  color: var(--color-text-inverse);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .state-tab:hover { background: var(--neutral-variant-30); }
+  .state-tab[aria-pressed="true"]:hover { background: var(--neutral-90); }
+  .identity:hover, .icon-button:hover, .offering-row:hover { background: var(--color-surface-muted); }
+  .icon-button.primary:hover { background: var(--color-accent-hover); }
+  .reply-button:hover, .dialog-action:hover { filter: brightness(0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0ms !important; }
+}
+@media (min-width: 40rem) {
+  .review-bar { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .compact-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; }
+  .browse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+  .browse-grid .offering-row:nth-last-child(2):nth-child(odd) { border-block-end: 0; }
+}
+@media (min-width: 60rem) {
+  .category-strip { display: none; }
+  .browse-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+  .browse-sidebar { display: block; padding-block: 28px; }
+  .browse-sidebar nav { position: sticky; inset-block-start: calc(var(--header-height) + 28px); }
+  .browse-sidebar h2 { margin: 0 0 12px; font-size: 18px; }
+  .browse-sidebar button {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    border: 0;
+    border-radius: var(--radius-field);
+    padding: 0 12px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: start;
+    white-space: nowrap;
+  }
+  .browse-sidebar button[aria-current="true"] { background: var(--color-accent-soft); color: var(--color-accent-active); font-weight: 600; }
+  .compact-catalog { padding-block-start: 32px; }
+  .compact-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+  <aside class="review-bar" aria-label="Prototype controls">
+    <div class="review-copy">
+      <strong>Sparse storefront amendment</strong>
+      <span>Compact at 1-6 offerings. Browse navigation starts at 7+ offerings across multiple categories.</span>
+    </div>
+    <div class="state-tabs" role="group" aria-label="Storefront state">
+      <button class="state-tab" type="button" data-state-button="compact" aria-pressed="true">Sparse catalog</button>
+      <button class="state-tab" type="button" data-state-button="browse" aria-pressed="false">Mature catalog</button>
+      <button class="state-tab" type="button" data-state-button="empty" aria-pressed="false">No catalog</button>
+    </div>
+  </aside>
+
+  <main class="storefront" data-state="compact">
+    <header class="site-header">
+      <div class="container header-inner">
+        <button class="identity" type="button" data-scroll-top aria-label="Back to top">
+          <span class="mark">S</span>
+          <span class="identity-name">sababa2.0</span>
+        </button>
+        <div class="header-actions">
+          <button class="icon-button" type="button" aria-label="Share page" title="Share page"><span class="ms">share</span></button>
+          <button class="icon-button primary" type="button" aria-label="Chat with sababa2.0" title="Chat with sababa2.0" data-chat><span class="ms">forum</span></button>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero" aria-labelledby="business-name">
+      <div class="hero-veil"></div>
+      <div class="container hero-body">
+        <span class="mark hero-mark">S</span>
+        <h1 id="business-name">sababa2.0</h1>
+        <p class="hero-subtitle">breakfast, drinks, salads</p>
+        <div class="facts">
+          <span class="fact">middle eastern cafe</span>
+          <span class="fact"><span class="ms">schedule</span> everyday 7-8</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog-shell compact-state" aria-labelledby="compact-heading">
+      <div class="container compact-catalog">
+        <h2 class="section-heading" id="compact-heading">What we offer</h2>
+        <div class="compact-groups">
+          <section class="compact-group" aria-labelledby="group-breakfast">
+            <h3 id="group-breakfast">Breakfast / Drinks</h3>
+            <button class="offering-row" type="button" data-name="coffee" data-description="" data-price="">
+              <span class="offering-main"><span class="offering-name">coffee</span></span>
+              <span class="ms row-arrow">chevron_right</span>
+            </button>
+          </section>
+          <section class="compact-group" aria-labelledby="group-drinks">
+            <h3 id="group-drinks">drinks</h3>
+            <button class="offering-row" type="button" data-name="coke" data-description="" data-price="$2.50">
+              <span class="offering-main"><span class="offering-name">coke</span><span class="offering-price">$2.50</span></span>
+              <span class="ms row-arrow">chevron_right</span>
+            </button>
+          </section>
+          <section class="compact-group" aria-labelledby="group-more">
+            <h3 id="group-more">More</h3>
+            <button class="offering-row" type="button" data-name="drinks" data-description="" data-price="">
+              <span class="offering-main"><span class="offering-name">drinks</span></span>
+              <span class="ms row-arrow">chevron_right</span>
+            </button>
+            <button class="offering-row" type="button" data-name="salads" data-description="" data-price="">
+              <span class="offering-main"><span class="offering-name">salads</span></span>
+              <span class="ms row-arrow">chevron_right</span>
+            </button>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog-shell browse-state" aria-label="Mature catalog">
+      <nav class="category-strip" aria-label="Offer categories">
+        <button class="category-link" type="button" data-target="plates" aria-pressed="true">Plates &amp; Bowls</button>
+        <button class="category-link" type="button" data-target="pitas" aria-pressed="false">Pitas</button>
+        <button class="category-link" type="button" data-target="sides" aria-pressed="false">Sides</button>
+        <button class="category-link" type="button" data-target="drinks" aria-pressed="false">Drinks</button>
+      </nav>
+      <div class="container browse-layout">
+        <aside class="browse-sidebar">
+          <nav aria-label="Offer categories">
+            <h2>Browse</h2>
+            <button type="button" data-target="plates" aria-current="true">Plates &amp; Bowls</button>
+            <button type="button" data-target="pitas" aria-current="false">Pitas</button>
+            <button type="button" data-target="sides" aria-current="false">Sides</button>
+            <button type="button" data-target="drinks" aria-current="false">Drinks</button>
+          </nav>
+        </aside>
+        <div>
+          <section class="browse-section" id="plates">
+            <h2>Plates &amp; Bowls</h2>
+            <div class="browse-grid">
+              <button class="offering-row" type="button" data-name="Bowl" data-description="Salads and dips with pita on the side" data-price="$27.00"><span class="offering-main"><span class="offering-name">Bowl</span><span class="offering-price">$27.00</span><span class="offering-description">Salads and dips with pita on the side</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Super Plate" data-description="Choice of two proteins, four seasonal salads and two dips" data-price="$37.00"><span class="offering-main"><span class="offering-name">Super Plate</span><span class="offering-price">$37.00</span><span class="offering-description">Choice of two proteins, four seasonal salads and two dips</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Plate" data-description="Salads and dips with one pita" data-price=""><span class="offering-main"><span class="offering-name">Plate</span><span class="offering-description">Salads and dips with one pita</span></span><span class="ms row-arrow">chevron_right</span></button>
+            </div>
+          </section>
+          <section class="browse-section" id="pitas">
+            <h2>Pitas</h2>
+            <div class="browse-grid">
+              <button class="offering-row" type="button" data-name="Pita Pocket" data-description="Salads and dips wrapped in pita" data-price=""><span class="offering-main"><span class="offering-name">Pita Pocket</span><span class="offering-description">Salads and dips wrapped in pita</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Sabbaba Pita Pocket" data-description="House pita with the full four-salad, four-dip combo" data-price="$20.00"><span class="offering-main"><span class="offering-name">Sabbaba Pita Pocket</span><span class="offering-price">$20.00</span><span class="offering-description">House pita with the full four-salad, four-dip combo</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Larnaca Pita" data-description="Olives, green chilli and shredded halloumi" data-price="$19.90"><span class="offering-main"><span class="offering-name">Larnaca Pita</span><span class="offering-price">$19.90</span><span class="offering-description">Olives, green chilli and shredded halloumi</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Algerian Pita" data-description="Chickpeas and eggplant" data-price="$19.90"><span class="offering-main"><span class="offering-name">Algerian Pita</span><span class="offering-price">$19.90</span><span class="offering-description">Chickpeas and eggplant</span></span><span class="ms row-arrow">chevron_right</span></button>
+            </div>
+          </section>
+          <section class="browse-section" id="sides">
+            <h2>Sides</h2>
+            <div class="browse-grid">
+              <button class="offering-row" type="button" data-name="Hot Chips" data-description="Famous lightly seasoned chips" data-price="$10.00"><span class="offering-main"><span class="offering-name">Hot Chips</span><span class="offering-price">$10.00</span><span class="offering-description">Famous lightly seasoned chips</span></span><span class="ms row-arrow">chevron_right</span></button>
+              <button class="offering-row" type="button" data-name="Six Falafel" data-description="Six falafel pieces" data-price="$10.90"><span class="offering-main"><span class="offering-name">Six Falafel</span><span class="offering-price">$10.90</span><span class="offering-description">Six falafel pieces</span></span><span class="ms row-arrow">chevron_right</span></button>
+            </div>
+          </section>
+          <section class="browse-section" id="drinks">
+            <h2>Drinks</h2>
+            <div class="browse-grid">
+              <button class="offering-row" type="button" data-name="Soft Drink Can" data-description="A can of soft drink" data-price="$4.50"><span class="offering-main"><span class="offering-name">Soft Drink Can</span><span class="offering-price">$4.50</span><span class="offering-description">A can of soft drink</span></span><span class="ms row-arrow">chevron_right</span></button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="empty-state" aria-labelledby="empty-heading">
+      <div class="container service-overview">
+        <h2 id="empty-heading">What we offer</h2>
+        <ul class="service-list"><li>breakfast</li><li>drinks</li><li>salads</li></ul>
+      </div>
+      <div class="container assistant-wrap">
+        <div class="assistant-card">
+          <div class="assistant-message">
+            <span class="mark">S</span>
+            <p>Hi, I’m sababa2.0’s assistant. Ask me anything about what we do, pricing, or opening hours.</p>
+          </div>
+          <button class="reply-button" type="button" data-chat>Reply</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <div class="container footer-inner"><strong>Agencx</strong><span>Powered by Agencx</span></div>
+    </footer>
+  </main>
+
+  <dialog id="offering-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 id="dialog-title">Offering</h2>
+        <button class="icon-button dialog-close" type="button" aria-label="Close"><span class="ms">close</span></button>
+      </div>
+      <p id="dialog-description"></p>
+      <p class="dialog-price" id="dialog-price"></p>
+      <button class="dialog-action" type="button">Ask about this</button>
+    </div>
+  </dialog>
+  <dialog id="chat-dialog" aria-labelledby="chat-title">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 id="chat-title">Chat with sababa2.0</h2>
+        <button class="icon-button dialog-close" type="button" aria-label="Close"><span class="ms">close</span></button>
+      </div>
+      <p>The production storefront opens the existing conversation sheet here. This prototype keeps the catalog layout as the review focus.</p>
+    </div>
+  </dialog>
+
+<script>
+const storefront = document.querySelector('.storefront');
+const stateButtons = [...document.querySelectorAll('[data-state-button]')];
+stateButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    storefront.dataset.state = button.dataset.stateButton;
+    stateButtons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+document.querySelector('[data-scroll-top]').addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+const offeringDialog = document.querySelector('#offering-dialog');
+document.querySelectorAll('.offering-row').forEach((row) => {
+  row.addEventListener('click', () => {
+    document.querySelector('#dialog-title').textContent = row.dataset.name;
+    const description = document.querySelector('#dialog-description');
+    description.textContent = row.dataset.description;
+    description.hidden = !row.dataset.description;
+    const price = document.querySelector('#dialog-price');
+    price.textContent = row.dataset.price;
+    price.hidden = !row.dataset.price;
+    offeringDialog.showModal();
+  });
+});
+
+document.querySelectorAll('[data-chat]').forEach((button) => button.addEventListener('click', () => document.querySelector('#chat-dialog').showModal()));
+document.querySelectorAll('.dialog-close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
+document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+  if (event.target === dialog) dialog.close();
+}));
+
+const navControls = [...document.querySelectorAll('[data-target]')];
+navControls.forEach((control) => control.addEventListener('click', () => {
+  document.querySelector(`#${CSS.escape(control.dataset.target)}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  navControls.forEach((candidate) => {
+    const active = candidate.dataset.target === control.dataset.target;
+    if (candidate.classList.contains('category-link')) candidate.setAttribute('aria-pressed', String(active));
+    else candidate.setAttribute('aria-current', String(active));
+  });
+}));
+</script>
+</body>
+</html>

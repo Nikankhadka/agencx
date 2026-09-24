@@ -28,6 +28,10 @@ function htmlFor(item: StorefrontOffering): string {
   return renderToStaticMarkup(<Offerings offerings={[item]} onSelect={() => {}} />);
 }
 
+function catalogHtml(items: StorefrontOffering[]): string {
+  return renderToStaticMarkup(<Offerings offerings={items} onSelect={() => {}} />);
+}
+
 describe("Offerings row media", () => {
   it("renders an image thumbnail when media is a photo", () => {
     const html = htmlFor(
@@ -72,5 +76,51 @@ describe("Offerings row media", () => {
 
     expect(html).not.toContain("<img");
     expect(html).not.toContain("Video");
+  });
+});
+
+describe("Offerings catalog density", () => {
+  it("uses one compact region and no category navigation for up to six offerings", () => {
+    const html = catalogHtml([
+      offering({ id: "1", name: "Coffee", category: "Breakfast / Drinks" }),
+      offering({ id: "2", name: "Coke", category: "Drinks", price_cents: 250 }),
+      offering({ id: "3", name: "Salads" }),
+      offering({ id: "4", name: "Fresh juice" }),
+    ]);
+
+    expect(html).toContain('data-testid="compact-offerings"');
+    expect(html).toContain("What we offer");
+    expect(html).toContain("Breakfast / Drinks");
+    expect(html).toContain("Drinks");
+    expect(html).toContain("More");
+    expect(html).not.toContain('aria-label="Offer categories"');
+    expect(html).not.toContain(">Browse<");
+  });
+
+  it("keeps category navigation for a mature catalog starting at seven offerings", () => {
+    const html = catalogHtml(
+      Array.from({ length: 7 }, (_, index) =>
+        offering({
+          id: String(index + 1),
+          name: `Item ${index + 1}`,
+          category: index < 4 ? "Repairs" : "Phones",
+        }),
+      ),
+    );
+
+    expect(html).toContain('data-testid="browse-offerings"');
+    expect(html).toContain('aria-label="Offer categories"');
+    expect(html).toContain(">Browse<");
+    expect(html).not.toContain('data-testid="compact-offerings"');
+  });
+
+  it("does not repeat a category label when a compact catalog has only one group", () => {
+    const html = catalogHtml([
+      offering({ id: "1", name: "Coffee" }),
+      offering({ id: "2", name: "Tea" }),
+    ]);
+
+    expect(html.match(/What we offer/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain(">More<");
   });
 });

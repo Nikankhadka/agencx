@@ -11,6 +11,8 @@ interface Section {
   offerings: StorefrontOffering[];
 }
 
+const COMPACT_CATALOG_MAX_ITEMS = 6;
+
 function sectionsOf(offerings: StorefrontOffering[]): Section[] {
   const categories = Array.from(
     new Set(offerings.map((item) => item.category).filter(Boolean)),
@@ -88,10 +90,45 @@ function RowMedia({ offering }: { offering: StorefrontOffering }) {
   return null;
 }
 
+function OfferingRow({
+  offering,
+  onSelect,
+}: {
+  offering: StorefrontOffering;
+  onSelect: (offering: StorefrontOffering) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(offering)}
+      className="flex w-full items-start justify-between gap-4 border-b border-hairline py-4 text-left transition-colors duration-(--duration-fast) last:border-b-0 hover:bg-surface-container active:bg-surface-container-high sm:px-3"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-card-hl font-semibold text-text">{offering.name}</span>
+        {offering.price_cents !== null ? (
+          <span
+            data-testid="offering-price"
+            className="mt-1 block text-body-sm font-medium text-text tabular-nums"
+          >
+            {priceLabel(offering.price_cents)}
+          </span>
+        ) : null}
+        {offering.description ? (
+          <span className="mt-2 line-clamp-3 text-body-sm text-text-secondary">
+            {offering.description}
+          </span>
+        ) : null}
+      </span>
+      <RowMedia offering={offering} />
+    </button>
+  );
+}
+
 /**
- * M-7 offering list (v4 frames 1-2): one composition for both states. Rows
- * reserve no media space - thumbnails render only where media exists - and
- * the category navs carry scrollspy through the shared `navTone` idiom.
+ * M-7 offering list (v5 sparse amendment): small catalogs stay in one compact
+ * region without browse chrome, while mature catalogs retain category nav and
+ * scrollspy. Rows reserve no media space in either mode - thumbnails render
+ * only where media exists.
  */
 export function Offerings({
   offerings,
@@ -101,12 +138,13 @@ export function Offerings({
   onSelect: (offering: StorefrontOffering) => void;
 }) {
   const sections = useMemo(() => sectionsOf(offerings), [offerings]);
+  const isCompact = offerings.length <= COMPACT_CATALOG_MAX_ITEMS;
   const [activeId, setActiveId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || sections.length < 2) return;
+    if (!root || isCompact || sections.length < 2) return;
     const targets = sections
       .map((section) => root.querySelector(`#${CSS.escape(section.id)}`))
       .filter((el): el is Element => el !== null);
@@ -120,12 +158,49 @@ export function Offerings({
     );
     targets.forEach((target) => observer.observe(target));
     return () => observer.disconnect();
-  }, [sections]);
+  }, [isCompact, sections]);
 
   const active = activeId ?? sections[0]?.id;
 
+  if (isCompact) {
+    const singleGroup = sections.length === 1;
+    return (
+      <div
+        ref={rootRef}
+        data-testid="compact-offerings"
+        className="w-full border-t border-hairline"
+      >
+        <section className="mx-auto max-w-5xl px-gutter py-6">
+          <h2 className="text-title-2 font-semibold text-text">What we offer</h2>
+          {singleGroup ? (
+            <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
+              {sections[0]?.offerings.map((offering) => (
+                <OfferingRow key={offering.id} offering={offering} onSelect={onSelect} />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-6 grid min-w-0 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {sections.map((section) => (
+                <section key={section.id} className="min-w-0">
+                  <h3 className="text-footnote font-semibold text-text-secondary">
+                    {section.label}
+                  </h3>
+                  <div className="mt-1">
+                    {section.offerings.map((offering) => (
+                      <OfferingRow key={offering.id} offering={offering} onSelect={onSelect} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div ref={rootRef} className="w-full border-t border-hairline">
+    <div ref={rootRef} data-testid="browse-offerings" className="w-full border-t border-hairline">
       {sections.length > 1 ? (
         <nav
           aria-label="Offer categories"
@@ -186,32 +261,11 @@ export function Offerings({
               <h2 className="text-title-2 font-semibold text-text">{section.label}</h2>
               <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
                 {section.offerings.map((offering) => (
-                  <button
+                  <OfferingRow
                     key={offering.id}
-                    type="button"
-                    onClick={() => onSelect(offering)}
-                    className="flex w-full items-start justify-between gap-4 border-b border-hairline py-4 text-left transition-colors duration-(--duration-fast) last:border-b-0 hover:bg-surface-container active:bg-surface-container-high sm:px-3"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-card-hl font-semibold text-text">
-                        {offering.name}
-                      </span>
-                      {offering.price_cents !== null ? (
-                        <span
-                          data-testid="offering-price"
-                          className="mt-1 block text-body-sm font-medium text-text tabular-nums"
-                        >
-                          {priceLabel(offering.price_cents)}
-                        </span>
-                      ) : null}
-                      {offering.description ? (
-                        <span className="mt-2 line-clamp-3 text-body-sm text-text-secondary">
-                          {offering.description}
-                        </span>
-                      ) : null}
-                    </span>
-                    <RowMedia offering={offering} />
-                  </button>
+                    offering={offering}
+                    onSelect={onSelect}
+                  />
                 ))}
               </div>
             </section>

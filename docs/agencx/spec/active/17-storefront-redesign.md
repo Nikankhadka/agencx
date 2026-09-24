@@ -1,13 +1,10 @@
 # 17 - Storefront redesign: no-image-first base, Uber Eats-style mature state (M-7)
 
-**Status:** built on `feat/m7-storefront-redesign` (M-7 US-1 through US-6);
-founder review amendments applied (hero veil in both states, long facts wrap);
-verified against every acceptance signal below, `make check` /
-`make eval-skip-llm` / the full E2E suite green, PR open to `development`;
-awaiting the founder's mobile/desktop walkthrough against v4 and merge.
-Prototype
-[`agencx-storefront-customer-v4.html`](../design/prototypes/agencx-storefront-customer-v4.html)
-approved in founder review.
+**Status:** the original M-7 build merged to `development` as PR #41. The
+sparse-catalog amendment is implemented and locally verified; it awaits the
+founder's mobile and desktop walkthrough. Prototype
+[`agencx-storefront-customer-v5.html`](../design/prototypes/agencx-storefront-customer-v5.html)
+is the review target; v4 remains the record of the approved original rebuild.
 
 Founder request: the customer storefront at `/{slug}` reads unfinished for a
 business with no photos. The hero reserves a `min-h-36` band for a cover that
@@ -19,12 +16,12 @@ serves the whole page.
 
 ## Design reference
 
-`docs/agencx/design/prototypes/agencx-storefront-customer-v4.html`, frozen
-from the reviewed `.lavish/storefront-redesign.html`. Today screenshots,
-edge cases, and the full decision record live inside the artifact. Port
-structure, states, and vocabulary from it; take behaviour, never strings,
-except where the artifact's words specify a state (no "nothing published"
-notice); visual values are `theme.css` tokens only, no new tokens.
+`docs/agencx/design/prototypes/agencx-storefront-customer-v5.html`, which adds
+the sparse-catalog state to the reviewed v4 rebuild. The original screenshots,
+edge cases, and decision record remain in v4. Port structure, states, and
+vocabulary from v5; take behaviour, never strings, except where the artifact's
+words specify a state (no "nothing published" notice); visual values are
+`theme.css` tokens only, no new tokens.
 
 Review decisions (hero fallback amended in founder review 2026-09-17):
 
@@ -44,6 +41,18 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 - US-6 revised in review: the fixed bottom Ask bar is gone. The single
   persistent header chat button is the only entry, and the header identity
   taps back to top.
+
+Sparse-catalog amendment from the founder walkthrough on 2026-09-24:
+
+- One through six offerings render in one compact "What we offer" region.
+  Categories become quiet group labels, not sticky navigation targets.
+- Seven or more offerings retain the category navigation and full browse
+  sections. A single-category catalog still omits redundant navigation.
+- Compact groups stack on mobile and form up to three columns on wider
+  screens. Optional media keeps the existing row behavior.
+- No placeholder images, promotional filler, duplicate services, or extra
+  chat call to action is introduced. The footer stays at the bottom when the
+  page is shorter than the viewport.
 
 ## Scope
 
@@ -89,14 +98,17 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 
 ### Acceptance signal
 
-- [x] Every pointer above names v4; no active doc still presents v3 as the
-  storefront reference.
+- [x] Every active pointer names v5; no active doc still presents v3 or v4 as
+  the current storefront reference.
 
 ## M-7 US-3: category navigation
 
-- Sticky category nav with scrollspy on mobile; tap scrolls to the section.
-- Desktop keeps the Uber Eats geometry: sticky left Browse sidebar while
-  the menu scrolls.
+- Mature catalogs use sticky category nav with scrollspy on mobile; tap
+  scrolls to the section.
+- Desktop mature catalogs keep the Uber Eats geometry: sticky left Browse
+  sidebar while the menu scrolls.
+- Compact catalogs omit both navigation treatments because every group is
+  already visible in one region.
 
 ### Acceptance signal
 
@@ -162,6 +174,8 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
   spec covering the no-photo base and the minimal business state.
 - `Offerings.test.tsx` (new) pins `RowMedia`'s image, video-with-poster, and
   video-without-poster branches - the one part of US-4 nothing else touched.
+- `Offerings.test.tsx` also pins the compact-to-browse boundary at six and
+  seven offerings and prevents a redundant nested label for one group.
 - `storefront.spec.ts` gained a no-media detail-sheet assertion (US-5 frame
   3b) and a no-fixed-bottom-bar assertion (US-6), mirrored in
   `storefront-mobile.spec.ts` for the latter.
@@ -179,6 +193,6 @@ Review decisions (hero fallback amended in founder review 2026-09-17):
 - [x] All six stories meet their acceptance signals.
 - [x] `make lint`, `make typecheck`, `make test`, `make eval-skip-llm`
   green; E2E suite green including the new mobile spec.
-- [ ] Founder walkthrough of `/{slug}` on mobile and desktop against v4.
+- [ ] Founder walkthrough of `/{slug}` on mobile and desktop against v5.
 - [x] One commit on `feat/m7-storefront-redesign`, PR to `development`
   ([#41](https://github.com/Nikankhadka/agencx/pull/41)).
