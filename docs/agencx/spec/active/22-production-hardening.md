@@ -121,9 +121,12 @@ Built.
   Dependabot alerts were switched on (they were off). All three are recorded in
   `deploy.md` Step 7 with the readback commands.
 
-**Still to verify on the first PR:** that the `security` job's log lists Python
-packages, i.e. that GitHub parses `backend/uv.lock`. If it only sees npm, add a
-backend-only `google/osv-scanner-action` step with `continue-on-error: true`.
+**Verified on PR #47:** the `security` job ran green and read the workflow
+change (`actions/dependency-review-action@5.0.0`). GitHub's dependency graph
+(`gh api repos/Nikankhadka/agencx/dependency-graph/sbom`) lists 104 PyPI, 522
+npm and 6 GitHub Actions packages, so `backend/uv.lock` is parsed and no
+backend-only `osv-scanner` step is needed. That PR changed no dependencies, so a
+red run on a vulnerable Python bump has not been seen yet.
 
 ## T-024 and T-025: Error tracking (D33)
 
