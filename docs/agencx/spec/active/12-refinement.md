@@ -68,8 +68,12 @@ body-size limits are covered by backend tests.
 - [ ] Backups, RPO/RTO, and a restore drill have a documented status and proof
   command.
 - [ ] Error tracking has a documented status and operational verification.
-- [ ] The Playwright suite runs in CI, not only locally.
-- [ ] Dependency scanning has a documented status and scan report.
+- [x] The Playwright suite runs in CI, not only locally. Built: the `e2e` job
+  in `.github/workflows/ci.yml`; validate with `make test-e2e`.
+- [x] Dependency scanning has a documented status and scan report. Built (T-023):
+  `.github/dependabot.yml`, the PR-only `security` job in `ci.yml`, and Dependabot
+  alerts, secret scanning and push protection, recorded in `deploy.md` Step 7;
+  owner is the founder, validate with the `gh api` readback there.
 
 #### Acceptance signal
 

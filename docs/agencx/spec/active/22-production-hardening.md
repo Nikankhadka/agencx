@@ -1,7 +1,7 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 is built; the rest are queued in the
-build order below.
+**Status:** Active - in progress. T-022 and T-023 are built; the rest are
+queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
 
@@ -54,7 +54,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | Order | Ticket | Scope | ADR | Status |
 |---|---|---|---|---|
 | 1 | T-022 | Per-IP rate limit, 2000-char chat cap, docs off in production | D32 | Built |
-| 2 | T-023 | CI `permissions`, Dependabot, dependency review, secret scanning note | - | Queued |
+| 2 | T-023 | CI `permissions`, Dependabot, dependency review, secret scanning note | - | Built |
 | 3 | T-024 | Backend Sentry | D33 | Queued |
 | 4 | T-025 | Frontend Sentry | D33 | Queued |
 | 5 | T-026 | Security headers and report-only CSP | D34 | Queued |
@@ -101,16 +101,32 @@ header is not arriving.
 
 ## T-023: CI hygiene
 
-`permissions: contents: read` at the top of `ci.yml`; the same check on
-`deploy.yml`, `keep-warm.yml` and `registry-cleanup.yml` (the last one needs
-`packages: write` and says so). New `.github/dependabot.yml` for `uv`
-(`/backend`), `npm` (`/frontend`), `github-actions` (`/`) and `docker`
-(`/backend`, `/frontend`), weekly, `deps` commit prefix, grouped, majors left
-ungrouped. A PR-only `actions/dependency-review-action@v4` job with its own
-permissions. No CI secret scanner: GitHub secret scanning with push protection
-and Dependabot alerts are repo settings, recorded in `deploy.md`. Verify on
-the first PR that dependency review lists Python packages, i.e. that GitHub
-parses `backend/uv.lock`.
+Built.
+
+- `ci.yml` gains a top-level `permissions: contents: read`. It was the only one
+  of the four workflows without one; `deploy.yml`, `keep-warm.yml` and
+  `registry-cleanup.yml` already declared it and need nothing more (the last
+  authenticates with `VERCEL_TOKEN`, not the workflow token).
+- New PR-only `security` job in `ci.yml`: `actions/dependency-review-action@v5.0.0`,
+  `fail-on-severity: high`, `comment-summary-in-pr: on-failure`, with its own
+  `contents: read` + `pull-requests: write` (the reason it is a separate job).
+  Pinned to the full tag because the action publishes no floating `v5`. Not
+  `continue-on-error`: it fires only on what a PR newly introduces.
+- New `.github/dependabot.yml`: `uv` (`/backend`), `npm` (`/frontend`),
+  `github-actions` (`/`), `docker` (`/backend`, `/frontend`); weekly Monday,
+  `deps` commit prefix, one grouped minor-and-patch PR per ecosystem, majors
+  ungrouped, open-PR limits 3 / 3 / 2 / 1 / 1. The Node-in-two-files and
+  pgvector-not-scanned gaps are written into the file as comments.
+- No CI secret scanner: secret scanning and push protection were already on, and
+  Dependabot alerts were switched on (they were off). All three are recorded in
+  `deploy.md` Step 7 with the readback commands.
+
+**Verified on PR #47:** the `security` job ran green and read the workflow
+change (`actions/dependency-review-action@5.0.0`). GitHub's dependency graph
+(`gh api repos/Nikankhadka/agencx/dependency-graph/sbom`) lists 104 PyPI, 522
+npm and 6 GitHub Actions packages, so `backend/uv.lock` is parsed and no
+backend-only `osv-scanner` step is needed. That PR changed no dependencies, so a
+red run on a vulnerable Python bump has not been seen yet.
 
 ## T-024 and T-025: Error tracking (D33)
 

@@ -469,6 +469,45 @@ VERCEL_TOKEN=<token scoped to the project's team>
    Keep the newest ~5 per repository - the currently-deployed images are always
    among them.
 
+## Step 7 - Repository security settings
+
+Three GitHub settings do the dependency and secret scanning that CI would
+otherwise have to. They are repo settings, not workflow files, so they do not
+show up in a diff - the readback below is the proof they are on.
+
+| Setting | State (2026-09-25) | What it does |
+|---|---|---|
+| Secret scanning | on | Flags a committed credential from a known provider. |
+| Push protection | on | Rejects the `git push` itself when it carries one, which is strictly better than reporting a secret already in history. |
+| Dependabot alerts | on | Watches the dependency graph (`backend/uv.lock`, `frontend/package-lock.json`) against the advisory database, continuously, so a CVE published after a dependency shipped still surfaces. |
+| Dependabot security updates | off | Would open a fix PR the moment an alert fires. Left off on purpose: the weekly PRs from `.github/dependabot.yml` are the update path, and an unscheduled PR is easy to miss on a solo repo. Turn on under Settings > Advanced Security if alerts start going unread. |
+
+Read them back:
+
+```bash
+gh api repos/Nikankhadka/agencx --jq '.security_and_analysis'
+gh api repos/Nikankhadka/agencx/vulnerability-alerts -i | head -1   # 204 = on, 404 = off
+```
+
+In CI, `ci.yml` has a PR-only `security` job (`actions/dependency-review-action`)
+that fails a PR which newly adds a dependency with a known **high or critical**
+vulnerability. It looks only at what the PR changes, so a red run is always
+about that PR; it does not audit what is already merged - the alerts above do.
+
+`.github/dependabot.yml` opens one grouped minor-and-patch PR per ecosystem per
+week (`uv`, `npm`, `github-actions`), plus the two Dockerfile base images.
+Majors arrive alone. Every dependency is an exact pin, so nothing moves unless
+one of these PRs moves it. Two things it cannot do, both manual:
+
+- The Node version is written in `frontend/Dockerfile` **and** `ci.yml`
+  (`node-version`). Bump both in one PR or CI tests a runtime that is not shipped.
+- The `pgvector/pgvector` image (`ci.yml` services, `docker-compose.yml`) is not
+  read by Dependabot's `docker` ecosystem.
+
+`ci.yml` also declares `permissions: contents: read` at the top, so a job gets a
+read-only token unless it asks for more; only `security` does, and only for its
+PR comment. The other three workflows already declared the same.
+
 ## What the repo changes deliver
 
 The founder steps above are external. The code that makes them work is B-4;

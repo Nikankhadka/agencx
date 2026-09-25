@@ -15,6 +15,12 @@ on:
     branches: [staging, development]
   pull_request:
 
+# Least privilege (T-023): every job reads the repo and nothing else. The one job
+# that needs more (`security`, below) asks for it on its own, so a compromised
+# third-party action in any other job cannot write to the repo or its PRs.
+permissions:
+  contents: read
+
 # One in-flight run per ref; a newer push cancels the older run.
 concurrency:
   group: ci-${{ github.ref }}
@@ -227,6 +233,29 @@ jobs:
             echo "LLM_API_KEY not set - running deterministic gate only"
             uv run python -m evals.run_gate --skip-llm
           fi
+
+  security:
+    # T-023: fails a PR that newly introduces a dependency with a known high or
+    # critical vulnerability. Diff-based on purpose: it only fires on what the PR
+    # adds, so a red run is always actionable. Vulnerabilities already shipped are
+    # Dependabot alerts' job (deploy.md, "Repository security settings"), and
+    # committed secrets are caught by secret scanning with push protection, which
+    # blocks the push itself - both are repo settings, not CI time.
+    #
+    # Its own permissions because the PR comment needs pull-requests: write and
+    # the workflow default above is read-only. Pinned to the full tag: v5 has no
+    # floating major tag yet, and Dependabot keeps it current either way.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
 
   e2e:
     # R-5: the Playwright suite runs here, not only on a developer's machine.
