@@ -162,6 +162,19 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Abuse control (T-022, app/shared/ratelimit.py): per-IP request ceilings on
+    # the public routes, per 60s window, per container. 0 = unlimited for that
+    # bucket; rate_limit_enabled is the kill switch that needs no deploy. The
+    # client address comes from one trusted header only - Vercel's edge sets
+    # x-vercel-forwarded-for and overwrites anything the client sent. With the
+    # header absent (local dev, tests) requests are not limited.
+    rate_limit_enabled: bool = True
+    rate_limit_trusted_ip_header: str = "x-vercel-forwarded-for"
+    rate_limit_chat_per_min: int = 12
+    rate_limit_poll_per_min: int = 120
+    rate_limit_public_read_per_min: int = 120
+    rate_limit_default_per_min: int = 600
+
     @property
     def app_database_url(self) -> str:
         """The same database, but as the un-privileged ``wren_app`` role the API uses.

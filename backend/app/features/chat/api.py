@@ -36,7 +36,9 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     slug: str
     conversation_id: UUID | None = None
-    message: str = Field(min_length=1)
+    # T-022: ~350 words / ~500 tokens, so one request cannot dent the tenant's
+    # daily budget. Over-length is the standard 422 before any row is written.
+    message: str = Field(min_length=1, max_length=2000)
 
 
 class PublicMessage(BaseModel):

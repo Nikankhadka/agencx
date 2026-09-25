@@ -44,6 +44,12 @@ live in the ticket files, not here.
 
 ## What is next
 
+- [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
+  a 2000-character chat cap (T-022, built, ADR D32), then CI hygiene, Sentry
+  on both surfaces, security headers and CSP, conversation delete, retention,
+  operator export and offboard, privacy and terms pages, and backups. Billing
+  and notifications are out of scope. Ticket file
+  [22-production-hardening.md](spec/active/22-production-hardening.md).
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -104,6 +110,7 @@ live in the ticket files, not here.
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
 | [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
 | [spec/active/21-category-management.md](spec/active/21-category-management.md) | `Done - verified` | Category management and multi-category offerings (migration `0034`, ADR D31) |
+| [spec/active/22-production-hardening.md](spec/active/22-production-hardening.md) | `Active - in progress` | Abuse control, data lifecycle, error tracking, security headers, backups (T-022 to T-033, ADRs D32-D36) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

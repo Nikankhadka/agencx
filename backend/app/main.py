@@ -30,6 +30,7 @@ from app.retrieval.dependency import close_reranker, get_reranker_dependency
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.errors import ProblemDetails, problem_response, validation_problem
+from app.shared.ratelimit import RateLimitMiddleware
 from app.shared.startup import check_startup_config
 
 # Local dev only. B-4 deploys the frontend and backend as two services behind
@@ -97,7 +98,22 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await db.close_pool()
 
 
-app = FastAPI(title="Agencx", version="0.1.0", lifespan=lifespan)
+def docs_enabled(environment: str) -> bool:
+    """/docs, /redoc and /openapi.json publish the whole API surface, so they are
+    off in production. `npm run gen:types` is unaffected: it calls the
+    ``app.openapi()`` method, not the route."""
+    return environment.lower() != "production"
+
+
+_docs = docs_enabled(get_settings().environment)
+app = FastAPI(
+    title="Agencx",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 
 def _openapi() -> dict[str, object]:
@@ -169,7 +185,10 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 # Order matters: add_middleware prepends, so the LAST added is outermost. CORS
 # must be outermost so its headers land on every response - including the
 # structured 500 that RequestContextMiddleware (inner) produces for an
-# unhandled error.
+# unhandled error. RateLimitMiddleware is added first so it is innermost: a 429
+# still gets a request id, an access line and CORS headers, and rejects before
+# any route writes a row.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,

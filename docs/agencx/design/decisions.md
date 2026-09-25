@@ -962,3 +962,76 @@ rollout additive and keeps existing clients readable.
 tax, or business behavior. There is no global taxonomy, nesting, merging,
 automatic category writing, hard count cap, or vertical branch in this
 decision. Monetary behavior remains entirely deterministic and unchanged.
+
+## D32: Public routes get a per-IP noise limiter, not a spend limiter
+
+**Date:** 2026-09-25. **Status:** accepted.
+
+**Decision:** One middleware (`app/shared/ratelimit.py`) counts requests per
+client address in a fixed 60-second window and answers over-limit requests
+with the existing Problem+JSON 429 and a `retry-after`. It sits innermost in
+the middleware stack, so a rejection still carries `X-Request-ID`, gets an
+access log line and CORS headers, and lands before any route writes a row.
+
+| Bucket | Match | Per 60s |
+|---|---|---|
+| `chat` | `POST /api/chat` | 12 |
+| `poll` | `GET /api/chat/{id}/messages` | 120 |
+| `public_read` | `GET /api/public/...` | 120 |
+| `default` | everything else, including `/docs` | 600 |
+| exempt | `/health` | none |
+
+Every limit is a `RATE_LIMIT_*_PER_MIN` setting (`0` = unlimited for that
+bucket) and `RATE_LIMIT_ENABLED=false` switches the whole thing off without a
+deploy. The address is read from one header, `x-vercel-forwarded-for`, which
+Vercel's edge sets and overwrites. The leftmost `x-forwarded-for` entry is
+client-controlled and is never trusted.
+
+Two fail-open rules, both deliberate. When the trusted header is absent
+(local dev, tests, a direct container probe) the request is not limited:
+falling back to the socket peer would put the whole internet behind one
+counter, and rejecting would break `make demo` and the e2e suite. A production
+request that arrives without the header logs one warning per process, so the
+limiter cannot go quiet unnoticed. And the counter is bounded at 10,000
+tracked addresses: at the bound it sweeps expired entries, and if still full
+it lets new addresses through unrecorded (one warning per window) while
+continuing to enforce the tracked ones, so a wide scan degrades the limiter
+instead of becoming an outage for real customers.
+
+Alongside it: `ChatRequest.message` is capped at 2000 characters (about 350
+words), so one request cannot dent a tenant's daily budget, and the OpenAPI
+docs routes are switched off when `ENVIRONMENT=production`. `app.openapi()` is
+unaffected, so `npm run gen:types` still works.
+
+**Why:** `POST /api/chat` is unauthenticated by design and every hit is an LLM
+turn plus database writes. The per-tenant daily budget in `limits.py` bounds
+spend but not noise: one script could burn a tenant's whole day and fill
+`messages` before that budget notices. A middleware rather than a per-route
+dependency, because a dependency is opt-in (the next public route ships
+unprotected), cannot cover `/docs`, and would add `429` to five routes'
+OpenAPI schema and red the `api-types` CI job. State is a plain per-process
+dict, matching the TTL-cache idiom in `limits.py`, so it adds no dependency,
+no secret and no infrastructure.
+
+**What this does not stop.** It is a noise limiter, not a spend limiter:
+
+- Distributed abuse. 500 addresses each under 12 a minute is 6000 turns a
+  minute, and this sees nothing.
+- Anything past 10,000 distinct addresses a minute (the bound above).
+- The multiplier from several containers plus cold-start resets: the state is
+  per process, so the effective limit is `limit x container count` and it
+  resets whenever a container starts.
+- Direct access to the Vercel backend origin URL, which bypasses the edge and
+  therefore the header, and so fails open.
+- A slow drip of 11 a minute, forever.
+- Cost already incurred inside the current window.
+- Content abuse (prompt injection, scraping) entirely.
+
+The fixed window also allows a 2x burst across a window boundary; that is
+irrelevant against sustained spend.
+
+**Boundary:** The per-tenant daily budget stays the spend control, and this
+does not replace or weaken it. The upgrade path is Vercel WAF rate-limit rules
+at the edge (fixed window, keyed on IP), which the project has none of today;
+they would sit in front of this and need nothing here replaced. No behavior
+here depends on a tenant's vertical, and no monetary amount is touched.
