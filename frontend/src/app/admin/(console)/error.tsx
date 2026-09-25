@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { ErrorRecovery } from "@/components/ErrorRecovery";
 
 /**
@@ -17,6 +18,7 @@ export default function PlatformConsoleError({
 }) {
   useEffect(() => {
     console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   return <ErrorRecovery onRetry={unstable_retry} />;

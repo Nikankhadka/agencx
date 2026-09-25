@@ -1038,8 +1038,8 @@ here depends on a tenant's vertical, and no monetary amount is touched.
 
 ## D33: Error tracking is Sentry, off without a DSN, and never carries customer text
 
-**Date:** 2026-09-26. **Status:** accepted (backend built in T-024; the
-frontend half lands in T-025 under the same rules).
+**Date:** 2026-09-26. **Status:** accepted (backend built in T-024, frontend
+in T-025).
 
 **Decision:** Both surfaces report unhandled errors to Sentry, driven by one
 `SENTRY_DSN`. With it empty no client is created on either surface: no import
@@ -1069,6 +1069,38 @@ number into the chat box:
 
 No Session Replay, ever, on either surface: on the customer page it would
 record a person typing their details.
+
+**Frontend (T-025).** `@sentry/nextjs` 11.0.0, wired without `withSentryConfig`:
+`src/instrumentation.ts` (`register()` plus Next 16's `onRequestError`, for
+server render and route-handler errors) and `src/instrumentation-client.ts`,
+plus a `Sentry.captureException` beside the `console.error` in the three error
+boundaries. Client Sentry runs on the storefront on purpose: chat-widget errors
+are the ones most needed and otherwise invisible. The DSN reaches the browser
+through the existing `PublicConfig` seam (`sentryDsn`), not a second one.
+
+v11 has **no `sendDefaultPii`**; the option is gone and every collection
+category defaults on (cookies, headers, request bodies, query params, stack-frame
+variables, source context lines). Privacy is therefore the `dataCollection`
+option, set to the restrictive value in `src/lib/sentry-options.ts`, plus
+`includeLocalVariables: false` (the node switch that stops the capture at the
+source; `dataCollection.stackFrameVariables` only filters it) and
+`tracesSampleRate: 0`. One leak sits outside that option: Next's
+`onRequestError` hands over `request.path` *with the query string*
+(`/blog?name=foo`), and Sentry copies it verbatim into the event's `nextjs`
+context, bypassing `urlQueryParams: false`. `instrumentation.ts` strips
+everything after `?` before forwarding, so a `?phone=...` never leaves.
+
+`instrumentation.test.ts` pins the init options and the off-without-DSN rule;
+`instrumentation-events.test.ts` runs a real init against an in-memory transport
+and asserts a captured server error carries no cookie, no bearer token and no
+query string (checked by mutation: it fails with the strip removed).
+
+**Source maps are off** (`ponytail:` in `sentry-options.ts`): no
+`withSentryConfig` means no build-time plugin and no `SENTRY_AUTH_TOKEN`, the
+only shape that works in a container build with no build args. Client frames
+are minified. Upgrade path: a CI step running `sentry-cli sourcemaps upload`
+against the `next build` output the `frontend` job already produces, with
+`release` set to the commit SHA on both the upload and `Sentry.init`.
 
 **Why:** an unhandled 500 used to exist only as a container log line nobody
 reads, so the first report of an outage would be a customer. The privacy

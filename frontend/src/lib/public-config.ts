@@ -21,6 +21,8 @@ export const PUBLIC_CONFIG_GLOBAL = "__AGENCX_PUBLIC_CONFIG__";
 export interface PublicConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
+  /** Sentry DSN (public by design). Empty means error tracking is off. */
+  sentryDsn: string;
 }
 
 /**
@@ -34,12 +36,18 @@ export function serverPublicConfig(): PublicConfig {
     supabaseUrl: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
     supabaseAnonKey:
       process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    sentryDsn: process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN ?? "",
   };
 }
 
 /**
  * Client-side: the config the server wrote into the document, falling back to
  * build-time inlining so `next dev` and the test environment behave as before.
+ *
+ * `instrumentation-client.ts` reads the DSN from here. The inline `<head>` script
+ * that writes the global runs before any bundle, so it is present by then; if
+ * that ordering ever changed the DSN would read empty and Sentry would simply be
+ * off, not broken.
  */
 export function readPublicConfig(): PublicConfig {
   const injected =
@@ -50,5 +58,6 @@ export function readPublicConfig(): PublicConfig {
   return {
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
     supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN ?? "",
   };
 }

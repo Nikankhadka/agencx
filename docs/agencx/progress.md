@@ -46,7 +46,7 @@ live in the ticket files, not here.
 
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
-  built), backend Sentry (T-024, built, ADR D33), then frontend Sentry,
+  built), Sentry on both surfaces (T-024 and T-025, built, ADR D33), then
   security headers and CSP,
   conversation delete, retention, operator export and offboard, privacy and
   terms pages, and backups. Billing

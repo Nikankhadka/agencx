@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022, T-023 and T-024 are built; the rest are
+**Status:** Active - in progress. T-022 to T-025 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -56,7 +56,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 1 | T-022 | Per-IP rate limit, 2000-char chat cap, docs off in production | D32 | Built |
 | 2 | T-023 | CI `permissions`, Dependabot, dependency review, secret scanning note | - | Built |
 | 3 | T-024 | Backend Sentry | D33 | Built |
-| 4 | T-025 | Frontend Sentry | D33 | Queued |
+| 4 | T-025 | Frontend Sentry | D33 | Built |
 | 5 | T-026 | Security headers and report-only CSP | D34 | Queued |
 | 6 | T-028 | Conversation delete, backend | D35 | Queued |
 | 7 | T-029 | Conversation delete, console UI | D35 | Queued |
@@ -142,7 +142,20 @@ and a real event captured in memory from a stub app using the real middleware
 contains no customer text, no `Authorization` header value, no cookie, no frame
 locals and no request body, while an error-level log line creates no event.
 
-**T-025 (frontend) is queued.**
+**T-025 (frontend) is built.** `@sentry/nextjs@11.0.0`, `src/instrumentation.ts`
+(`register()` and `onRequestError`), `src/instrumentation-client.ts`,
+`src/lib/sentry-options.ts`, `sentryDsn` on `PublicConfig`, and
+`Sentry.captureException` in the three error boundaries. Beyond the plan:
+v11 has no `sendDefaultPii`, so privacy is an explicit restrictive
+`dataCollection` plus `includeLocalVariables: false`; and Next's
+`request.path` carries the query string, which Sentry copies into the event
+past `urlQueryParams: false`, so `onRequestError` strips it. **Verified** by
+`src/instrumentation.test.ts` (init contract, off without a DSN, no replay) and
+`src/instrumentation-events.test.ts` (a real captured server error carries no
+cookie, bearer token or query string; the strip test fails when the strip is
+removed). `make lint-frontend`, `typecheck-frontend`, `test-frontend` and
+`build` pass. **Not yet verified live:** an event arriving at a real Sentry
+project, which needs `SENTRY_DSN` set in the Vercel environment.
 
 Backend `sentry-sdk`, frontend `@sentry/nextjs`, both inert without a DSN.
 No traces (Langfuse owns tracing), no Session Replay (the customer surface
