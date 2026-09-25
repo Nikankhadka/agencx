@@ -1,10 +1,14 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { CommandPill } from "@/components/ui/CommandPill";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
+import { Icon } from "@/components/ui/Icon";
 import { StructuredResponse } from "@/components/ui/StructuredResponse";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -32,8 +36,13 @@ const POLL_INTERVAL_MS = 4000;
 
 export default function ChatThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Its own state, not `error`: the poll below clears `error` every 4s on a
+  // successful load, which would wipe the reason a delete was refused.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -106,13 +115,57 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // T-029 (D35): the owner deletes one customer conversation. The server
+  // refuses one that has a quote attached; that reason is shown as written.
+  async function handleDelete() {
+    setDeleteError(null);
+    await confirm({
+      title: "Delete this conversation?",
+      description: "The conversation and its messages are deleted permanently. This cannot be undone.",
+      confirmLabel: "Delete",
+      tone: "danger",
+      onConfirm: remove,
+    });
+  }
+
+  async function remove() {
+    try {
+      await apiFetch(`/api/conversations/${id}`, { method: "DELETE" });
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.detail : "Could not delete this conversation.");
+      return;
+    }
+    // The console layout re-polls the list every 4s, but until that tick the
+    // deleted row would still show, and opening it lands on a not-found.
+    await queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+    toast.success("Conversation deleted");
+    router.replace("/chats");
+  }
+
   // Built from the route id, not the response, so the title is right on first
   // paint instead of flashing a placeholder while the detail request is out.
   const customerName = customerLabel(detail?.customer_ref, id);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
-      <ScreenTopbar title={customerName} backHref="/chats" />
+      <ScreenTopbar
+        title={customerName}
+        backHref="/chats"
+        action={
+          detail ? (
+            <button
+              type="button"
+              aria-label="Delete conversation"
+              data-testid="delete-conversation"
+              disabled={working}
+              onClick={() => void handleDelete()}
+              className="flex size-icon-btn items-center justify-center rounded-full text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high disabled:opacity-50"
+            >
+              <Icon name="delete" size={20} />
+            </button>
+          ) : undefined
+        }
+      />
       <Container className="flex min-h-0 flex-1 flex-col">
       <p
         data-testid="thread-status"
@@ -150,6 +203,11 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {error ? <p className="pb-2 text-footnote text-danger">{error}</p> : null}
+      {deleteError ? (
+        <p data-testid="delete-error" className="pb-2 text-footnote text-danger">
+          {deleteError}
+        </p>
+      ) : null}
 
       {stopped ? null : (
         <div className="shrink-0 border-t border-hairline pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">

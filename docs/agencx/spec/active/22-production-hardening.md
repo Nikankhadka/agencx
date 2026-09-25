@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 and T-028 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026, T-028 and T-029 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -59,7 +59,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 4 | T-025 | Frontend Sentry | D33 | Built |
 | 5 | T-026 | Security headers and report-only CSP | D34 | Built |
 | 6 | T-028 | Conversation delete, backend | D35 | Built |
-| 7 | T-029 | Conversation delete, console UI | D35 | Queued |
+| 7 | T-029 | Conversation delete, console UI | D35 | Built |
 | 8 | T-030 | Retention module and policy | D36 | Queued |
 | 9 | T-031 | Operator export and offboard scripts | D35 | Queued |
 | 10 | T-032 | Privacy policy and terms pages | - | Queued |
@@ -205,8 +205,17 @@ beside the other conversation route tests (the plan named a separate
 with a negative control proving `wren_app` still cannot `delete from quotes`.
 `frontend/src/lib/api-types.ts` is regenerated in the same commit.
 
-**T-029 is queued.** The console action lives on the conversation drill-down,
-uses `useConfirm` and explains the 409 in plain words.
+**T-029 is built.** The console action lives on the conversation thread
+(`chats/[id]`), a trash icon in the topbar that opens `useConfirm` with
+destructive copy. On success it invalidates the conversations list, toasts and
+`router.replace`s to `/chats`. A refusal (the 409) is shown verbatim in its own
+`deleteError` line, not the page's `error` one, because the 4s thread poll
+clears `error` on every successful load. `e2e/chats-delete.spec.ts` deletes a
+real conversation through the list and checks it is gone on the server; the 409
+is stubbed, since a real quote needs the assistant to build one. The console
+layout already re-polls the list every 4s, so the invalidation only removes a
+short window where the deleted row still shows - the spec cannot pin it, and
+does not claim to.
 
 ## T-030: Retention (D36)
 

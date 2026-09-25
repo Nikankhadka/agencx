@@ -49,8 +49,8 @@ live in the ticket files, not here.
   built), Sentry on both surfaces (T-024 and T-025, built, ADR D33),
   security headers and a report-only CSP (T-026, built, ADR D34; enforcing it is
   T-027, after a real-deploy walkthrough), conversation delete backend
-  (T-028, built, ADR D35), then its console action, retention, operator export
-  and offboard, privacy and terms pages, and backups. Billing and notifications are out of scope. Ticket file
+  (T-028, built, ADR D35) and its console action (T-029, built), then retention,
+  operator export and offboard, privacy and terms pages, and backups. Billing and notifications are out of scope. Ticket file
   [22-production-hardening.md](spec/active/22-production-hardening.md).
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
