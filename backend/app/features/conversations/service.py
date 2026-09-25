@@ -11,7 +11,7 @@ rather than silently built here).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from app.shared import db
 
@@ -132,3 +132,33 @@ async def get_conversation(
         "cost_rows": [dict(row) for row in cost_rows],
         "total_cost": float(total_cost),
     }
+
+
+async def delete_conversation(
+    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
+) -> Literal["deleted", "not_found", "has_quotes"]:
+    """T-028: forget one customer conversation. Messages, tool calls and
+    escalations cascade; cost_logs.conversation_id is set null, so the unit
+    economics survive detached. A conversation with a quote is refused: quotes
+    are tamper-proof records (wren_app has no DELETE on them), and excluding
+    those conversations here means the cascade never reaches `quotes` at all.
+    They go through the operator offboarding path instead.
+    """
+    async with db.tenant_context(tenant_id, role) as conn:
+        deleted = await conn.fetchval(
+            "delete from conversations "
+            "where id = $1 and tenant_id = $2 "
+            "  and not exists (select 1 from quotes q "
+            "                  where q.tenant_id = $2 and q.conversation_id = $1) "
+            "returning id",
+            conversation_id,
+            tenant_id,
+        )
+        if deleted is not None:
+            return "deleted"
+        exists = await conn.fetchval(
+            "select 1 from conversations where id = $1 and tenant_id = $2",
+            conversation_id,
+            tenant_id,
+        )
+    return "has_quotes" if exists else "not_found"

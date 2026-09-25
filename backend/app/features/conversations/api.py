@@ -1,5 +1,5 @@
 """T-031: Surface 2's Conversations tab - list + full-transcript detail with
-per-message trace (tool calls, inspection verdicts, cost).
+per-message trace (tool calls, inspection verdicts, cost), plus T-028's delete.
 
 Handlers live in controller.py, persistence in service.py. The per-message
 cost attribution (lateral join against cost_logs, see service.py) is exact,
@@ -102,6 +102,20 @@ async def get_conversation(
             conversation_id=str(conversation_id),
             role=admin.role,
         )
+    )
+
+
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> None:
+    """T-028: the owner deletes one customer conversation, permanently.
+    404 for an unknown one, 409 when it holds a quote (see service.py)."""
+    await controller.delete_conversation(
+        tenant_id=str(admin.tenant_id),
+        conversation_id=str(conversation_id),
+        role=admin.role,
     )
 
 

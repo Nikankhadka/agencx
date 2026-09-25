@@ -1179,3 +1179,50 @@ chance of a silent one; the flip in T-027 is one header name.
 
 **Boundary:** headers change no request outcome and touch no monetary amount;
 nothing branches on a tenant's vertical.
+
+## D35: An owner deletes one customer conversation, and a quoted one is refused
+
+**Decision.** `DELETE /api/conversations/{id}` (T-028), guarded by
+`require_tenant_admin`, permanently removes one customer conversation and
+answers `204`. It is a single `delete ... where id = $1 and tenant_id = $2 and
+not exists (select 1 from quotes ...)` statement run inside `tenant_context`, so
+RLS and the explicit tenant filter both apply. `messages`, `tool_calls` and
+`escalations` go with it through their composite `(tenant_id, conversation_id)`
+foreign keys. `cost_logs.conversation_id` is `on delete set null`, so the spend
+row survives detached and unit economics stay whole. `orders` are not
+conversation-linked and are untouched. A conversation owns no storage objects,
+so there is nothing external to clean up.
+
+**A quoted conversation answers `409`, not `204`.** `quotes` are tamper-proof:
+migration `0006` revokes `DELETE` on them from `wren_app` and an immutability
+trigger guards updates. A foreign-key cascade runs as the referential-integrity
+trigger, not as the app role, so the cascade would have deleted them anyway. The
+statement excludes a conversation that holds a quote, which means the delete
+never reaches `quotes`: the revoke is never exercised in production and no
+migration is needed. A second query tells `404` (no such conversation for this
+tenant) from `409` (it exists but holds a quote), so the owner gets a useful
+message: the conversation cannot be deleted here, and a request in writing gets
+it removed by the operator path. Quotes are commercial records; keeping them is
+the safe direction, and the operator path can delete them because it connects as
+the database owner.
+
+**Whole-tenant deletion is not a button.** It is an operator-run script with a
+documented request process and SLA (T-031). One self-serve action is bounded and
+reversible in scope; tenant deletion removes identity, brand, knowledge, quotes
+and the auth users across four systems, and belongs behind a typed double
+confirmation and a receipt.
+
+**Test.** `backend/tests/test_conversations_api.py` runs the real route against
+Postgres: the cascade, the surviving `cost_logs` row, a sibling conversation
+left alone, `409` with nothing moved, tenant scoping, and `401` without auth. A
+negative control asserts `wren_app` still raises `InsufficientPrivilegeError` on
+`delete from quotes`, so the revoke is proven in force rather than assumed.
+Removing the `not exists` clause makes the `409` test fail.
+
+**What this does not do.** It does not erase a conversation from Langfuse traces,
+Sentry events (which carry no customer text by D33) or provider logs, and it does
+not touch database backups, which age out on the platform's schedule. The privacy
+page states that.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches on
+a tenant's vertical.

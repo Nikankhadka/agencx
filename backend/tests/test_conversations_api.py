@@ -376,3 +376,165 @@ async def test_takeover_is_scoped_to_its_own_tenant(
     )
     assert response.status_code == 409
     assert await _status_of(superuser_conn, other_conversation) == "open"
+
+
+async def _seed_transcript(
+    conn: asyncpg.Connection[Any], tenant_id: uuid.UUID, conversation_id: uuid.UUID
+) -> None:
+    """One assistant turn with everything that hangs off a conversation:
+    messages, a tool call, an escalation and a cost_logs row."""
+    message_id: uuid.UUID = await conn.fetchval(
+        "insert into messages (tenant_id, conversation_id, role, content) "
+        "values ($1, $2, 'customer', 'my number is 0400 000 000'), "
+        "       ($1, $2, 'assistant', 'thanks') returning id",
+        tenant_id,
+        conversation_id,
+    )
+    await conn.execute(
+        "insert into tool_calls (tenant_id, message_id, tool_name, arguments, success) "
+        "values ($1, $2, 'lookup', '{}', true)",
+        tenant_id,
+        message_id,
+    )
+    await conn.execute(
+        "insert into escalations (tenant_id, conversation_id, reason, summary) "
+        "values ($1, $2, 'price_provenance', 'asked for a price')",
+        tenant_id,
+        conversation_id,
+    )
+    await conn.execute(
+        "insert into cost_logs (tenant_id, conversation_id, model, input_tokens, output_tokens, "
+        "cost_usd) values ($1, $2, 'gpt-4o-mini', 10, 5, 0.1)",
+        tenant_id,
+        conversation_id,
+    )
+
+
+async def _rows_for(conn: asyncpg.Connection[Any], conversation_id: uuid.UUID) -> dict[str, int]:
+    return {
+        "conversations": await conn.fetchval(
+            "select count(*) from conversations where id = $1", conversation_id
+        ),
+        "messages": await conn.fetchval(
+            "select count(*) from messages where conversation_id = $1", conversation_id
+        ),
+        "tool_calls": await conn.fetchval(
+            "select count(*) from tool_calls tc join messages m on m.id = tc.message_id "
+            "where m.conversation_id = $1",
+            conversation_id,
+        ),
+        "escalations": await conn.fetchval(
+            "select count(*) from escalations where conversation_id = $1", conversation_id
+        ),
+    }
+
+
+async def test_delete_conversation_removes_the_transcript_and_keeps_the_cost(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    doomed = await _seed_conversation(superuser_conn, tenant_id)
+    kept = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_transcript(superuser_conn, tenant_id, doomed)
+    await _seed_transcript(superuser_conn, tenant_id, kept)
+
+    response = await client.delete(f"/api/conversations/{doomed}", headers=_auth(token))
+    assert response.status_code == 204
+
+    assert await _rows_for(superuser_conn, doomed) == {
+        "conversations": 0,
+        "messages": 0,
+        "tool_calls": 0,
+        "escalations": 0,
+    }
+    # Its cost row survives, detached: unit economics do not depend on the chat text.
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from cost_logs where tenant_id = $1 and conversation_id is null",
+            tenant_id,
+        )
+        == 1
+    )
+    # A sibling conversation is untouched.
+    assert await _rows_for(superuser_conn, kept) == {
+        "conversations": 1,
+        "messages": 2,
+        "tool_calls": 1,
+        "escalations": 1,
+    }
+    gone = await client.get(f"/api/conversations/{doomed}", headers=_auth(token))
+    assert gone.status_code == 404
+
+
+async def test_delete_conversation_with_a_quote_is_refused(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    quoted = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_transcript(superuser_conn, tenant_id, quoted)
+    await superuser_conn.execute(
+        "insert into quotes (tenant_id, conversation_id, line_items, subtotal_cents, total_cents) "
+        "values ($1, $2, '[]', 1000, 1000)",
+        tenant_id,
+        quoted,
+    )
+
+    response = await client.delete(f"/api/conversations/{quoted}", headers=_auth(token))
+    assert response.status_code == 409
+    assert response.headers["content-type"] == "application/problem+json"
+    assert "quote" in response.json()["detail"].lower()
+
+    # Nothing moved: not the conversation, not its messages, not the quote.
+    assert await _rows_for(superuser_conn, quoted) == {
+        "conversations": 1,
+        "messages": 2,
+        "tool_calls": 1,
+        "escalations": 1,
+    }
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from quotes where conversation_id = $1", quoted
+        )
+        == 1
+    )
+
+
+async def test_the_app_role_still_cannot_delete_quotes(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Negative control for the 409 above: the refusal exists because quotes are
+    tamper-proof, so prove the revoke in 0006 is still in force rather than
+    silently re-granted later."""
+    _, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+    await superuser_conn.execute(
+        "insert into quotes (tenant_id, conversation_id, line_items, subtotal_cents, total_cents) "
+        "values ($1, $2, '[]', 1000, 1000)",
+        tenant_id,
+        conversation_id,
+    )
+
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        async with db.tenant_context(str(tenant_id), "tenant_admin") as conn:
+            await conn.execute("delete from quotes where tenant_id = $1", tenant_id)
+
+
+async def test_delete_conversation_is_scoped_to_its_own_tenant(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, _ = await _signup_tenant_admin(client)
+    _, other_tenant_id = await _signup_tenant_admin(client)
+    other_conversation = await _seed_conversation(superuser_conn, other_tenant_id)
+    await _seed_transcript(superuser_conn, other_tenant_id, other_conversation)
+
+    response = await client.delete(f"/api/conversations/{other_conversation}", headers=_auth(token))
+    assert response.status_code == 404
+    assert (await _rows_for(superuser_conn, other_conversation))["messages"] == 2
+
+    missing = await client.delete(f"/api/conversations/{uuid.uuid4()}", headers=_auth(token))
+    assert missing.status_code == 404
+
+
+async def test_delete_conversation_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.delete(f"/api/conversations/{uuid.uuid4()}")
+    assert response.status_code == 401
