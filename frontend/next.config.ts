@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
   // E-3: /dashboards no longer redirects. It is unlinked like every other
@@ -13,6 +14,14 @@ const nextConfig: NextConfig = {
   // copies `public` and `.next/static` in beside it, which that server does not
   // gather itself.
   output: "standalone",
+
+  // T-026: no framework fingerprint, and one header set on every page the
+  // frontend serves. /api/* is routed to the backend by vercel.json and never
+  // reaches this server, so JSON responses carry none of these.
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders(process.env.NODE_ENV !== "production") }];
+  },
 };
 
 export default nextConfig;

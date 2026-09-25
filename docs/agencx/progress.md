@@ -46,11 +46,11 @@ live in the ticket files, not here.
 
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
-  built), Sentry on both surfaces (T-024 and T-025, built, ADR D33), then
-  security headers and CSP,
-  conversation delete, retention, operator export and offboard, privacy and
-  terms pages, and backups. Billing
-  and notifications are out of scope. Ticket file
+  built), Sentry on both surfaces (T-024 and T-025, built, ADR D33),
+  security headers and a report-only CSP (T-026, built, ADR D34; enforcing it is
+  T-027, after a real-deploy walkthrough), then conversation delete,
+  retention, operator export and offboard, privacy and terms pages, and
+  backups. Billing and notifications are out of scope. Ticket file
   [22-production-hardening.md](spec/active/22-production-hardening.md).
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders

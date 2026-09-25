@@ -1121,3 +1121,61 @@ the privacy page (T-032).
 **Boundary:** Error tracking observes; it changes no request outcome, and the
 500 response is byte-for-byte what it was. No behavior depends on a tenant's
 vertical and no monetary amount is touched.
+
+## D34: Security headers on every frontend page, and a CSP that reports before it enforces
+
+**Decision.** `frontend/next.config.ts` sets `poweredByHeader: false` and one
+header set on every page the frontend serves, built by
+`frontend/src/lib/security-headers.ts` so the values are unit-tested:
+`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
+`Permissions-Policy` denying camera, microphone, geolocation and payment,
+`Cross-Origin-Opener-Policy: same-origin`, and `Strict-Transport-Security:
+max-age=63072000; includeSubDomains`. HSTS omits `preload` on purpose: it is a
+one-way door for every subdomain and would block a future per-tenant
+custom-domain plan. The Content-Security-Policy ships as
+`Content-Security-Policy-Report-Only` in T-026 and becomes the enforcing header
+in T-027, after a real deploy and a manual walkthrough with zero violations.
+
+**The policy.** `default-src 'self'`; `img-src` and `media-src` add
+`res.cloudinary.com` (tenant media); `frame-src` allows
+`www.youtube-nocookie.com` and `player.vimeo.com` (the storefront video embeds
+in `Storefront.tsx`, which `default-src` alone would have blocked once
+enforced); `connect-src` adds `*.supabase.co` (browser-side auth) and
+`*.sentry.io` (D33); `frame-ancestors 'self'`, `object-src 'none'`,
+`base-uri 'none'`, `form-action 'self'`. The browser reaches the backend through
+the same-origin `/api` rewrite, so `connect-src 'self'` covers it. `next dev`
+gets `'unsafe-eval'` (React Refresh) and `http://localhost:54321` (local
+Supabase); the production build has neither, which the routes manifest and the
+test both show.
+
+**`SAMEORIGIN` everywhere, storefront included.** Nobody has asked to embed a
+storefront, and when they do the right answer is a per-tenant `frame-ancestors`
+allowlist set at request time from the tenant record, which a static config
+cannot express. A permissive value today would buy nothing and cost
+clickjacking protection on the chat widget.
+
+**What this does not stop (the ceiling).** `script-src` keeps `'unsafe-inline'`
+because `app/layout.tsx` injects a runtime-valued inline script (the public
+config), which no hash can cover, and a nonce would need `proxy.ts` on every
+route, while it deliberately never runs on the customer surface. So this CSP
+stops injected third-party sources and exfiltration destinations, not injected
+inline script. Upgrade path: serve the public config from a route handler or a
+data attribute instead of an inline script, then set `script-src 'self'` with no
+inline at all. The `/api/*` JSON responses come from the backend, which
+`vercel.json` routes around the frontend, so they carry none of these headers.
+
+**Known unknowns the report-only pass exists to find.** The production Supabase
+host is assumed to be `<ref>.supabase.co` (the wildcard); a custom auth domain
+would be reported and needs adding. `brand.logo_url` is read by `BrandMark` but
+nothing in the backend writes it today, so a tenant logo from an arbitrary
+origin is not covered and would be blocked once enforced. `next.config.ts`
+headers are baked at build time in the `standalone` container, so a runtime env
+value cannot feed them.
+
+**Why report-only first.** CSP failures are client side and the page still
+returns 200, so `keep-warm.yml` cannot see a break. Enforcing blind has a real
+chance of a silent one; the flip in T-027 is one header name.
+
+**Boundary:** headers change no request outcome and touch no monetary amount;
+nothing branches on a tenant's vertical.

@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-025 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -57,7 +57,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 2 | T-023 | CI `permissions`, Dependabot, dependency review, secret scanning note | - | Built |
 | 3 | T-024 | Backend Sentry | D33 | Built |
 | 4 | T-025 | Frontend Sentry | D33 | Built |
-| 5 | T-026 | Security headers and report-only CSP | D34 | Queued |
+| 5 | T-026 | Security headers and report-only CSP | D34 | Built |
 | 6 | T-028 | Conversation delete, backend | D35 | Queued |
 | 7 | T-029 | Conversation delete, console UI | D35 | Queued |
 | 8 | T-030 | Retention module and policy | D36 | Queued |
@@ -170,16 +170,26 @@ upload` CI step. Read `frontend/node_modules/next/dist/docs/` for the
 
 ## T-026 and T-027: Security headers and CSP (D34)
 
-Everything in `frontend/next.config.ts`; `proxy.ts` is untouched.
-`poweredByHeader: false`, `X-Content-Type-Options`, `Referrer-Policy`,
-`X-Frame-Options: SAMEORIGIN`, `Permissions-Policy`,
-`Cross-Origin-Opener-Policy` and HSTS without `preload`. The CSP ships
-report-only in T-026 and is enforced in T-027, only after a real deploy and a
-manual walkthrough (storefront, a full chat turn, login, all three console
-tabs, onboarding, admin) with zero violations, because CSP failures are client
-side and return 200, so `keep-warm.yml` cannot see them. `script-src` keeps
+**T-026 is built.** The header values live in
+`frontend/src/lib/security-headers.ts` (unit-tested) and `frontend/next.config.ts`
+applies them with `poweredByHeader: false`; `proxy.ts` is untouched.
+`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: SAMEORIGIN`,
+`Permissions-Policy`, `Cross-Origin-Opener-Policy` and HSTS without `preload`.
+The CSP ships report-only, with a `frame-src` for the YouTube-nocookie and Vimeo
+storefront embeds that the first draft of the plan missed. Verified by building
+the production image path and running `.next/standalone/server.js`: `curl -I`
+on `/login` and a storefront route shows every header and no `X-Powered-By`.
+
+**T-027 is queued.** It renames the header to the enforcing one, only after
+T-026 is on a real deploy and a manual walkthrough (storefront, a full chat
+turn, login, all three console tabs, onboarding, admin) shows zero violations,
+because CSP failures are client side and return 200, so `keep-warm.yml` cannot
+see them. `security-headers.test.ts` asserts the enforcing header is absent, so
+that flip has to update the test on purpose. `script-src` keeps
 `'unsafe-inline'` because `app/layout.tsx` injects a runtime-valued inline
 public-config script; the upgrade path is moving it out of an inline script.
+Unknowns to watch in the walkthrough are listed in D34: a custom Supabase auth
+domain, and a tenant `brand.logo_url` from an arbitrary origin.
 
 ## T-028 and T-029: Conversation delete (D35)
 
