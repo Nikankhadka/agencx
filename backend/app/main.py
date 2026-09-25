@@ -26,6 +26,7 @@ from app.features.tenants.api import router as tenants_router
 from app.features.tenants.public_api import router as public_router
 from app.llm.dependency import get_embedder_dependency
 from app.observability.logging import RequestContextMiddleware, configure_logging
+from app.observability.sentry import init_sentry
 from app.retrieval.dependency import close_reranker, get_reranker_dependency
 from app.shared import db
 from app.shared.config import get_settings
@@ -80,6 +81,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     settings = get_settings()
     configure_logging(settings.log_level)
+    # Before check_startup_config so a boot that dies on bad config is reported.
+    init_sentry(settings)
     # Fail loudly now rather than 500ing on the first authed request if a real
     # deployment booted with placeholder/empty secrets.
     check_startup_config(settings)

@@ -1035,3 +1035,57 @@ does not replace or weaken it. The upgrade path is Vercel WAF rate-limit rules
 at the edge (fixed window, keyed on IP), which the project has none of today;
 they would sit in front of this and need nothing here replaced. No behavior
 here depends on a tenant's vertical, and no monetary amount is touched.
+
+## D33: Error tracking is Sentry, off without a DSN, and never carries customer text
+
+**Date:** 2026-09-26. **Status:** accepted (backend built in T-024; the
+frontend half lands in T-025 under the same rules).
+
+**Decision:** Both surfaces report unhandled errors to Sentry, driven by one
+`SENTRY_DSN`. With it empty no client is created on either surface: no import
+side effects, no network, no overhead, the same off-by-default rule the
+Langfuse wiring in `tracing.py` follows. In production an empty DSN logs one
+"error tracking is inactive" warning per process, because a deploy with no
+tracking looks exactly like a healthy one.
+
+The backend (`app/observability/sentry.py`) starts the SDK from `lifespan`,
+before `check_startup_config`, so a boot that dies on bad config is itself
+reported. `RequestContextMiddleware` swallows unhandled exceptions to return
+its own 500, so the SDK's ASGI integration sees only a response and would
+create no event; the middleware therefore calls `sentry_sdk.capture_exception()`
+inside its existing `except` block (a no-op while uninitialised).
+
+What is deliberately not sent, because a customer types their name and phone
+number into the chat box:
+
+| Setting | Why |
+|---|---|
+| `max_request_body_size="never"` | A 500 on `POST /api/chat` would otherwise attach the verbatim message. |
+| `include_local_variables=False` | The SDK default attaches stack-frame locals, so the chat handler's `body` and `message` would leak by another road. |
+| `send_default_pii=False` | Cookies, client IP and auth headers. |
+| `ignore_logger(TRANSCRIPT_LOGGER_NAME)` | That logger's job is to print message text. |
+| `LoggingIntegration(event_level=None)` | Logs stay breadcrumbs. Every `logger.error` does not become an issue, and nothing double-reports. |
+| `traces_sample_rate=0.0` | Langfuse owns tracing, and spans would burn the free error quota. |
+
+No Session Replay, ever, on either surface: on the customer page it would
+record a person typing their details.
+
+**Why:** an unhandled 500 used to exist only as a container log line nobody
+reads, so the first report of an outage would be a customer. The privacy
+settings are a list, not a flag, because each one closes a separate route by
+which the same text could leave. `tests/test_sentry.py` proves the result
+rather than the settings: it runs the real init against an in-memory
+transport, raises inside a handler that holds a customer message in a local
+variable, and searches the captured event for that text, an `Authorization`
+header and a cookie.
+
+**What this does not stop.** The exception message and stack text are still
+sent, and they can carry data: a database error quoting a value, a parse error
+quoting model output. The upgrade path is a `before_send` scrubber, worth
+writing once real events show what actually leaks; guessing patterns now would
+be false comfort. Sentry's own retention and sub-processor status belong on
+the privacy page (T-032).
+
+**Boundary:** Error tracking observes; it changes no request outcome, and the
+500 response is byte-for-byte what it was. No behavior depends on a tenant's
+vertical and no monetary amount is touched.
