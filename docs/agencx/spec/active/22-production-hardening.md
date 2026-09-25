@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026, T-028 and T-029 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026 and T-028 to T-030 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -60,7 +60,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 5 | T-026 | Security headers and report-only CSP | D34 | Built |
 | 6 | T-028 | Conversation delete, backend | D35 | Built |
 | 7 | T-029 | Conversation delete, console UI | D35 | Built |
-| 8 | T-030 | Retention module and policy | D36 | Queued |
+| 8 | T-030 | Retention module and policy | D36 | Built |
 | 9 | T-031 | Operator export and offboard scripts | D35 | Queued |
 | 10 | T-032 | Privacy policy and terms pages | - | Queued |
 | 11 | T-027 | Enforce the CSP (after T-026 is on a real deploy) | D34 | Queued |
@@ -225,6 +225,16 @@ abandoned conversations (30 days, no assistant message and no escalation).
 Never purged: `cost_logs`, the business's own content, `quotes`, `orders`, and
 identity and brand tables. Policy in `docs/agencx/design/retention.md`;
 `make retention` and `make retention-apply`.
+
+**T-030 is built.** `backend/app/shared/retention.py` selects with the same
+queries in both modes and only `--apply` issues a `delete`, one transaction per
+tenant. A conversation matching both rules is counted once, under "abandoned".
+`make retention TENANT=<slug>` limits either target to one tenant, and an unknown
+slug exits 1. `backend/tests/test_retention_db.py` runs against Postgres with
+backdated rows (seven tests); removing the quote exclusion, the escalation guard,
+the `apply` gate or the tenant filter each turns tests red. Run end to end against
+the demo database: 9 conversations, a dry run that left 9, an apply that left 7
+with the counts the dry run printed.
 
 ## T-031: Operator export and offboard
 

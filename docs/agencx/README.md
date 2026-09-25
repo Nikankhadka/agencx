@@ -18,7 +18,8 @@ chat when planning work.
 | [prd.md](prd.md) | What is Agencx? Personas, scope, signals |
 | [architecture.md](architecture.md) | How does it work? Invariants, seams, providers, eval gates |
 | [history.md](history.md) | Where did this come from? The Wren story, once |
-| [design/decisions.md](design/decisions.md) | Why was it built this way? Decision ledger D1 through D27 |
+| [design/decisions.md](design/decisions.md) | Why was it built this way? Decision ledger D1 through D36 |
+| [design/retention.md](design/retention.md) | How long is customer data kept? Retention windows, the never-purged list, how to run it |
 | [design/database.md](design/database.md) | The schema: tables, roles, RLS, migrations, seeds |
 | [design/frontend.md](design/frontend.md) | The UI: design system, rhythm (spacing, type, layout, CI guard), components, screens and states |
 | [design/api-contract.md](design/api-contract.md) | The API shape: Problem Details errors, safe SSE, review contract |

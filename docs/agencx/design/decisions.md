@@ -1226,3 +1226,64 @@ page states that.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches on
 a tenant's vertical.
+
+## D36: Retention is a dry-run-by-default script and a written policy, not a scheduler
+
+**Decision.** `python -m app.shared.retention` (T-030) deletes customer
+conversations that have outlived their purpose, under two rules: **stale**
+(last message older than 365 days) and **abandoned** (older than 30 days with no
+assistant message and no escalation). Any conversation with a quote is excluded
+from both. The windows are module constants, overridable per run. Dry run is the
+default and writes nothing; `--apply` deletes, one transaction per tenant. `make
+retention` and `make retention-apply` wrap it, and the full policy, including the
+never-purged list, is `docs/agencx/design/retention.md`.
+
+**Why a script, not a job.** A scheduled or endpoint-triggered purge is
+unattended code that can delete customer data, and it needs either a new
+production secret or an authenticated purge route (a new attack surface whose
+only job is deletion). The volume today does not justify that. A monthly run by
+the operator, dry run first, is the smaller and safer thing; it is idempotent, so
+a missed month costs nothing. The upgrade path is a scheduled GitHub Action
+calling the same module, taken when a manual run stops being reasonable.
+
+**Why these windows.** A year covers a seasonal repeat customer and the "what
+did I tell them" lookup; past it, verbatim chat text is liability, and the
+Australian Privacy Act (APP 11.2) requires personal information no longer needed
+to be destroyed or de-identified. Thirty days for abandoned conversations clears
+bot-scan and bounce residue, which no owner will ever open and which D32 only
+slows, not stops.
+
+**Quoted conversations are skipped, not deleted.** This is what protects
+commercial records, and it keeps the module consistent with D35: `quotes` are
+tamper-proof, and the app role cannot delete them. The retention module connects
+as the database owner (where a cascade would bypass that revoke), so the
+exclusion is in the selection query and is the only thing standing between a
+purge and a quote. A test seeds a quoted conversation past both windows and
+asserts it survives; removing the exclusion makes it fail.
+
+**Selection and deletion are separate steps on purpose.** The dry run runs the
+same selection queries as `--apply` and never issues a `delete`, so a dry run
+cannot delete even through a bug in the deletion path. `--apply` re-uses the ids
+the selection returned inside one transaction. The gap between the two is a
+conversation that has been idle for at least 30 days, so a concurrent write to it
+is not a case worth a lock.
+
+**Never purged** (full reasoning in `retention.md`): `cost_logs`, the business's
+own content (`documents`, `knowledge_chunks`, `offerings`, `catalog_items`,
+`pricing_rules`), `quotes`, `orders`, and the identity and brand tables.
+
+**What this does not do.** It does not reach Langfuse traces, provider logs or
+database backups, and it is not a data-subject deletion: it runs by age, not on
+request. Deletion on request is D35 (one conversation) and T-031 (a whole
+tenant).
+
+**Test.** `backend/tests/test_retention_db.py`, against Postgres with backdated
+rows: a dry run reports and writes nothing, `--apply` deletes exactly what the
+dry run reported (children with it, `cost_logs` detached, the quote intact), a
+year-old bounce is counted once, the windows are arguments, `--tenant` leaves
+other tenants alone, an unknown tenant is an error, and a zero-day window is
+refused. Removing the quote exclusion, the escalation guard, the `apply` gate or
+the tenant filter each makes a test fail.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches on
+a tenant's vertical.
