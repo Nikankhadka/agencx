@@ -1,7 +1,7 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 and T-028 to T-032 are built; the rest are
-queued in the build order below.
+**Status:** Active - in progress. T-022 to T-026 and T-028 to T-033 are built; T-027
+(enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
 
@@ -64,7 +64,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 9 | T-031 | Operator export and offboard scripts | D35 | Built |
 | 10 | T-032 | Privacy policy and terms pages | - | Built |
 | 11 | T-027 | Enforce the CSP (after T-026 is on a real deploy) | D34 | Queued |
-| 12 | T-033 | Backups: facts, proof command, restore drill | - | Queued |
+| 12 | T-033 | Backups: facts, proof command, restore drill | - | Built (local drill; production drill open) |
 
 ## T-022: Per-IP abuse control on the public routes
 
@@ -325,12 +325,49 @@ jurisdiction; needs a lawyer's review before real clients sign up.
 
 ## T-033: Backups
 
-A section in `deploy.md`: managed backup cadence, no point-in-time recovery, so
-RPO up to 24 hours and RTO manual, in hours; `keep-warm.yml` is load bearing for
-database liveness on the free tier; Storage and Cloudinary objects are an
-accepted gap; GoTrue users are covered only if the dump includes the `auth`
-schema. `make db-dump` as the proof command, and a restore drill run once and
-dated, whose wall-clock time is the RTO.
+A section in `deploy.md` (Step 9): what protects production data today, marked
+verified or not verified line by line; `make db-dump` as the proof command; and a
+restore drill run once and dated.
+
+**T-033 is built, with one gap the code cannot close.** What to know:
+
+- **Production has no backup safety net that anyone has seen.** The Supabase
+  organization is on the **Free** plan (verified through the Supabase API), and
+  the published plan table puts managed backups at Pro. The Backups page was not
+  read, so that part is marked not verified. Until it is, RPO is "since the last
+  `make db-dump`" and RTO is manual. **Whether to move to Pro is the founder's
+  call**, and it also removes the 7-day pause.
+- **The restore drill ran locally, not on production.** No production
+  `DATABASE_URL` is available to the build, and a drill that needs the credential
+  is the founder's to run. The local run dumped the dev database (24 tenants, 58
+  messages, 79 chunks, 22 auth users), restored it into a fresh Postgres 17, matched
+  every row count, confirmed `wren_app` still cannot delete quotes, then served a
+  storefront and a full chat turn from the restored copy. It is recorded in Step 9
+  as the time of the procedure on a tiny database, explicitly **not** as an RTO. The
+  production drill, and the number it produces, is the first open item there.
+- **Deviations from the plan, all found by running it:**
+  - The client image is a dedicated `pgvector/pgvector:0.8.6-pg17` (`PG_IMAGE`),
+    not the compose `db` image. Hosted Postgres is 17 and `pg_dump` refuses a
+    newer server; the compose db stays on 16, which is a real local and CI versus
+    production parity gap.
+  - `--no-privileges` is dropped: with it a restore silently loses the GRANTs and
+    the `quotes` DELETE revoke, which is the tamper-proof-quote guarantee.
+  - The pipeline uses `bash` with `pipefail` and writes to a `.part` file renamed
+    only on success. The plan's `sh -c 'pg_dump | gzip'` would report gzip's exit
+    status (dash has no `pipefail`), so a failed dump would leave a tiny but
+    valid gzip that looks like a backup. Checked on the real target: an unset URL
+    and a wrong password both exit non-zero and leave no file.
+  - A restore needs `create extension vector` and the two roles from migration
+    `0002` created first (missing, the load emitted 36 errors), and a Postgres 17
+    target (16 rejects `SET transaction_timeout`).
+  - Not the `make` target the plan sketched with `$(DC) run ... db`: a plain
+    `docker run` needs no compose project and no stack running.
+- **Two unknowns are written into Step 9 as open items, not guessed:** what a real
+  recovery target is (a new Supabase project already has its own `auth` schema, so
+  this dump's `auth.*` will collide) and what extra roles hosted GoTrue's grants
+  ask for. Both are answered by the production drill.
+- **Storage objects and Cloudinary media are not in any backup.** Recorded as an
+  accepted gap with its consequence (re-upload; the extracted text is in Postgres).
 
 ## Definition of done
 

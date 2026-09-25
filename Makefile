@@ -120,6 +120,24 @@ dbui: ## Start pgweb DB browser (UI :8081)
 db-down: ## Stop and remove containers + volumes (tears out persistent data)
 	$(DCP) down -v --remove-orphans
 
+# Postgres client for db-dump, and the scratch server for the restore drill in
+# docs/agencx/deploy.md Step 9. It must be the hosted major (17 on Supabase):
+# pg_dump refuses a server newer than itself, and the compose db image stays on
+# pg16 for local dev and CI, so it cannot be the client. Bump this with the
+# hosted major.
+PG_IMAGE   := pgvector/pgvector:0.8.6-pg17
+BACKUP_DIR := var/backups
+
+.PHONY: db-dump
+db-dump: ## Dump the public + auth schemas of DATABASE_URL to var/backups (customer data, gitignored)
+	@test -n "$$DATABASE_URL" || { echo "set DATABASE_URL to the Supabase session-pooler string (port 5432)"; exit 1; }
+	@mkdir -p $(BACKUP_DIR)
+	@umask 077; f=$(BACKUP_DIR)/wren-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz; \
+	docker run --rm -e DATABASE_URL $(PG_IMAGE) bash -c \
+	  'set -o pipefail; pg_dump --no-owner -n public -n auth "$$DATABASE_URL" | gzip' > $$f.part \
+	  && mv $$f.part $$f && echo "$$f: $$(wc -c < $$f | tr -d ' ') bytes" \
+	  || { rm -f $$f.part; echo "db-dump failed" >&2; exit 1; }
+
 # ── data ───────────────────────────────────────────────────────────────────────
 # Every `docker compose run backend ...` brings its dependencies up first
 # (backend depends_on db healthy), so migrate/seed work standalone.

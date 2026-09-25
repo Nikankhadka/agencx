@@ -66,7 +66,13 @@ body-size limits are covered by backend tests.
 #### Remaining work
 
 - [ ] Backups, RPO/RTO, and a restore drill have a documented status and proof
-  command.
+  command. Built (T-033): `deploy.md` Step 9 records what is verified and what
+  is not, `make db-dump` is the proof command, and a restore drill was run
+  locally on 2026-09-26 (row counts equal, quote-delete revoke intact, storefront
+  and a chat turn served from the restored copy). Open: the production project is
+  on the Free plan and its Backups page has not been read, and the drill has not
+  been run against production, so no real RTO exists. Owner is the founder;
+  validate with `make db-dump` on the production URL and the Step 9 procedure.
 - [ ] Error tracking has a documented status and operational verification.
   Built (T-024 backend, T-025 frontend, ADR D33), off until `SENTRY_DSN` is set;
   the in-memory event tests pass on both surfaces. Open: set `SENTRY_DSN` in the

@@ -585,7 +585,9 @@ Say this to the requester, because the privacy page says it:
 - **Langfuse traces and LLM provider logs.** Delete the tenant's traces from the
   Langfuse project by hand if the request covers them. Provider-side retention
   is the provider's.
-- **Database backups.** They age out on the platform's schedule.
+- **Database backups and dumps.** They age out on the platform's schedule, and a
+  dump you took with `make db-dump` (Step 9) lives until you delete it. Delete
+  the dump, or say when it will go, when the request is a deletion.
 - **Sentry events.** They carry no customer text (D33), so there is nothing
   personal to remove.
 
@@ -611,6 +613,156 @@ delete from conversations where id = '<conversation id>' and tenant_id = '<tenan
 Take the ids from an export, and log it the same way. There is no script for this
 on purpose: it is rare enough that a written statement and a log entry are
 proportionate.
+
+## Step 9 - Backups and restore (T-033)
+
+What protects the production database today, what does not, and one command plus
+one procedure that turn "we have backups" from a belief into something that has
+been run. Every line below is marked **verified** (seen or run, with the date) or
+**not verified** (read from documentation or inferred; confirm it before relying
+on it).
+
+### What is true about production
+
+| Fact | Status |
+|---|---|
+| Postgres **17.6** on Supabase, region ap-southeast-2 | Verified 2026-09-26, Supabase API |
+| The Supabase organization is on the **Free** plan | Verified 2026-09-26, Supabase API |
+| Free-plan projects have **no managed backups** you can restore from, and no point-in-time recovery. Daily backups (7 days kept) start at Pro | **Not verified.** From Supabase's published plan table; open Dashboard > Database > Backups and read what is there |
+| Free-plan projects **pause after 7 days without activity** | Documented by Supabase (architecture section 13); not observed here |
+
+Until the Backups page says otherwise, plan on the worst case:
+
+- **RPO (how much you can lose) is the time since the last `make db-dump`.** With
+  no dump ever taken, it is everything. On Pro it would be up to 24 hours.
+- **RTO (how long to be back) is manual.** Nothing restores by itself; a person
+  provisions a target, loads a dump and repoints the app. See the drill result
+  below for what was and was not measured.
+- **The 7-day pause is a data-availability risk, not only a cold start.**
+  `keep-warm.yml` pings `/health` every 10 minutes and `/health` queries the
+  database, so that workflow is the likeliest thing keeping the project awake.
+  Whether Supabase counts a pooler query as activity is **not verified**, so do
+  not delete `keep-warm.yml` to find out. Moving to Pro removes both this and the
+  no-backups problem, and is the founder's call.
+
+**Not in a Postgres dump at all:**
+
+- **Supabase Storage objects** (the uploaded source documents) and **Cloudinary
+  media** (photos, logo). Neither has a backup. Accepted gap, and a mild one: a
+  Storage loss means asking the business to re-upload, because the extracted text
+  lives in Postgres (`documents.structured`, `knowledge_chunks.content`) and the
+  assistant keeps answering from it. The cover image is `tenant_assets.bytes` and
+  is in the dump.
+- **Anything at a provider**: Langfuse traces, Sentry events, LLM provider logs.
+
+**In the dump:** the `public` schema (all tenant data, grants, RLS policies, the
+`quotes` DELETE revoke) and the `auth` schema (owner logins). Verified on the
+local database: 23 `auth` tables dumped and the `auth.users` count matched after
+restore. **Not verified:** the same against hosted GoTrue, whose `auth` schema
+carries Supabase-specific roles and grants; the first production drill will show
+which extra roles the load asks for.
+
+### Taking a dump
+
+```bash
+DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres' \
+  make db-dump
+# var/backups/wren-<UTC timestamp>.sql.gz: <bytes>
+```
+
+- Use the **session** pooler (port `5432`), exactly as in Step 1. `pg_dump` does
+  not work through the transaction pooler.
+- It runs in a container, so the host needs only Docker. The client is
+  `PG_IMAGE` in the Makefile (Postgres **17**): `pg_dump` refuses a server newer
+  than itself, and the compose `db` image stays on 16 for local dev and CI, so it
+  cannot be the client. **Bump `PG_IMAGE` whenever the hosted major moves**, and
+  note that this is also a parity gap: local and CI run Postgres 16 against a 17
+  production.
+- It exits non-zero and leaves **no file** if `DATABASE_URL` is unset, the
+  connection fails, or `pg_dump` dies halfway (the dump is written to a `.part`
+  file and renamed only on success, with `pipefail`, so a truncated dump never
+  looks like a backup).
+- **Read the byte count.** A suspiciously small file is the most common silent
+  backup failure. The local dev database (24 tenants, 58 messages, 79 knowledge
+  chunks) dumps to about 370 KB; production should be visibly larger.
+- **The file is customer data.** `var/` is gitignored, the file is mode 600.
+  Keep it encrypted or on your machine only, never in the repository, a ticket
+  or a chat, and delete it after a drill.
+
+### Restoring, and the drill
+
+The target must be **Postgres 17 with pgvector**: a 16 target rejects the dump's
+`SET transaction_timeout`. The cluster-level pieces are not in a `-n` dump, so
+create them first. Always restore into a **freshly created** database - comparing
+counts against one that already holds the data proves nothing.
+
+```bash
+# 1. A scratch server (locally; for a real recovery see "Open" below).
+docker run -d --name wren-restore -e POSTGRES_PASSWORD=postgres -p 5433:5432 \
+  pgvector/pgvector:0.8.6-pg17
+psql() { docker exec -i wren-restore psql -U postgres -q "$@"; }
+
+# 2. Database, extension and the two roles migration 0002 creates.
+psql -c "create database wren_restore"
+psql -d wren_restore \
+  -c "create extension vector" \
+  -c "create role wren_app login password '<WREN_APP_DB_PASSWORD>'" \
+  -c "create role wren_resolver nologin bypassrls"
+
+# 3. Load. Expect exactly one error: 'schema "public" already exists' (benign).
+gunzip -c var/backups/<dump>.sql.gz | psql -d wren_restore
+
+# 4. Compare with the source: tenants, conversations, messages, documents,
+#    knowledge_chunks, auth.users. Then confirm the app role kept its limits:
+psql -d wren_restore -At -c \
+  "select has_table_privilege('wren_app','public.quotes','DELETE')"   # must be f
+
+# 5. Point a backend at it. WREN_APP_DB_PASSWORD must equal the password in step 2.
+DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/wren_restore \
+WREN_APP_DB_PASSWORD=<same> ...   # then load a storefront and send one chat message
+```
+
+**Drill run 2026-09-26, local only.** Source: the local dev database (24 tenants,
+13 conversations, 58 messages, 16 documents, 79 knowledge chunks, 22 auth users).
+
+| Step | Result |
+|---|---|
+| `make db-dump` | 367,767 bytes, 1 s |
+| Scratch pg17 + pgvector server ready | 2 s |
+| Roles, extension and load | under 1 s, one benign error (`schema "public" already exists`) |
+| Row counts, six tables | all equal to the source |
+| `wren_app` after restore | cannot `DELETE` from `quotes`; 20 RLS-enabled tables, same as source |
+| Backend on the restored DB | up in about 20 s (container boot) |
+| Storefront `/api/public/tenant/bytefix` | 200, body byte-identical to the source's |
+| One chat message | full turn (routing, retrieval, streamed answer); 1 conversation and 2 messages written |
+
+That is about 30 seconds of machine time for a 0.4 MB database on a laptop. **It
+is not a production RTO.** It proves the dump is complete and loadable and that
+the restored roles and grants behave, and it found the two traps above (missing
+roles, and a pg17 dump into pg16). A production recovery is dominated by things
+this did not include: downloading a larger dump, provisioning a target, restoring
+`auth`, repointing `DATABASE_URL` and the Supabase keys in Vercel, and a person
+doing it under pressure. The realistic figure is hours the first time; that is a
+guess, not a measurement.
+
+### Open - to do before the first paying tenant
+
+1. **Run the production drill.** `make db-dump` with the production URL, then
+   steps 1 to 5 above with that dump. Record the dump size, the load errors, the
+   count comparison and the wall-clock time of the whole thing here, replacing the
+   guess above with a number.
+2. **Decide and prove the recovery target.** A new Supabase project already has
+   its own `auth` schema and GoTrue tables, so loading this dump into it will
+   collide on `auth.*`. The likely answer is to load `public` and then the `auth`
+   data only (`auth.users`, `auth.identities`), keeping the same user ids because
+   the `users` table maps a login to a tenant by that id. That is **untested**.
+   The alternative is a self-managed Postgres 17 plus GoTrue. Pick one and run it
+   in the drill.
+3. **Read the Backups page** and correct the table above. If the plan should be
+   Pro, upgrade before onboarding real clients and re-record RPO.
+4. **Take a dump on a schedule you will keep** (before each onboarding, and at
+   least weekly) until managed backups exist. There is no scheduler; this is a
+   manual step, like `make retention`.
 
 ## What the repo changes deliver
 
@@ -673,6 +825,7 @@ worth stating here:
   project ever moves to a plan that keeps an instance up.
 - **Supabase free tier pauses after 7 days idle** (architecture section 13).
   Fine for a portfolio; keep it warm or move to Pro ($25/month) if it bites.
+  With real tenants it is also a backup question - see Step 9.
 - **Free-tier LLM and embedding models train on your inputs** (section 13). No
   real customer data through the free tiers; swap provider before a real cohort.
 - **Google's `thought_signature` 400** (known gap in `progress.md`) can reject

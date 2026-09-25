@@ -19,6 +19,9 @@ __pycache__/
 # uploads (local knowledge files, T-007)
 backend/var/
 
+# database dumps from `make db-dump` - production customer data, never committed
+/var/
+
 # terraform
 .terraform/
 *.tfstate
