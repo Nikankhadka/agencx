@@ -19,6 +19,7 @@ filename is a column value, never part of a path, so a crafted name
 
 from __future__ import annotations
 
+import shutil
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
@@ -28,6 +29,9 @@ import httpx
 from starlette.concurrency import run_in_threadpool
 
 from app.shared.config import get_settings
+
+# Supabase Storage lists and deletes in pages of this size.
+_PAGE = 100
 
 
 class Storage(ABC):
@@ -63,6 +67,11 @@ def _read_file(path: Path) -> bytes | None:
 
 def _delete_matching(root: Path, prefix: str) -> None:
     directory = root / prefix
+    if prefix.endswith("/"):
+        # A whole folder (offboarding), not one document's files.
+        if directory.exists():
+            shutil.rmtree(directory)
+        return
     parent, stem = (directory.parent, directory.name)
     if not parent.exists():
         return
@@ -117,25 +126,30 @@ class SupabaseStorage(Storage):
         return resp.content
 
     async def delete_prefix(self, prefix: str) -> None:
-        # Storage has no delete-by-prefix, so list the tenant folder and filter.
-        # `prefix` is always "{tenant_id}/{document_id}", one document's files.
+        # Storage has no delete-by-prefix, so page through the tenant folder and
+        # filter. `prefix` is "{tenant_id}/{document_id}" (one document's files)
+        # or "{tenant_id}/" (everything the tenant owns, at offboarding).
         folder, _, stem = prefix.rpartition("/")
-        listing = await self._client.post(
-            f"/object/list/{self._bucket}",
-            json={"prefix": folder, "limit": 100},
-        )
-        listing.raise_for_status()
-        names = [
-            item["name"] for item in listing.json() if str(item.get("name", "")).startswith(stem)
-        ]
-        if not names:
-            return
-        resp = await self._client.request(
-            "DELETE",
-            f"/object/{self._bucket}",
-            json={"prefixes": [f"{folder}/{name}" for name in names]},
-        )
-        resp.raise_for_status()
+        names: list[str] = []
+        offset = 0
+        while True:
+            listing = await self._client.post(
+                f"/object/list/{self._bucket}",
+                json={"prefix": folder, "limit": _PAGE, "offset": offset},
+            )
+            listing.raise_for_status()
+            page = listing.json()
+            names += [i["name"] for i in page if str(i.get("name", "")).startswith(stem)]
+            if len(page) < _PAGE:
+                break
+            offset += _PAGE
+        for start in range(0, len(names), _PAGE):
+            resp = await self._client.request(
+                "DELETE",
+                f"/object/{self._bucket}",
+                json={"prefixes": [f"{folder}/{n}" for n in names[start : start + _PAGE]]},
+            )
+            resp.raise_for_status()
 
 
 @lru_cache(maxsize=4)

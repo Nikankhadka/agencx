@@ -1207,10 +1207,30 @@ the safe direction, and the operator path can delete them because it connects as
 the database owner.
 
 **Whole-tenant deletion is not a button.** It is an operator-run script with a
-documented request process and SLA (T-031). One self-serve action is bounded and
-reversible in scope; tenant deletion removes identity, brand, knowledge, quotes
-and the auth users across four systems, and belongs behind a typed double
-confirmation and a receipt.
+documented request process and a 30-day SLA (T-031, `deploy.md` Step 8). One
+self-serve action is bounded and reversible in scope; tenant deletion removes
+identity, brand, knowledge, quotes and the auth users across four systems, and
+belongs behind a typed double confirmation and a receipt.
+
+`python -m app.shared.offboard --slug S` (T-031) is a dry run that prints the
+receipt; `--apply --confirm S` deletes, in this order: Cloudinary media, Supabase
+Storage under `{tenant_id}/`, the GoTrue login of every `users` row, then
+`delete from tenants` as the database owner, where every tenant table cascades
+and `quotes` go with it. External systems come first and each treats "already
+gone" as success, so a failure exits with Postgres untouched and the same
+command safe to re-run, rather than leaving an unreachable tenant with live
+files. Credentials for what the tenant actually has are checked before anything
+is deleted, in the dry run too. `python -m app.shared.export --slug S` answers
+the portability request: one JSON document, verbatim, except that asset bytes and
+embeddings are replaced by their sizes. A drift test fails when a migration adds a
+`tenant_id` table that the export and the receipt do not list, so a table cannot
+silently escape either.
+
+**One quoted conversation** is the case the 409 hands to the operator, and it has
+no script: a written statement and a log entry are proportionate to how rare it
+is. The operator deletes it as the database owner with one `delete from
+conversations` (`deploy.md` Step 8), after deciding whether the request outweighs
+keeping a commercial record.
 
 **Test.** `backend/tests/test_conversations_api.py` runs the real route against
 Postgres: the cascade, the surviving `cost_logs` row, a sibling conversation

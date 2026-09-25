@@ -508,6 +508,110 @@ one of these PRs moves it. Two things it cannot do, both manual:
 read-only token unless it asks for more; only `security` does, and only for its
 PR comment. The other three workflows already declared the same.
 
+## Step 8 - Data requests: export and offboarding (D35)
+
+A tenant can ask for a copy of what Agencx holds about their business, or ask
+for all of it to be deleted. Both are operator-run scripts, not buttons: no
+route, no auth surface, and a typed double confirmation on the destructive one.
+The owner can already delete a single customer conversation from the console
+(T-028/T-029); this is for everything else.
+
+**The published promise (privacy page, T-032): answered within 30 days of a
+request from the account's login address.** The clock starts when the request
+arrives; write down that date and the completion date.
+
+### Request process
+
+1. **Verify the requester.** The request must come from the login email of a
+   `users` row of that tenant (logins live in GoTrue, not in Agencx tables, so
+   check it in the Supabase dashboard under Authentication). If it arrives from
+   any other address, reply to the login address to confirm before acting.
+2. **Export first, always** - even for a deletion request, offer the export
+   before deleting. Deletion is irreversible.
+3. **Run the dry run** and read the receipt: the row counts, the Cloudinary ids,
+   the storage prefix and the login ids are exactly what `--apply` will remove.
+4. **Apply**, then keep the receipt (below) and reply to the requester with the
+   completion date.
+
+### Commands
+
+Both connect as the database owner, like `app.shared.migrate`. They need the
+same production environment the backend runs with, or a step is skipped or
+refuses:
+
+```bash
+# Export: JSON on stdout. Send it to the requester over the verified address.
+docker compose run --rm -T \
+  -e DATABASE_URL='<pooler url>' \
+  backend python -m app.shared.export --slug <slug> > <slug>-export.json
+
+# Offboard, dry run (the default): prints the receipt, deletes nothing.
+docker compose run --rm -T \
+  -e DATABASE_URL='<pooler url>' \
+  -e SUPABASE_URL='<project url>' -e SUPABASE_SERVICE_ROLE_KEY='<service role key>' \
+  -e UPLOADS_BUCKET='<bucket>' \
+  -e CLOUDINARY_CLOUD_NAME='<...>' -e CLOUDINARY_API_KEY='<...>' -e CLOUDINARY_API_SECRET='<...>' \
+  backend python -m app.shared.offboard --slug <slug>
+
+# The same command plus --apply --confirm <slug> deletes.
+```
+
+`make export SLUG=<slug>`, `make offboard SLUG=<slug>` and `make offboard-apply
+SLUG=<slug> CONFIRM=<slug>` run the same modules against whatever `DATABASE_URL`
+the compose service has, which is the local database unless you point it
+elsewhere. For production use the explicit form above.
+
+**Check the receipt names the right backend before applying.** Its
+`storage_backend` is `SupabaseStorage` in production. `LocalStorage` means
+`UPLOADS_BUCKET` was not set, so the tenant's uploaded files in the bucket would
+be missed while the Postgres rows are deleted. Do not apply until it says
+`SupabaseStorage`.
+
+### What the script does
+
+In this order, so a failure leaves orphans a re-run finishes rather than an
+unreachable tenant with live files: Cloudinary media, Supabase Storage under
+`{tenant_id}/`, the GoTrue login for every `users` row, then `delete from
+tenants` (every tenant table cascades, `quotes` included). The first three run
+before Postgres is touched and each treats "already gone" as success, so any
+failure exits non-zero with the database intact and the same command safe to
+run again. It refuses to start, in the dry run too, if the tenant has Cloudinary
+media or logins and the matching credentials are not set.
+
+### What it does not remove
+
+Say this to the requester, because the privacy page says it:
+
+- **Langfuse traces and LLM provider logs.** Delete the tenant's traces from the
+  Langfuse project by hand if the request covers them. Provider-side retention
+  is the provider's.
+- **Database backups.** They age out on the platform's schedule.
+- **Sentry events.** They carry no customer text (D33), so there is nothing
+  personal to remove.
+
+### The deletion log
+
+Keep each receipt (it holds only the slug, opaque ids, counts and a timestamp)
+as the log entry, with the request date and the completion date.
+Keep it outside the repository: the repo is public.
+
+### One quoted conversation
+
+The console refuses to delete a conversation that holds a quote (409, "ask us in
+writing"). Quotes are commercial records, so decide before acting whether the
+request outweighs keeping the record. If it does, delete it as the database
+owner, which is the only role that can (migration `0006` revokes `DELETE` on
+`quotes` from the app role, and a foreign-key cascade needs no grant); the quote
+goes with its conversation:
+
+```sql
+delete from conversations where id = '<conversation id>' and tenant_id = '<tenant id>';
+```
+
+Take the ids from an export, and log it the same way. There is no script for this
+on purpose: it is rare enough that a written statement and a log entry are
+proportionate.
+
 ## What the repo changes deliver
 
 The founder steps above are external. The code that makes them work is B-4;

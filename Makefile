@@ -158,6 +158,22 @@ retention: ## Show what data retention would delete (dry run, writes nothing)
 retention-apply: ## Delete conversations past the retention windows (DESTRUCTIVE)
 	$(BE) python -m app.shared.retention --apply $(if $(TENANT),--tenant $(TENANT))
 
+# Operator export and offboarding (ADR D35, docs/agencx/deploy.md). Like retention
+# they run against DATABASE_URL, and offboarding also needs the Cloudinary and
+# Supabase credentials of the environment it deletes from. `@` and `-T` keep
+# stdout clean JSON, so `make export SLUG=acme > acme.json` is a valid file.
+.PHONY: export
+export: ## Export one tenant's data as JSON: make export SLUG=acme > acme.json
+	@$(if $(SLUG),,$(error SLUG is required: make export SLUG=acme))$(DC) run --rm -T backend python -m app.shared.export --slug $(SLUG)
+
+.PHONY: offboard
+offboard: ## Dry-run offboarding of one tenant, prints the receipt: make offboard SLUG=acme
+	@$(if $(SLUG),,$(error SLUG is required: make offboard SLUG=acme))$(DC) run --rm -T backend python -m app.shared.offboard --slug $(SLUG)
+
+.PHONY: offboard-apply
+offboard-apply: ## DELETE a tenant and everything it owns: make offboard-apply SLUG=acme CONFIRM=acme
+	@$(if $(SLUG),,$(error SLUG is required: make offboard-apply SLUG=acme CONFIRM=acme))$(DC) run --rm -T backend python -m app.shared.offboard --apply --slug $(SLUG) $(if $(CONFIRM),--confirm $(CONFIRM))
+
 # ── lint & format ──────────────────────────────────────────────────────────────
 
 .PHONY: lint
