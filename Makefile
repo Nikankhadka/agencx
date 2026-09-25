@@ -147,6 +147,17 @@ seed-tenant1: migrate ## Seed Tenant 1 (Bytefix phone repair) only - no auth use
 seed-tenant2: ## Seed Tenant 2 via the public API - NEEDS the stack up (make dev)
 	$(BE) python -m seeds.seed_tenant2_dental --api-base http://backend:8000
 
+# Data retention (ADR D36, docs/agencx/design/retention.md). Runs against
+# DATABASE_URL, so against production it needs that env pointed there.
+# `make retention TENANT=slug` limits either target to one tenant.
+.PHONY: retention
+retention: ## Show what data retention would delete (dry run, writes nothing)
+	$(BE) python -m app.shared.retention $(if $(TENANT),--tenant $(TENANT))
+
+.PHONY: retention-apply
+retention-apply: ## Delete conversations past the retention windows (DESTRUCTIVE)
+	$(BE) python -m app.shared.retention --apply $(if $(TENANT),--tenant $(TENANT))
+
 # ── lint & format ──────────────────────────────────────────────────────────────
 
 .PHONY: lint
