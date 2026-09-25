@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026 and T-028 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -58,7 +58,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 3 | T-024 | Backend Sentry | D33 | Built |
 | 4 | T-025 | Frontend Sentry | D33 | Built |
 | 5 | T-026 | Security headers and report-only CSP | D34 | Built |
-| 6 | T-028 | Conversation delete, backend | D35 | Queued |
+| 6 | T-028 | Conversation delete, backend | D35 | Built |
 | 7 | T-029 | Conversation delete, console UI | D35 | Queued |
 | 8 | T-030 | Retention module and policy | D36 | Queued |
 | 9 | T-031 | Operator export and offboard scripts | D35 | Queued |
@@ -193,16 +193,20 @@ domain, and a tenant `brand.logo_url` from an arbitrary origin.
 
 ## T-028 and T-029: Conversation delete (D35)
 
-A sixth route in `backend/app/features/conversations/api.py`, guarded by
-`require_tenant_admin`, `204` on success, `404` for an unknown conversation,
-`409` when the conversation has quotes. The delete statement excludes quoted
-conversations, so it never cascades into `quotes`. `messages`, `tool_calls` and
-`escalations` cascade; `cost_logs.conversation_id` is `on delete set null`, so
-unit economics survive. `orders` are not conversation-linked. DB test with a
-negative control proving `wren_app` still cannot `delete from quotes`.
-`frontend/src/lib/api-types.ts` regenerated in the same commit. The console
-action lives on the conversation drill-down, uses `useConfirm` and explains
-the 409 in plain words.
+**T-028 is built.** A sixth route in `backend/app/features/conversations/api.py`,
+guarded by `require_tenant_admin`, `204` on success, `404` for an unknown
+conversation, `409` when the conversation has quotes. The delete statement
+excludes quoted conversations, so it never cascades into `quotes`.
+`messages`, `tool_calls` and `escalations` cascade; `cost_logs.conversation_id`
+is `on delete set null`, so unit economics survive. `orders` are not
+conversation-linked. The DB tests sit in `tests/test_conversations_api.py`
+beside the other conversation route tests (the plan named a separate
+`test_conversations_delete_db.py`; it would have repeated that file's fixtures),
+with a negative control proving `wren_app` still cannot `delete from quotes`.
+`frontend/src/lib/api-types.ts` is regenerated in the same commit.
+
+**T-029 is queued.** The console action lives on the conversation drill-down,
+uses `useConfirm` and explains the 409 in plain words.
 
 ## T-030: Retention (D36)
 

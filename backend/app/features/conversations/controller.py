@@ -87,3 +87,21 @@ async def get_conversation_detail(
         "total_cost_usd": float(rows["total_cost"]),
         "messages": messages,
     }
+
+
+async def delete_conversation(
+    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
+) -> None:
+    outcome = await service.delete_conversation(
+        tenant_id=tenant_id, conversation_id=conversation_id, role=role
+    )
+    if outcome == "not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="conversation not found")
+    if outcome == "has_quotes":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This conversation has a quote attached and cannot be deleted here. "
+                "Quotes are kept as records - ask us in writing to remove it."
+            ),
+        )
