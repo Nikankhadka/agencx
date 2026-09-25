@@ -35,8 +35,8 @@ does.
 **A conversation with a quote is never selected by either rule.** Quotes are
 commercial records, kept for the five-year substantiation period that applies to
 Australian business records, and they are tamper-proof by design (migration
-`0006`). A quoted conversation is removed only through the operator offboarding
-path (T-031).
+`0006`). A quoted conversation is removed only by the operator, on a written
+request (`deploy.md` Step 8, T-031).
 
 A conversation that matches both rules is counted and deleted once, under
 "abandoned".

@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 and T-028 to T-030 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026 and T-028 to T-031 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -61,7 +61,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 6 | T-028 | Conversation delete, backend | D35 | Built |
 | 7 | T-029 | Conversation delete, console UI | D35 | Built |
 | 8 | T-030 | Retention module and policy | D36 | Built |
-| 9 | T-031 | Operator export and offboard scripts | D35 | Queued |
+| 9 | T-031 | Operator export and offboard scripts | D35 | Built |
 | 10 | T-032 | Privacy policy and terms pages | - | Queued |
 | 11 | T-027 | Enforce the CSP (after T-026 is on a real deploy) | D34 | Queued |
 | 12 | T-033 | Backups: facts, proof command, restore drill | - | Queued |
@@ -239,12 +239,51 @@ with the counts the dry run printed.
 ## T-031: Operator export and offboard
 
 `python -m app.shared.export --slug <slug>` (JSON to stdout, `make export`)
-and `python -m app.shared.offboard --slug <slug> --confirm <slug> [--apply]`.
-Both connect as the database owner with an explicit `where tenant_id = $1` on
-every query. Offboard runs external systems first (Cloudinary, Storage, GoTrue)
+and `python -m app.shared.offboard --slug <slug> [--apply --confirm <slug>]`
+(`make offboard`, `make offboard-apply`). Both connect as the database owner with
+an explicit `where tenant_id = $1` on every query. Offboard runs external systems first (Cloudinary, Storage, GoTrue)
 and aborts before touching Postgres if any fail, so it stays re-runnable, then
 prints a receipt that is the evidence for the deletion log. The request process
-and SLA go in `deploy.md`.
+and SLA are `deploy.md` Step 8.
+
+**T-031 is built.** Differences from the plan, all deliberate:
+
+- The export's top level is `exported_at`, `tenant` (the whole `tenants` row),
+  `notes` and `tables`, and `knowledge_chunks.tsv` is dropped along with the
+  embedding. Owner login emails are not in it: they live in GoTrue only.
+- `--confirm` is required only with `--apply`. A dry run touches nothing, so
+  typing the slug twice would only be friction. `--apply` with a missing or
+  different `--confirm` exits 2.
+- The dry run also runs the credential preflight, so a dry run that passes is a
+  run that can finish. A tenant with Cloudinary media or logins and no matching
+  credentials is refused before anything is deleted.
+- The plan named `MediaClient.delete`; the class is `Cloudinary` in
+  `features/business/media.py`.
+- **Two latent storage bugs fixed on the way.** `SupabaseStorage.delete_prefix`
+  listed one page and so silently deleted at most 100 objects (fine for one
+  document's files, wrong for a tenant); it now pages the listing and the
+  delete. `LocalStorage.delete_prefix("{tenant_id}/")` would have raised on the
+  tenant directory; a prefix ending in `/` now removes the folder.
+- One quoted conversation has no script; `deploy.md` Step 8 documents the owner
+  `delete` statement instead.
+
+Tests: `tests/test_storage_delete_prefix.py` (paging past one page, one
+document's prefix, an empty folder, the local folder) and
+`tests/test_operator_export_offboard_db.py` (ten tests against Postgres: a drift
+guard on `tenant_id` tables, an export carrying only the tenant's data with sizes
+in place of bytes and embeddings, an unknown slug, a dry run that writes nothing,
+an apply that removes everything and touches no other tenant, a storage failure
+followed by a re-run, a missing credential caught before anything is deleted, and
+the `--confirm` gate). Dropping a table from `TENANT_TABLES`, keeping the
+embedding, deleting the tenant before the external steps, and removing the
+paging or the local folder fix each turn a test red.
+
+Run end to end against the dev stack with a scratch tenant holding a real GoTrue
+login, a quoted conversation, a Cloudinary media row and a file on disk: the
+export parsed with the onboarding record and no embeddings, the dry run left
+everything in place, `--apply` without a matching `--confirm` was refused, and
+`--apply --confirm` removed the Postgres rows, the uploads folder and the login
+(GoTrue answered 404 afterwards); a re-run reported no such tenant.
 
 ## T-032: Privacy policy and terms
 
