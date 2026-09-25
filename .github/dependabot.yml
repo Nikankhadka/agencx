@@ -1,0 +1,77 @@
+# T-023: weekly dependency update PRs.
+#
+# Every dependency in this repo is an exact pin (== in backend/pyproject.toml,
+# no ^ or ~ in frontend/package.json), so nothing ever moves unless a PR moves
+# it - which makes these PRs the only way a security patch reaches the build.
+#
+# Minor and patch bumps arrive as ONE PR per ecosystem per week, so a solo
+# reviewer gets a handful of PRs, not a stream. Majors are left out of the group
+# on purpose: a FastAPI, React or Next major arrives alone, with its own CI run,
+# and is read before it is merged.
+#
+# Known gaps, both manual:
+#   - The Node version lives in TWO places, frontend/Dockerfile and ci.yml's
+#     `node-version: "24.19.0"`. Dependabot bumps the Dockerfile; CI must be
+#     edited to match in the same PR, or CI tests a runtime that is not shipped.
+#   - The pgvector image in ci.yml's `services:` blocks (and docker-compose.yml)
+#     is not read by the `docker` ecosystem, so it is bumped by hand.
+
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: deps
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: deps

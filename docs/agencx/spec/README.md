@@ -33,7 +33,7 @@ Per-ticket header pattern:
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 record | `Active - todo` (U part shipped, walkthrough remains) |
 | [active/19-intent-and-identity.md](active/19-intent-and-identity.md) | Intent families and actions, escalation-scoped contact capture | `Active - awaiting review` (merged as 5300586, PR #43; founder walkthrough remains) |
 | [active/21-category-management.md](active/21-category-management.md) | Category management: controlled-vocabulary input, multi-category offerings with one primary | `Active - todo` |
-| [active/22-production-hardening.md](active/22-production-hardening.md) | Production hardening: abuse control, privacy and data lifecycle, error tracking, security headers, backups (T-022 to T-033) | `Active - in progress` (T-022 built) |
+| [active/22-production-hardening.md](active/22-production-hardening.md) | Production hardening: abuse control, privacy and data lifecycle, error tracking, security headers, backups (T-022 to T-033) | `Active - in progress` (T-022, T-023 built) |
 
 ## Completed work
 
