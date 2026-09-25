@@ -50,8 +50,10 @@ live in the ticket files, not here.
   security headers and a report-only CSP (T-026, built, ADR D34; enforcing it is
   T-027, after a real-deploy walkthrough), conversation delete backend
   (T-028, built, ADR D35) and its console action (T-029, built), retention
-  (T-030, built, ADR D36), operator export and offboard (T-031, built), then
-  privacy and terms pages, and backups. Billing and notifications are out of scope. Ticket file
+  (T-030, built, ADR D36), operator export and offboard (T-031, built),
+  privacy and terms pages (T-032, built; placeholders in
+  `frontend/src/lib/legal.ts` still to fill, lawyer review before real clients),
+  then backups. Billing and notifications are out of scope. Ticket file
   [22-production-hardening.md](spec/active/22-production-hardening.md).
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders

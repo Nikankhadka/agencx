@@ -31,8 +31,10 @@ const RESERVED_SLUGS = new Set([
   "login",
   "onboarding",
   "pricing",
+  "privacy",
   "settings",
   "signup",
+  "terms",
   "www",
 ]);
 

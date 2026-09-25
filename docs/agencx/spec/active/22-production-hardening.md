@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 and T-028 to T-031 are built; the rest are
+**Status:** Active - in progress. T-022 to T-026 and T-028 to T-032 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -62,7 +62,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 | 7 | T-029 | Conversation delete, console UI | D35 | Built |
 | 8 | T-030 | Retention module and policy | D36 | Built |
 | 9 | T-031 | Operator export and offboard scripts | D35 | Built |
-| 10 | T-032 | Privacy policy and terms pages | - | Queued |
+| 10 | T-032 | Privacy policy and terms pages | - | Built |
 | 11 | T-027 | Enforce the CSP (after T-026 is on a real deploy) | D34 | Queued |
 | 12 | T-033 | Backups: facts, proof command, restore drill | - | Queued |
 
@@ -293,6 +293,35 @@ frontend reserved-slugs test fails otherwise). Linked from the storefront
 footer and the login screen. Names every sub-processor and states that free
 LLM tiers may train on inputs. Draft prose, placeholders for entity, ABN and
 jurisdiction; needs a lawyer's review before real clients sign up.
+
+**T-032 is built.** What to know before real clients sign up:
+
+- **Fill `frontend/src/lib/legal.ts`.** Entity, ABN, jurisdiction, privacy
+  contact, liability cap and last-updated date are bracketed placeholders on
+  purpose, so an unfilled one is visible on the live page. Both pages read that
+  one file. `REQUEST_DAYS` (30) sits beside them and is the same window as
+  `deploy.md` Step 8.
+- **The prose is a draft, not legal advice.** A lawyer reviews it before a real
+  client signs up.
+- **Keep the provider list true.** The privacy page names Supabase, Vercel,
+  Cloudinary, Google AI Studio, Groq, OpenRouter, Google (embeddings), Cohere
+  (ranking), Sentry and, only if tracing is on, Langfuse. Adding or swapping a
+  provider means editing that list, and `privacy.test.tsx` fails if one of the
+  named ones is dropped.
+- **The retention numbers are pinned.** 365 days, 30 days for unanswered, quoted
+  conversations kept, and the 30-day request window are asserted in the test
+  against [retention.md](../../design/retention.md) (D36).
+- **Copy rule (PRD section 13).** The pages say "language model" and
+  "assistant", never "AI", "agent", "automated" or "virtual", and the test
+  enforces it (the one exception it allows is the provider name "Google AI
+  Studio"). That is honest without the banned words: the page says plainly that a
+  language model reads what a customer types and that a free plan may keep and
+  train on it.
+- **One sentence to confirm:** terms section 7 says Agencx is currently free to
+  use, because billing is not built. Change it the day that stops being true.
+- Linked from the storefront footer (Privacy, Terms, beside the Agencx mark) and
+  from the login screen ("By continuing you agree to..."). `privacy` and `terms`
+  are reserved slugs on the backend and in the frontend mirror.
 
 ## T-033: Backups
 
