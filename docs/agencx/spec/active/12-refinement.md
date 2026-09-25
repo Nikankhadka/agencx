@@ -68,6 +68,11 @@ body-size limits are covered by backend tests.
 - [ ] Backups, RPO/RTO, and a restore drill have a documented status and proof
   command.
 - [ ] Error tracking has a documented status and operational verification.
+  Built (T-024 backend, T-025 frontend, ADR D33), off until `SENTRY_DSN` is set;
+  the in-memory event tests pass on both surfaces. Open: set `SENTRY_DSN` in the
+  Vercel environment for both services, then raise a deliberate error on each and
+  confirm the event arrives with no request body or query string. Owner is the
+  founder.
 - [x] The Playwright suite runs in CI, not only locally. Built: the `e2e` job
   in `.github/workflows/ci.yml`; validate with `make test-e2e`.
 - [x] Dependency scanning has a documented status and scan report. Built (T-023):
