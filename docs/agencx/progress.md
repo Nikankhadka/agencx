@@ -53,7 +53,10 @@ live in the ticket files, not here.
   (T-030, built, ADR D36), operator export and offboard (T-031, built),
   privacy and terms pages (T-032, built; placeholders in
   `frontend/src/lib/legal.ts` still to fill, lawyer review before real clients),
-  then backups. Billing and notifications are out of scope. Ticket file
+  and backups (T-033, built: `make db-dump` and a local restore drill in
+  `deploy.md` Step 9; the production drill, the Supabase Backups page and the
+  Free-versus-Pro decision are still open founder items). Billing and
+  notifications are out of scope. Ticket file
   [22-production-hardening.md](spec/active/22-production-hardening.md).
 - [ ] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
@@ -87,8 +90,8 @@ live in the ticket files, not here.
   [12-refinement.md](spec/active/12-refinement.md).
 - [ ] R-4 remainder: founder judge calibration plus production-smoke
   evidence. See [12-refinement.md](spec/active/12-refinement.md).
-- [ ] R-5 remainder: backups and restore drill, error tracking, E2E in
-  CI, dependency scanning. See
+- [ ] R-5 remainder: restore drill on production (the tooling and a local drill
+  are built), error tracking live verification, E2E in CI, dependency scanning. See
   [12-refinement.md](spec/active/12-refinement.md).
 - [ ] RF-1 through RF-17 product refinement: `Active - todo`, design
   intent in [12-refinement.md](spec/active/12-refinement.md) Part 2.
