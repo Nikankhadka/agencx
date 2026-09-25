@@ -1,6 +1,6 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 and T-023 are built; the rest are
+**Status:** Active - in progress. T-022, T-023 and T-024 are built; the rest are
 queued in the build order below.
 **Phase 1 area:** Operations and security (closes the four open boxes in
 [R-5](12-refinement.md)).
@@ -55,7 +55,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 |---|---|---|---|---|
 | 1 | T-022 | Per-IP rate limit, 2000-char chat cap, docs off in production | D32 | Built |
 | 2 | T-023 | CI `permissions`, Dependabot, dependency review, secret scanning note | - | Built |
-| 3 | T-024 | Backend Sentry | D33 | Queued |
+| 3 | T-024 | Backend Sentry | D33 | Built |
 | 4 | T-025 | Frontend Sentry | D33 | Queued |
 | 5 | T-026 | Security headers and report-only CSP | D34 | Queued |
 | 6 | T-028 | Conversation delete, backend | D35 | Queued |
@@ -129,6 +129,20 @@ backend-only `osv-scanner` step is needed. That PR changed no dependencies, so a
 red run on a vulnerable Python bump has not been seen yet.
 
 ## T-024 and T-025: Error tracking (D33)
+
+**T-024 (backend) is built.** `sentry-sdk==2.70.0`,
+`backend/app/observability/sentry.py`, one `capture_exception()` line in
+`RequestContextMiddleware`, `sentry_dsn` in `config.py` and `.env.example`.
+Beyond the plan, `include_local_variables=False` is set: the SDK default
+attaches stack-frame locals, which would have carried the chat handler's
+`message` past the request-body setting. **Verified** by
+`backend/tests/test_sentry.py` (9 tests): unset DSN creates no client, the
+production warning fires once, the init kwargs are exactly the PII-safe set,
+and a real event captured in memory from a stub app using the real middleware
+contains no customer text, no `Authorization` header value, no cookie, no frame
+locals and no request body, while an error-level log line creates no event.
+
+**T-025 (frontend) is queued.**
 
 Backend `sentry-sdk`, frontend `@sentry/nextjs`, both inert without a DSN.
 No traces (Langfuse owns tracing), no Session Replay (the customer surface

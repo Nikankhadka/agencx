@@ -162,6 +162,11 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Error tracking (T-024, app/observability/sentry.py): opt-in like Langfuse -
+    # an empty DSN means no Sentry client is created. One DSN serves this backend;
+    # the frontend reads the same value (T-025).
+    sentry_dsn: str = ""
+
     # Abuse control (T-022, app/shared/ratelimit.py): per-IP request ceilings on
     # the public routes, per 60s window, per container. 0 = unlimited for that
     # bucket; rate_limit_enabled is the kill switch that needs no deploy. The

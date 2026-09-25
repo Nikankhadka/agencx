@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from uuid import uuid4
 
+import sentry_sdk
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -135,6 +136,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     "duration_ms": duration_ms,
                 },
             )
+            # This block swallows the exception, so the SDK's ASGI integration
+            # sees only a 500 response and would create no event (T-024). A
+            # no-op while Sentry is uninitialised.
+            sentry_sdk.capture_exception()
             response = problem_response(request, 500)
         else:
             # The ALB pings /health constantly; logging every probe would drown
