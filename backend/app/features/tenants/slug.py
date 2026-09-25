@@ -43,8 +43,10 @@ RESERVED_SLUGS = frozenset(
         "login",
         "onboarding",
         "pricing",
+        "privacy",
         "settings",
         "signup",
+        "terms",
         "www",
     }
 )

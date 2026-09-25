@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- storefront cover is a tenant API response. */
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Container } from "@/components/ui/Container";
@@ -209,7 +210,15 @@ export function Storefront({
       )}
 
       <footer className="mx-auto mt-auto flex w-full max-w-5xl items-center justify-between border-t border-hairline px-gutter py-6 text-meta text-text-tertiary">
-        <span className="font-medium text-text">Agencx</span>
+        <span className="flex items-center gap-4">
+          <span className="font-medium text-text">Agencx</span>
+          <Link href="/privacy" className="-my-2 py-2 hover:underline">
+            Privacy
+          </Link>
+          <Link href="/terms" className="-my-2 py-2 hover:underline">
+            Terms
+          </Link>
+        </span>
         <span>Powered by Agencx</span>
       </footer>
 

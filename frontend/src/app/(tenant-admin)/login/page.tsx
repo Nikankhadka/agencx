@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
 import { CodeInput } from "@/components/ui/CodeInput";
@@ -284,6 +285,17 @@ export default function LoginPage() {
 
           <p role="status" className="min-h-4 text-center text-meta text-text-secondary">
             {status ?? ""}
+          </p>
+          <p className="text-center text-meta text-text-tertiary">
+            By continuing you agree to the{" "}
+            <Link href="/terms" className="underline">
+              terms
+            </Link>{" "}
+            and the{" "}
+            <Link href="/privacy" className="underline">
+              privacy page
+            </Link>
+            .
           </p>
         </Container>
       </div>
