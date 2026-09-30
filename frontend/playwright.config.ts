@@ -52,7 +52,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /mobile|w7-screenshots\.spec\.ts|w9-repro\.spec\.ts/,
+      testIgnore: /mobile|w7-screenshots\.spec\.ts|w9-repro\.spec\.ts|walkthrough-2026-10\.spec\.ts/,
     },
     {
       name: "mobile-chrome",

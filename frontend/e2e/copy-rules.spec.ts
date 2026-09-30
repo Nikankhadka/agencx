@@ -84,6 +84,40 @@ test.describe("copy rules - the owner's side", () => {
   }
 });
 
+test.describe("copy rules - shared components", () => {
+  test("the shared confirm dialog and a toast stay clean", async ({ page, request }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+
+    // The "website" slot, not "instagram" - business-hub.spec.ts already
+    // exercises that one and these specs share one seeded tenant.
+    const tile = page.getByTestId("booking-platform-website");
+    await tile.click();
+    if (await page.getByTestId("booking-link-remove").isVisible()) {
+      await page.getByTestId("booking-link-remove").click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(tile).toContainText("Add");
+      await tile.click();
+    }
+
+    await page.getByTestId("booking-link-input").fill("bytefix.example.com");
+    await page.getByTestId("booking-link-save").click();
+    await expect(page.getByText("Link saved", { exact: true })).toBeVisible();
+    await expectCleanCopy(page, "the link-saved toast");
+
+    // Put the slot back, and check the shared ConfirmDialog (U-3) on the way -
+    // open and unconfirmed, so its own copy is swept before it closes.
+    await tile.click();
+    await page.getByTestId("booking-link-remove").click();
+    await expect(page.getByTestId("confirm-accept")).toBeVisible();
+    await expectCleanCopy(page, "the shared confirm dialog");
+    await page.getByTestId("confirm-accept").click();
+    await expect(tile).toContainText("Add");
+    await expect(page.getByText("Link removed", { exact: true })).toBeVisible();
+    await expectCleanCopy(page, "the link-removed toast");
+  });
+});
+
 test.describe("copy rules - the platform surface", () => {
 
   test("the platform chrome is Agencx, not Wren", async ({ page }) => {
