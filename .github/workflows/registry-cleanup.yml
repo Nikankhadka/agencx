@@ -2,28 +2,20 @@ name: Container registry cleanup
 
 # Vercel's container registry (VCR) caps at 50 images per repository on the
 # hobby plan, and every deployment pushes a commit-SHA-tagged image that
-# nothing ever deletes. On 2026-09-03 both `frontend` and `backend` filled up
-# (~9 days of staging + development pushes), and every new deployment failed at
-# the push step with "repository has reached the maximum allowed number of
-# images" - the deployment errored, the deploy.yml smoke test then ran against
-# a stale origin, and both branches showed a red "Vercel deployment failed".
+# nothing ever deletes. A full repository fails every later deployment at the
+# push step ("repository has reached the maximum allowed number of images"):
+# it happened on 2026-09-03 and again from 2026-09-12 to 2026-09-30, when this
+# workflow could not run without its secret.
 #
-# This prunes all but the newest 5 images per repository daily, so the deploy
-# lane cannot fill up between deployments. It fails loudly on error - unlike
-# keep-warm.yml, this workflow guards the deploy lane itself.
-#
-# The newest 5 always include both live images in the normal flow (staging
-# production + development preview): a deployment's image is the newest of its
-# branch, and a prune can only remove an image after 5+ newer pushes, which
-# means several development pushes with no staging sync. Pruning a live image
-# would break the container's next cold start, so keep the count higher than
-# the usual number of pushes between staging syncs.
+# scripts/vcr_prune.py keeps the images live deployments run (the newest
+# production and development deployments plus any build in flight) and deletes
+# the rest. It fails loudly on error - this workflow guards the deploy lane.
 #
 # Required repo secret:
 #   VERCEL_TOKEN - a token scoped to the project's team (the same kind of token
 #     as .env.deploy.local's VERCEL_TOKEN). Until it is set this workflow fails
-#     on purpose; the cleanup can also be run by hand (deploy.md, "Container
-#     registry hygiene").
+#     on purpose; `make vcr-prune-apply` runs the same prune by hand
+#     (deploy.md, Step 6).
 
 on:
   schedule:
@@ -44,46 +36,14 @@ jobs:
       # Same values as the committed .vercel/project.json - not secrets.
       VERCEL_PROJECT: prj_wtY5nJsaSQERalmLNsjAIITDbcAU
       VERCEL_TEAM: team_nrEhsZUAzBz2XyL8eLM7l4gX
-      # The newest 5 always include the currently-deployed images (a
-      # deployment's image is the newest of its branch, and both branches are
-      # pushed together in this repo's flow), so nothing live is ever pruned.
-      KEEP_NEWEST: 5
     steps:
-      - name: Prune old images
+      - uses: actions/checkout@v7
+      - name: Prune images no live deployment runs
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           if [ -z "${VERCEL_TOKEN}" ]; then
-            echo "::error::VERCEL_TOKEN secret not set - add it in Settings > Secrets and variables (see docs/agencx/deploy.md, Container registry hygiene)"
+            echo "::error::VERCEL_TOKEN secret not set - add it in Settings > Secrets and variables (see docs/agencx/deploy.md, Step 6)"
             exit 1
           fi
-          for repo in frontend backend; do
-            REPO="$repo" KEEP_NEWEST="$KEEP_NEWEST" VERCEL_PROJECT="$VERCEL_PROJECT" \
-              python3 - "$repo" <<'PY'
-          import json, os, subprocess, sys
-
-          repo = sys.argv[1]
-          project = os.environ["VERCEL_PROJECT"]
-          keep = int(os.environ["KEEP_NEWEST"])
-          listing = subprocess.run(
-              ["npx", "-y", "vercel@latest", "vcr", "image", "ls", repo, "-p", project,
-               "--format", "json"],
-              capture_output=True, check=True, text=True,
-          )
-          images = sorted(
-              json.loads(listing.stdout)["images"],
-              key=lambda i: i.get("createdAt", 0), reverse=True,
-          )
-          stale = [i["id"] for i in images[keep:]]
-          if not stale:
-              print(f"{repo}: {len(images)} images, nothing to prune")
-              raise SystemExit(0)
-          print(f"{repo}: {len(images)} images, pruning {len(stale)} oldest")
-          for image_id in stale:
-              subprocess.run(
-                  ["npx", "-y", "vercel@latest", "vcr", "image", "rm", repo, image_id,
-                   "-p", project, "-y", "--non-interactive"],
-                  check=True,
-              )
-          PY
-          done
+          python3 scripts/vcr_prune.py --apply

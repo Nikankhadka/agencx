@@ -138,6 +138,20 @@ db-dump: ## Dump the public + auth schemas of DATABASE_URL to var/backups (custo
 	  && mv $$f.part $$f && echo "$$f: $$(wc -c < $$f | tr -d ' ') bytes" \
 	  || { rm -f $$f.part; echo "db-dump failed" >&2; exit 1; }
 
+# Container registry hygiene (docs/agencx/deploy.md, Step 6). Deletes the
+# Vercel registry images no live deployment runs; needs VERCEL_TOKEN,
+# VERCEL_PROJECT and VERCEL_TEAM (source .env.deploy.local).
+VCR_PRUNE := docker run --rm -e VERCEL_TOKEN -e VERCEL_PROJECT -e VERCEL_TEAM \
+	-v $(CURDIR)/scripts:/scripts:ro python:3.12-slim python /scripts/vcr_prune.py
+
+.PHONY: vcr-prune
+vcr-prune: ## Show which Vercel registry images a prune would delete (dry run)
+	@$(VCR_PRUNE)
+
+.PHONY: vcr-prune-apply
+vcr-prune-apply: ## Delete Vercel registry images no live deployment runs
+	@$(VCR_PRUNE) --apply
+
 # ── data ───────────────────────────────────────────────────────────────────────
 # Every `docker compose run backend ...` brings its dependencies up first
 # (backend depends_on db healthy), so migrate/seed work standalone.

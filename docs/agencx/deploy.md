@@ -442,8 +442,11 @@ Prevention, in two layers:
    `development` push builds - `feat/*` and PRs are skipped, which keeps the
    burn rate at the two live branches. It is writable over the API as
    `commandForIgnoringBuildStep`; it was set that way on 2026-09-03.
-2. `.github/workflows/registry-cleanup.yml` prunes all but the newest 5 images
-   per repository daily. It needs one repo secret:
+2. `.github/workflows/registry-cleanup.yml` runs `scripts/vcr_prune.py`
+   daily. It keeps the images live deployments run - the newest 3 READY
+   production deployments (live plus rollback), the newest 3 READY development
+   previews, and any build in flight - and deletes the rest. It needs one repo
+   secret:
 
 ```
 VERCEL_TOKEN=<token scoped to the project's team>
@@ -451,23 +454,19 @@ VERCEL_TOKEN=<token scoped to the project's team>
 
    The same kind of token as `.env.deploy.local`'s `VERCEL_TOKEN` (Vercel >
    Account Settings > Tokens). Until the secret is set the workflow fails on
-   purpose - it guards the deploy lane.
+   purpose - it guards the deploy lane. Without it the registry filled again
+   on 2026-09-12 and every development deployment failed until 2026-10-01.
 
-   Keeping 5 per repository covers both live images (staging production +
-   development preview, which are the newest of their branches) plus a few
-   rollback steps. The count is deliberately higher than the number of pushes
-   that can land between staging syncs: pruning a live image would break the
-   container's next cold start.
+   It keeps by deployment, not "the newest N images": development takes many
+   pushes between staging syncs, and a newest-N rule would prune the image
+   production serves, which breaks its next cold start.
 
    Manual equivalent, from a machine with `.env.deploy.local` sourced:
 
    ```bash
-   npx vercel vcr image ls frontend -p "$VERCEL_PROJECT"
-   npx vercel vcr image rm frontend <image-id> -p "$VERCEL_PROJECT"
+   make vcr-prune         # dry run: live commits and what would go
+   make vcr-prune-apply   # delete
    ```
-
-   Keep the newest ~5 per repository - the currently-deployed images are always
-   among them.
 
 ## Step 7 - Repository security settings
 
