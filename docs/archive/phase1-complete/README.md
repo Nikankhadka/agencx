@@ -23,6 +23,7 @@ merged to `development` or `staging`, with its verification narrative.
 | [15-document-review.md](15-document-review.md) | W-11a, W-11b, W-11c | Document review workspace + privacy disclosure |
 | [16-auth-otp-reliability.md](16-auth-otp-reliability.md) | W-12, W-13 | Auth OTP config-drift + resend/cooldown fixes, hosted-verified |
 | [17-storefront-redesign.md](17-storefront-redesign.md) | M-7 | Final storefront: no-image-first base, compact catalogs through six offerings, mature browse state from seven, and one header chat entry |
+| [21-category-management.md](21-category-management.md) | 21 | Category management: controlled category objects, ordered multi-category membership with one primary, migration `0034`, ADR D31 |
 
 Evidence:
 

@@ -103,8 +103,8 @@ live in the ticket files, not here.
   one primary, multi-shelf storefront and chat rendering, and generic food,
   dental, and repair seeds shipped with migration `0034` and ADR D31.
   Automated gates and responsive owner/storefront visual checks are green;
-  evidence is recorded in
-  [21-category-management.md](spec/active/21-category-management.md).
+  evidence is recorded in the archived
+  [21-category-management.md](../archive/phase1-complete/21-category-management.md).
 - [ ] Ops: add the GitHub `VERCEL_TOKEN` secret; configure Brevo SMTP on
   the hosted project (built-in mailer is member-only); automate hosted
   migrations (`deploy.yml` runs no migrate step). Procedure is in
@@ -117,7 +117,6 @@ live in the ticket files, not here.
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
 | [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
-| [spec/active/21-category-management.md](spec/active/21-category-management.md) | `Done - verified` | Category management and multi-category offerings (migration `0034`, ADR D31) |
 | [spec/active/22-production-hardening.md](spec/active/22-production-hardening.md) | `Active - in progress` | Abuse control, data lifecycle, error tracking, security headers, backups (T-022 to T-033, ADRs D32-D36) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 

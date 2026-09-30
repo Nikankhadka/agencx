@@ -5,7 +5,7 @@
 **Phase 1 area:** Offerings, storefront, and catalog.
 
 Numbering note: 17 is reserved for the M-7 storefront redesign, 18 was
-absorbed into [12-refinement.md](12-refinement.md), 19 is intent and
+absorbed into [12-refinement.md](../../agencx/spec/active/12-refinement.md), 19 is intent and
 identity, and 20 is required services, so 21 is the next free ticket.
 
 ## Summary
@@ -44,11 +44,11 @@ The founder found the failure while auditing the catalog:
 The same structure blocks correct behavior without a typo: a business that
 wants Coffee under both Breakfast and Drinks has no way to express it. The
 model suggestion path
-([service.py:35](../../../../backend/app/features/business/service.py#L35))
+([service.py:35](../../../backend/app/features/business/service.py#L35))
 returns one label, so it cannot express it either.
 
 The repo's own research anticipated the fix.
-[The category discussion](../../research/owner-input-and-conversational-agent-architecture.md#L372)
+[The category discussion](../../agencx/research/owner-input-and-conversational-agent-architecture.md#L372)
 warrants a tenant-scoped category table with a stable foreign key, "plus a
 join table if membership becomes many-to-many". Membership is now the open
 need.
@@ -57,70 +57,70 @@ need.
 
 ### Data model
 
-[offering_categories](../../../../backend/migrations/0031_offering_categories.sql#L5)
+[offering_categories](../../../backend/migrations/0031_offering_categories.sql#L5)
 holds one row per distinct label per tenant, unique on
 `(tenant_id, normalized_key)`
-([migration 0031:13](../../../../backend/migrations/0031_offering_categories.sql#L13)).
+([migration 0031:13](../../../backend/migrations/0031_offering_categories.sql#L13)).
 Each offering carries one label, `offerings.category` (legacy) and
 `offerings.category_id`
-([migration 0031:19](../../../../backend/migrations/0031_offering_categories.sql#L19)).
+([migration 0031:19](../../../backend/migrations/0031_offering_categories.sql#L19)).
 The backfill maps each offering to one category row through its legacy label
-([migration 0031:28](../../../../backend/migrations/0031_offering_categories.sql#L28)).
+([migration 0031:28](../../../backend/migrations/0031_offering_categories.sql#L28)).
 
 ### Write path
 
 `_ensure_category`
-([service.py:58](../../../../backend/app/features/business/service.py#L58))
+([service.py:58](../../../backend/app/features/business/service.py#L58))
 creates a category row from any non-empty label the caller supplies. The key
 comes from
-[normalize_name](../../../../backend/app/features/business/offering_candidates.py#L21):
+[normalize_name](../../../backend/app/features/business/offering_candidates.py#L21):
 Unicode NFKC, casefold, punctuation to space, whitespace collapsed. That
 catches "Drinks" against "drinks" and "Drinks!"; it does not know that
 "breakfast / drinks" names two concepts, so the slash and both words key into
 one label.
 
 Rename rewrites the row and the label copies on its offerings
-([service.py:100](../../../../backend/app/features/business/service.py#L100)).
+([service.py:100](../../../backend/app/features/business/service.py#L100)).
 Delete clears the offerings to null, which reads as Uncategorized
-([service.py:124](../../../../backend/app/features/business/service.py#L124)).
+([service.py:124](../../../backend/app/features/business/service.py#L124)).
 Neither operation merges.
 
 ### Model suggestions
 
 The extraction path calls
-[suggest a category](../../../../backend/app/features/business/service.py#L256)
+[suggest a category](../../../backend/app/features/business/service.py#L256)
 only in production, and it returns one short label while preferring existing
 categories. One string in, one string out: no two memberships.
 
 ### Owner console
 
 The category field is a free-text input under "Add details"
-([OfferingsList.tsx:453](../../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx#L453)).
+([OfferingsList.tsx:453](../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx#L453)).
 The list groups by the resolved label, sorted A-Z with Uncategorized last
-([OfferingsList.tsx:35](../../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx#L35)).
+([OfferingsList.tsx:35](../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx#L35)).
 Rename and Delete render only for a group a category row owns. There is no
 combobox, no suggestion list, and no warning when a typed label nearly
 matches an existing one.
 
 ### Storefront
 
-[sectionsOf](../../../../frontend/src/app/[slug]/Offerings.tsx#L14) derives
+[sectionsOf](../../../frontend/src/app/[slug]/Offerings.tsx#L14) derives
 sections from the distinct category values on the offerings. One category or
 fewer collapses to a single "What we offer" section; null falls into "More"
 when several categories exist. More than one category renders the browse nav,
 mobile chips, and desktop sidebar
-([Offerings.tsx:129](../../../../frontend/src/app/[slug]/Offerings.tsx#L129)).
+([Offerings.tsx:129](../../../frontend/src/app/[slug]/Offerings.tsx#L129)).
 Every section filters the same flat list, so an offering appears in one
 section only.
 
 ### Chat and agent context
 
 The catalog card groups by the one label, with "Offerings" as the fallback
-([CatalogCard.tsx:17](../../../../frontend/src/components/ui/CatalogCard.tsx#L17)).
+([CatalogCard.tsx:17](../../../frontend/src/components/ui/CatalogCard.tsx#L17)).
 The agent reads one coalesced category per offering in its context
-([context_package.py:148](../../../../backend/app/services/context_package.py#L148))
+([context_package.py:148](../../../backend/app/services/context_package.py#L148))
 and renders it as `name (category: X)`
-([context_package.py:226](../../../../backend/app/services/context_package.py#L226)).
+([context_package.py:226](../../../backend/app/services/context_package.py#L226)).
 
 ## Industry standard (research, 2026-09-24)
 
@@ -169,7 +169,7 @@ No schema change. The write path, rename, and delete keep working.
   position, is_primary)`, backfilled from `offerings.category_id`.
 - `offerings.category` and `offerings.category_id` stay as the compatibility
   read during the migration window, the pattern D28 used for the legacy label
-  ([decisions.md:826](../../design/decisions.md#L826)).
+  ([decisions.md:826](../../agencx/design/decisions.md#L826)).
 - Storefront `sectionsOf` dedupes by offering id, so Coffee renders under
   Breakfast and Drinks once each; the browse nav gains a section per
   membership; the primary drives the owner preview line and the canonical
@@ -220,17 +220,17 @@ Phase B:
 
 Internal:
 
-- [Category versus offering](../../research/owner-input-and-conversational-agent-architecture.md#L227)
-  and [the category-table warrant](../../research/owner-input-and-conversational-agent-architecture.md#L372)
+- [Category versus offering](../../agencx/research/owner-input-and-conversational-agent-architecture.md#L227)
+  and [the category-table warrant](../../agencx/research/owner-input-and-conversational-agent-architecture.md#L372)
   in the offering normalization research.
-- [D28](../../design/decisions.md#L826) - the decision that introduced
+- [D28](../../agencx/design/decisions.md#L826) - the decision that introduced
   stable category IDs with a compatibility label.
-- [migration 0031](../../../../backend/migrations/0031_offering_categories.sql)
-  and [business/service.py](../../../../backend/app/features/business/service.py).
-- [OfferingsList.tsx](../../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx),
-  [Offerings.tsx](../../../../frontend/src/app/[slug]/Offerings.tsx),
-  [CatalogCard.tsx](../../../../frontend/src/components/ui/CatalogCard.tsx).
-- [context_package.py](../../../../backend/app/services/context_package.py).
+- [migration 0031](../../../backend/migrations/0031_offering_categories.sql)
+  and [business/service.py](../../../backend/app/features/business/service.py).
+- [OfferingsList.tsx](../../../frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx),
+  [Offerings.tsx](../../../frontend/src/app/[slug]/Offerings.tsx),
+  [CatalogCard.tsx](../../../frontend/src/components/ui/CatalogCard.tsx).
+- [context_package.py](../../../backend/app/services/context_package.py).
 
 External: the platform documentation linked in the industry table above.
 
@@ -245,6 +245,6 @@ contract.
   untouched.
 - Tests cover the changed surfaces, `make check` is green, and the storefront
   e2e spec follows any section change.
-- The ADR, [design/database.md](../../design/database.md),
-  [design/api-contract.md](../../design/api-contract.md), and
-  [progress.md](../../progress.md) reflect what shipped.
+- The ADR, [design/database.md](../../agencx/design/database.md),
+  [design/api-contract.md](../../agencx/design/api-contract.md), and
+  [progress.md](../../agencx/progress.md) reflect what shipped.

@@ -99,7 +99,7 @@ business-maintenance tickets; RF-8 and RF-9 follow it. RF-11 follows name
 capture, and continuity covers those resulting states. Queue filtering
 precedes split-pane work, which precedes integrated issue resolution.
 
-Refine the existing application using selected Hivee workflows and the
+Refine the existing application using selected reference workflows and the
 shipped Agencx visual language (Airbnb colour discipline, Plus Jakarta
 Sans - `design/frontend.md`). Preserve working behavior, especially
 onboarding and document review. Preserve Home, Chats, and Business

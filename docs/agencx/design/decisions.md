@@ -142,7 +142,7 @@ manifest - Chat and Business - renders as an app-style surface with a persistent
 **bottom tab bar**; at `lg+` the left sidebar stays. One codebase, responsive; no
 native app, no PWA shell in Stage 1. The bottom tab bar pattern from the Agencx
 planning prototype is carried forward; the rest of the prototype stays retired
-(D17 - teal accent, cleaning copy, Hivee emblem). E-1 owns the implementation.
+(D17 - teal accent, cleaning copy, legacy emblem). E-1 owns the implementation.
 
 **Why:** Small-business owners live on phones; the tenant app's two destinations
 map exactly onto two bottom tabs. The planning prototype validated the app-style
@@ -153,7 +153,7 @@ squeeze (progress.md) - mobile stops being an afterthought of the desktop shell.
 
 **Boundary:** The customer public page (S3) is untouched - it is a shared web
 link, already chat-first and mobile. D17 stands for the prototype's identity
-elements (teal, cleaning copy, Hivee emblem). This decision sets the
+elements (teal, cleaning copy, legacy emblem). This decision sets the
 direction; E-1 delivers the chrome.
 
 **Amended by D21 (2026-08-22):** the manifest is three tabs, not two - Home

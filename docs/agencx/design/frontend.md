@@ -13,7 +13,7 @@ The system below is the shipped frontend carried forward from the prior build
 three-screen manifest (S1/S2/S3), the font swap, the Airbnb
 color system (D26, superseding D25), the failover typing indicator (P-5), and
 the mobile-first app chrome (D18). The pre-Agencx prototype's teal accent,
-cleaning copy, and Hivee emblem stay retired and archived (D17); its
+cleaning copy, and legacy emblem stay retired and archived (D17); its
 mobile-first structure returns as the tenant app's bottom tab bar (D18).
 D26's teal is the info status role, not a return of that identity accent.
 Prototype currency (which prototype is current for which surface) is owned
