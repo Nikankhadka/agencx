@@ -279,6 +279,50 @@ async def test_saving_the_reviewed_sections_makes_them_answerable(
 
 
 @pytest.mark.db
+async def test_saving_a_price_list_with_no_prose_sections_still_writes_offerings(
+    client: httpx.AsyncClient, uploads_tmp: Path, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """A source that is only a price list structures to zero prose sections -
+    the document contributed offerings, not knowledge text. There is nothing
+    to chunk, not nothing to save: the document must still publish and the
+    offerings must still be written."""
+    headers = await _signup_tenant_admin(client)
+    draft = await _upload_draft(client, headers)
+    tenant_id = await superuser_conn.fetchval(
+        "select tenant_id from documents where id = $1", uuid.UUID(draft["id"])
+    )
+
+    response = await client.put(
+        f"/api/knowledge/records/{draft['id']}",
+        headers=headers,
+        json={
+            "sections": [],
+            "offerings": [
+                {"name": "Drip coffee", "price_cents": 500, "sources": ["document"]},
+                {"name": "Butter croissant", "price_cents": 400, "sources": ["document"]},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["status"] == "ready"
+    assert saved["error"] is None
+    assert saved["sections"] == []
+
+    offerings = await superuser_conn.fetch(
+        "select name, price_cents from offerings where tenant_id = $1 order by name", tenant_id
+    )
+    assert [(row["name"], row["price_cents"]) for row in offerings] == [
+        ("Butter croissant", 400),
+        ("Drip coffee", 500),
+    ]
+    chunks = await superuser_conn.fetchval(
+        "select count(*) from knowledge_chunks where document_id = $1", uuid.UUID(draft["id"])
+    )
+    assert chunks == 0
+
+
+@pytest.mark.db
 async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
     client: httpx.AsyncClient, uploads_tmp: Path
 ) -> None:
@@ -405,6 +449,33 @@ async def test_onboarding_review_publishes_knowledge_without_writing_offerings(
         == 0
     )
     assert original.read_bytes() == original_bytes
+
+
+@pytest.mark.db
+async def test_onboarding_review_with_zero_sections_still_publishes(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """publish_record's other caller: a price-list-only source reviewed down to
+    zero sections must still publish, not fail with nothing extractable."""
+    headers = await _signup_tenant_admin(client)
+    uploaded = await client.post(
+        "/api/knowledge/drafts/upload",
+        headers=headers,
+        files={"file": ("menu.txt", b"Drip coffee $5. Butter croissant $4.", "text/plain")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    document_id = uploaded.json()["id"]
+
+    response = await client.put(
+        f"/api/onboarding/knowledge/{document_id}",
+        headers=headers,
+        json={"sections": [], "offerings": []},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["record"]["status"] == "ready"
+    assert response.json()["record"]["error"] is None
 
 
 @pytest.mark.db

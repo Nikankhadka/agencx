@@ -27,7 +27,7 @@ from app.features.knowledge.models import normalize_sections
 from app.features.knowledge.offering_extraction import extract_offerings
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
-from app.ingestion.pipeline import ingest_offerings, process_document
+from app.ingestion.pipeline import _replace_chunks, ingest_offerings, process_document
 from app.ingestion.url import AllowedTarget, extract_main_text, extract_title, fetch_page
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
@@ -855,7 +855,15 @@ async def _publish_record(
     embedder: Embedder,
     source: str,
 ) -> None:
-    """Publish reviewed sections and rebuild only this document's chunks."""
+    """Publish reviewed sections and rebuild only this document's chunks.
+
+    A reviewed record can have zero prose sections - the document contributed
+    only offerings (a price list, say) - in which case there is nothing to
+    chunk or embed. Running process_document over empty text would raise
+    _NoExtractableContent and fail the whole save, so that case clears any
+    stale chunks directly and marks the document ready itself, matching the
+    columns process_document's own success path clears.
+    """
     sections = normalize_sections(sections)
     text = render_sections(sections)
     await get_storage().put(document_key(tenant_id, document_id, ".txt"), text.encode("utf-8"))
@@ -865,6 +873,17 @@ async def _publish_record(
         json.dumps([dict(section) for section in sections]),
         tenant_id,
     )
+    if not text.strip():
+        await _replace_chunks(
+            conn, document_id=document_id, tenant_id=tenant_id, chunks=[], vectors=[]
+        )
+        await conn.execute(
+            "update documents set status = 'ready', error = null, failure_stage = null, "
+            "failure_retryable = null, failed_at = null where id = $1 and tenant_id = $2",
+            document_id,
+            tenant_id,
+        )
+        return
     await process_document(
         conn,
         tenant_id=tenant_id,

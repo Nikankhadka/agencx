@@ -148,8 +148,12 @@ async def process_document(
     except (asyncpg.PostgresConnectionError, asyncpg.InterfaceError):
         raise
     except _NoExtractableContent:
+        # Logged as the extract stage (it's the chunker finding nothing to
+        # chunk, not an embedding-provider failure); _mark_failed still
+        # records this as failure_stage='embed' - retry_draft's embed-vs-
+        # structure branch depends on that value, so it is left alone here.
         logger.exception(
-            "knowledge document processing failed tenant_id=%s document_id=%s stage=embed",
+            "knowledge document processing failed tenant_id=%s document_id=%s stage=extract",
             tenant_id,
             document_id,
         )
