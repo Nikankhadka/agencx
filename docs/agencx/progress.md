@@ -74,8 +74,10 @@ live in the ticket files, not here.
   inspection call and persisted on the escalation row and message metadata;
   contact is captured at handoff (one name+email ask, never blocking). Code
   merged to `development` and `staging` as `5300586` (PR #43); ticket file
-  [19-intent-and-identity.md](spec/active/19-intent-and-identity.md). Founder
-  preview walkthrough remains.
+  [19-intent-and-identity.md](spec/active/19-intent-and-identity.md). The
+  2026-10-01 walkthrough's defect (a name sent after the handoff re-sent the
+  handoff and was not stored) is fixed with tests; the preview re-walk of
+  items 04 and 08 remains.
 - [ ] Resumable owner input and offering normalization: optional beats can
   be skipped and stay skipped (ticket 20 retired the chip that did it), name
   proposals are confirmed rather than

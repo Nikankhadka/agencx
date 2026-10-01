@@ -12,7 +12,7 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.agents.escalation import HANDOFF_MESSAGE, handoff_message
+from app.agents.escalation import HANDOFF_MESSAGE, contact_ask, handoff_message
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ToolCall, ToolTurn
@@ -377,3 +377,80 @@ async def test_contact_set_in_the_same_turn_omits_the_ask(
     assert row is not None
     assert row["customer_ref"] == "Sam"
     assert row["customer_email"] == "sam@example.com"
+
+
+async def test_replying_with_a_name_after_a_handoff_stores_it_and_does_not_hand_off_again(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The customer answers the contact ask ("Jordan") and the model, seeing a
+    handoff in the transcript, calls create_escalation again. That duplicate
+    must not re-stream the handoff text and its ask, and must leave the model
+    free to store the name."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    graph = build_graph()
+
+    async def stream_turn(provider: ToolAwareFakeProvider, message: str) -> list[dict[str, Any]]:
+        state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+        state["messages"] = [{"role": "customer", "content": message}]
+        context = GraphContext(
+            tenant_id=tenant_id,
+            provider=provider,
+            embedder=ZeroEmbedder(),
+            reranker=NoopReranker(),
+        )
+        stream = graph.astream(state, context=context, stream_mode="custom")
+        return [event async for event in stream]
+
+    first_events = await stream_turn(
+        _escalation_provider(reason="customer_request"), "I'd like to speak to a real person"
+    )
+    first_text = " ".join(str(event.get("text", "")) for event in first_events)
+    assert {"type": "handoff"} in first_events
+    assert handoff_message(name_known=False, email_known=False) in first_text
+
+    reply = "Thanks Jordan - the team will pick this up here."
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_e", name="create_escalation", args={"reason": "customer_request"}
+                    )
+                ]
+            ),
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_c", name="set_customer_contact", args={"name": "Jordan"})
+                ]
+            ),
+            ToolTurn(text=reply, tool_calls=[]),
+        ],
+        stream_text=reply,
+        extract_route="conversation",
+    )
+    events = await stream_turn(provider, "Jordan")
+
+    text = " ".join(str(event.get("text", "")) for event in events)
+    assert {"type": "handoff"} not in events
+    assert HANDOFF_MESSAGE not in text
+    assert contact_ask(name_known=False, email_known=False) not in text
+    assert reply in text
+    tool_events = [event for event in events if event.get("type") == "tool_call"]
+    assert [(e["name"], e["result"]) for e in tool_events] == [
+        ("create_escalation", {"escalated": False, "already_open": True}),
+        ("set_customer_contact", {"stored": True}),
+    ]
+    assert "already_open" in provider.tool_call_messages[1][-1]["content"]
+    assert (
+        await superuser_conn.fetchval(
+            "select customer_ref from conversations where id = $1", conversation_id
+        )
+        == "Jordan"
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select count(*) from escalations where conversation_id = $1 and status = 'open'",
+            conversation_id,
+        )
+        == 1
+    )

@@ -342,20 +342,24 @@ async def _create_escalation_impl(
     reason: str,
     summary: str = "",
     intent: str | None = None,
-) -> None:
+) -> bool:
     # C-5: records the handoff, does not end the conversation. The status flip
     # that used to live here is gone from every agent-side path - see
     # app/agents/escalation.py for why. Only limit escalations still terminate.
-    await conn.execute(
+    # False means one was already open on this conversation (the insert was a
+    # no-op), so the caller must not hand off a second time.
+    created = await conn.fetchval(
         "insert into escalations (tenant_id, conversation_id, reason, summary, intent) "
         "values ($1, $2, $3, $4, $5) "
-        "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
+        "on conflict (tenant_id, conversation_id) where status = 'open' do nothing "
+        "returning id",
         tenant_id,
         conversation_id,
         reason,
         summary or None,
         as_intent(intent),
     )
+    return created is not None
 
 
 async def _set_customer_contact_impl(
@@ -602,6 +606,7 @@ async def run(state: AgentState) -> dict[str, Any]:
     structured_response: dict[str, Any] | None = None
     deterministic_text: str | None = None
     escalation_intent: str | None = None
+    escalation_created = False
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
         # P-3: assembled at chat open and cached by (tenant, knowledge_version),
@@ -868,8 +873,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                         )
                     elif call.name == "create_escalation":
                         ce_args = _CreateEscalationArgs.model_validate(call.args)
-                        escalation_intent = ce_args.intent
-                        await _create_escalation_impl(
+                        created = await _create_escalation_impl(
                             conn,
                             ctx.tenant_id,
                             UUID(state["conversation_id"]),
@@ -877,16 +881,42 @@ async def run(state: AgentState) -> dict[str, Any]:
                             ce_args.summary,
                             intent=ce_args.intent,
                         )
-                        writer({"type": "handoff"})
-                        result_text = _tool_result(
-                            spotlight, {"escalated": True, "reason": ce_args.reason}
-                        )
+                        if created:
+                            escalation_created = True
+                            escalation_intent = ce_args.intent
+                            writer({"type": "handoff"})
+                            ce_result = {"escalated": True}
+                            result_text = _tool_result(
+                                spotlight, {"escalated": True, "reason": ce_args.reason}
+                            )
+                        else:
+                            # Already open on this conversation: the customer's
+                            # reply to the contact ask ("Jordan") is not a new
+                            # handoff. Drop the call from called_tools so the
+                            # turn neither routes to escalation (which would
+                            # stream the handoff text and ask again) nor stops
+                            # the loop before the model can store the contact.
+                            if not escalation_created:
+                                called_tools.discard("create_escalation")
+                            ce_result = {"escalated": False, "already_open": True}
+                            result_text = _tool_result(
+                                spotlight,
+                                {
+                                    **ce_result,
+                                    "note": (
+                                        "This conversation is already with the team, so do "
+                                        "not hand off again - if the customer just gave "
+                                        "their name or email, call set_customer_contact, "
+                                        "then answer them briefly."
+                                    ),
+                                },
+                            )
                         writer(
                             {
                                 "type": "tool_call",
                                 "name": "create_escalation",
                                 "arguments": call.args,
-                                "result": {"escalated": True},
+                                "result": ce_result,
                                 "success": True,
                                 "latency_ms": int((time.perf_counter() - started) * 1000),
                             }
