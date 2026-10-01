@@ -189,6 +189,8 @@ test("ticket 19 - pricing question, handoff, name-only contact, non-terminal", a
 
   // Name only - never a phone/email nudge, never a re-ask.
   await customerSay(page, "Jordan");
+  const bodyAfterName = await page.locator("main").innerText();
+  expect(bodyAfterName.match(/forwarded your query/g)?.length).toBe(1);
   await shot(page, "04-t19-name-only-accepted-desktop.png");
 
   // The conversation is not terminal: the composer stays present and usable,
@@ -209,6 +211,8 @@ test("ticket 19 - pricing question, handoff, name-only contact, non-terminal", a
   await loginPreview(owner, "owner@bytefix.dev");
   await owner.goto("/chats");
   await owner.getByTestId("chat-row").first().waitFor({ state: "visible" });
+  // The stored name labels the row; without it the row falls back to an id.
+  await expect(owner.getByTestId("chat-row").first()).toContainText("Jordan");
   await shot(owner, "07-t19-owner-chats-list-desktop.png");
   await owner.getByTestId("chat-row").first().click();
   await owner.waitForURL(/\/chats\/[^/]+$/);
@@ -220,6 +224,42 @@ test("ticket 19 - pricing question, handoff, name-only contact, non-terminal", a
   await owner.getByText("How much does a cracked screen repair cost?").waitFor({ state: "visible", timeout: 15_000 });
   await shot(owner, "08-t19-owner-thread-name-desktop.png");
   await owner.close();
+});
+
+test("ticket 19 - support turn, handoff, name and email, owner-only email", async ({ browser }) => {
+  test.setTimeout(600_000);
+  const stamp = Date.now();
+  const email = `wt-customer+${stamp}@agencx.test`;
+
+  // A fresh context so this is a new conversation, not the one above.
+  const context = await browser.newContext({ viewport: DESKTOP });
+  const page = await context.newPage();
+  await page.goto("/bytefix");
+  await openCustomerChat(page);
+
+  await customerSay(page, "The screen you replaced last week has stopped responding to touch again.");
+  await customerSay(page, "Can I talk to a person about this, please?");
+  expect(await page.locator("main").innerText()).toContain("forwarded your query");
+
+  await customerSay(page, `Sam, ${email}`);
+  const customerBody = await page.locator("main").innerText();
+  expect(customerBody.match(/forwarded your query/g)?.length).toBe(1);
+  // The customer's own bubble is the only place the address appears.
+  expect(customerBody.split(email).length - 1).toBe(1);
+  await customerSay(page, "Thanks. Also, do you fix tablets?");
+  await shot(page, "09a-t19-support-name-email-desktop.png");
+
+  const owner = await context.browser()!.newPage();
+  await loginPreview(owner, "owner@bytefix.dev");
+  await owner.goto("/chats");
+  await expect(owner.getByTestId("chat-row").first()).toContainText("Sam");
+  await owner.getByTestId("chat-row").first().click();
+  await owner.waitForURL(/\/chats\/[^/]+$/);
+  console.log(`WALKTHROUGH_SUPPORT_CONVERSATION_ID=${owner.url().split("/chats/")[1]}`);
+  await expect(owner.getByTestId("thread-email")).toHaveText(email, { timeout: 15_000 });
+  await shot(owner, "09b-t19-owner-thread-email-desktop.png");
+  await owner.close();
+  await context.close();
 });
 
 // ===========================================================================
@@ -264,6 +304,9 @@ test("ticket 20 and 12 - onboarding, services overview, normalization, U-1..U-4"
   await onboardingSay(page, "Drip coffee, $4 to $6. Pastries, $3 to $6.");
   await shot(page, "15-t20-services-answered-desktop.png");
 
+  // The read-back is prose, never the stored list's Python repr.
+  const bodyAfterServices = await page.locator("main").innerText();
+  expect(bodyAfterServices).not.toContain("['");
   await shot(page, "16-t20-voice-chips-desktop.png");
   await onboardingChipByLabel(page, "Warm and casual");
 
@@ -359,11 +402,13 @@ test("ticket 20 and 12 - onboarding, services overview, normalization, U-1..U-4"
   await expect(publicPage.getByTestId("services-overview")).toBeVisible();
 
   await page.getByTestId("knowledge-save").click();
-  await expect(page.getByText("Saved")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible({ timeout: 60_000 });
   await shot(page, "28-t12-review-sheet-save-toast-desktop.png");
 
+  // The saved offerings take the "What we offer" block over from the overview.
   await publicPage.goto(`/${slugValue}`);
-  await publicPage.waitForTimeout(500);
+  await expect(publicPage.getByText("Butter croissant").first()).toBeVisible({ timeout: 15_000 });
+  await expect(publicPage.getByTestId("services-overview")).toHaveCount(0);
   await shot(publicPage, "29-t12-storefront-offerings-now-public-desktop.png");
 
   await publicPage.close();

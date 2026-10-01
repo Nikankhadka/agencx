@@ -1,10 +1,10 @@
 # 19: Intent architecture and escalation-scoped contact capture
 
-**Status:** Active - awaiting review. Merged to development and staging as 5300586 (PR #43); founder preview walkthrough remains.
+**Status:** Done - delivered 2026-10-01. Merged to development and staging as 5300586 (PR #43); the walkthrough's duplicate-handoff defect was fixed in `4cc2683` and the preview re-walk passed (`docs/agencx/evidence/walkthrough-2026-10/README.md`).
 **Phase 1 area:** Grounded chat, money and escalation safety.
 
 Numbering note: 17 is reserved for the M-7 storefront redesign, and 18 was the
-refinement proposal absorbed into [12-refinement.md](12-refinement.md) on
+refinement proposal absorbed into [12-refinement.md](../../agencx/spec/active/12-refinement.md) on
 2026-09-18, so 19 is the next free ticket.
 
 ## Summary
@@ -185,9 +185,18 @@ Final gate, after the review fixes, same day:
 - [x] Local E2E run once the full stack is available: the stack was already up,
   so `make seed && make test-e2e` was run against it (`make dev` was not
   re-run) -> **141 passed**.
-- [ ] Founder preview walkthrough: a seeded chat that trips a pricing question
+- [x] Founder preview walkthrough: a seeded chat that trips a pricing question
   (offer), a bad order (support), and an explicit person request (escalation
   row, name+email ask); reply with both and confirm the Chats thread shows the
   email while the customer transcript does not; keep chatting to confirm the
-  handoff is non-terminal.
+  handoff is non-terminal. Walked on the preview on 2026-10-01 with
+  `frontend/e2e/walkthrough-2026-10.spec.ts`. The first walk found a name
+  reply re-sending the handoff (fixed in `4cc2683`). The re-walk passed: one
+  handoff, the name stored, the email shown only on the owner's thread (`thread-email`),
+  and the chat continued after. Known gaps, recorded and not blocking (decision
+  5: intent never gates): the inspection classifier labeled the pricing
+  question `information` rather than `offer` (the support complaint was
+  labeled `support` correctly), and both escalation rows recorded a null
+  intent. Evidence:
+  `docs/agencx/evidence/walkthrough-2026-10/README.md`.
 - [x] Merged to `development` and `staging` as `5300586` (PR #43).

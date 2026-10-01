@@ -41,6 +41,7 @@ live in the ticket files, not here.
 | Tenant console, storefront and media, product polish and hygiene | E-1 through E-6, M-1 through M-7, B-1, B-3, D-2, F-1 through F-3, G-1 |
 | Developer experience, deployment, security and API reliability | K-1, B-4, R-1, R-2, R-4 US-1, R-5 US-1 |
 | Walkthrough fixes, schema drop, document review, auth OTP | W-1 through W-13, migration `0029`, hosted-verified |
+| Intent and identity, required services, category management | 19, 20, 21 |
 
 ## What is next
 
@@ -68,27 +69,29 @@ live in the ticket files, not here.
   ADR D30. Merged to `development` as PR #45. The 2026-10-01 walkthrough's
   one defect (the read-back printed the `services` list as a Python list) is
   fixed with tests.
-- [ ] Intent architecture and escalation-scoped contact capture: three intent
+- [x] Intent architecture and escalation-scoped contact capture: three intent
   families (information/offer/support) and four actions
   (respond/offer_followup/escalate/handoff) classified by the existing
   inspection call and persisted on the escalation row and message metadata;
   contact is captured at handoff (one name+email ask, never blocking). Code
-  merged to `development` and `staging` as `5300586` (PR #43); ticket file
-  [19-intent-and-identity.md](spec/active/19-intent-and-identity.md). The
-  2026-10-01 walkthrough's defect (a name sent after the handoff re-sent the
-  handoff and was not stored) is fixed with tests; the preview re-walk of
-  items 04 and 08 remains.
-- [ ] Resumable owner input and offering normalization: optional beats can
+  merged to `development` and `staging` as `5300586` (PR #43). The 2026-10-01
+  walkthrough's defect (a name sent after the handoff re-sent the handoff) was
+  fixed in `4cc2683`, and the preview re-walk passed, including a support turn
+  and an owner-only email. Archived ticket file
+  [19-intent-and-identity.md](../archive/phase1-complete/19-intent-and-identity.md);
+  evidence in [the walkthrough ledger](evidence/walkthrough-2026-10/README.md).
+- [x] Resumable owner input and offering normalization: optional beats can
   be skipped and stay skipped (ticket 20 retired the chip that did it), name
   proposals are confirmed rather than
   assumed, services are a normalized list, offering suggestions stay private
   until the owner reviews them, and categories are tenant-scoped rows
-  (migration `0031`). Code in `development`, founder walkthrough on the
-  preview deploy remains; record in
+  (migration `0031`). Walked on the preview on 2026-10-01; the one defect it
+  found (a price-list-only record could not be saved) was fixed in `7d8425b`
+  and re-walked. Record in
   [12-refinement.md](spec/active/12-refinement.md), ADR D28.
-- [ ] U-1 through U-4 UX consistency: shared nav idiom, button feel,
-  shared confirm dialog, toasts. Code in `development`, founder
-  walkthrough remains; record folded into
+- [x] U-1 through U-4 UX consistency: shared nav idiom, button feel,
+  shared confirm dialog, toasts. Walked on the preview on 2026-10-01, and every
+  Part 3 test box is backed by a named E2E check; record in
   [12-refinement.md](spec/active/12-refinement.md) Part 3.
 - [ ] R-3 schema and type safety: `Active - todo`, not yet scoped. See
   [12-refinement.md](spec/active/12-refinement.md).
@@ -119,8 +122,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, shipped U-1 through U-4 and onboarding-normalization records |
-| [spec/active/19-intent-and-identity.md](spec/active/19-intent-and-identity.md) | `Active - awaiting review` | Intent families and actions, escalation-scoped contact capture |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, delivered U-1 through U-4 and onboarding-normalization records |
 | [spec/active/22-production-hardening.md](spec/active/22-production-hardening.md) | `Active - in progress` | Abuse control, data lifecycle, error tracking, security headers, backups (T-022 to T-033, ADRs D32-D36) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
