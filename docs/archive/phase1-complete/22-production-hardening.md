@@ -1,13 +1,9 @@
 # 22: Production hardening - abuse control, data lifecycle, deploy safety net
 
-**Status:** Active - in progress. T-022 to T-026 and T-028 to T-033 are built; T-027
-(enforce the CSP) waits on a real-deploy walkthrough.
+**Status:** Delivered (T-022 to T-026, T-028 to T-033 built; T-027 queued
+for real-deploy walkthrough; T-033 production drill open).
 **Phase 1 area:** Operations and security (closes the four open boxes in
-[R-5](12-refinement.md)).
-
-Numbering note: 21 is category management, so 22 is the next free ticket and
-D32 is the next free ADR. Ticket ids T-022 to T-033 are local to this file and
-do not collide with the original T-series, which is archived.
+[R-5](../../agencx/spec/active/12-refinement.md)).
 
 ## Summary
 
@@ -69,7 +65,7 @@ One ticket is one commit on its own `<type>/<slug>` branch off `development`.
 ## T-022: Per-IP abuse control on the public routes
 
 Built. The decision, its numbers, both fail-open rules and the list of what it
-does not stop are in [D32](../../design/decisions.md).
+does not stop are in [D32](../../agencx/design/decisions.md).
 
 - `backend/app/shared/ratelimit.py`: one `BaseHTTPMiddleware`, wired innermost
   in `backend/app/main.py`. Buckets `chat` 12, `poll` 120, `public_read` 120,
@@ -310,7 +306,7 @@ jurisdiction; needs a lawyer's review before real clients sign up.
   named ones is dropped.
 - **The retention numbers are pinned.** 365 days, 30 days for unanswered, quoted
   conversations kept, and the 30-day request window are asserted in the test
-  against [retention.md](../../design/retention.md) (D36).
+  against [retention.md](../../agencx/design/retention.md) (D36).
 - **Copy rule (PRD section 13).** The pages say "language model" and
   "assistant", never "AI", "agent", "automated" or "virtual", and the test
   enforces it (the one exception it allows is the provider name "Google AI
@@ -375,5 +371,5 @@ Each ticket: `make check` green (`make ci` when the frontend build is touched),
 its own tests, an end-to-end check against `make demo`,
 its `progress.md` row updated, and one commit prefixed with its ticket id.
 Anything failing that is unrelated is reported separately rather than folded
-in. The R-5 boxes in [12-refinement.md](12-refinement.md) are ticked as their
-tickets land.
+in. The R-5 boxes in [12-refinement.md](../../agencx/spec/active/12-refinement.md)
+are ticked as their tickets land.

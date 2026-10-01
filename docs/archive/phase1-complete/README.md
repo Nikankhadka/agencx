@@ -26,6 +26,8 @@ merged to `development` or `staging`, with its verification narrative.
 | [19-intent-and-identity.md](19-intent-and-identity.md) | 19 | Intent families and actions on the existing inspection call, escalation-scoped name and email capture, migration `0032` |
 | [20-required-services.md](20-required-services.md) | 20 | Required services overview with a rough price, skip-free interview, one knowledge Skip chip, ADR D30 |
 | [21-category-management.md](21-category-management.md) | 21 | Category management: controlled category objects, ordered multi-category membership with one primary, migration `0034`, ADR D31 |
+| [12-refinement-u1-u4.md](12-refinement-u1-u4.md) | U-1 through U-4 | Shipped UX consistency: nav idiom, button feel, confirm dialog, toasts; walked 2026-10-01 |
+| [22-production-hardening.md](22-production-hardening.md) | T-022 to T-033 | Production hardening: abuse control, CI hygiene, Sentry, CSP, conversation delete, retention, operator export, privacy/terms, backups; ADRs D32-D36 |
 
 Evidence:
 

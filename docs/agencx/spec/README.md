@@ -30,8 +30,7 @@ Per-ticket header pattern:
 | Location | Contents | Status |
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
-| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, delivered U-1 through U-4 and onboarding-normalization records | `Active - todo` (U and normalization delivered and walked 2026-10-01) |
-| [active/22-production-hardening.md](active/22-production-hardening.md) | Production hardening: abuse control, privacy and data lifecycle, error tracking, security headers, backups (T-022 to T-033) | `Active - in progress` (T-022, T-023 built) |
+| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17 | `Active - todo` |
 
 ## Completed work
 
@@ -54,7 +53,7 @@ walkthrough evidence logs.
 | [archived v3 storefront](../../archive/prototypes/agencx-storefront-customer-v3.html) | Interaction vocabulary only |
 
 No v7 prototype exists - the refinement design intent in
-[active/12-refinement.md](active/12-refinement.md) Part 2 was specified
+[active/12-refinement.md](active/12-refinement.md) was specified
 against a v7 that was never built; shipped refinement was implemented
 against v6 plus `design/frontend.md`.
 

@@ -57,8 +57,8 @@ live in the ticket files, not here.
   and backups (T-033, built: `make db-dump` and a local restore drill in
   `deploy.md` Step 9; the production drill, the Supabase Backups page and the
   Free-versus-Pro decision are still open founder items). Billing and
-  notifications are out of scope. Ticket file
-  [22-production-hardening.md](spec/active/22-production-hardening.md).
+   notifications are out of scope. Ticket file
+   [12-refinement.md](spec/active/12-refinement.md) Part 4.
 - [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -98,7 +98,7 @@ live in the ticket files, not here.
 - [ ] R-4 remainder: founder judge calibration plus production-smoke
   evidence. See [12-refinement.md](spec/active/12-refinement.md).
 - [ ] R-5 remainder: restore drill on production (the tooling and a local drill
-  are built), error tracking live verification, E2E in CI, dependency scanning. See
+  are built), error tracking live verification. See
   [12-refinement.md](spec/active/12-refinement.md).
 - [ ] RF-1 through RF-17 product refinement: `Active - todo`, design
   intent in [12-refinement.md](spec/active/12-refinement.md) Part 2.
@@ -122,8 +122,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17, delivered U-1 through U-4 and onboarding-normalization records |
-| [spec/active/22-production-hardening.md](spec/active/22-production-hardening.md) | `Active - in progress` | Abuse control, data lifecycle, error tracking, security headers, backups (T-022 to T-033, ADRs D32-D36) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17 |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
