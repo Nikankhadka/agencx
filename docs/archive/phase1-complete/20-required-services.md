@@ -1,10 +1,13 @@
 # 20: Required services and a skip-free interview
 
-**Status:** Merged 2026-09-19. Founder-decided 2026-09-18.
+**Status:** Done - merged 2026-09-19. Founder-decided 2026-09-18. The
+2026-10-01 preview walkthrough found one defect (the read-back printed the
+`services` list as a Python list); fixed with tests, and the item 16 re-walk is
+tracked in `docs/agencx/evidence/walkthrough-2026-10/README.md`.
 **Phase 1 area:** Onboarding interview.
 
 Numbering note: 17 is reserved for the M-7 storefront redesign, 18 was absorbed
-into [12-refinement.md](12-refinement.md), and 19 is intent and identity, so 20
+into [12-refinement.md](../../agencx/spec/active/12-refinement.md), and 19 is intent and identity, so 20
 is the next free ticket.
 
 ## Summary

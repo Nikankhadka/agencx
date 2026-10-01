@@ -435,6 +435,30 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_turn_acknowledges_a_list_valued_field_without_a_python_repr() -> None:
+    """`services` is stored as `list[str]` (flow.ProfileDraft.services); the
+    acknowledged read-back must join its items into prose, never leak the
+    Python repr of the list (the bug: "Got what you offer: ['a', 'b']")."""
+    provider = _ExtractFake(
+        updates=[
+            {"profile": {"services": ["Drip coffee, $4 to $6", "Pastries, $3 to $6"]}},
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(draft=_draft_up_to("services"), ask_beat="services", ask_count=1)
+    await run_turn(
+        admin_message="Drip coffee, $4 to $6. Pastries, $3 to $6.",
+        record=record,
+        provider=provider,
+    )
+
+    system_prompts = [m["content"] for m in provider.chat_messages[0] if m["role"] == "system"]
+    captured = next(p for p in system_prompts if "Just captured" in p)
+    assert "Drip coffee, $4 to $6; Pastries, $3 to $6" in captured
+    assert "[" not in captured and "]" not in captured and "'" not in captured
+
+
+@pytest.mark.asyncio
 async def test_run_turn_uses_the_authoritative_next_beat() -> None:
     """W-2 US-1: the model writes the acknowledgment, the server writes the question."""
     provider = _ExtractFake(updates=[{}], replies=["Sure thing."])
@@ -723,6 +747,26 @@ async def test_prepare_url_turn_extracts_from_page_and_reads_back() -> None:
     assert "Mon-Fri 9-6" in plan.summary
     assert plan.reply_msgs is None
     assert record.draft["business_type"] == "phone repair shop"
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_turn_reads_back_a_list_valued_field_without_a_python_repr() -> None:
+    """`_url_readback` renders `services` (a `list[str]`) as prose, never the
+    Python repr of the list."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"services": "screen repairs, battery replacements"}}],
+    )
+    record = OnboardingRecord()
+    plan = await prepare_url_turn(
+        url="https://bytefix.example.com",
+        page_text="Bytefix Repairs. Screen repairs and battery replacements.",
+        record=record,
+        provider=provider,
+    )
+
+    assert plan.summary is not None
+    assert "services: screen repairs; battery replacements." in plan.summary
+    assert "[" not in plan.summary and "]" not in plan.summary
 
 
 @pytest.mark.asyncio
@@ -1622,6 +1666,41 @@ async def test_a_correction_applies_from_whatever_beat_is_on_screen(asked: str) 
     assert OnboardingRecord.from_jsonb(updated.to_jsonb()).draft["business_type"] == (
         "middle eastern cafe"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_correction_to_a_list_valued_field_reads_back_without_a_python_repr() -> None:
+    """A correction targeting `services` (a `list[str]`) must read back its
+    items as prose, not the Python repr of the list."""
+    provider = _ExtractFake(
+        updates=[
+            {
+                "corrections": [
+                    {
+                        "field": "services",
+                        "value": "Coffee and pastries",
+                        "raw": "Coffee and pastries",
+                        "normalization": "none",
+                    }
+                ]
+            }
+        ],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord(
+        draft=_draft_up_to("customer_voice_preset"),
+        ask_beat="customer_voice_preset",
+        ask_count=1,
+    )
+    updated, reply = await run_turn(
+        admin_message="actually change what we offer to coffee and pastries",
+        record=record,
+        provider=provider,
+    )
+
+    assert updated.draft["services"] == ["Coffee and pastries"]
+    assert "Coffee and pastries" in reply
+    assert "[" not in reply and "]" not in reply and "'" not in reply
 
 
 @pytest.mark.asyncio

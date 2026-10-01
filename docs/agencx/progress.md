@@ -58,14 +58,16 @@ live in the ticket files, not here.
   Free-versus-Pro decision are still open founder items). Billing and
   notifications are out of scope. Ticket file
   [22-production-hardening.md](spec/active/22-production-hardening.md).
-- [ ] Required services, price-aware overview, knowledge Skip chip: `services`
+- [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
   knowledge ask keeps one always-visible Skip chip, and the storefront and its
   owner preview read the overview back when nothing is priced yet. Built on
-  `feat/20-required-services` off M-7's base; ticket file
-  [20-required-services.md](spec/active/20-required-services.md), ADR D30.
-  Merged to `development` as PR #45; founder preview walkthrough remains.
+  `feat/20-required-services` off M-7's base; archived ticket file
+  [20-required-services.md](../archive/phase1-complete/20-required-services.md),
+  ADR D30. Merged to `development` as PR #45. The 2026-10-01 walkthrough's
+  one defect (the read-back printed the `services` list as a Python list) is
+  fixed with tests.
 - [ ] Intent architecture and escalation-scoped contact capture: three intent
   families (information/offer/support) and four actions
   (respond/offer_followup/escalate/handoff) classified by the existing

@@ -593,12 +593,19 @@ def _apply_corrections(
             continue
         if beat.valid is not None and not beat.valid(value):
             continue
-        previous = str(record.draft.get(target, ""))
+        previous = _readable(record.draft.get(target, ""))
         record.draft = save_profile(record.draft, ProfileDraft.model_validate({target: value}))
-        current = str(record.draft.get(target, ""))
+        current = _readable(record.draft.get(target, ""))
         if current and current != previous:
             applied.append((beat.label, current))
     return applied, clarify
+
+
+def _readable(value: Any) -> str:
+    """A draft value as the owner should read it back: a list joins with "; "."""
+    if isinstance(value, list):
+        return "; ".join(str(item).strip() for item in value if str(item).strip())
+    return str(value).strip()
 
 
 def _captured_ack(captured: list[tuple[str, str]]) -> str:
@@ -984,7 +991,7 @@ _URL_READBACK_FIELDS = ("business_name", "business_type", "services", "hours")
 
 def _url_readback(draft: dict[str, Any]) -> str:
     parts = [
-        f"{field.replace('_', ' ')}: {draft[field]}"
+        f"{field.replace('_', ' ')}: {_readable(draft[field])}"
         for field in _URL_READBACK_FIELDS
         if draft.get(field)
     ]
@@ -1103,8 +1110,8 @@ async def prepare_turn(
     if update.profile is not None:
         record.draft = save_profile(record.draft, update.profile)
         for beat in beats.BEAT_ORDER:
-            saved = str(record.draft.get(beat.key, "")).strip()
-            if saved and saved != str(before.get(beat.key, "")).strip():
+            saved = _readable(record.draft.get(beat.key, ""))
+            if saved and saved != _readable(before.get(beat.key, "")):
                 acknowledged.append((beat.label, saved))
     if update.offering_names is not None:
         _merge_owner_offerings(record, update.offering_names)
