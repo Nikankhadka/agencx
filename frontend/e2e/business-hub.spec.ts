@@ -110,6 +110,7 @@ test.describe("Business hub", () => {
     await page.getByRole("button", { name: "Repairs", exact: true }).click();
     await page.getByTestId("offering-description").fill("Most models");
     await page.getByTestId("offering-price").fill("89.50");
+    await page.getByTestId("offering-media-mode-url").click();
     await page.getByTestId("offering-media-url").fill("https://youtu.be/example");
     await page.getByTestId("offering-save").click();
     await expect(page.getByTestId("offerings-list")).toContainText("M1 test offering");
@@ -381,6 +382,7 @@ test.describe("Business hub", () => {
     await page.getByTestId("offering-add").click();
     await page.getByTestId("offering-name").fill(offeringName);
     await page.getByText("Add details", { exact: true }).click();
+    await page.getByTestId("offering-media-mode-url").click();
     await page.getByTestId("offering-media-url").fill("https://youtu.be/first");
     await page.getByTestId("offering-save").click();
     await expect(page.getByText("Offering added", { exact: true })).toBeVisible();
@@ -415,13 +417,65 @@ test.describe("Business hub", () => {
     await page.getByTestId("offering-save").click();
     await expect(page.getByText("Offering saved", { exact: true }).last()).toBeVisible();
 
-    // Reopen: the URL is gone and there is nothing to remove.
+    // Reopen: empty media starts on Upload, with no URL field or remove link.
+    // With nothing left on the offering the details block is collapsed.
     await page.getByRole("button", { name: `Edit ${offeringName}` }).click();
-    await expect(page.getByTestId("offering-media-url")).toHaveValue("");
+    await page.getByText("Add details", { exact: true }).click();
+    await expect(page.getByTestId("offering-media-url")).toHaveCount(0);
+    await expect(page.getByTestId("offering-media-upload")).toBeVisible();
     await expect(page.getByTestId("offering-media-remove")).toHaveCount(0);
     await sheet.getByRole("button", { name: "Cancel" }).click();
 
     // Clean up through the real remove path.
+    await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("offerings-list")).not.toContainText(offeringName);
+  });
+
+  test("switching a pending pick to URL drops it and restores the saved link", async ({
+    page,
+    request,
+  }) => {
+    const offeringName = "RF-5 media toggle probe";
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/offerings");
+
+    await expect(
+      page.getByTestId("offerings-list").or(page.getByText("Nothing added yet.")),
+    ).toBeVisible();
+    const leftovers = page.getByRole("button", { name: `Remove ${offeringName}` });
+    while ((await leftovers.count()) > 0) {
+      await leftovers.first().click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(leftovers).toHaveCount(0);
+    }
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill(offeringName);
+    await page.getByText("Add details", { exact: true }).click();
+    await page.getByTestId("offering-media-mode-url").click();
+    await page.getByTestId("offering-media-url").fill("https://youtu.be/keep");
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering added", { exact: true })).toBeVisible();
+
+    // Reopen on the saved URL, stage a file, then leave the upload side: the
+    // pending pick drops and the saved link comes back.
+    await page.getByRole("button", { name: `Edit ${offeringName}` }).click();
+    await expect(page.getByTestId("offering-media-url")).toHaveValue("https://youtu.be/keep");
+    await page.getByTestId("offering-media-mode-upload").click();
+    await page.getByTestId("offering-media-input").setInputFiles({
+      name: "toggle.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from("toggle-image-bytes"),
+    });
+    await expect(page.getByTestId("offering-media-preview")).toBeVisible();
+
+    await page.getByTestId("offering-media-mode-url").click();
+    await expect(page.getByTestId("offering-media-preview")).toHaveCount(0);
+    await expect(page.getByTestId("offering-media-url")).toHaveValue("https://youtu.be/keep");
+
+    // Cancel sends nothing; clean up through the real remove path.
+    await page.getByRole("dialog", { name: "Edit offering" }).getByRole("button", { name: "Cancel" }).click();
     await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
     await page.getByTestId("confirm-accept").click();
     await expect(page.getByTestId("offerings-list")).not.toContainText(offeringName);

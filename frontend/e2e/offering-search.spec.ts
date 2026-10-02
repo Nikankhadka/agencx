@@ -45,7 +45,12 @@ test.describe("RF-3 offering search", () => {
     await expect(page.getByTestId("offerings-no-matches")).toBeVisible();
     await expect(page.getByTestId("offerings-list")).toHaveCount(0);
 
-    // Clearing restores every group.
+    // The clear button empties the field, keeps focus, and restores every group.
+    await page.getByTestId("offering-search-clear").click();
+    await expect(input).toHaveValue("");
+    await expect(input).toBeFocused();
+    await expect(page.getByTestId("offering-edit")).toHaveCount(before);
+
     await input.fill("");
     await expect(page.getByTestId("offering-edit")).toHaveCount(before);
   });

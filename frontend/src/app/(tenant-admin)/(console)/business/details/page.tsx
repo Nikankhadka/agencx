@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { RowLink } from "@/components/ui/RowLink";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { abnSummary } from "@/lib/abn";
@@ -8,6 +9,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import { AbnSheet } from "./components/AbnSheet";
+import { ContactSheet } from "./components/ContactSheet";
 import { ProfileFieldSheet } from "./components/ProfileFieldSheet";
 import { ServicesSheet, servicesSummary } from "./components/ServicesSheet";
 import { VoiceSheet, voiceSummary } from "./components/VoiceSheet";
@@ -49,6 +51,7 @@ export default function BusinessDetailsPage() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const scrollRef = useScrollRestoration<HTMLDivElement>("/business/details");
 
   useEffect(() => {
@@ -192,13 +195,9 @@ export default function BusinessDetailsPage() {
         onClose={() => setEditing(null)}
         onSave={save}
       />
-      <ProfileFieldSheet
+      <ContactSheet
         open={editing === "contact"}
-        field="business_contact"
-        title="Edit business contact"
-        label="Business contact"
-        value={profile.business_contact}
-        placeholder="Phone, email, or address"
+        profile={profile}
         busy={busy}
         error={error}
         onClose={() => setEditing(null)}
@@ -211,6 +210,7 @@ export default function BusinessDetailsPage() {
         error={error}
         onClose={() => setEditing(null)}
         onSave={save}
+        confirmRemove={confirm}
       />
       <AbnSheet
         open={editing === "abn"}
@@ -228,6 +228,7 @@ export default function BusinessDetailsPage() {
         onClose={() => setEditing(null)}
         onSave={save}
       />
+      {confirmDialog}
     </main>
   );
 }

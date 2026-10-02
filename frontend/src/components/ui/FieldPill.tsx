@@ -32,6 +32,12 @@ export interface FieldPillProps {
   leading?: ReactNode;
   /** Rendered under the pill. The phone beat's inline error line lives here. */
   below?: ReactNode;
+  /**
+   * The send circle. False when a surrounding form owns submission (the
+   * console contact sheet): the pill is then just the field, and Save is the
+   * only button.
+   */
+  showSubmit?: boolean;
   inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
   type?: "text" | "tel" | "email";
   autoComplete?: string;
@@ -61,6 +67,7 @@ export function FieldPill({
   onRejected,
   leading,
   below,
+  showSubmit = true,
   inputMode,
   type = "text",
   autoComplete,
@@ -109,23 +116,29 @@ export function FieldPill({
           aria-label={ariaLabel}
           data-testid={testId}
           autoFocus
-          className="min-w-0 flex-1 bg-transparent py-4 pl-3 pr-1 text-prose text-text placeholder:text-ink-a40 outline-none disabled:opacity-50"
-        />
-        <button
-          type="button"
-          onClick={submit}
-          disabled={disabled || (!canSubmit && !onRejected)}
-          aria-label="Send"
           className={[
-            "m-2 flex size-send shrink-0 items-center justify-center rounded-full",
-            "transition-colors duration-(--duration-fast) ease-out",
-            canSubmit
-              ? "bg-accent text-text-inverse hover:bg-accent-hover active:bg-accent-active"
-              : "bg-accent-a12 text-accent-a50",
+            "min-w-0 flex-1 bg-transparent py-4 pl-3 text-prose text-text",
+            "placeholder:text-ink-a40 outline-none disabled:opacity-50",
+            showSubmit ? "pr-1" : "pr-3",
           ].join(" ")}
-        >
-          <Icon name="send" size={20} />
-        </button>
+        />
+        {showSubmit ? (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={disabled || (!canSubmit && !onRejected)}
+            aria-label="Send"
+            className={[
+              "m-2 flex size-send shrink-0 items-center justify-center rounded-full",
+              "transition-colors duration-(--duration-fast) ease-out",
+              canSubmit
+                ? "bg-accent text-text-inverse hover:bg-accent-hover active:bg-accent-active"
+                : "bg-accent-a12 text-accent-a50",
+            ].join(" ")}
+          >
+            <Icon name="send" size={20} />
+          </button>
+        ) : null}
       </div>
       {below}
     </div>

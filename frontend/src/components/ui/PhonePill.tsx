@@ -53,9 +53,15 @@ export const COUNTRIES: Country[] = [
     code: "+1",
     flag: "🇺🇸",
     name: "United States",
-    format: (value) => value,
-    valid: (value) => digitsOf(value).length === 10,
-    placeholder: "Phone number",
+    format: (value) => {
+      const d = digitsOf(value).slice(0, 10);
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+      return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+    },
+    // NANP area codes never start with 0 or 1; the rest is the 10-digit check.
+    valid: (value) => /^[2-9]\d{9}$/.test(digitsOf(value)),
+    placeholder: "(555) 123-4567",
   },
   {
     code: "+44",
@@ -73,20 +79,65 @@ export const COUNTRIES: Country[] = [
     valid: (value) => digitsOf(value).length >= 8,
     placeholder: "Phone number",
   },
+  {
+    code: "+977",
+    flag: "🇳🇵",
+    name: "Nepal",
+    format: (value) => {
+      const d = digitsOf(value).slice(0, 10);
+      if (d.length <= 4) return d;
+      if (d.length <= 7) return `${d.slice(0, 4)} ${d.slice(4)}`;
+      return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
+    },
+    // Nepali mobiles are 10 digits and start 96 to 99.
+    valid: (value) => /^9[6-9]\d{8}$/.test(digitsOf(value)),
+    placeholder: "9812 345 678",
+  },
 ];
 
 export interface PhonePillProps {
   disabled?: boolean;
   /** Receives the dial code and number as one string, e.g. "+61 0412 345 678". */
-  onSubmit: (value: string) => void;
+  onSubmit?: (value: string) => void;
+  /**
+   * Controlled full value ("+61 0412 345 678"). Given, the pill reports every
+   * keystroke through `onChange` instead of holding its own draft, for forms
+   * whose Save owns submission. Omitted, it is the self-contained onboarding
+   * beat.
+   */
+  value?: string;
+  onChange?: (value: string) => void;
+  /** Hide the send circle when a surrounding form owns submission. */
+  showSubmit?: boolean;
+  /** Override the field test id where this widget is reused outside onboarding. */
+  testId?: string;
 }
 
-export function PhonePill({ disabled, onSubmit }: PhonePillProps) {
-  const [country, setCountry] = useState<Country>(COUNTRIES[0]);
-  const [value, setValue] = useState("");
+/** Splits a stored "+61 0412 345 678" back into its country and local number. */
+function decode(value: string): { country: Country; local: string } {
+  const trimmed = value.trimStart();
+  const match = COUNTRIES.find((entry) => trimmed.startsWith(entry.code));
+  if (!match) return { country: COUNTRIES[0], local: "" };
+  return { country: match, local: trimmed.slice(match.code.length).trimStart() };
+}
+
+export function PhonePill({
+  disabled,
+  onSubmit,
+  value,
+  onChange,
+  showSubmit = true,
+  testId = "onboarding-phone-input",
+}: PhonePillProps) {
+  const controlled = value !== undefined;
+  const [countryState, setCountry] = useState<Country>(COUNTRIES[0]);
+  const [valueState, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [showError, setShowError] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const decoded = controlled ? decode(value) : null;
+  const country = decoded?.country ?? countryState;
+  const local = decoded?.local ?? valueState;
 
   // The prototype closes the picker on any document click.
   useEffect(() => {
@@ -98,15 +149,23 @@ export function PhonePill({ disabled, onSubmit }: PhonePillProps) {
     return () => document.removeEventListener("click", onDocClick);
   }, [open]);
 
-  const valid = country.valid(value);
+  const valid = country.valid(local);
+
+  function change(next: string) {
+    setShowError(false);
+    const formatted = country.format(next);
+    if (controlled) onChange?.(`${country.code} ${formatted}`.trimEnd());
+    else setValue(formatted);
+  }
 
   function pick(next: Country) {
     setCountry(next);
     setOpen(false);
+    setShowError(false);
     // Switching country clears the field: a number formatted for one country is
     // not a draft of a number for another.
-    setValue("");
-    setShowError(false);
+    if (controlled) onChange?.(next.code);
+    else setValue("");
   }
 
   return (
@@ -136,21 +195,19 @@ export function PhonePill({ disabled, onSubmit }: PhonePillProps) {
       ) : null}
 
       <FieldPill
-        value={value}
-        onChange={(next) => {
-          setValue(country.format(next));
-          setShowError(false);
-        }}
-        onSubmit={() => onSubmit(`${country.code} ${value.trim()}`)}
+        value={local}
+        onChange={change}
+        onSubmit={() => onSubmit?.(`${country.code} ${local.trim()}`)}
         placeholder={country.placeholder}
         disabled={disabled}
         canSubmit={valid}
         onRejected={() => setShowError(true)}
+        showSubmit={showSubmit}
         type="tel"
         inputMode="tel"
         autoComplete="tel"
         aria-label="Phone number"
-        data-testid="onboarding-phone-input"
+        data-testid={testId}
         leading={
           <button
             type="button"

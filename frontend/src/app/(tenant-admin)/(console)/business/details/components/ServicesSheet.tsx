@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import type { ConfirmOptions } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Sheet } from "@/components/ui/Sheet";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
@@ -13,6 +14,8 @@ export interface ServicesSheetProps {
   error: string | null;
   onClose: () => void;
   onSave: (update: ProfileUpdate) => void;
+  /** The page's shared confirm, so a removal asks above the open sheet. */
+  confirmRemove: (options: ConfirmOptions) => Promise<boolean>;
 }
 
 /** The row's one-line summary, or the invitation to fill it. */
@@ -31,7 +34,15 @@ export function servicesSummary(profile: BusinessProfile): string {
  * nothing quotes from it - the priced catalog is Offerings, and every amount
  * the product states comes from there through the pricing engine.
  */
-export function ServicesSheet({ open, profile, busy, error, onClose, onSave }: ServicesSheetProps) {
+export function ServicesSheet({
+  open,
+  profile,
+  busy,
+  error,
+  onClose,
+  onSave,
+  confirmRemove,
+}: ServicesSheetProps) {
   return (
     <Sheet open={open} onClose={onClose} title="Edit services">
       {/* Keyed by what was loaded, like the ABN sheet: reopening starts from
@@ -43,6 +54,7 @@ export function ServicesSheet({ open, profile, busy, error, onClose, onSave }: S
           busy={busy}
           error={error}
           onSave={onSave}
+          confirmRemove={confirmRemove}
         />
       ) : null}
     </Sheet>
@@ -54,15 +66,34 @@ function ServicesEditor({
   busy,
   error,
   onSave,
+  confirmRemove,
 }: {
   profile: BusinessProfile;
   busy: boolean;
   error: string | null;
   onSave: (update: ProfileUpdate) => void;
+  confirmRemove: (options: ConfirmOptions) => Promise<boolean>;
 }) {
   const [services, setServices] = useState<string[]>(() =>
     profile.services.length ? profile.services : [""],
   );
+
+  async function requestRemove(index: number) {
+    if (busy) return;
+    const text = services[index]?.trim();
+    const confirmed = await confirmRemove({
+      title: "Remove this service?",
+      description: text
+        ? `"${text}" is removed when you save.`
+        : "It is removed when you save.",
+      confirmLabel: "Remove",
+      tone: "danger",
+      // The edit sheet is open; the dialog has to paint above it.
+      layer: "top",
+    });
+    if (!confirmed) return;
+    setServices((current) => current.filter((_, at) => at !== index));
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-2">
@@ -88,7 +119,7 @@ function ServicesEditor({
             disabled={busy}
             aria-label={`Remove service ${index + 1}`}
             data-testid="service-remove"
-            onClick={() => setServices((current) => current.filter((_, at) => at !== index))}
+            onClick={() => void requestRemove(index)}
           >
             Remove
           </Button>
