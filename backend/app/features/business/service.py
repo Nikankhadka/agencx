@@ -952,10 +952,12 @@ async def read_public_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None
     return row["mime"], bytes(row["bytes"]), row["updated_at"]
 
 
-# O-9: the slice of the profile an owner can correct after go-live. The rest of
-# the profile is written once, at confirm, and stays frozen - the ticket says
-# why, and a settings tree that edits all of it is not being built.
-PROFILE_FIELDS = ("abn", "gst", "services")
+# O-9/RF-2: the slice of the profile an owner can correct after go-live. The
+# rest of the profile is written once, at confirm, and stays frozen - a settings
+# tree that edits all of it is not being built. RF-2 widens this from ABN/GST to
+# the business identity the owner actually maintains: name, hours, description
+# and contact, stored under the keys the storefront and context package read.
+PROFILE_FIELDS = ("business_name", "hours", "description", "contact", "abn", "gst", "services")
 
 # W-9: how the public assistant sounds. Editable here beside the ABN, but kept
 # at `config->customer_voice` rather than in the profile object, because that is
@@ -978,8 +980,16 @@ async def read_profile(*, tenant_id: UUID) -> dict[str, Any]:
     config = json.loads(raw) if isinstance(raw, str) else (raw or {})
     profile = config.get("profile") or {}
     draft = (config.get("onboarding") or {}).get("draft") or {}
+    # The API names are the owner's words; the storage keys are what the rest of
+    # the stack reads. `name` is `business_name` and `business_contact` is
+    # `contact` in the profile jsonb.
     fields: dict[str, Any] = {
-        key: str(profile.get(key) or draft.get(key) or "") for key in ("abn", "gst")
+        "name": str(profile.get("business_name") or draft.get("business_name") or ""),
+        "hours": str(profile.get("hours") or draft.get("hours") or ""),
+        "description": str(profile.get("description") or draft.get("description") or ""),
+        "business_contact": str(profile.get("contact") or draft.get("contact") or ""),
+        "abn": str(profile.get("abn") or draft.get("abn") or ""),
+        "gst": str(profile.get("gst") or draft.get("gst") or ""),
     }
     fields["services"] = read_services(profile.get("services", draft.get("services", [])))
     # The voice is read through the same normalizer the customer contract uses,
@@ -1028,6 +1038,29 @@ async def write_profile(*, tenant_id: UUID, fields: dict[str, Any]) -> dict[str,
                 "), updated_at = now() where tenant_id = $1",
                 tenant_id,
                 json.dumps(profile_patch),
+            )
+        if "business_name" in profile_patch:
+            # The go-live snapshot the Business page, the storefront and the
+            # platform view read through `display_name`. Synced so an edited
+            # name shows on every surface; the slug is a separate column set
+            # once at go-live and is deliberately not touched, so a rename never
+            # moves the public address.
+            await conn.execute(
+                "update tenants set business_name = $2 where id = $1",
+                tenant_id,
+                profile_patch["business_name"],
+            )
+            # A tenant with an explicit brand name (the demo seeds, an old
+            # rebrand) has it win over `business_name` in `display_name`, so the
+            # edited name must follow it too - but only where one already
+            # exists, so a tenant without a brand override keeps falling back to
+            # the business name.
+            await conn.execute(
+                "update tenant_config "
+                "set brand = jsonb_set(brand, '{display_name}', to_jsonb($2::text), true) "
+                "where tenant_id = $1 and brand ? 'display_name'",
+                tenant_id,
+                profile_patch["business_name"],
             )
         if voice is not None:
             await conn.execute(

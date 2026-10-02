@@ -59,6 +59,9 @@ class BookingPageResponse(BaseModel):
     slug: str
     name: str
     tagline: str | None
+    # RF-2: the owner's editable description and contact, shown on the preview.
+    description: str | None = None
+    business_contact: str | None = None
     services: list[str] = Field(default_factory=list)
     links: dict[str, str]
     has_cover: bool
@@ -412,6 +415,13 @@ class BusinessProfile(BaseModel):
     captured is the empty string, which is what the screens already render.
     """
 
+    # RF-2: the four identity fields an owner can correct after go-live. `name`
+    # is stored under the existing `business_name` key (what the storefront and
+    # the context package already read); `business_contact` under `contact`.
+    name: str
+    hours: str
+    description: str
+    business_contact: str
     abn: str
     gst: str
     customer_voice_preset: str
@@ -420,8 +430,9 @@ class BusinessProfile(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """The ABN and its GST answer, and how the public assistant sounds - the
-    slice of the profile that stays correctable after go-live.
+    """The post-go-live correctable profile: the business name, hours,
+    description and contact, the ABN and its GST answer, services, and how the
+    public assistant sounds.
 
     Extra keys are refused rather than ignored: the rest of the profile is
     frozen at confirm, and a request that thought otherwise should hear so.
@@ -429,6 +440,10 @@ class ProfileUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    name: str | None = None
+    hours: str | None = None
+    description: str | None = None
+    business_contact: str | None = None
     abn: str | None = None
     gst: str | None = None
     services: list[str] | None = None
@@ -443,6 +458,16 @@ class ProfileUpdate(BaseModel):
         in.
         """
         fields: dict[str, object] = {}
+        if self.name is not None:
+            if not (name := self.name.strip()):
+                raise ValueError("Give your business a name.")
+            fields["business_name"] = name
+        if self.hours is not None:
+            fields["hours"] = self.hours.strip()
+        if self.description is not None:
+            fields["description"] = self.description.strip()
+        if self.business_contact is not None:
+            fields["contact"] = self.business_contact.strip()
         if self.abn is not None:
             fields["abn"] = _normalize_abn(self.abn)
         if self.gst is not None:

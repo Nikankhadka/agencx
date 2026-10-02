@@ -99,6 +99,18 @@ export default function BusinessPageScreen() {
               {page.tagline}
             </p>
           ) : null}
+          {/* RF-2: the owner's own description and contact, edited in Business
+              details and read back here immediately. */}
+          {page?.description ? (
+            <p data-testid="business-description" className="mt-2 text-body-sm text-text-secondary">
+              {page.description}
+            </p>
+          ) : null}
+          {page?.business_contact ? (
+            <p data-testid="business-contact" className="mt-2 text-meta text-ink-a40">
+              {page.business_contact}
+            </p>
+          ) : null}
           {page?.offerings.length ? (
             <section
               data-testid="offerings-summary"

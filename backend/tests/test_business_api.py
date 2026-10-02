@@ -17,6 +17,7 @@ from app.features.business import service as business_service
 from app.features.business.media import UploadedMedia
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
+from app.services.context_package import clear_cache, get_package
 from app.services.knowledge_version import knowledge_version
 from app.shared import db
 from app.shared.config import get_settings
@@ -773,6 +774,11 @@ async def test_profile_patch_moves_both_keys_together(client: httpx.AsyncClient)
     # Stored as the digits, the way the interview stores them - the formatting
     # is the screen's job.
     assert saved.json() == {
+        # RF-2: the four identity fields, empty until the owner edits them.
+        "name": "",
+        "hours": "",
+        "description": "",
+        "business_contact": "",
         "abn": "51824753556",
         "gst": "yes",
         # W-9: the profile response carries the voice the assistant speaks in.
@@ -784,6 +790,10 @@ async def test_profile_patch_moves_both_keys_together(client: httpx.AsyncClient)
 
     read_back = await client.get("/api/business/profile", headers=headers)
     assert read_back.json() == {
+        "name": "",
+        "hours": "",
+        "description": "",
+        "business_contact": "",
         "abn": "51824753556",
         "gst": "yes",
         "customer_voice_preset": "warm_casual",
@@ -805,6 +815,10 @@ async def test_profile_patch_leaves_absent_fields_alone(client: httpx.AsyncClien
     )
     saved = await client.patch("/api/business/profile", json={"gst": "no"}, headers=headers)
     assert saved.json() == {
+        "name": "",
+        "hours": "",
+        "description": "",
+        "business_contact": "",
         "abn": "51824753556",
         "gst": "no",
         # W-9: the profile response carries the voice the assistant speaks in.
@@ -876,7 +890,7 @@ async def test_a_field_outside_the_editable_slice_is_refused(client: httpx.Async
     otherwise hears so, instead of being quietly ignored."""
     headers, _ = await _signup(client)
     response = await client.patch(
-        "/api/business/profile", json={"business_name": "Renamed Co"}, headers=headers
+        "/api/business/profile", json={"business_type": "butcher"}, headers=headers
     )
     assert response.status_code == 422
 
@@ -916,3 +930,153 @@ async def test_the_patch_leaves_the_rest_of_the_onboarding_record_alone(
     assert onboarding["history"] == [{"role": "user", "content": "hi"}]
     assert onboarding["draft"]["name"] == "Sam"
     assert onboarding["draft"]["abn"] == "51824753556"
+
+
+async def _tenant_business_name(tenant_id: uuid.UUID) -> str | None:
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        value = await conn.fetchval("select business_name from tenants where id = $1", tenant_id)
+    return str(value) if value is not None else None
+
+
+async def test_rf2_identity_fields_persist_to_both_jsonb_copies(
+    client: httpx.AsyncClient,
+) -> None:
+    """RF-2: name, hours, description and contact land in `config->profile` and
+    `config->onboarding.draft` together, and the name also syncs the go-live
+    snapshot the Business page and storefront read. The slug does not move."""
+    headers, tenant_id = await _signup(client)
+    saved = await client.patch(
+        "/api/business/profile",
+        json={
+            "name": "Bytefix Repairs",
+            "hours": "Mon to Fri 9am to 6pm",
+            "description": "We fix phones and laptops.",
+            "business_contact": "0400 000 000",
+        },
+        headers=headers,
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["name"] == "Bytefix Repairs"
+    assert body["hours"] == "Mon to Fri 9am to 6pm"
+    assert body["description"] == "We fix phones and laptops."
+    assert body["business_contact"] == "0400 000 000"
+
+    config = await _config_of(tenant_id)
+    for copy in (config["profile"], config["onboarding"]["draft"]):
+        assert copy["business_name"] == "Bytefix Repairs"
+        assert copy["hours"] == "Mon to Fri 9am to 6pm"
+        assert copy["description"] == "We fix phones and laptops."
+        assert copy["contact"] == "0400 000 000"
+    assert await _tenant_business_name(tenant_id) == "Bytefix Repairs"
+
+
+async def test_rf2_editing_one_field_leaves_the_rest_of_the_profile_alone(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, tenant_id = await _signup(client)
+    await client.patch(
+        "/api/business/profile",
+        json={
+            "name": "Original Co",
+            "hours": "9-5",
+            "description": "Original.",
+            "business_contact": "111",
+        },
+        headers=headers,
+    )
+    saved = await client.patch("/api/business/profile", json={"hours": "10-6"}, headers=headers)
+    body = saved.json()
+    assert body["hours"] == "10-6"
+    assert body["name"] == "Original Co"
+    assert body["description"] == "Original."
+    assert body["business_contact"] == "111"
+    config = await _config_of(tenant_id)
+    assert config["profile"]["hours"] == "10-6"
+    assert config["onboarding"]["draft"]["hours"] == "10-6"
+    assert config["profile"]["business_name"] == "Original Co"
+    assert config["onboarding"]["draft"]["business_name"] == "Original Co"
+
+
+async def test_rf2_profile_is_tenant_scoped(client: httpx.AsyncClient) -> None:
+    headers_a, tenant_a = await _signup(client)
+    headers_b, tenant_b = await _signup(client)
+
+    await client.patch(
+        "/api/business/profile",
+        json={"name": "Tenant A Co", "hours": "A hours"},
+        headers=headers_a,
+    )
+
+    # B reads its own profile, not A's, and writing as B leaves A untouched.
+    b_profile = (await client.get("/api/business/profile", headers=headers_b)).json()
+    assert b_profile["name"] == ""
+    assert b_profile["hours"] == ""
+    await client.patch("/api/business/profile", json={"name": "Tenant B Co"}, headers=headers_b)
+    a_config = await _config_of(tenant_a)
+    assert a_config["profile"]["business_name"] == "Tenant A Co"
+    b_config = await _config_of(tenant_b)
+    assert b_config["profile"]["business_name"] == "Tenant B Co"
+    assert await _tenant_business_name(tenant_a) == "Tenant A Co"
+    assert await _tenant_business_name(tenant_b) == "Tenant B Co"
+
+
+async def test_rf2_a_profile_edit_reaches_the_context_package(
+    client: httpx.AsyncClient,
+) -> None:
+    """The package is cached by `knowledge_version`, which includes
+    `tenant_config.updated_at`; a profile write bumps it, so the next turn
+    reassembles with the new values. No separate invalidation is needed."""
+    clear_cache()
+    headers, tenant_id = await _signup(client)
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        before = await get_package(conn, tenant_id)
+
+    await client.patch(
+        "/api/business/profile",
+        json={
+            "name": "Edited Co",
+            "hours": "10am to 6pm",
+            "description": "A fresh description.",
+            "business_contact": "0400 111 222",
+        },
+        headers=headers,
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        after = await get_package(conn, tenant_id)
+
+    assert after.version > before.version
+    assert after.business_name == "Edited Co"
+    text = after.profile_text()
+    assert "10am to 6pm" in text
+    assert "A fresh description." in text
+    assert "0400 111 222" in text
+    clear_cache()
+
+
+async def test_rf2_a_name_edit_follows_an_existing_brand_display_name(
+    client: httpx.AsyncClient,
+) -> None:
+    """A tenant with an explicit brand name (the demo seeds, an old rebrand) has
+    it win over `business_name` in `display_name`, so an edited name must follow
+    it too - otherwise the Business page would keep showing the stale brand."""
+    import json
+
+    headers, tenant_id = await _signup(client)
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config set brand = jsonb_build_object('display_name', 'Old Brand') "
+            "where tenant_id = $1",
+            tenant_id,
+        )
+
+    await client.patch("/api/business/profile", json={"name": "New Brand"}, headers=headers)
+
+    page = (await client.get("/api/business/page", headers=headers)).json()
+    assert page["name"] == "New Brand"
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        brand = await conn.fetchval(
+            "select brand from tenant_config where tenant_id = $1", tenant_id
+        )
+    assert json.loads(brand)["display_name"] == "New Brand"

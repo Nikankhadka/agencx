@@ -300,7 +300,8 @@ agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
 
 #### RF-2: Business-detail editing and immediate consistency
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress on `feat/rf-2-business-details`; the
+  implementation lands in the same commit.
 - **Visible outcome:** The owner edits business name, hours, description, and
   business contact after go-live from the Business hub, in the shipped sheet
   idiom; saved edits appear on the Business page and in customer answers. The

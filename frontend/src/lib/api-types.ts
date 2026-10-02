@@ -1046,6 +1046,10 @@ export interface components {
             name: string;
             /** Tagline */
             tagline: string | null;
+            /** Description */
+            description?: string | null;
+            /** Business Contact */
+            business_contact?: string | null;
             /** Services */
             services?: string[];
             /** Links */
@@ -1079,6 +1083,14 @@ export interface components {
          *     captured is the empty string, which is what the screens already render.
          */
         BusinessProfile: {
+            /** Name */
+            name: string;
+            /** Hours */
+            hours: string;
+            /** Description */
+            description: string;
+            /** Business Contact */
+            business_contact: string;
             /** Abn */
             abn: string;
             /** Gst */
@@ -1906,13 +1918,22 @@ export interface components {
         };
         /**
          * ProfileUpdate
-         * @description The ABN and its GST answer, and how the public assistant sounds - the
-         *     slice of the profile that stays correctable after go-live.
+         * @description The post-go-live correctable profile: the business name, hours,
+         *     description and contact, the ABN and its GST answer, services, and how the
+         *     public assistant sounds.
          *
          *     Extra keys are refused rather than ignored: the rest of the profile is
          *     frozen at confirm, and a request that thought otherwise should hear so.
          */
         ProfileUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Hours */
+            hours?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Business Contact */
+            business_contact?: string | null;
             /** Abn */
             abn?: string | null;
             /** Gst */

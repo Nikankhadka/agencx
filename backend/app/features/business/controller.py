@@ -41,6 +41,10 @@ async def booking_page(*, tenant_id: UUID) -> dict[str, Any]:
             fallback=tenant["name"],
         ),
         "tagline": service.profile_tagline(profile),
+        # RF-2: the owner's own description and contact, edited in Business
+        # details and shown back on this preview immediately.
+        "description": service.profile_field(profile, "description"),
+        "business_contact": service.profile_field(profile, "contact"),
         # 20: the catalog-empty overview block renders from this, so the
         # preview has to carry what the public storefront carries.
         "services": read_services(profile.get("services", [])),

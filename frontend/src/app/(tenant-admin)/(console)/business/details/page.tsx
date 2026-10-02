@@ -8,10 +8,15 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import { AbnSheet } from "./components/AbnSheet";
+import { ProfileFieldSheet } from "./components/ProfileFieldSheet";
 import { ServicesSheet, servicesSummary } from "./components/ServicesSheet";
 import { VoiceSheet, voiceSummary } from "./components/VoiceSheet";
 
 const EMPTY: BusinessProfile = {
+  name: "",
+  hours: "",
+  description: "",
+  business_contact: "",
   abn: "",
   gst: "",
   services: [],
@@ -19,23 +24,29 @@ const EMPTY: BusinessProfile = {
   customer_voice_custom_style: "",
 };
 
+type Editing = "name" | "hours" | "description" | "contact" | "abn" | "voice" | "services";
+
+/** A row summary: the saved value, or the invitation to fill it. */
+function orPlaceholder(value: string, placeholder: string): string {
+  return value.trim() || placeholder;
+}
+
 /**
  * Business details, built from `renderScreen('business')` in agencx-prototype-v6.html:
  * a topbar over a list of `.bh-row`s. Some open a screen, some open an edit
  * sheet - the prototype's list does both, and this one does too.
  *
- * Still not a settings tree. The rest of the profile the interview captured -
- * business name, hours, what you offer, how customers reach you - is written
- * once at go-live and has no editor here yet; the ABN row exists because the
- * interview now asks for two fields no screen was ever showing back. The
- * prototype's remaining sections (pricing, payment mode, channels) belong to
- * Stage 2 work that does not exist, and a row that opens onto nothing is worse
- * than an absent one.
+ * Still not a settings tree. RF-2 makes the business identity correctable here:
+ * name, hours, description and contact, each a sheet over the same profile save
+ * path as ABN and services. The rest of the profile is written once at confirm.
+ * The prototype's remaining sections (pricing, payment mode, channels) belong
+ * to Stage 2 work that does not exist, and a row that opens onto nothing is
+ * worse than an absent one.
  */
 export default function BusinessDetailsPage() {
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY);
   // Which sheet is open, if any - the rows share one save path and one error.
-  const [editing, setEditing] = useState<"abn" | "voice" | "services" | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useScrollRestoration<HTMLDivElement>("/business/details");
@@ -81,6 +92,42 @@ export default function BusinessDetailsPage() {
           detail="Where your customers' answers come from"
         />
         <RowLink
+          label="Business name"
+          icon="dashboard"
+          detail={orPlaceholder(profile.name, "Add your business name")}
+          onClick={() => {
+            setError(null);
+            setEditing("name");
+          }}
+        />
+        <RowLink
+          label="Opening hours"
+          icon="refresh"
+          detail={orPlaceholder(profile.hours, "Add your opening hours")}
+          onClick={() => {
+            setError(null);
+            setEditing("hours");
+          }}
+        />
+        <RowLink
+          label="Description"
+          icon="edit"
+          detail={orPlaceholder(profile.description, "Add a short description")}
+          onClick={() => {
+            setError(null);
+            setEditing("description");
+          }}
+        />
+        <RowLink
+          label="Business contact"
+          icon="support_agent"
+          detail={orPlaceholder(profile.business_contact, "Add how customers reach you")}
+          onClick={() => {
+            setError(null);
+            setEditing("contact");
+          }}
+        />
+        <RowLink
           label="ABN & Tax"
           icon="verified_user"
           detail={abnSummary(profile)}
@@ -108,6 +155,55 @@ export default function BusinessDetailsPage() {
           }}
         />
       </div>
+      <ProfileFieldSheet
+        open={editing === "name"}
+        field="name"
+        title="Edit business name"
+        label="Business name"
+        value={profile.name}
+        placeholder="Bytefix Repairs"
+        busy={busy}
+        error={error}
+        onClose={() => setEditing(null)}
+        onSave={save}
+      />
+      <ProfileFieldSheet
+        open={editing === "hours"}
+        field="hours"
+        title="Edit opening hours"
+        label="Opening hours"
+        value={profile.hours}
+        placeholder="Mon to Fri 9am to 6pm"
+        busy={busy}
+        error={error}
+        onClose={() => setEditing(null)}
+        onSave={save}
+      />
+      <ProfileFieldSheet
+        open={editing === "description"}
+        field="description"
+        title="Edit description"
+        label="Description"
+        value={profile.description}
+        placeholder="What your business does, in your own words"
+        multiline
+        busy={busy}
+        error={error}
+        onClose={() => setEditing(null)}
+        onSave={save}
+      />
+      <ProfileFieldSheet
+        open={editing === "contact"}
+        field="business_contact"
+        title="Edit business contact"
+        label="Business contact"
+        value={profile.business_contact}
+        placeholder="Phone, email, or address"
+        busy={busy}
+        error={error}
+        onClose={() => setEditing(null)}
+        onSave={save}
+      />
       <ServicesSheet
         open={editing === "services"}
         profile={profile}

@@ -65,6 +65,8 @@ CACHE_TTL_S = 900.0
 _PROFILE_LABELS: tuple[tuple[str, str], ...] = (
     ("business_name", "Business"),
     ("business_type", "What the business does"),
+    # RF-2: an owner-written description, editable after go-live.
+    ("description", "About the business"),
     ("hours", "Opening hours"),
     ("services", "Services offered"),
     ("headcount", "Team"),

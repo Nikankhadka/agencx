@@ -112,8 +112,14 @@ live in the ticket files, not here.
   small accent dot. Open follow-up: the console Chats tab badge stays on
   `needs_attention` until RF-14. Record in
   [12-refinement.md](spec/active/12-refinement.md), ADR D42.
-- [ ] RF-2 through RF-17 product refinement: `Active - todo`, next is RF-2
-  (business-detail editing and immediate consistency); no other ticket
+- [ ] RF-2 business-detail editing and immediate consistency: in progress on
+  `feat/rf-2-business-details`, awaiting merge. Business name, hours,
+  description and contact are editable in the Business details sheets,
+  persisted to both profile jsonb copies, and reach the Business page and
+  customer answers. Record in
+  [12-refinement.md](spec/active/12-refinement.md).
+- [ ] RF-3 through RF-17 product refinement: `Active - todo`, next is RF-3
+  (offering search and category grouping); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
