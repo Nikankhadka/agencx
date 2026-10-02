@@ -100,8 +100,17 @@ live in the ticket files, not here.
 - [ ] R-5 remainder: restore drill on production (the tooling and a local drill
   are built), error tracking live verification. See
   [12-refinement.md](spec/active/12-refinement.md).
-- [ ] RF-1 through RF-17 product refinement: `Active - todo`, design
-  intent in [12-refinement.md](spec/active/12-refinement.md) Part 2.
+- [ ] RF-1 through RF-17 product refinement: `Active - todo`, no ticket
+  implemented. The Part 2 design task is complete and implementation-ready:
+  documentation and prototype authority agree, every workflow has an
+  implementation ticket, and each ticket names its visible outcome, current
+  versus proposed behavior, design reference, dependencies, API/DB changes,
+  acceptance scenarios, and regression checks. Design intent in
+  [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
+  there record the product questions that still need a founder ruling (public
+  address editing, offering search fields, price-plus-wording precedence,
+  contextual shortcut fields, chat-card width, the legacy Unread tab, and
+  whether resolution requires takeover).
 - [ ] Provider-backed `make eval` has no valid baseline: deterministic
   gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
   attempts). Needs a paid tier or a smaller eval slice.
@@ -122,7 +131,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder, RF-1 through RF-17 |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-1 through RF-17 (Part 2 spec completed and implementation-ready, no ticket implemented) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

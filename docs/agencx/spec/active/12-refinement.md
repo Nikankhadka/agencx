@@ -102,7 +102,11 @@ owner, urgency trigger, and validation command where applicable.
 small, connected tickets. RF-1 precedes visual ports. RF-7 follows the
 business-maintenance tickets; RF-8 and RF-9 follow it. RF-11 follows name
 capture, and continuity covers those resulting states. Queue filtering
-precedes split-pane work, which precedes integrated issue resolution.
+precedes split-pane work, which precedes integrated issue resolution. The
+Part 2 design task is complete: the documentation and the prototype authority
+agree, every workflow below has an implementation ticket, and each ticket is
+implementable without deciding product behavior (the `OPEN:` lines record the
+product questions that still need a founder ruling).
 
 Refine the existing application using selected reference workflows and the
 shipped Agencx visual language (Airbnb colour discipline, Plus Jakarta
@@ -114,12 +118,26 @@ independent publication. Allow go-live without uploaded documents or
 confirmed offerings, with clear next steps (20 narrowed this: a stated
 services overview is now required, though it is still not a priced catalog). Exclude old payment,
 scheduling, and Copilot screens from the Phase 1 experience. Each ticket
-specifies its visible outcome, current/proposed behavior, prototype states,
-dependencies, API changes, acceptance scenarios, and regression checks;
+specifies its visible outcome, current-versus-proposed behavior, design
+reference, dependencies, API/DB changes, acceptance scenarios, and regression
+checks;
 backend and frontend work for one usable outcome belong together. The UI
 standard of `design/conventions.md` section 6 applies unchanged: UI is
 ported from the prototype, never designed from ticket text; every visual
 value lands in `theme.css` as a token, never a hex in a component.
+
+**Design authority (D37).** The console screens are ported from
+`docs/agencx/design/prototypes/agencx-prototype-v6.html` plus
+`docs/agencx/design/frontend.md` section 4, which wins where the two disagree
+on spacing, type, radii, or elevation. The storefront authority is the shipped
+implementation under `frontend/src/app/[slug]/`; the archived v5 storefront is
+the accepted structure and interaction record, and the shipped code is what
+the refinement tickets read. No v7 prototype exists and none is required - the
+refinement was specified against a v7 that was never built and shipped against
+v6 plus `frontend.md` (see `spec/README.md` and D37). The convention at
+`design/conventions.md` section 6 is unchanged: UI is ported, never designed
+from ticket text, and each ticket below names its exact screen, render
+function, or shipped code path.
 
 The four switchable businesses - cafe, retail/repair, dental clinic, and
 general clinic - prove the domain-agnostic invariant visually: identical
@@ -155,102 +173,587 @@ knowledge review, and go-live boundaries.
 
 **Business maintenance:**
 
-- Core business-detail editing after launch (name, hours, description,
-  business contact), in the shipped ABN-editor sheet idiom; the public
-  address is a separate field and stays stable when the name changes. Saved
-  edits appear immediately on the Business page and in customer answers.
-- Searchable, category-grouped offerings; equal prices never merge distinct
-  offerings. Fixed price (numeric, calculable) versus pricing wording
-  (owner-confirmed display text such as "from $12 a head") - wording is
+- **RF-2** - Core business-detail editing after launch (name, hours,
+  description, business contact), in the shipped ABN-editor sheet idiom; the
+  public address is a separate field and stays stable when the name changes.
+  Saved edits appear immediately on the Business page and in customer answers.
+- **RF-3** - Searchable, category-grouped offerings; equal prices never merge
+  distinct offerings.
+- **RF-4** - Fixed price (numeric, calculable) versus pricing wording
+  (owner-confirmed display text such as "from $12 a head"); wording is
   display-only and never treated as a calculable amount on either surface.
-- One cover/offering-image workflow (upload, preview, replacement, removal)
-  with the same states (empty, uploading, preview, done, remove); removal is
-  explicit.
-- Contextual owner edit shortcuts open the same editors as the Business hub -
-  one editor per field kind, two entry points, explicit Save and Cancel.
-- Document review is clarified only; publication semantics unchanged.
+- **RF-5** - One cover/offering-image workflow (upload, preview, replacement,
+  removal) with the same states (empty, uploading, preview, done, remove);
+  removal is explicit.
+- **RF-6** - Document review is clarified only; publication semantics
+  unchanged.
 
 **Business page and customer presentation:**
 
-- Browse-first Business page (cover, identity, category-grouped offerings,
-  price summaries, links) with clearly labeled chat access. Offering card
-  (image, name, category, price or wording, one line); price summary shows
-  deterministic figures only, formatted from cents by `src/lib/money.ts`.
-- Customer chat is a desktop side panel (`lg+`) and a full-height mobile
-  sheet; the Business page stays reachable while chat is open.
-- Composer text is never sent automatically; contextual questions arrive
-  editable and composed text survives navigation and refresh.
+- **RF-7** - Browse-first Business page (cover, identity, category-grouped
+  offerings, price summaries, links) with clearly labeled chat access, plus
+  contextual owner edit shortcuts that open the same editors as the Business
+  hub - one editor per field kind, two entry points, explicit Save and Cancel.
+  Offering card (image, name, category, price or wording, one line); price
+  summary shows deterministic figures only, formatted from cents by
+  `src/lib/money.ts`.
+- **RF-8** - Customer chat is a desktop side panel (`lg+`) and a full-height
+  mobile sheet; the Business page stays reachable while chat is open.
+- **RF-9** - Offering and price-summary cards align on one width and chrome.
 
 **Customer identity and continuity:**
 
-- Answer while asking for a preferred name, at most two opening-phase name
-  requests; first name or nickname accepted without verification; no phone
-  number, email, or other contact detail collected during the opening phase.
-  Name shown, correctable, persisted across refresh; after the limit the prompt
-  stops silently. Contact is now captured deliberately at handoff instead,
-  scoped to the escalation (ticket `19`): one ask covers name and email, a
-  name-only answer is accepted, and the email is chased once more only for an
-  order, quote, or booking.
-- Visible **Ask for a person** action; the handoff always happens, and when
-  contact is incomplete the handoff reply asks once - the ask never gates or
-  blocks the escalation. Refused or unanswered handoffs stay in the owner's All
-  view; operational alerts may still use the conversation reference.
-- Conversation content, structured cards, and relevant state restore after
-  same-tab refresh. Failed sends recover in place with the draft preserved -
-  explicit retry in the failed-bubble idiom, no unsafe automatic replay.
+- **RF-10** - Answer while asking for a preferred name. The opening phase is
+  the window before the first escalation or handoff; during it the assistant
+  asks for a preferred name at most twice. First name or nickname is accepted
+  without verification, and no phone number, email, or other contact detail is
+  collected. The preferred name shows on the customer surface in a small chip
+  and is correctable in natural language, which routes to
+  `set_customer_contact`; it persists across refresh, and after the two-ask cap
+  the prompt stops silently. Contact is captured deliberately at handoff
+  instead, scoped to the escalation (ticket `19`): one ask covers name and
+  email, a name-only answer is accepted, and the email is chased once more only
+  for an order, quote, or booking.
+- **RF-11** - Visible **Ask for a person** action; the handoff always happens,
+  and when contact is incomplete the handoff reply asks once - the ask never
+  gates or blocks the escalation. Refused or unanswered handoffs stay in the
+  owner's All view; operational alerts may still use the conversation
+  reference.
+- **RF-12** - Conversation content, structured cards, and relevant state
+  (conversation id, composer draft, handoff or escalated banner) restore after
+  same-tab refresh; card payloads restore from the customer-safe `response`
+  payload in `messages.metadata`.
+- **RF-13** - Failed sends recover in place with the exact failed payload and
+  the draft preserved - explicit retry in the failed-bubble idiom, no unsafe
+  automatic replay.
 
 **Owner work queue:**
 
-- Chats opens on **Needs you** (unresolved issues + active human-handled);
-  All and Human handled retained. One row per conversation (identity or
+- **RF-14** - Chats opens on **Needs you**, defined as an open escalation
+  (`escalations.status <> 'resolved'`) or `conversations.status = 'human'`;
+  All and Human handled are retained. One row per conversation (identity or
   conversation reference, attention reason, handler, waiting time) with
-  attention counts beside the tabs; filtering, searching, and pagination
-  apply to the complete dataset (verified past 200 conversations).
-- Takeover, reply, issue resolution, and handback stay distinct; replying or
-  handing back never silently resolves - resolution is explicit with its own
-  confirmation, shown in the shipped `thr-pill` stamp idiom. Unanswered
-  questions without handoff stay in All unless an operational failure
-  requires attention.
-- Desktop (`lg+`) split pane (list left, thread right, no navigation);
-  mobile keeps list-then-thread with the bar preserved.
+  attention counts beside the tabs; filtering, searching, and pagination apply
+  to the complete dataset (verified past 200 conversations), and paging is
+  "Load more" backed by a server total. Unanswered questions without a handoff
+  stay in All unless an operational failure requires attention.
+- **RF-15** - Desktop (`lg+`) split pane (list left, thread right, no
+  navigation); mobile keeps list-then-thread with the bar preserved, and
+  `/chats/[id]` survives as a deep link inside the split pane.
+- **RF-16** - Takeover, reply, issue resolution, and handback stay distinct;
+  replying or handing back never silently resolves - resolution is explicit
+  with its own confirmation and writes an owner-only `thr-pill` system stamp,
+  with an optional customer-facing message, shown in the shipped `thr-pill`
+  stamp idiom.
+
+**Cross-cutting:** composer text is never sent automatically; contextual
+questions arrive editable. This applies to every ticket below.
 
 **Home:** unchanged in behavior (greeting plus the brief); refinement
 restyles through shared tokens only (RF-1). Brief cards include the queue
-attention count when Needs you is non-empty.
+attention count when Needs you is non-empty (RF-14).
 
 ### Tickets
 
-- **RF-1**: Shared typography, surfaces, controls, responsive navigation,
-  and focus behavior; preserves routes and flow order. Row grammar (icon or
-  identity slot, primary line, meta line, trailing action) reused across
-  list screens. `:focus-visible` ring on every interactive element, focus
-  restoration after sheets close, scroll preserved on list return. U-1
-  through U-4 below are landed pre-work for this ticket.
-- **RF-2**: Business-detail editing and immediate consistency with customer
-  answers.
-- **RF-3**: Offering search and category grouping.
-- **RF-4**: Explicit pricing wording across editing, publication, and
-  customer display.
-- **RF-5**: Cover and offering-image workflows.
-- **RF-6**: Document-review workspace clarification, semantics unchanged.
-- **RF-7**: Business page composition and contextual owner editing.
-- **RF-8**: Desktop customer chat panels and mobile sheets.
-- **RF-9**: Offering and price-summary card alignment.
-- **RF-10**: Preferred-name capture, correction, and persisted prompt
-  limits.
-- **RF-11**: Visible human-help action and name-gated requested handoff.
-- **RF-12**: Same-tab refresh restoration of content, cards, and state.
-- **RF-13**: Failed-send recovery and draft preservation.
-- **RF-14**: Complete-dataset queue filtering, searching, pagination, and
-  attention counts.
-- **RF-15**: Desktop split-pane Chats, mobile navigation preserved.
-- **RF-16**: Explicit issue resolution in the conversation workspace;
-  customer-facing handoff copy matches the shipped bubble; transcript
-  consistency across takeover, reply, resolution, handback, and refresh.
-- **RF-17**: Four-business walkthroughs with visual evidence (screenshots
-  per state) and behavioral evidence (e2e checks), plus the ledger of what
-  was verified where. Existing checks run within every ticket; RF-17
-  verifies the assembled experience rather than postponing testing.
+Each ticket keeps `Status: Active - todo`; none is implemented by this design
+task. "Current" restates the read-only audit of 2026-10-02 and "Proposed" is the
+agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
+9 bind every ticket.
+
+#### RF-1: Shared typography, surfaces, controls, navigation, and focus
+
+- **Status:** Active - todo.
+- **Visible outcome:** Every console screen shares one type rhythm, surface,
+  control, and navigation language; list rows read as one grammar (identity or
+  icon slot, primary line, meta line, trailing action); keyboard focus is
+  always visible, focus returns after a sheet closes, and a list restores its
+  scroll position when the owner returns. Routes and flow order do not change.
+  U-1 through U-4 are landed pre-work.
+- **Current vs proposed:** Current: U-1 through U-4 shipped shared navigation,
+  buttons, the confirm dialog, and toasts; row grammar is not unified -
+  `components/ui/RowLink.tsx` carries icon, label, detail, and chevron only,
+  with no identity or trailing slot, and Chats, Home, records, and admin lists
+  each build their own row; no scroll preservation exists under `frontend/src`;
+  no E2E asserts a `:focus-visible` ring. Proposed: extend or add a row
+  primitive with identity and trailing slots, migrate the list screens, add
+  focus restoration and scroll preservation, and pin focus visibility with a
+  Playwright check.
+- **Design reference:** `agencx-prototype-v6.html` `#tabbar`, `#screen-layer`,
+  `.dst-topbar`, and the `.bh-row` grammar inside `renderScreen('business')`;
+  `design/frontend.md` sections 4 and 7. Shipped:
+  `frontend/src/components/ui/RowLink.tsx`, `TabBar.tsx`, `ScreenTopbar.tsx`,
+  `Container.tsx`, and the `:focus-visible` rule in
+  `frontend/src/app/globals.css`.
+- **Dependencies:** None. This ticket precedes the visual ports RF-2 through
+  RF-16.
+- **API/DB changes:** None.
+- **Acceptance scenarios:** A keyboard-only owner tabs through Home, Chats, and
+  Business and always sees a focus ring; opening and closing a sheet returns
+  focus to the control that opened it; scrolling a long list, opening a row,
+  and returning restores the scroll position; the migrated rows render the same
+  slots at 360px and 1024px.
+- **Regression checks:** `make lint-frontend`, `make typecheck-frontend`,
+  `make test-frontend`, and `make test-e2e`; the existing U-1 through U-4 checks
+  stay green.
+
+#### RF-2: Business-detail editing and immediate consistency
+
+- **Status:** Active - todo.
+- **Visible outcome:** The owner edits business name, hours, description, and
+  business contact after go-live from the Business hub, in the shipped sheet
+  idiom; saved edits appear on the Business page and in customer answers. The
+  public address is a separate field and stays stable when the name changes.
+- **Current vs proposed:** Current: `/business/details` reads back ABN/GST,
+  services, and assistant voice; none of business name, hours, description, or
+  business contact has an editor, and `PATCH /api/business/profile` refuses
+  extra keys (`backend/app/features/business/api.py` `ProfileUpdate`). Proposed:
+  add an editor per field kind over the same save path, extend the profile
+  model and update handler to accept the new fields, and revalidate that
+  customer answers read the updated profile.
+- **Design reference:** `agencx-prototype-v6.html` `renderScreen('settings')`
+  `.set-field-row` rows and `openSettingsEdit(idx)` sheet; `design/frontend.md`
+  section 4.4 sheet-field recipe. Shipped:
+  `frontend/src/app/(tenant-admin)/(console)/business/details/page.tsx`,
+  `AbnSheet.tsx`, and `backend/app/features/business/api.py` `BusinessProfile` /
+  `ProfileUpdate`.
+- **Dependencies:** RF-1. The field editors follow the same idiom RF-7 uses.
+- **API/DB changes:** Extend `BusinessProfile` and `ProfileUpdate` with `name`,
+  `hours`, `description`, and `business_contact`; store on `tenant_config` or
+  the existing profile storage; no new table.
+- **Acceptance scenarios:** Edit name, hours, description, and contact in turn;
+  each appears immediately on the Business page and in the customer chat's
+  answers; changing the name does not change the public address or link.
+- **Regression checks:** Tenant isolation and onboarding-confirmed values stay
+  intact; the existing ABN, services, and voice editors still save;
+  `make test-backend`, `make test-frontend`, and `make test-e2e`.
+- **OPEN:** whether the public address gains a post-launch editor in this pass,
+  or stays a go-live-only choice from M-4 US-3.
+
+#### RF-3: Offering search and category grouping
+
+- **Status:** Active - todo.
+- **Visible outcome:** The owner searches offerings and sees them grouped by
+  category; two distinct offerings that happen to share a price never merge
+  into one row.
+- **Current vs proposed:** Current: category grouping ships in `CatalogCard.tsx`
+  and migration `0034`; the owner offerings editor and the storefront render
+  groups, but no offering search exists. Proposed: add search to the owner
+  offerings editor and the storefront catalog, and assert that equal-priced
+  distinct offerings stay distinct.
+- **Design reference:** Shipped storefront
+  `frontend/src/app/[slug]/Offerings.tsx` (`sectionsOf`) and
+  `frontend/src/components/ui/CatalogCard.tsx`; owner editor
+  `frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx`;
+  category model in `backend/migrations/0034_offering_category_memberships.sql`.
+  v6 has no offerings screen; use its `.chat-row` list grammar with
+  `openChatsSearch()` / `filterChats()` for the search bar.
+- **Dependencies:** RF-1.
+- **API/DB changes:** Add a `search` query parameter to
+  `GET /api/business/offerings` and the storefront catalog read; no schema
+  change (category memberships already exist).
+- **Acceptance scenarios:** Typing a partial offering name filters the list; a
+  price-shared pair shows as two rows; clearing the search restores every
+  group; a category with one member still renders.
+- **Regression checks:** The grouping tests in `CatalogCard.test.tsx` and
+  `Offerings.test.tsx` stay green; storefront grouping at 6 and 7 or more
+  offerings.
+- **OPEN:** whether search matches name only or name, description, and category.
+
+#### RF-4: Explicit pricing wording across editing, publication, and customer display
+
+- **Status:** Active - todo.
+- **Visible outcome:** An offering carries either a fixed price (numeric,
+  calculable) or owner-confirmed pricing wording (such as "from $12 a head");
+  wording is display-only and never becomes a calculable amount on either
+  surface.
+- **Current vs proposed:** Current: offerings carry `price_cents` only
+  (`backend/app/features/business/api.py` `OfferingCreate` / `OfferingUpdate`);
+  no display-only pricing wording exists anywhere. Proposed: add a
+  `pricing_wording` field through the offering API, the owner editor, the
+  storefront card, the detail sheet, and `CatalogCard`; the
+  deterministic-pricing invariant still holds because wording never enters the
+  pricing engine.
+- **Design reference:** Shipped `frontend/src/app/[slug]/Offerings.tsx`
+  `OfferingRow` and `Storefront.tsx` detail sheet; owner editor
+  `business/components/OfferingsList.tsx`; `frontend/src/lib/money.ts`. v6
+  quote lines (`openQuotePreview`) show the money-rendering idiom only.
+- **Dependencies:** RF-3.
+- **API/DB changes:** Add a nullable `pricing_wording text` column to
+  `offerings` (migration with the implementation ticket) and expose it on
+  create, update, and read.
+- **Acceptance scenarios:** Save wording on an offering with no fixed price and
+  see it on the storefront card and detail; the assistant never derives a total
+  from wording; a priced offering still formats from cents through `money.ts`;
+  wording longer than the cap is refused with a readable message.
+- **Regression checks:** The deterministic-pricing tests stay green; the price
+  gate rejects any model-authored amount; the storefront tests for priced and
+  unpriced offerings.
+- **OPEN:** what to render on the storefront and in chat when one offering
+  carries both a fixed price and pricing wording, and whether the API allows
+  both to be set.
+
+#### RF-5: Cover and offering-image workflows
+
+- **Status:** Active - todo.
+- **Visible outcome:** One cover/offering-image workflow covers upload, preview,
+  replacement, and removal, with the same states everywhere (empty, uploading,
+  preview, done, remove); removal is explicit.
+- **Current vs proposed:** Current: the cover photo ships (E-6, Cloudinary) and
+  offering media has an upload/preview field; a single unified workflow across
+  cover and offering images, and explicit removal states, are partial.
+  Proposed: unify the two on one media component and add an explicit remove
+  state.
+- **Design reference:** `agencx-prototype-v6.html` `renderScreen('booking')`
+  `.bk-photo-wrap` with the "Edit photo" control; `design/frontend.md` section
+  6 `FileDropzone` (images are refused for knowledge, not for brand assets).
+  Shipped: `business/page/components/CoverPhoto.tsx`,
+  `business/components/OfferingMediaField.tsx`, and the Cloudinary adapter
+  behind the media endpoints.
+- **Dependencies:** RF-1.
+- **API/DB changes:** Reuse the existing upload and delete endpoints; add an
+  explicit removal call for the cover if one is missing; no schema change.
+- **Acceptance scenarios:** Upload a cover, replace it, and remove it back to
+  the empty state; upload, replace, and remove an offering image; a failed
+  upload recovers without leaving a partial state.
+- **Regression checks:** The E-6 cover tests, the Cloudinary rollback, and the
+  legacy `tenant_assets` reads stay green.
+- **OPEN:** none.
+
+#### RF-6: Document-review workspace clarification, semantics unchanged
+
+- **Status:** Active - todo.
+- **Visible outcome:** The document-review workspace is clearer to read and
+  edit; publication semantics do not change and no new review behavior is
+  added.
+- **Current vs proposed:** Current: the review sheet ships (O-3, W-8) with
+  read-first documents, capped offering cards, duplicate decisions, and inline
+  editing. Proposed: clarification only - copy, ordering, and state labels -
+  with no change to what saves or publishes.
+- **Design reference:** Shipped
+  `frontend/src/app/(tenant-admin)/(console)/business/details/knowledge/components/ReviewSheet.tsx`
+  and `knowledge/page.tsx`; `design/frontend.md` S2 states table and the W-8
+  paragraph.
+- **Dependencies:** RF-1.
+- **API/DB changes:** None.
+- **Acceptance scenarios:** Every existing review path still saves the same
+  content; nothing answers a customer before Save; the changed copy reads
+  correctly at mobile and desktop widths.
+- **Regression checks:** `make test-e2e` knowledge-review and
+  knowledge-review-mobile specs stay green.
+- **OPEN:** none.
+
+#### RF-7: Business page composition and contextual owner editing
+
+- **Status:** Active - todo.
+- **Visible outcome:** The public business page is browse-first (cover,
+  identity, category-grouped offerings, price summaries, links) with clearly
+  labeled chat access, and the owner reaches the same field editors from
+  contextual shortcuts on that page.
+- **Current vs proposed:** Current: the browse-first business page and
+  storefront ship (M-4, M-7); no contextual owner edit shortcuts exist; the
+  storefront price label does inline arithmetic in `priceLabel`
+  (`frontend/src/app/[slug]/Offerings.tsx:58-60`) instead of
+  `src/lib/money.ts`. Proposed: add contextual shortcuts that open the RF-2
+  editors, keep one editor per field kind and two entry points, and route the
+  storefront price display through `money.ts`.
+- **Design reference:** `agencx-prototype-v6.html` `renderScreen('booking')` and
+  `renderScreen('business')`; the archived v5 storefront is the accepted
+  structure record. Shipped: `frontend/src/app/[slug]/Storefront.tsx`,
+  `StorefrontHero.tsx`, `Offerings.tsx`, and `business/page/components/`.
+- **Dependencies:** RF-1 and RF-2.
+- **API/DB changes:** None beyond RF-2; replace `priceLabel`'s arithmetic with
+  `formatCents`.
+- **Acceptance scenarios:** A contextual shortcut opens the field's editor with
+  the current value, Save updates the page and customer answers, and Cancel
+  changes nothing; the storefront renders the same price as the owner editor.
+- **Regression checks:** The storefront tests, the `money.ts` contract tests,
+  and the deterministic-pricing tests stay green.
+- **OPEN:** which fields warrant a contextual shortcut on the Business page
+  (name, hours, description, contact), and whether the public address is among
+  them.
+
+#### RF-8: Desktop customer chat panels and mobile sheets
+
+- **Status:** Active - todo.
+- **Visible outcome:** On `lg+` the customer chat is a side panel that leaves
+  the business page reachable; below `lg` it is a full-height sheet.
+- **Current vs proposed:** Current: chat renders as a mobile `Sheet` only; no
+  `lg+` desktop side panel exists. Proposed: add the `lg+` side panel while
+  keeping the mobile sheet, with the business page visible beside it.
+- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx`,
+  `Storefront.tsx` (sheet host), and `components/ui/Sheet.tsx`;
+  `design/frontend.md` S3. v6 is mobile-only.
+- **Dependencies:** RF-7.
+- **API/DB changes:** None.
+- **Acceptance scenarios:** At 1024px the chat opens beside the page and the
+  page stays scrollable and interactive; at 360px the sheet is full height with
+  the composer reachable; closing the panel restores the page state.
+- **Regression checks:** The storefront E2E at both widths; focus trap and
+  `aria-modal` behavior for the sheet.
+- **OPEN:** none.
+
+#### RF-9: Offering and price-summary card alignment
+
+- **Status:** Active - todo.
+- **Visible outcome:** The offering card and the price-summary card share one
+  width and chrome so they read as one family.
+- **Current vs proposed:** Current: grouping logic is already correct in
+  `CatalogCard.tsx`; the only mismatch is width and chrome -
+  `PriceSummaryCard.tsx` and `QuoteCard.tsx` use `max-w-[420px]`, while
+  `CatalogCard.tsx` uses `max-w-[520px]`. Proposed: pick one width and one
+  chrome and apply it to all three cards.
+- **Design reference:** Shipped `frontend/src/components/ui/CatalogCard.tsx`,
+  `PriceSummaryCard.tsx`, and `QuoteCard.tsx`; `design/frontend.md` section 6
+  `QuoteCard`.
+- **Dependencies:** RF-1, RF-4, and RF-7.
+- **API/DB changes:** None.
+- **Acceptance scenarios:** The offering, price-summary, and quote cards
+  left-align in one column at the same width and share padding, radius, and
+  header treatment.
+- **Regression checks:** `CatalogCard.test.tsx` and `PriceSummaryCard.test.tsx`
+  stay green; a visual check at 360px and 1024px.
+- **OPEN:** whether 420px or 520px becomes the canonical chat-card width.
+
+#### RF-10: Preferred-name capture, correction, and persisted prompt limits
+
+- **Status:** Active - todo.
+- **Visible outcome:** During the opening phase the assistant asks for a
+  preferred name at most twice; the name is shown on the customer surface in a
+  small chip, correctable by natural language, persists across refresh, and the
+  prompt stops silently after the cap.
+- **Current vs proposed:** Current: no opening-phase name ask or counter exists;
+  the customer surface shows no name; `customer_ref` storage and owner display
+  ship. Proposed: define the opening phase, persist the ask counter in a new
+  `conversations` column, and add the customer-facing name chip and correction
+  path through `set_customer_contact`.
+- **Design reference:** `agencx-prototype-v6.html` `initName()` name pill in the
+  onboarding thread (`#ni`); the opened account shows the customer reference.
+  Shipped: `backend/app/agents/agent_node.py` `set_customer_contact`
+  (`_set_customer_contact_impl`) and
+  `frontend/src/app/[slug]/CustomerChat.tsx` header.
+- **Dependencies:** RF-1. RF-11 follows name capture.
+- **API/DB changes:** Add `conversations.opening_name_asks integer not null
+  default 0` (migration with the implementation ticket); expose `customer_ref`
+  on the customer chat read so the chip can render; the counter increments on
+  each opening-phase name prompt and caps at two.
+- **Acceptance scenarios:** The first two opening-phase name prompts show; a
+  third non-answer stops the prompt silently; a first name or nickname is
+  accepted without verification; the chip shows the stored name; a
+  natural-language correction ("call me Sam") updates `customer_ref` and the
+  chip; a refresh keeps the chip; no phone, email, or other contact detail is
+  collected.
+- **Regression checks:** Ticket 19's handoff contact capture and its
+  never-blocking behavior stay green; name refusal, correction, and duplicate
+  names; the public transcript stays leak-free.
+- **OPEN:** none.
+
+#### RF-11: Visible human-help action and requested handoff
+
+- **Status:** Active - todo.
+- **Visible outcome:** A visible **Ask for a person** control lets the customer
+  request a human; the handoff always happens, and when contact is incomplete
+  the handoff reply asks once. The ask never gates or blocks the escalation.
+- **Current vs proposed:** Current: handoff row-first, one contact ask, and
+  never-gating ship (ticket 19); the visible **Ask for a person** control is
+  absent, so a customer cannot request a human explicitly. Proposed: add the
+  control, wire it to the existing escalation/handoff path, and keep the
+  handoff unconditional. The ticket title no longer implies the handoff is
+  gated on a name.
+- **Design reference:** `agencx-prototype-v6.html` thread handoff behavior and
+  `renderThreadScreen`; `design/frontend.md` S1 `Handed off (C-5)` state.
+  Shipped: `components/ui/EscalationBanner.tsx`,
+  `backend/app/agents/agent_node.py` escalation tool, and ticket 19 behavior in
+  `backend/app/agents/escalation.py`.
+- **Dependencies:** RF-10. Continuity (RF-12) covers the resulting states.
+- **API/DB changes:** Reuse the existing escalation and handoff endpoints; the
+  control posts the same request the assistant's escalation tool records; no
+  schema change.
+- **Acceptance scenarios:** Tapping **Ask for a person** creates an escalation
+  and the handoff reply; an incomplete contact asks once and never blocks; the
+  escalation appears in the owner's Needs you queue; the public transcript
+  leaks no contact detail; an already-open escalation does not hand off twice.
+- **Regression checks:** Ticket 19's tests and the escalation-scoped contact
+  capture stay green.
+- **OPEN:** none.
+
+#### RF-12: Same-tab refresh restoration of content, cards, and state
+
+- **Status:** Active - todo.
+- **Visible outcome:** After a same-tab refresh the conversation content,
+  structured cards, and relevant state restore: the conversation id, composer
+  draft, and handoff or escalated banner.
+- **Current vs proposed:** Current: `conversationId` lives in memory
+  (`CustomerChat.tsx`); nothing persists it; the history endpoint
+  `GET /api/chat/{conversation_id}/messages` returns only `id`, `role`,
+  `content`, and `created_at` and filters to `customer`, `assistant`, and
+  `human_agent` (`backend/app/features/chat/api.py` and `service.py`), so cards
+  and stamps cannot restore. Proposed: persist the conversation id, draft, and
+  banner state in the browser for the same tab, widen the history query to
+  return the customer-safe `response` card payload read from
+  `messages.metadata`, and restore quote, catalog, and price-summary cards from
+  that payload.
+- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx` and
+  `backend/app/features/chat/api.py` / `service.py`; card payloads in
+  `messages.metadata` (`backend/migrations/0012_messages_metadata.sql`);
+  `design/frontend.md` S1 `Drop-off / return` state.
+- **Dependencies:** RF-11 for the handoff and escalated banner states. Queue
+  filtering and split-pane work do not block this.
+- **API/DB changes:** Widen `PublicMessage` and `list_messages` to return the
+  customer-safe `response` card payload only, read from `messages.metadata`;
+  never the raw metadata blob, which holds owner-only inspection verdicts,
+  intent, action, and timing (D41). No schema change (`messages.metadata`
+  exists).
+- **Acceptance scenarios:** Send a few turns, refresh, and see the transcript,
+  any quote/catalog/price-summary card, the unsent draft, and the handoff or
+  escalated banner restored; a refresh with no conversation renders the opening
+  state; a human reply still polls in after restore.
+- **Regression checks:** The customer transcript poll, ticket 19's leak-free
+  transcript, and the existing chat-stream tests stay green.
+- **OPEN:** none.
+
+#### RF-13: Failed-send recovery and draft preservation
+
+- **Status:** Active - todo.
+- **Visible outcome:** A failed send recovers in place: the failed bubble offers
+  an explicit retry that replays the exact failed payload, and the draft
+  survives the failure. Nothing replays automatically.
+- **Current vs proposed:** Current: an error state and Retry exist in-session,
+  but Retry replays the previous bubble rather than the failed payload
+  (`CustomerChat.tsx` reads `messages[index - 1]?.text`), and the draft is
+  cleared before send and not restored. Proposed: keep the draft in a slot
+  cleared only on success, and retry the stored failed payload.
+- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx` send,
+  error, and retry paths; `design/frontend.md` S1 and S3 `Error / disconnect`
+  states (inline retry in the failed bubble).
+- **Dependencies:** RF-12 (draft persistence).
+- **API/DB changes:** None.
+- **Acceptance scenarios:** Force a network failure, confirm the draft stays in
+  the composer and the failed bubble carries Retry; Retry sends the exact
+  original text once; a success clears the draft; no automatic replay occurs.
+- **Regression checks:** The `redraft` price-gate path and the existing
+  error-state tests stay green.
+- **OPEN:** none.
+
+#### RF-14: Complete-dataset queue filtering, searching, pagination, and attention counts
+
+- **Status:** Active - todo.
+- **Visible outcome:** Chats opens on **Needs you** (an open escalation or
+  `conversations.status = 'human'`); All and Human handled are retained. Rows
+  carry identity or reference, attention reason, handler, and waiting time;
+  attention counts sit beside the tabs; filter, search, and paging apply to the
+  complete dataset with a server total behind "Load more".
+- **Current vs proposed:** Current: tabs are All/Action needed/Unread with no
+  Needs you or Human handled; there is no handler field; the client filters the
+  first 50 rows only (`chats/page.tsx`); there is no pagination; attention
+  counts appear only on the nav tab. Proposed: server-side filter, search, and
+  paging with a total; a derived `handler` field; counts beside the tabs.
+- **Design reference:** `agencx-prototype-v6.html` `renderScreen('chats')`
+  `.chat-row` and filter row, `openChatsSearch()` / `filterChats()`;
+  `design/frontend.md` S1 owner-surface paragraph. Shipped:
+  `frontend/src/app/(tenant-admin)/(console)/chats/page.tsx`,
+  `home/lib/brief.ts`, and `components/ui/TabBar.tsx`.
+- **Dependencies:** RF-1. Queue filtering precedes split-pane work (RF-15).
+- **API/DB changes:** Extend `GET /api/conversations` with `q` (search), a
+  `needs_you` / `human` filter, and a server total (response envelope or
+  `X-Total-Count`); add a derived `handler` field to `ConversationSummary` from
+  `conversations.status = 'human'`; no new column required. Pagination keeps
+  `limit`/`offset` and returns the total for "Load more".
+- **Acceptance scenarios:** Seed 200 or more conversations including older
+  unresolved issues beyond the first page; Needs you returns open escalations
+  and human-handled threads; All returns everything; Human handled returns only
+  `status = 'human'`; search matches a name or reference across the whole
+  dataset, not the first page; "Load more" appends and stops at the total; the
+  tab counts match the dataset.
+- **Regression checks:** Tenant isolation on the conversations read; the
+  existing Chats list and Home brief tests stay green.
+- **OPEN:** whether the legacy **Unread** tab survives alongside Needs you, All,
+  and Human handled, or is dropped.
+
+#### RF-15: Desktop split-pane Chats, mobile navigation preserved
+
+- **Status:** Active - todo.
+- **Visible outcome:** At `lg+` Chats is a split pane (list left, thread right)
+  with no navigation between them; mobile keeps list-then-thread with the
+  bottom bar preserved. `/chats/[id]` remains a deep link that opens the thread
+  in the split pane.
+- **Current vs proposed:** Current: list and thread are separate routes reached
+  by navigation; no split pane exists. Proposed: add the `lg+` split pane while
+  keeping both routes; `/chats/[id]` selects the thread pane.
+- **Design reference:** `agencx-prototype-v6.html` `renderScreen('chats')` plus
+  `renderThreadScreen` (list-then-screen in v6; the split pane is the `lg+`
+  composition of the same two); `design/frontend.md` section 7 tenant console
+  shell. Shipped: `chats/page.tsx` and `chats/[id]/page.tsx`.
+- **Dependencies:** RF-14 (queue filtering precedes split-pane work).
+- **API/DB changes:** None.
+- **Acceptance scenarios:** At 1024px, selecting a row loads the thread in the
+  right pane and keeps the list; `/chats/[id]` deep-links to the same state; at
+  360px the list navigates to the full thread with the bar visible; browser
+  back returns to the list state.
+- **Regression checks:** The existing Chats E2E, focus order, and the mobile bar
+  behavior stay green.
+- **OPEN:** none.
+
+#### RF-16: Explicit issue resolution in the conversation workspace
+
+- **Status:** Active - todo.
+- **Visible outcome:** From the conversation workspace the owner resolves an
+  issue explicitly, with its own confirmation and an owner-only `thr-pill`
+  system stamp; an optional customer-facing message may accompany the
+  resolution. Replying or handing back never silently resolves. Takeover,
+  reply, resolution, and handback stay distinct, and the owner and customer
+  transcripts agree across all four and a refresh.
+- **Current vs proposed:** Current: the resolve endpoint exists
+  (`POST /api/escalations/{id}/resolve`) but its UI is the hidden Wren-era
+  `/escalations` table; the thread has takeover, handback, reply, and delete
+  only; resolve writes no stamp; handback already never silently resolves.
+  Proposed: move resolution into the thread, write a `system` message stamp on
+  resolve, allow an optional customer-facing message, and keep reply and
+  handback from resolving anything. Customer-facing handoff copy matches the
+  shipped bubble.
+- **Design reference:** `agencx-prototype-v6.html` `renderThreadScreen`
+  `.thr-pill` stamps and `alexTko` / `alexHbk`; `design/frontend.md` S1 `The
+  owner's side of the same surface (C-6)`. Shipped: `chats/[id]/page.tsx`,
+  `backend/app/features/escalations/api.py` (`ResolveRequest`), and `service.py`
+  `resolve`.
+- **Dependencies:** RF-14 and RF-15.
+- **API/DB changes:** `resolve` writes an owner-only `system` message (the
+  `thr-pill` stamp); the existing optional message becomes a `human_agent`
+  message. No schema change (`messages.role` already allows `system`).
+- **Acceptance scenarios:** Resolving from the thread asks for confirmation,
+  writes a stamp, and optionally posts a customer-visible message; reply alone
+  does not resolve; handback alone does not resolve; after resolving, the issue
+  leaves Needs you and the stamp survives a refresh; the customer transcript
+  shows the optional message and not the owner-only stamp.
+- **Regression checks:** The escalations resolve tests, ticket 19's transcripts,
+  and the never-silent-resolve behavior stay green.
+- **OPEN:** whether resolution is available from the "Handling" state or only
+  after the owner takes over.
+
+#### RF-17: Four-business walkthroughs with visual and behavioral evidence
+
+- **Status:** Active - todo.
+- **Visible outcome:** Four businesses (cafe, retail/repair, dental clinic, and
+  general clinic) are walked on identical workflow code with
+  configuration-driven content, with screenshots per state and E2E checks, plus
+  a ledger of what was verified where.
+- **Current vs proposed:** Current: four-business visual and behavioral
+  walkthroughs and the evidence ledger are specified but not yet assembled for
+  the refined experience. Proposed: run every ticket's existing checks within
+  each ticket, then verify the assembled experience once across all four
+  businesses. RF-17 verifies the assembled experience rather than postponing
+  testing.
+- **Design reference:** Existing walkthrough evidence under
+  `docs/agencx/evidence/` and the four seeded businesses; no prototype change.
+  Shipped: `frontend/e2e/`.
+- **Dependencies:** RF-1 through RF-16.
+- **API/DB changes:** None.
+- **Acceptance scenarios:** Each business completes the refined owner queue,
+  business page, storefront, and customer chat flows with config-only
+  differences; every screenshot maps to a named E2E check; the ledger names the
+  environment and date; a cross-tenant check proves isolation.
+- **Regression checks:** `make test-e2e`, `make eval-skip-llm`, and the
+  deterministic pricing and domain-agnostic invariant tests.
+- **OPEN:** none.
 
 ### Verification and boundaries
 

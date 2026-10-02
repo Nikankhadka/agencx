@@ -1307,3 +1307,139 @@ the tenant filter each makes a test fail.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches on
 a tenant's vertical.
+
+## D37: The refinement design authority is v6 plus frontend.md plus the shipped storefront
+
+**Decision.** The RF refinement in `docs/agencx/spec/active/12-refinement.md`
+Part 2 is ported from the console prototype
+`docs/agencx/design/prototypes/agencx-prototype-v6.html` together with
+`docs/agencx/design/frontend.md` section 4, which wins where the two disagree
+on spacing, type, radii, or elevation. The storefront authority is the shipped
+implementation under `frontend/src/app/[slug]/`, with the archived v5
+storefront as the accepted structure and interaction record. No v7 prototype
+exists and none is required.
+
+**Why.** The refinement was originally specified against a v7 prototype that
+was never built; the shipped refinement landed against v6 plus `frontend.md`.
+`spec/README.md` and `frontend.md` already say so. Naming the authority in the
+spec closes the gap between the ticket text and the artifact a builder reads,
+and keeps `design/conventions.md` section 6 intact: UI is ported, never
+designed from ticket text, and each ticket names its exact screen, render
+function, or shipped path.
+
+**Boundary:** a documentation and prototyping decision only; it produces no
+monetary amount and branches on no tenant's vertical.
+
+## D38: "Needs you" is a server query over the complete dataset, not a client filter
+
+**Decision.** The Chats queue's **Needs you** tab is an open escalation
+(`escalations.status <> 'resolved'`) or a conversation a human has taken over
+(`conversations.status = 'human'`). `GET /api/conversations` answers filter,
+search, and paging over the complete tenant dataset: a `q` search parameter, a
+`needs_you` / `human` filter, and a server total the client uses to back "Load
+more". The list carries a derived `handler` field (`human` when
+`conversations.status = 'human'`, otherwise the assistant). No new column is
+required; the field is derived from status, which is the state the tab already
+keys on.
+
+**Why.** The shipped client filters only the first 50 rows, so a queue with
+200 or more conversations hides older unresolved issues behind a page bound
+that looks like a complete answer. The dataset is the thing being triaged, so
+the predicate, the search, the count, and the page all belong on the server
+where the whole set is visible. A derived handler keeps the schema honest: the
+handler is who is replying, and `conversations.status` already records exactly
+that. Unanswered questions with no handoff stay in All, because an absence of
+attention is not attention.
+
+**Why a total, not an inferred end.** "Load more" needs a stop. Without a
+server total the client either guesses by page size (wrong whenever the last
+page is partial) or keeps offering a load that returns nothing. The count is
+already computed for the tab badges, so returning it costs one query.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D39: The opening phase is explicit, and the preferred-name ask counter is persisted
+
+**Decision.** The opening phase is the window before the first escalation or
+handoff. During it the assistant asks for a preferred name at most twice; the
+count is persisted on the conversation in a new
+`conversations.opening_name_asks integer not null default 0` column (the
+migration ships with the implementation ticket). First name or nickname is
+accepted without verification, no phone, email, or other contact detail is
+collected, and after the cap the prompt stops silently. The preferred name is
+stored in `conversations.customer_ref`, shown on the customer surface in a
+small chip, and correctable in natural language, which routes to the existing
+`set_customer_contact` tool.
+
+**Why.** The earlier text said "at most two opening-phase name requests" but
+named neither the phase nor where the counter lives, so two implementations
+could disagree on when it resets. Anchoring the phase to the first escalation
+or handoff gives it a boundary both surfaces can compute. It persists on the
+row rather than in the agent's turn state because a refresh must not hand the
+customer a third ask; that is the same reason the name itself persists. The
+chip makes the captured name visible and correctable instead of an invisible
+field, and it is the one identity affordance on the customer surface until
+handoff.
+
+**Contact stays at handoff.** This decision does not reopen ticket 19: no
+contact detail is collected during the opening phase, and the one name-plus
+email ask still belongs to the escalation. The two are separate concerns - a
+display name for the conversation, and a reachable contact for the business.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D40: Resolution is explicit and stamps the thread; replying and handing back never resolve
+
+**Decision.** Resolving an issue from the conversation workspace is an
+explicit owner action with its own confirmation. It writes an owner-only
+`system` message that renders as the prototype's `thr-pill` stamp, and it
+allows an optional customer-facing message that lands as a `human_agent`
+message the customer surface polls. Replying and handing back never resolve an
+escalation; takeover, reply, resolution, and handback stay four distinct
+actions.
+
+**Why.** The shipped resolve endpoint already exists, but its only UI is the
+hidden Wren-era `/escalations` table, and resolving writes no visible record in
+the thread. An owner who hands a conversation back and believes that closed
+it, or who replies and assumes the escalation cleared, leaves an issue open
+that the Needs you queue keeps surfacing. An explicit confirmation plus an
+owner-visible stamp makes the state change legible in the same transcript the
+owner is reading, and the optional customer message keeps a resolution that
+needs words from forcing the owner through two separate actions. The
+owner-only stamp keeps internal state out of the customer transcript, which
+stays consistent with the leak-free transcript rule.
+
+**Why `system` and `human_agent`.** The messages schema already admits both
+roles, so no migration is needed. `system` is the existing stamp idiom the
+thread renders centered; `human_agent` is the existing role the customer
+transcript already carries for a human reply. Reusing them keeps the two
+surfaces reading one transcript rather than two.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D41: The public transcript returns card payloads, never the raw message metadata
+
+**Decision.** To restore structured cards after a same-tab refresh, the
+unauthenticated transcript endpoint `GET /api/chat/{conversation_id}/messages`
+returns the customer-safe card payload (`response`) read from
+`messages.metadata`. It does not return the metadata blob. The rest of the
+blob - `inspection` verdicts, `price_summary_ms`, `intent`, and `action` -
+stays owner-only on the Surface-2 trace.
+
+**Why.** `messages.metadata` is not a customer-facing column: migration `0012`
+added it for the Reasoning-Inspection layer's verdicts, and the chat service
+later wrote `response`, `price_summary_ms`, `intent`, and `action` alongside
+them (`backend/app/features/chat/service.py`, `persist_assistant_turn`). The
+existing agent history reader already whitelists `response` before handing a
+message to the model (`recent_messages`), so the public surface follows the
+same seam rather than a new one. Returning the whole blob would leak the
+price-gate verdicts and intent classification to anyone holding the
+conversation id, which is the capability on this bare surface. A projection of
+one known key is the smallest change that restores the cards without widening
+what an anonymous caller can read.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
