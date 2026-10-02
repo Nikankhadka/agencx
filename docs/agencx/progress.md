@@ -118,11 +118,12 @@ live in the ticket files, not here.
   Business details sheets, persisted to both profile jsonb copies, and reach
   the Business page and customer answers. Record in the archived
   [12-refinement-rf-2-business-detail-editing.md](../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md).
-- [ ] RF-3 offering search and category grouping: in progress on
-  `feat/rf-3-offering-search`, awaiting merge. The owner editor and the
-  storefront filter the loaded catalog by name, description or category
-  (case-insensitive substring); equal-priced distinct offerings stay distinct.
-  Record in [12-refinement.md](spec/active/12-refinement.md).
+- [x] RF-3 offering search and category grouping: merged in `486156c`. The owner
+  editor and the storefront filter the loaded catalog by name, description or
+  category (case-insensitive substring) through one shared predicate;
+  equal-priced distinct offerings stay distinct and category grouping is
+  unchanged. Record in the archived
+  [12-refinement-rf-3-offering-search.md](../archive/phase1-complete/12-refinement-rf-3-offering-search.md).
 - [ ] RF-4 through RF-17 product refinement: `Active - todo`, next is RF-4
   (explicit pricing wording); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
@@ -132,9 +133,14 @@ live in the ticket files, not here.
   acceptance scenarios, and regression checks. Design intent in
   [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
   there record the product questions that still need a founder ruling (public
-  address editing, offering search fields, price-plus-wording precedence,
+  address editing, price-plus-wording precedence,
   contextual shortcut fields, chat-card width, the legacy Unread tab, and
   whether resolution requires takeover).
+- [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
+  `make test-e2e` (169 passed, 1 failed) because its freshly created
+  conversation arrived `escalated` (terminal) rather than `open`. Reproduced
+  with the RF-3 backend files stashed, so it is not an RF-3 defect. Treat as an
+  environment/provider flake and investigate separately.
 - [ ] Provider-backed `make eval` has no valid baseline: deterministic
   gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
   attempts). Needs a paid tier or a smaller eval slice.
@@ -155,7 +161,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-3 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-4 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

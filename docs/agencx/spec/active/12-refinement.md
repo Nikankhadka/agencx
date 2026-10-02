@@ -1,8 +1,8 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-3 through
-RF-17); RF-1, RF-2, and RF-18 are delivered and archived, and U-1 through U-4
-and the onboarding-normalization slice were delivered and walked on the
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-4 through
+RF-17); RF-1, RF-2, RF-3, and RF-18 are delivered and archived, and U-1 through
+U-4 and the onboarding-normalization slice were delivered and walked on the
 preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to T-033
 are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Refinement.
@@ -107,9 +107,9 @@ Part 2 design task is complete: the documentation and the prototype authority
 agree, every workflow below has an implementation ticket, and each ticket is
 implementable without deciding product behavior (the `OPEN:` lines record the
 product questions that still need a founder ruling). The delivered tickets are
-RF-1 (shared row grammar), RF-2 (business-detail editing), and RF-18 (owner
-read state); the remaining product-refinement tickets are **RF-3 through
-RF-17**, plus the RF-14 tab-badge follow-up.
+RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
+search), and RF-18 (owner read state); the remaining product-refinement tickets
+are **RF-4 through RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -272,45 +272,13 @@ archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
 is the agreed behavior above. The hard rules in `design/conventions.md`
 sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, and RF-18. Their full records,
+**Delivered and archived:** RF-1, RF-2, RF-3, and RF-18. Their full records,
 including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
+[12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-3: Offering search and category grouping
-
-- **Status:** Active - in progress on `feat/rf-3-offering-search`; the
-  implementation lands in the same commit.
-- **Visible outcome:** The owner searches offerings and sees them grouped by
-  category; two distinct offerings that happen to share a price never merge
-  into one row.
-- **Current vs proposed:** Current: category grouping ships in `CatalogCard.tsx`
-  and migration `0034`; the owner offerings editor and the storefront render
-  groups, but no offering search exists. Proposed: add search to the owner
-  offerings editor and the storefront catalog, and assert that equal-priced
-  distinct offerings stay distinct.
-- **Design reference:** Shipped storefront
-  `frontend/src/app/[slug]/Offerings.tsx` (`sectionsOf`) and
-  `frontend/src/components/ui/CatalogCard.tsx`; owner editor
-  `frontend/src/app/(tenant-admin)/(console)/business/components/OfferingsList.tsx`;
-  category model in `backend/migrations/0034_offering_category_memberships.sql`.
-  v6 has no offerings screen; use its `.chat-row` list grammar with
-  `openChatsSearch()` / `filterChats()` for the search bar.
-- **Dependencies:** RF-1.
-- **API/DB changes:** Add a `search` query parameter to
-  `GET /api/business/offerings` and the storefront catalog read; no schema
-  change (category memberships already exist).
-- **Acceptance scenarios:** Typing a partial offering name filters the list; a
-  price-shared pair shows as two rows; clearing the search restores every
-  group; a category with one member still renders.
-- **Regression checks:** The grouping tests in `CatalogCard.test.tsx` and
-  `Offerings.test.tsx` stay green; storefront grouping at 6 and 7 or more
-  offerings.
-- **Resolved:** search matches name, description, and category
-  (case-insensitive substring), the same full-row match the prototype's
-  `filterChats()` uses.
 
 #### RF-4: Explicit pricing wording across editing, publication, and customer display
 

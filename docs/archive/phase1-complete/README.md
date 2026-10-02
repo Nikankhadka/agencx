@@ -29,6 +29,7 @@ merged to `development` or `staging`, with its verification narrative.
 | [12-refinement-u1-u4.md](12-refinement-u1-u4.md) | U-1 through U-4 | Shipped UX consistency: nav idiom, button feel, confirm dialog, toasts; walked 2026-10-01 |
 | [12-refinement-rf-1-shared-ui.md](12-refinement-rf-1-shared-ui.md) | RF-1 | Shared row grammar, focus visibility and restoration, inner-container scroll restoration, compact chat preview and attention badge |
 | [12-refinement-rf-2-business-detail-editing.md](12-refinement-rf-2-business-detail-editing.md) | RF-2 | Post-launch business-detail editing (name, hours, description, contact) with immediate customer-visible consistency |
+| [12-refinement-rf-3-offering-search.md](12-refinement-rf-3-offering-search.md) | RF-3 | Offering search on the owner offerings editor and the storefront catalog with one shared predicate; category grouping unchanged |
 | [12-refinement-rf-18-owner-read-state.md](12-refinement-rf-18-owner-read-state.md) | RF-18 | Real per-owner read state in the chat queue: migration `0035`, `POST /api/conversations/{id}/read`, unread row emphasis |
 | [22-production-hardening.md](22-production-hardening.md) | T-022 to T-033 | Production hardening: abuse control, CI hygiene, Sentry, CSP, conversation delete, retention, operator export, privacy/terms, backups; ADRs D32-D36 |
 
