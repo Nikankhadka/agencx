@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -281,8 +281,11 @@ async def patch_links(
 @router.get("/offerings", response_model=list[OfferingResponse])
 async def list_offerings(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    search: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[OfferingResponse]:
-    rows = await service.list_offerings(tenant_id=admin.tenant_id, active_only=True)
+    rows = await service.list_offerings(
+        tenant_id=admin.tenant_id, active_only=True, search=search
+    )
     return [OfferingResponse.model_validate(row) for row in rows]
 
 

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -74,9 +75,14 @@ async def _tenant_id(slug: str) -> UUID:
     "/tenant/{slug}/storefront",
     response_model=StorefrontResponse,
 )
-async def storefront(slug: str) -> StorefrontResponse:
+async def storefront(
+    slug: str,
+    search: Annotated[str | None, Query(max_length=200)] = None,
+) -> StorefrontResponse:
     tenant_id = await _tenant_id(slug)
-    return StorefrontResponse(**await service.read_public_storefront(tenant_id=tenant_id))
+    return StorefrontResponse(
+        **await service.read_public_storefront(tenant_id=tenant_id, search=search)
+    )
 
 
 @router.get("/tenant/{slug}/cover")

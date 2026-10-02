@@ -1080,3 +1080,75 @@ async def test_rf2_a_name_edit_follows_an_existing_brand_display_name(
             "select brand from tenant_config where tenant_id = $1", tenant_id
         )
     assert json.loads(brand)["display_name"] == "New Brand"
+
+
+async def test_rf3_offering_search_matches_name_description_and_category(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, _ = await _signup(client)
+    drinks = await client.post(
+        "/api/business/offering-categories", json={"name": "Cold drinks"}, headers=headers
+    )
+    category_id = drinks.json()["id"]
+    for body in (
+        {"name": "Iced coffee", "description": "Served over ice"},
+        {"name": "Hot chocolate", "description": "With whipped cream"},
+        {
+            "name": "Lemonade",
+            "category_ids": [category_id],
+            "primary_category_id": category_id,
+        },
+    ):
+        created = await client.post("/api/business/offerings", json=body, headers=headers)
+        assert created.status_code == 201, created.text
+
+    async def names(search: str) -> list[str]:
+        response = await client.get(
+            "/api/business/offerings", params={"search": search}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        return [row["name"] for row in response.json()]
+
+    # Name, case-insensitive.
+    assert await names("iced") == ["Iced coffee"]
+    assert await names("COFFEE") == ["Iced coffee"]
+    # Description.
+    assert await names("whipped") == ["Hot chocolate"]
+    # Category membership.
+    assert await names("cold") == ["Lemonade"]
+    # Empty (and absent) search returns every offering.
+    assert set(await names("")) == {"Iced coffee", "Hot chocolate", "Lemonade"}
+    listed = await client.get("/api/business/offerings", headers=headers)
+    assert len(listed.json()) == 3
+    # A typed wildcard is a literal character, not a pattern.
+    assert await names("%") == []
+
+
+async def test_rf3_offering_search_is_tenant_scoped(client: httpx.AsyncClient) -> None:
+    headers_a, _ = await _signup(client)
+    headers_b, _ = await _signup(client)
+    await client.post("/api/business/offerings", json={"name": "Alpha widget"}, headers=headers_a)
+
+    other = await client.get(
+        "/api/business/offerings", params={"search": "alpha"}, headers=headers_b
+    )
+    assert other.status_code == 200
+    assert other.json() == []
+
+
+async def test_rf3_storefront_search_narrows_the_catalog(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    await client.post(
+        "/api/business/offerings",
+        json={"name": "Screen repair", "description": "Same day"},
+        headers=headers,
+    )
+    await client.post("/api/business/offerings", json={"name": "Battery swap"}, headers=headers)
+
+    full = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+    assert len(full["offerings"]) == 2
+    narrowed = (
+        await client.get(f"/api/public/tenant/{slug}/storefront", params={"search": "battery"})
+    ).json()
+    assert [offering["name"] for offering in narrowed["offerings"]] == ["Battery swap"]

@@ -2,7 +2,9 @@
 /* eslint-disable @next/next/no-img-element -- offering media is a tenant API response. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { navTone } from "@/components/ui/TabBar";
+import { filterOfferings } from "@/lib/offering-search";
 import type { StorefrontOffering } from "@/lib/tenant";
 
 interface Section {
@@ -146,6 +148,28 @@ function OfferingRow({
 }
 
 /**
+ * RF-3: the catalog is loaded whole on the server and handed down as props, so
+ * the search filters it in memory rather than round-tripping per keystroke.
+ */
+function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-field border border-border bg-surface px-4 py-3">
+      <span className="shrink-0 text-text-tertiary">
+        <Icon name="search" size={18} />
+      </span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search offerings…"
+        aria-label="Search offerings"
+        data-testid="storefront-search"
+        className="min-h-11 min-w-0 flex-1 bg-transparent text-body-sm text-text outline-none placeholder:text-text-tertiary"
+      />
+    </div>
+  );
+}
+
+/**
  * M-7 offering list (v5 sparse amendment): small catalogs stay in one compact
  * region without browse chrome, while mature catalogs retain category nav and
  * scrollspy. Rows reserve no media space in either mode - thumbnails render
@@ -158,8 +182,13 @@ export function Offerings({
   offerings: StorefrontOffering[];
   onSelect: (offering: StorefrontOffering) => void;
 }) {
-  const sections = useMemo(() => sectionsOf(offerings), [offerings]);
+  const [search, setSearch] = useState("");
+  // The compact/browse split is the catalog's own size, not the filtered one,
+  // so searching never changes the layout mode.
+  const visible = useMemo(() => filterOfferings(offerings, search), [offerings, search]);
+  const sections = useMemo(() => sectionsOf(visible), [visible]);
   const isCompact = offerings.length <= COMPACT_CATALOG_MAX_ITEMS;
+  const searchUi = <SearchInput value={search} onChange={setSearch} />;
   const [activeId, setActiveId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -193,7 +222,15 @@ export function Offerings({
       >
         <section className="mx-auto max-w-5xl px-gutter py-6">
           <h2 className="text-title-2 font-semibold text-text">What we offer</h2>
-          {singleGroup ? (
+          <div className="mt-3">{searchUi}</div>
+          {visible.length === 0 ? (
+            <p
+              data-testid="storefront-no-matches"
+              className="mt-3 text-prose text-text-secondary"
+            >
+              No offerings match your search.
+            </p>
+          ) : singleGroup ? (
             <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
               {sections[0]?.offerings.map((offering) => (
                 <OfferingRow key={offering.id} offering={offering} onSelect={onSelect} />
@@ -222,6 +259,16 @@ export function Offerings({
 
   return (
     <div ref={rootRef} data-testid="browse-offerings" className="w-full border-t border-hairline">
+      <div className="mx-auto max-w-5xl px-gutter pt-6">{searchUi}</div>
+      {visible.length === 0 ? (
+        <p
+          data-testid="storefront-no-matches"
+          className="mx-auto max-w-5xl px-gutter py-8 text-prose text-text-secondary"
+        >
+          No offerings match your search.
+        </p>
+      ) : (
+        <>
       {sections.length > 1 ? (
         <nav
           aria-label="Offer categories"
@@ -293,6 +340,8 @@ export function Offerings({
           ))}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

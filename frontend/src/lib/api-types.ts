@@ -2488,7 +2488,9 @@ export interface operations {
     };
     storefront_api_public_tenant__slug__storefront_get: {
         parameters: {
-            query?: never;
+            query?: {
+                search?: string | null;
+            };
             header?: never;
             path: {
                 slug: string;
@@ -3421,7 +3423,9 @@ export interface operations {
     };
     list_offerings_api_business_offerings_get: {
         parameters: {
-            query?: never;
+            query?: {
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3435,6 +3439,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OfferingResponse"][];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */

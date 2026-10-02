@@ -30,7 +30,7 @@ Per-ticket header pattern:
 | Location | Contents | Status |
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
-| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-3 through RF-17 (RF-1, RF-2, and RF-18 delivered and archived; Part 2 spec completed and implementation-ready) | `Active - todo` |
+| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-3 (in progress on `feat/rf-3-offering-search`), RF-4 through RF-17 (RF-1, RF-2, and RF-18 delivered and archived; Part 2 spec completed and implementation-ready) | `Active - todo` |
 
 ## Completed work
 

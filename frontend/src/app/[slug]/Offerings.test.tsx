@@ -124,6 +124,28 @@ describe("Offerings catalog density", () => {
     expect(html).not.toContain(">More<");
   });
 
+  it("keeps two distinct offerings with the same price as two rows", () => {
+    // RF-3: grouping is by category and identity, never by price - two
+    // offerings that happen to cost the same must not collapse into one row.
+    const html = catalogHtml([
+      offering({ id: "a", name: "Screen replacement", price_cents: 5000, category: "Repairs" }),
+      offering({ id: "b", name: "Battery replacement", price_cents: 5000, category: "Repairs" }),
+    ]);
+
+    expect(html.match(/Screen replacement/g) ?? []).toHaveLength(1);
+    expect(html.match(/Battery replacement/g) ?? []).toHaveLength(1);
+  });
+
+  it("renders a category with a single member", () => {
+    const html = catalogHtml([
+      offering({ id: "a", name: "Solo item", category: "Only category" }),
+      offering({ id: "b", name: "Other item", category: "Second category" }),
+    ]);
+
+    expect(html).toContain("Only category");
+    expect(html).toContain("Solo item");
+  });
+
   it("shows one offering once on each confirmed category shelf", () => {
     const html = catalogHtml([
       offering({

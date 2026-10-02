@@ -22,6 +22,28 @@ LINK_KEYS = ("website", "google", "facebook", "instagram")
 
 COVER_KIND = "cover"
 
+# RF-3: a case-insensitive substring over the whole row a customer sees - name,
+# description, the legacy category label, and every confirmed category
+# membership. `position(...) > 0` is a plain substring, so a typed `%` or `_`
+# is a literal character, matching the prototype's `filterChats()`.
+_SEARCH_PREDICATE = (
+    "and ($2::text is null "
+    "  or position(lower($2) in lower(coalesce(o.name, ''))) > 0 "
+    "  or position(lower($2) in lower(coalesce(o.description, ''))) > 0 "
+    "  or position(lower($2) in lower(coalesce(o.category, ''))) > 0 "
+    "  or exists (select 1 from offering_category_memberships m2 "
+    "    join offering_categories c2 on c2.tenant_id = m2.tenant_id "
+    "      and c2.id = m2.category_id "
+    "    where m2.tenant_id = o.tenant_id and m2.offering_id = o.id "
+    "      and position(lower($2) in lower(c2.name)) > 0))"
+)
+
+
+def _search_needle(search: str | None) -> str | None:
+    """The bound search term, or None when there is nothing to match."""
+    needle = (search or "").strip()
+    return needle or None
+
 
 async def _categories_by_offering(
     conn: db.AppConnection, *, tenant_id: UUID, offering_ids: list[UUID]
@@ -248,14 +270,19 @@ async def delete_category(*, tenant_id: UUID, category_id: UUID) -> bool:
     return True
 
 
-async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[dict[str, Any]]:
+async def list_offerings(
+    *, tenant_id: UUID, active_only: bool = False, search: str | None = None
+) -> list[dict[str, Any]]:
     """The owner's structured offerings, in the order they appear on the page.
 
     ``position`` is the owner's own ordering; ``created_at`` then ``id`` break
     ties so a list that has never been reordered still reads oldest-first
-    rather than arbitrarily.
+    rather than arbitrarily. RF-3 adds an optional case-insensitive substring
+    match over name, description and category (legacy label or membership),
+    the same full-row match the prototype's `filterChats()` does.
     """
     active_filter = "and active" if active_only else ""
+    needle = _search_needle(search)
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
             "select o.id, o.name, o.description, o.price_cents, "
@@ -263,8 +290,10 @@ async def list_offerings(*, tenant_id: UUID, active_only: bool = False) -> list[
             "m.type as media_type, m.provider as media_provider, m.url as media_url, m.poster_url "
             "from offerings o left join tenant_media m on m.offering_id = o.id "
             "and m.role = 'offering' "
-            f"where o.tenant_id = $1 {active_filter} order by o.position, o.created_at, o.id",  # noqa: S608
+            f"where o.tenant_id = $1 {active_filter} {_SEARCH_PREDICATE} "
+            "order by o.position, o.created_at, o.id",  # noqa: S608
             tenant_id,
+            needle,
         )
         result = []
         for row in rows:
@@ -734,8 +763,15 @@ async def read_profile_for_display(*, tenant_id: UUID) -> dict[str, Any]:
     return resolve_profile(config if isinstance(config, dict) else {})
 
 
-async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
-    """Read only the public presentation fields under the customer context."""
+async def read_public_storefront(
+    *, tenant_id: UUID, search: str | None = None
+) -> dict[str, Any]:
+    """Read only the public presentation fields under the customer context.
+
+    RF-3: ``search`` narrows the offerings with the same predicate the owner
+    read uses; the page normally loads the whole catalog and filters in memory.
+    """
+    needle = _search_needle(search)
     async with db.tenant_context(tenant_id, "customer") as conn:
         tenant = await conn.fetchrow(
             "select t.name, t.business_name, tc.brand, tc.config "
@@ -745,8 +781,10 @@ async def read_public_storefront(*, tenant_id: UUID) -> dict[str, Any]:
         offerings = await conn.fetch(
             "select o.id, o.name, o.description, o.price_cents, o.category, o.category_id "
             "from offerings o "
-            "where o.tenant_id = $1 and o.active order by o.position, o.created_at, o.id",
+            f"where o.tenant_id = $1 and o.active {_SEARCH_PREDICATE} "
+            "order by o.position, o.created_at, o.id",  # noqa: S608
             tenant_id,
+            needle,
         )
         offering_items = [dict(row) for row in offerings]
         await _attach_categories(conn, tenant_id=tenant_id, rows=offering_items)

@@ -281,7 +281,8 @@ and
 
 #### RF-3: Offering search and category grouping
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress on `feat/rf-3-offering-search`; the
+  implementation lands in the same commit.
 - **Visible outcome:** The owner searches offerings and sees them grouped by
   category; two distinct offerings that happen to share a price never merge
   into one row.
@@ -307,7 +308,9 @@ and
 - **Regression checks:** The grouping tests in `CatalogCard.test.tsx` and
   `Offerings.test.tsx` stay green; storefront grouping at 6 and 7 or more
   offerings.
-- **OPEN:** whether search matches name only or name, description, and category.
+- **Resolved:** search matches name, description, and category
+  (case-insensitive substring), the same full-row match the prototype's
+  `filterChats()` uses.
 
 #### RF-4: Explicit pricing wording across editing, publication, and customer display
 

@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { OfferingMediaField } from "./OfferingMediaField";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ApiError, apiFetch } from "@/lib/api";
+import { filterOfferings } from "@/lib/offering-search";
 import { CategoryPicker, type CategoryOption } from "@/components/business/CategoryPicker";
 
 interface Offering {
@@ -107,7 +108,13 @@ export function OfferingsList() {
   // the owner already closed.
   const [loadError, setLoadError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const groups = groupOfferings(offerings);
+  // RF-3: the catalog is already in state for local editing, so the search
+  // filters it in memory (the same predicate the backend's `search` param
+  // uses) rather than round-tripping per keystroke.
+  const [search, setSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const visible = filterOfferings(offerings, search);
+  const groups = groupOfferings(visible);
 
   async function load() {
     try {
@@ -428,20 +435,49 @@ export function OfferingsList() {
             Add the services or products customers can ask about.
           </p>
         </div>
-        {editing === null ? (
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => begin()}
-            data-testid="offering-add"
-            className="flex shrink-0 items-center gap-1 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+            aria-label="Search offerings"
+            aria-pressed={searching}
+            data-testid="offering-search-toggle"
+            onClick={() => {
+              setSearching((open) => !open);
+              setSearch("");
+            }}
+            className="flex size-icon-btn items-center justify-center rounded-full text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
           >
-            <Icon name="add" size={16} />
-            Add
+            <Icon name="search" size={18} />
           </button>
-        ) : null}
+          {editing === null ? (
+            <button
+              type="button"
+              onClick={() => begin()}
+              data-testid="offering-add"
+              className="flex shrink-0 items-center gap-1 text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+            >
+              <Icon name="add" size={16} />
+              Add
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {offerings.length > 0 ? (
+      {searching ? (
+        <div className="mt-3 border-b border-hairline py-2">
+          <input
+            autoFocus
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search offerings…"
+            aria-label="Search offerings"
+            data-testid="offering-search"
+            className="w-full bg-transparent py-1 text-body-sm text-text outline-none placeholder:text-text-tertiary"
+          />
+        </div>
+      ) : null}
+
+      {visible.length > 0 ? (
         <div className="mt-3" data-testid="offerings-list">
           {groups.map((group) => (
               <section key={group.label} className="mb-5 last:mb-0" aria-labelledby={`offerings-${group.label}`}>
@@ -513,6 +549,10 @@ export function OfferingsList() {
               </section>
           ))}
         </div>
+      ) : search.trim() ? (
+        <p data-testid="offerings-no-matches" className="mt-3 text-prose text-ink-a40">
+          {`No offerings match "${search.trim()}".`}
+        </p>
       ) : editing === null ? (
         <p className="mt-3 text-prose text-ink-a40">Nothing added yet.</p>
       ) : null}

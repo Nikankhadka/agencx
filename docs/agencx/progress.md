@@ -118,8 +118,13 @@ live in the ticket files, not here.
   Business details sheets, persisted to both profile jsonb copies, and reach
   the Business page and customer answers. Record in the archived
   [12-refinement-rf-2-business-detail-editing.md](../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md).
-- [ ] RF-3 through RF-17 product refinement: `Active - todo`, next is RF-3
-  (offering search and category grouping); no other ticket
+- [ ] RF-3 offering search and category grouping: in progress on
+  `feat/rf-3-offering-search`, awaiting merge. The owner editor and the
+  storefront filter the loaded catalog by name, description or category
+  (case-insensitive substring); equal-priced distinct offerings stay distinct.
+  Record in [12-refinement.md](spec/active/12-refinement.md).
+- [ ] RF-4 through RF-17 product refinement: `Active - todo`, next is RF-4
+  (explicit pricing wording); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
