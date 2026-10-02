@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -133,6 +133,7 @@ export function OfferingsList() {
   // uses) rather than round-tripping per keystroke.
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const visible = filterOfferings(offerings, search);
   const groups = groupOfferings(visible);
 
@@ -468,7 +469,7 @@ export function OfferingsList() {
               setSearching((open) => !open);
               setSearch("");
             }}
-            className="flex size-icon-btn items-center justify-center rounded-full text-text transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-container-high"
+            className="flex size-icon-btn items-center justify-center rounded-full text-text transition-colors duration-(--duration-fast) active:bg-ink-a05"
           >
             <Icon name="search" size={18} />
           </button>
@@ -487,16 +488,31 @@ export function OfferingsList() {
       </div>
 
       {searching ? (
-        <div className="mt-3 border-b border-hairline py-2">
+        <div className="command-pill mt-3 flex items-center gap-2 rounded-chip border-chip border-transparent bg-ink-a05 px-4">
           <input
+            ref={searchRef}
             autoFocus
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search offerings…"
             aria-label="Search offerings"
             data-testid="offering-search"
-            className="w-full bg-transparent py-1 text-body-sm text-text outline-none placeholder:text-text-tertiary"
+            className="min-w-0 flex-1 bg-transparent py-3 text-body-sm text-text outline-none placeholder:text-ink-a40"
           />
+          <button
+            type="button"
+            aria-label="Clear search"
+            data-testid="offering-search-clear"
+            onClick={() => {
+              setSearch("");
+              searchRef.current?.focus();
+            }}
+            className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) active:bg-ink-a05"
+          >
+            <span aria-hidden="true" className="text-body-lg leading-none">
+              ×
+            </span>
+          </button>
         </div>
       ) : null}
 

@@ -161,7 +161,7 @@ function OfferingRow({
  */
 function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex items-center gap-2 rounded-field border border-border bg-surface px-4 py-3">
+    <div className="command-pill flex items-center gap-2 rounded-field border border-border bg-surface px-4">
       <span className="shrink-0 text-text-tertiary">
         <Icon name="search" size={18} />
       </span>
@@ -171,7 +171,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (value: str
         placeholder="Search offerings…"
         aria-label="Search offerings"
         data-testid="storefront-search"
-        className="min-h-11 min-w-0 flex-1 bg-transparent text-body-sm text-text outline-none placeholder:text-text-tertiary"
+        className="min-w-0 flex-1 bg-transparent py-3 text-body-sm text-text outline-none placeholder:text-text-tertiary"
       />
     </div>
   );
