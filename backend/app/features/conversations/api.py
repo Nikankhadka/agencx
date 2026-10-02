@@ -31,6 +31,9 @@ class ConversationSummary(BaseModel):
     # C-6: what the owner's Chats list shows without opening anything - the
     # amber "needs you" dot, the line explaining why, and the last thing said.
     needs_attention: bool = False
+    # RF-18: a customer message newer than the owner's read marker (or no
+    # marker yet). A separate axis from needs_attention - both may be true.
+    unread: bool = False
     pending_summary: str | None = None
     pending_since: datetime | None = None
     last_message: str | None = None
@@ -113,6 +116,20 @@ async def delete_conversation(
     """T-028: the owner deletes one customer conversation, permanently.
     404 for an unknown one, 409 when it holds a quote (see service.py)."""
     await controller.delete_conversation(
+        tenant_id=str(admin.tenant_id),
+        conversation_id=str(conversation_id),
+        role=admin.role,
+    )
+
+
+@router.post("/{conversation_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_conversation_read(
+    conversation_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
+) -> None:
+    """RF-18: the owner opened the thread. Idempotent, and the marker only ever
+    moves forward, so a repeat call on an already-read conversation succeeds."""
+    await controller.mark_read(
         tenant_id=str(admin.tenant_id),
         conversation_id=str(conversation_id),
         role=admin.role,

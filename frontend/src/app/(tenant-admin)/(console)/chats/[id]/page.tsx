@@ -46,6 +46,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   const [working, setWorking] = useState(false);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  // RF-18: the conversation id whose read marker this mount has already sent,
+  // so the 4s poll never re-sends it (and a route change to another id still
+  // marks the new one).
+  const readRequestedFor = useRef<string | null>(null);
   // Handing back ends the owner's voice in the thread - that asks first.
   // Stepping in never does: it only adds the owner, it takes nothing away.
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -63,6 +67,17 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
         if (cancelled) return;
         setDetail(next);
         setError(null);
+        // RF-18: opening the thread marks it read, once. Invalidating the list
+        // query means returning to /chats (and the tab badge) sees it read
+        // instead of serving the cached unread summary.
+        if (readRequestedFor.current !== id) {
+          readRequestedFor.current = id;
+          void apiFetch(`/api/conversations/${id}/read`, { method: "POST" })
+            .then(() => queryClient.invalidateQueries({ queryKey: ["/api/conversations"] }))
+            .catch(() => {
+              if (readRequestedFor.current === id) readRequestedFor.current = null;
+            });
+        }
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof ApiError ? err.detail : "Could not load this conversation.");
@@ -75,7 +90,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       cancelled = true;
       clearInterval(timer);
     };
-  }, [id, reloadToken]);
+  }, [id, reloadToken, queryClient]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });

@@ -159,6 +159,107 @@ async def test_list_conversations_surfaces_the_open_escalation(
     assert datetime.fromisoformat(row["pending_since"]) == escalation_created_at
 
 
+async def _unread_of(
+    client: httpx.AsyncClient, token: str, conversation_id: uuid.UUID
+) -> bool:
+    response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    return bool(next(row for row in response.json() if row["id"] == str(conversation_id))["unread"])
+
+
+async def test_unread_tracks_customer_messages_after_the_read_marker(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-18: unread is a customer message newer than owner_read_at, or no marker
+    yet. Opening the thread (POST .../read) clears it; a later customer message
+    makes it unread again."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="cust-1")
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+        "values ($1, $2, 'customer', 'hi', now() - interval '2 minutes')",
+        tenant_id,
+        conversation_id,
+    )
+
+    # No marker yet, so the older customer message still counts as unread.
+    assert await _unread_of(client, token, conversation_id) is True
+
+    read = await client.post(
+        f"/api/conversations/{conversation_id}/read", headers=_auth(token)
+    )
+    assert read.status_code == 204
+    assert await _unread_of(client, token, conversation_id) is False
+
+    # A customer message after the marker flips it back to unread. Assistant
+    # messages never do.
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+        "values ($1, $2, 'assistant', 'hello', now() + interval '1 minute'), "
+        "       ($1, $2, 'customer', 'are you there?', now() + interval '2 minutes')",
+        tenant_id,
+        conversation_id,
+    )
+    assert await _unread_of(client, token, conversation_id) is True
+
+
+async def test_mark_read_is_idempotent_and_never_moves_backwards(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    first = await client.post(f"/api/conversations/{conversation_id}/read", headers=_auth(token))
+    assert first.status_code == 204
+    first_marker = await superuser_conn.fetchval(
+        "select owner_read_at from conversations where id = $1", conversation_id
+    )
+    assert first_marker is not None
+
+    second = await client.post(f"/api/conversations/{conversation_id}/read", headers=_auth(token))
+    assert second.status_code == 204
+    second_marker = await superuser_conn.fetchval(
+        "select owner_read_at from conversations where id = $1", conversation_id
+    )
+    assert second_marker >= first_marker
+
+
+async def test_read_state_is_scoped_to_its_own_tenant(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    other_token, other_tenant_id = await _signup_tenant_admin(client)
+    other_conversation = await _seed_conversation(superuser_conn, other_tenant_id)
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content) "
+        "values ($1, $2, 'customer', 'hi')",
+        other_tenant_id,
+        other_conversation,
+    )
+
+    # One tenant cannot mark another's conversation read.
+    response = await client.post(
+        f"/api/conversations/{other_conversation}/read", headers=_auth(token)
+    )
+    assert response.status_code == 404
+    assert (
+        await superuser_conn.fetchval(
+            "select owner_read_at from conversations where id = $1", other_conversation
+        )
+        is None
+    )
+    # And it is still unread for the tenant that owns it.
+    assert await _unread_of(client, other_token, other_conversation) is True
+
+    missing = await client.post(f"/api/conversations/{uuid.uuid4()}/read", headers=_auth(token))
+    assert missing.status_code == 404
+
+
+async def test_mark_read_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.post(f"/api/conversations/{uuid.uuid4()}/read")
+    assert response.status_code == 401
+
+
 async def test_get_conversation_detail_includes_tool_calls_verdicts_and_cost(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:

@@ -744,6 +744,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversations/{conversation_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Conversation Read
+         * @description RF-18: the owner opened the thread. Idempotent, and the marker only ever
+         *     moves forward, so a repeat call on an already-read conversation succeeds.
+         */
+        post: operations["mark_conversation_read_api_conversations__conversation_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/conversations/{conversation_id}/takeover": {
         parameters: {
             query?: never;
@@ -1161,6 +1182,11 @@ export interface components {
              * @default false
              */
             needs_attention: boolean;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
             /** Pending Summary */
             pending_summary?: string | null;
             /** Pending Since */
@@ -4140,6 +4166,44 @@ export interface operations {
         };
     };
     delete_conversation_api_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mark_conversation_read_api_conversations__conversation_id__read_post: {
         parameters: {
             query?: never;
             header?: never;

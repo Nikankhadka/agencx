@@ -1443,3 +1443,26 @@ what an anonymous caller can read.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.
+
+## D42: Owner read state is a per-conversation marker, not double ticks
+
+**Decision.** The chat queue's read state is `conversations.owner_read_at`
+(migration `0035`), a nullable `timestamptz` written when the owner opens the
+thread via `POST /api/conversations/{id}/read`. A conversation is unread when
+the marker is null or a `messages` row with `role = 'customer'` is newer than
+it. The list computes `unread` as one tenant-scoped correlated subquery and
+returns it on `ConversationSummary`; an unread row bolds its title and shows a
+small accent dot. There are no double ticks and no per-message read receipts.
+
+**Why.** "Unread" was a placeholder in the list (`needs_attention || status =
+'human'`), which conflates "wants the owner" with "the owner has not read it" -
+two axes an owner triages separately. A single per-conversation marker is the
+smallest state that answers "has the owner seen the latest customer message?",
+and it composes with the existing queue query instead of adding a read-receipts
+table. WhatsApp-style double ticks imply per-message delivery and read receipts,
+which this product has no channel for and no reason to claim; the founder ruled
+them out. The marker only ever moves forward (`greatest(owner_read_at, now())`),
+so the read endpoint is idempotent and a race cannot un-read a thread.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.

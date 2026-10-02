@@ -13,6 +13,8 @@ export interface ListRowProps {
   meta?: ReactNode;
   /** The trailing action: a chevron, a status, a time, or controls. */
   trailing?: ReactNode;
+  /** Unread activity: a bolder title plus a small accent dot by the name. */
+  unread?: boolean;
   /** Where the row goes. Omitted, pass `onClick` - the row opens in place. */
   href?: string;
   onClick?: () => void;
@@ -44,6 +46,7 @@ export function ListRow({
   title,
   meta,
   trailing,
+  unread = false,
   href,
   onClick,
   className = "",
@@ -59,8 +62,23 @@ export function ListRow({
         </span>
       ) : null}
       <span data-slot="body" className="min-w-0 flex-1">
-        <span data-slot="title" className="block truncate text-row-label font-medium text-text">
-          {title}
+        <span className="flex items-center gap-2">
+          {unread ? (
+            <span
+              data-testid="row-unread"
+              aria-hidden="true"
+              className="size-2 shrink-0 rounded-full bg-accent"
+            />
+          ) : null}
+          <span
+            data-slot="title"
+            className={[
+              "min-w-0 flex-1 truncate text-row-label text-text",
+              unread ? "font-semibold" : "font-medium",
+            ].join(" ")}
+          >
+            {title}
+          </span>
         </span>
         {meta ? (
           <span data-slot="meta" className="mt-2 block text-meta text-ink-a40">

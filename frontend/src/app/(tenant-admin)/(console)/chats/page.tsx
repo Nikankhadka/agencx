@@ -22,11 +22,12 @@ import { customerLabel, relativeTime } from "@/lib/format";
  * so triage happens here rather than by opening four threads.
  *
  * Ported from agencx-prototype-v6.html's `chats` screen: filter row, `chat-row`
- * with name / time / status / preview, and the search bar. Mounted chrome-free
- * until E-1 builds the tab bar to hold it. Two departures from the prototype,
- * both because it only ever mocked named customers: the row falls back to the
- * conversation's short reference rather than a literal "Customer" every row
- * shares, and the amber attention dot is a labelled pill.
+ * with name / time / status / preview, and the search bar. Two departures from
+ * the prototype, both because it only ever mocked named customers: the row
+ * falls back to the conversation's short reference rather than a literal
+ * "Customer" every row shares, and the amber attention indicator is a compact
+ * exclamation badge. RF-18 adds real owner read state: an unread row bolds its
+ * name and carries a small accent dot, separate from the attention badge.
  */
 
 type Filter = "all" | "action" | "unread";
@@ -58,10 +59,9 @@ export default function ChatsPage() {
     const all = query.data ?? [];
     const byFilter = all.filter((row) => {
       if (filter === "action") return row.needs_attention;
-      // "Unread" is honestly approximated as "the customer spoke last" - there
-      // is no per-owner read state yet, and inventing a table for it before the
-      // tab bar exists would be building the wrong thing first.
-      if (filter === "unread") return row.needs_attention || row.status === "human";
+      // RF-18: real per-owner read state, a customer message newer than the
+      // marker. A separate axis from "Action needed".
+      if (filter === "unread") return row.unread;
       return true;
     });
     const needle = search.trim().toLowerCase();
@@ -147,6 +147,7 @@ export default function ChatsPage() {
             className="border-b border-hairline py-4 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
             onClick={() => router.push(`/chats/${row.id}`)}
             leading={<RowIdentity label={customerLabel(row.customer_ref, row.id)} />}
+            unread={row.unread}
             title={customerLabel(row.customer_ref, row.id)}
             // The prototype's `.chat-row` preview is one line; the meta slot
             // itself does not clamp (Home's waiting rows use two), so the list

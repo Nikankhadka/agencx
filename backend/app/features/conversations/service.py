@@ -45,6 +45,15 @@ async def list_conversations(
             "  exists (select 1 from escalations e "
             "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved') "
             "   as needs_attention, "
+            # RF-18: unread is a separate axis from needs_attention. A
+            # conversation is unread when the owner has never opened it, or a
+            # customer message is newer than the marker. Tenant-scoped and
+            # correlated against the listed row, like every other subquery here.
+            "  exists (select 1 from messages m "
+            "   where m.tenant_id = $1 and m.conversation_id = c.id "
+            "     and m.role = 'customer' "
+            "     and (c.owner_read_at is null or m.created_at > c.owner_read_at)) "
+            "   as unread, "
             "  (select m.content from messages m "
             "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system' "
             "   order by m.created_at desc, m.id desc limit 1) as last_message, "
@@ -132,6 +141,27 @@ async def get_conversation(
         "cost_rows": [dict(row) for row in cost_rows],
         "total_cost": float(total_cost),
     }
+
+
+async def mark_read(
+    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
+) -> bool:
+    """RF-18: the owner opened the thread, so advance the read marker.
+
+    Idempotent and never backwards: `greatest(owner_read_at, now())` only ever
+    moves the marker later, and a repeat call on an already-read conversation
+    still matches and returns True. False means the conversation is not this
+    tenant's (or does not exist), which the controller turns into a 404.
+    """
+    async with db.tenant_context(tenant_id, role) as conn:
+        updated = await conn.fetchval(
+            "update conversations set owner_read_at = greatest(owner_read_at, now()) "
+            "where id = $1 and tenant_id = $2 "
+            "returning id",
+            conversation_id,
+            tenant_id,
+        )
+    return updated is not None
 
 
 async def delete_conversation(
