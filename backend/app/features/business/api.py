@@ -282,20 +282,14 @@ def _normalize_wording(value: str | None) -> str | None:
     if not wording:
         return None
     if len(wording) > PRICING_WORDING_MAX:
-        raise ValueError(
-            f"Keep pricing wording to {PRICING_WORDING_MAX} characters or fewer."
-        )
+        raise ValueError(f"Keep pricing wording to {PRICING_WORDING_MAX} characters or fewer.")
     return wording
 
 
-def _validate_price_or_wording(
-    price_dollars: Decimal | None, pricing_wording: str | None
-) -> None:
+def _validate_price_or_wording(price_dollars: Decimal | None, pricing_wording: str | None) -> None:
     """RF-4: a fixed price and pricing wording are mutually exclusive."""
     if price_dollars is not None and pricing_wording:
-        raise ValueError(
-            "Choose either a fixed price or pricing wording, not both."
-        )
+        raise ValueError("Choose either a fixed price or pricing wording, not both.")
 
 
 class OfferingCategoryUpdate(BaseModel):
@@ -342,9 +336,7 @@ async def list_offerings(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
     search: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[OfferingResponse]:
-    rows = await service.list_offerings(
-        tenant_id=admin.tenant_id, active_only=True, search=search
-    )
+    rows = await service.list_offerings(tenant_id=admin.tenant_id, active_only=True, search=search)
     return [OfferingResponse.model_validate(row) for row in rows]
 
 

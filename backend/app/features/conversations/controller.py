@@ -91,9 +91,7 @@ async def get_conversation_detail(
 
 async def mark_read(*, tenant_id: str, conversation_id: str, role: str = "tenant_admin") -> None:
     """RF-18: advance the owner's read marker, or 404 when it is not theirs."""
-    found = await service.mark_read(
-        tenant_id=tenant_id, conversation_id=conversation_id, role=role
-    )
+    found = await service.mark_read(tenant_id=tenant_id, conversation_id=conversation_id, role=role)
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="conversation not found")
 

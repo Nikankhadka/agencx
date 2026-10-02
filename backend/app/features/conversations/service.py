@@ -143,9 +143,7 @@ async def get_conversation(
     }
 
 
-async def mark_read(
-    *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
-) -> bool:
+async def mark_read(*, tenant_id: str, conversation_id: str, role: str = "tenant_admin") -> bool:
     """RF-18: the owner opened the thread, so advance the read marker.
 
     Idempotent and never backwards: `greatest(owner_read_at, now())` only ever

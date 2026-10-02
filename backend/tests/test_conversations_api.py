@@ -159,9 +159,7 @@ async def test_list_conversations_surfaces_the_open_escalation(
     assert datetime.fromisoformat(row["pending_since"]) == escalation_created_at
 
 
-async def _unread_of(
-    client: httpx.AsyncClient, token: str, conversation_id: uuid.UUID
-) -> bool:
+async def _unread_of(client: httpx.AsyncClient, token: str, conversation_id: uuid.UUID) -> bool:
     response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     return bool(next(row for row in response.json() if row["id"] == str(conversation_id))["unread"])
@@ -185,9 +183,7 @@ async def test_unread_tracks_customer_messages_after_the_read_marker(
     # No marker yet, so the older customer message still counts as unread.
     assert await _unread_of(client, token, conversation_id) is True
 
-    read = await client.post(
-        f"/api/conversations/{conversation_id}/read", headers=_auth(token)
-    )
+    read = await client.post(f"/api/conversations/{conversation_id}/read", headers=_auth(token))
     assert read.status_code == 204
     assert await _unread_of(client, token, conversation_id) is False
 

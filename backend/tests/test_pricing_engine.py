@@ -242,9 +242,7 @@ async def test_rf4_pricing_wording_is_never_calculable(
         tenant_id,
     )
     with pytest.raises(SelectionError, match="no direct price"):
-        await _quote(
-            tenant_id, [Selection(kind="item", code_or_id=str(wording_only), quantity=1)]
-        )
+        await _quote(tenant_id, [Selection(kind="item", code_or_id=str(wording_only), quantity=1)])
 
     # Wording alongside a real price: the engine computes from cents alone and
     # the wording is nowhere in the output.
