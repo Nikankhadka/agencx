@@ -106,10 +106,11 @@ live in the ticket files, not here.
   preview is a single truncated line, and the attention indicator is a compact
   amber exclamation badge. Record in
   [12-refinement.md](spec/active/12-refinement.md).
-- [ ] RF-18 owner read state in the chat queue: implemented on `feat/read-state`,
-  awaiting merge. `conversations.owner_read_at` plus
-  `POST /api/conversations/{id}/read`; the Unread filter reads the real field
-  and an unread row bolds its title with a small accent dot. Record in
+- [x] RF-18 owner read state in the chat queue: merged in `e1d5144`.
+  `conversations.owner_read_at` plus `POST /api/conversations/{id}/read`; the
+  Unread filter reads the real field and an unread row bolds its title with a
+  small accent dot. Open follow-up: the console Chats tab badge stays on
+  `needs_attention` until RF-14. Record in
   [12-refinement.md](spec/active/12-refinement.md), ADR D42.
 - [ ] RF-2 through RF-17 product refinement: `Active - todo`, next is RF-2
   (business-detail editing and immediate consistency); no other ticket

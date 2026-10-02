@@ -759,8 +759,9 @@ agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
 
 #### RF-18: Owner read state in the chat queue
 
-- **Status:** Active - in progress on `feat/read-state`; the implementation
-  lands in the same commit.
+- **Status:** Done - merged in `e1d5144`. Open follow-up: the console Chats tab
+  badge is still driven by `needs_attention`; RF-14 reconciles it with the
+  unread count.
 - **Visible outcome:** The owner's chat queue carries real per-owner read
   state: an unread row bolds its title and shows a small accent dot, the Unread
   filter selects only conversations with a customer message newer than the
