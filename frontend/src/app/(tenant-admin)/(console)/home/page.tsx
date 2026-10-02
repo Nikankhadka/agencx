@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
+import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
 import { buildBrief, waitingRows } from "./lib/brief";
@@ -41,6 +42,7 @@ function greetingFor(date: Date): string {
 
 export default function HomePage() {
   const [name, setName] = useState<string | null>(null);
+  const scrollRef = useScrollRestoration<HTMLElement>("/home");
 
   useEffect(() => {
     apiFetch<OnboardingState>("/api/onboarding/state")
@@ -68,7 +70,11 @@ export default function HomePage() {
   const items = ready ? buildBrief(conversations.data, records.data) : [];
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface pb-thread-tail pt-thread-top">
+    <main
+      ref={scrollRef}
+      data-testid="home-scroll"
+      className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface pb-thread-tail pt-thread-top"
+    >
       <Container>
         <h1 className="text-greeting font-bold text-text">
           {greetingFor(new Date())},

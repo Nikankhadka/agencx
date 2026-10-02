@@ -6,9 +6,9 @@
  * Scope note: the label itself is pinned deterministically by
  * src/lib/format.test.ts. What e2e is here for is the part unit tests cannot
  * see - that a row with no customer name renders something an owner can point
- * at, and that "needs attention" arrives as a word rather than an unlabelled
- * dot. Both regressed in production precisely because this screen had no e2e
- * coverage at all.
+ * at, and that "needs attention" arrives as a labelled icon badge rather than
+ * an unlabelled dot. Both regressed in production precisely because this
+ * screen had no e2e coverage at all.
  *
  * The list is stubbed rather than seeded: the seed's conversations all carry
  * customer_ref, so the unnamed case - the only one there is in the live web
@@ -74,14 +74,17 @@ test.describe("Chats - telling one row from another", () => {
     await expect(page.getByTestId("chat-row")).toHaveCount(1);
   });
 
-  test("a row that wants the owner says so in words", async ({ page, request }) => {
+  test("a row that wants the owner carries a labelled icon badge", async ({ page, request }) => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
     const badge = page.getByTestId("row-attention");
     await expect(badge).toHaveCount(1);
-    await expect(badge).toHaveText("Action needed");
-    await expect(page.getByTestId("chat-row").first()).toContainText("Action needed");
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveAttribute("aria-label", "Action needed");
+    // The row itself no longer spells it out - the icon and its accessible
+    // name are the signal, so the title keeps its width on a phone.
+    await expect(page.getByTestId("chat-row").first()).not.toContainText("Action needed");
   });
 
   test("the thread header carries the same label as its row", async ({ page, request }) => {

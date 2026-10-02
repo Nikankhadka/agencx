@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Icon } from "@/components/ui/Icon";
+import { ListRow } from "@/components/ui/ListRow";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import { ACCEPTED_UPLOAD_EXTENSIONS, describeUpload } from "@/lib/onboarding";
 import { KnowledgeDocument, ReviewSheet } from "./components/ReviewSheet";
 import {
@@ -54,6 +56,7 @@ export default function KnowledgePage() {
    *  that record instead of being added as a new one. */
   const [replaceTarget, setReplaceTarget] = useState<KnowledgeRecord | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useScrollRestoration<HTMLDivElement>("/business/details/knowledge");
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   async function refresh() {
@@ -309,7 +312,11 @@ export default function KnowledgePage() {
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Knowledge" backHref="/business/details" />
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-16 pt-5">
+      <div
+        ref={scrollRef}
+        data-testid="knowledge-scroll"
+        className="min-h-0 flex-1 overflow-y-auto pb-16 pt-5"
+      >
         <Container>
           <p className="text-prose text-text">
             This is what your assistant answers from. Add your site or a document, read back what
@@ -390,25 +397,24 @@ export default function KnowledgePage() {
           {drafts.length > 0 ? (
             <section className="mt-6 flex flex-col gap-2">
               {drafts.map((record) => (
-                <button
+                <ListRow
                   key={record.id}
-                  type="button"
+                  testId="knowledge-draft"
                   onClick={() => void open(record)}
-                  data-testid="knowledge-draft"
-                  className="flex items-center justify-between gap-3 rounded-field bg-accent-a06 px-4 py-4 text-left transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-row-label font-medium text-text">
-                      {sourceLabel(record)}
+                  className="rounded-field bg-accent-a06 px-4 py-4 transition-[filter] duration-(--duration-fast) hover:brightness-95 active:brightness-90"
+                  leading={
+                    <span className="flex size-5 shrink-0 items-center justify-center text-accent-active">
+                      <Icon name="folder_open" size={20} />
                     </span>
-                    <span className="mt-2 block text-meta text-ink-a40">
-                      Read it back before it answers anything
+                  }
+                  title={sourceLabel(record)}
+                  meta="Read it back before it answers anything"
+                  trailing={
+                    <span aria-hidden="true" className="text-accent-active">
+                      <Icon name="chevron_right" size={20} />
                     </span>
-                  </span>
-                  <span aria-hidden="true" className="text-accent-active">
-                    <Icon name="chevron_right" size={20} />
-                  </span>
-                </button>
+                  }
+                />
               ))}
             </section>
           ) : null}
@@ -429,74 +435,79 @@ export default function KnowledgePage() {
             <div className="mt-2 flex flex-col">
               {saved.map((record) => (
                 <article key={record.id} className="border-b border-hairline py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-row-label font-medium text-text">
-                        {sourceLabel(record)}
-                      </h3>
-                      <p
-                        className={`mt-2 text-meta ${record.status === "failed" ? "text-danger" : "text-ink-a40"}`}
-                      >
-                        {statusLine(record)}
-                      </p>
-                      {record.offering_candidates && record.offering_candidates.length > 0 ? (
-                        <p className="mt-1 text-meta text-ink-a40">
-                          {record.offering_candidates.length === 1
-                            ? "1 offering came from this"
-                            : `${record.offering_candidates.length} offerings came from this`}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {record.status === "failed" ? (
+                  <ListRow
+                    leading={
+                      <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
+                        <Icon name="folder_open" size={20} />
+                      </span>
+                    }
+                    title={sourceLabel(record)}
+                    meta={
+                      <>
+                        <span className={record.status === "failed" ? "text-danger" : undefined}>
+                          {statusLine(record)}
+                        </span>
+                        {record.offering_candidates && record.offering_candidates.length > 0 ? (
+                          <span className="mt-1 block">
+                            {record.offering_candidates.length === 1
+                              ? "1 offering came from this"
+                              : `${record.offering_candidates.length} offerings came from this`}
+                          </span>
+                        ) : null}
+                      </>
+                    }
+                    trailing={
+                      <span className="flex items-center gap-1">
+                        {record.status === "failed" ? (
+                          <button
+                            type="button"
+                            onClick={() => void retry(record)}
+                            disabled={working !== null}
+                            aria-label={`Try ${sourceLabel(record)} again`}
+                            data-testid="knowledge-retry"
+                            className="flex size-icon-btn items-center justify-center rounded-full text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a09 active:bg-accent-a12"
+                          >
+                            <Icon name="refresh" size={18} />
+                          </button>
+                        ) : null}
+                        {record.status === "failed" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplaceTarget(record);
+                              fileRef.current?.click();
+                            }}
+                            disabled={working !== null}
+                            aria-label={`Replace ${sourceLabel(record)}`}
+                            data-testid="knowledge-replace"
+                            className="flex size-icon-btn items-center justify-center rounded-full text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a09 active:bg-accent-a12"
+                          >
+                            <Icon name="swap_horiz" size={18} />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => void retry(record)}
+                          onClick={() => void open(record)}
                           disabled={working !== null}
-                          aria-label={`Try ${sourceLabel(record)} again`}
-                          data-testid="knowledge-retry"
-                          className="flex size-icon-btn items-center justify-center rounded-full text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a09 active:bg-accent-a12"
+                          aria-label={`Edit ${sourceLabel(record)}`}
+                          data-testid="knowledge-edit"
+                          className="flex size-icon-btn items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
                         >
-                          <Icon name="refresh" size={18} />
+                          <Icon name="edit" size={18} />
                         </button>
-                      ) : null}
-                      {record.status === "failed" ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            setReplaceTarget(record);
-                            fileRef.current?.click();
-                          }}
+                          onClick={() => void confirmRemove(record)}
                           disabled={working !== null}
-                          aria-label={`Replace ${sourceLabel(record)}`}
-                          data-testid="knowledge-replace"
-                          className="flex size-icon-btn items-center justify-center rounded-full text-accent-active transition-colors duration-(--duration-fast) hover:bg-accent-a09 active:bg-accent-a12"
+                          aria-label={`Remove ${sourceLabel(record)}`}
+                          data-testid="knowledge-remove"
+                          className="flex size-icon-btn items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
                         >
-                          <Icon name="swap_horiz" size={18} />
+                          <Icon name="delete" size={18} />
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => void open(record)}
-                        disabled={working !== null}
-                        aria-label={`Edit ${sourceLabel(record)}`}
-                        data-testid="knowledge-edit"
-                        className="flex size-icon-btn items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
-                      >
-                        <Icon name="edit" size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void confirmRemove(record)}
-                        disabled={working !== null}
-                        aria-label={`Remove ${sourceLabel(record)}`}
-                        data-testid="knowledge-remove"
-                        className="flex size-icon-btn items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high"
-                      >
-                        <Icon name="delete" size={18} />
-                      </button>
-                    </div>
-                  </div>
+                      </span>
+                    }
+                  />
 
                   <details className="mt-3">
                     <summary className="cursor-pointer text-action font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline">

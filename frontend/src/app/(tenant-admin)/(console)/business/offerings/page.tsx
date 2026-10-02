@@ -1,8 +1,11 @@
 "use client";
 
+"use client";
+
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { OfferingsList } from "../components/OfferingsList";
 import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions";
+import { useScrollRestoration } from "@/lib/useScrollRestoration";
 
 /**
  * M-1/M-4: "What you offer" - the owner's own offerings, on their own screen.
@@ -13,10 +16,15 @@ import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions"
  * list component is unchanged; only where it hangs moved.
  */
 export default function OfferingsPage() {
+  const scrollRef = useScrollRestoration<HTMLDivElement>("/business/offerings");
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="What you offer" backHref="/business" />
-      <div className="min-h-0 flex-1 overflow-y-auto pb-16 lg:mx-auto lg:w-full lg:max-w-thread">
+      <div
+        ref={scrollRef}
+        data-testid="offerings-scroll"
+        className="min-h-0 flex-1 overflow-y-auto pb-16 lg:mx-auto lg:w-full lg:max-w-thread"
+      >
         <OfferingSuggestions variant="section" />
         <OfferingsList />
       </div>

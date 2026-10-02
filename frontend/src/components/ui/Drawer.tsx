@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useRestoreFocusTarget } from "@/lib/useRestoreFocusTarget";
 
 export interface DrawerProps {
   open: boolean;
@@ -27,12 +28,15 @@ const FOCUSABLE_SELECTOR =
  */
 export function Drawer({ open, onClose, children, id }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRestoreFocusTarget(panelRef);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      openerRef.current ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    openerRef.current = null;
     const panel = panelRef.current;
     const first = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     (first ?? panel)?.focus();
@@ -40,7 +44,7 @@ export function Drawer({ open, onClose, children, id }: DrawerProps) {
       restoreFocusRef.current?.focus();
       restoreFocusRef.current = null;
     };
-  }, [open]);
+  }, [open, openerRef]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {

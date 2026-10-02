@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useRestoreFocusTarget } from "@/lib/useRestoreFocusTarget";
 
 export interface ModalProps {
   open: boolean;
@@ -35,12 +36,15 @@ const FOCUSABLE_SELECTOR =
 export function Modal({ open, onClose, title, children, layer = "base" }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRestoreFocusTarget(panelRef);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      openerRef.current ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    openerRef.current = null;
     const panel = panelRef.current;
     const first = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     (first ?? panel)?.focus();
@@ -48,7 +52,7 @@ export function Modal({ open, onClose, title, children, layer = "base" }: ModalP
       restoreFocusRef.current?.focus();
       restoreFocusRef.current = null;
     };
-  }, [open]);
+  }, [open, openerRef]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {

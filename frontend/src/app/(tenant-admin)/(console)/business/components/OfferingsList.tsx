@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { ListRow } from "@/components/ui/ListRow";
 import { Modal } from "@/components/ui/Modal";
 import { OfferingMediaField } from "./OfferingMediaField";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -338,31 +339,40 @@ export function OfferingsList() {
       {categories.length ? (
         <ul className="mt-3 divide-y divide-hairline" data-testid="categories-list">
           {categories.map((category) => (
-            <li key={category.id} className="flex items-center gap-3 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block text-card-hl font-medium text-text">{category.name}</span>
-                <span className="mt-1 block text-meta text-ink-a40">
-                  {category.offering_count} active {category.offering_count === 1 ? "offering" : "offerings"}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => beginCategory(category)}
-                disabled={working}
-                aria-label={`Edit ${category.name}`}
-                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-              >
-                <Icon name="edit" size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={() => void removeCategory(category)}
-                disabled={working}
-                aria-label={`Remove ${category.name}`}
-                className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-              >
-                <Icon name="delete" size={18} />
-              </button>
+            <li key={category.id} className="py-3">
+              <ListRow
+                leading={
+                  <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
+                    <Icon name="folder_open" size={20} />
+                  </span>
+                }
+                title={category.name}
+                meta={`${category.offering_count} active ${
+                  category.offering_count === 1 ? "offering" : "offerings"
+                }`}
+                trailing={
+                  <span className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => beginCategory(category)}
+                      disabled={working}
+                      aria-label={`Edit ${category.name}`}
+                      className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                    >
+                      <Icon name="edit" size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeCategory(category)}
+                      disabled={working}
+                      aria-label={`Remove ${category.name}`}
+                      className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                    >
+                      <Icon name="delete" size={18} />
+                    </button>
+                  </span>
+                }
+              />
             </li>
           ))}
         </ul>
@@ -440,51 +450,63 @@ export function OfferingsList() {
                 </h3>
                 <ul className="mt-1 divide-y divide-hairline">
                   {group.offerings.map((offering) => (
-                    <li key={offering.id} className="flex items-center gap-3 py-3">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-card-hl font-medium text-text">{offering.name}</span>
-                        {offering.description ? (
-                          <span className="mt-1 block truncate text-meta text-ink-a40">
-                            {offering.description}
+                    <li key={offering.id} className="py-3">
+                      <ListRow
+                        leading={
+                          <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
+                            <Icon name="sell" size={20} />
                           </span>
-                        ) : null}
-                        {offering.price_cents !== null ? (
-                          <span className="mt-1 block text-meta text-ink-a40">
-                            ${(offering.price_cents / 100).toFixed(2)}
+                        }
+                        title={offering.name}
+                        meta={
+                          <>
+                            {offering.description ? (
+                              <span className="block truncate">{offering.description}</span>
+                            ) : null}
+                            {offering.price_cents !== null ? (
+                              <span className="block">${(offering.price_cents / 100).toFixed(2)}</span>
+                            ) : null}
+                            {offering.categories.some((category) => !category.is_primary) ? (
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {offering.categories
+                                  .filter((category) => !category.is_primary)
+                                  .map((category) => (
+                                    <span
+                                      key={category.id}
+                                      className="rounded-full bg-surface-container px-2 py-1 text-meta text-ink-a40"
+                                    >
+                                      {category.name}
+                                    </span>
+                                  ))}
+                              </span>
+                            ) : null}
+                          </>
+                        }
+                        trailing={
+                          <span className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => begin(offering)}
+                              disabled={working}
+                              aria-label={`Edit ${offering.name}`}
+                              data-testid="offering-edit"
+                              className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                            >
+                              <Icon name="edit" size={18} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void remove(offering)}
+                              disabled={working}
+                              aria-label={`Remove ${offering.name}`}
+                              data-testid="offering-remove"
+                              className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
+                            >
+                              <Icon name="delete" size={18} />
+                            </button>
                           </span>
-                        ) : null}
-                        {offering.categories.some((category) => !category.is_primary) ? (
-                          <span className="mt-1 flex flex-wrap gap-1">
-                            {offering.categories
-                              .filter((category) => !category.is_primary)
-                              .map((category) => (
-                                <span key={category.id} className="rounded-full bg-surface-container px-2 py-1 text-meta text-ink-a40">
-                                  {category.name}
-                                </span>
-                              ))}
-                          </span>
-                        ) : null}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => begin(offering)}
-                        disabled={working}
-                        aria-label={`Edit ${offering.name}`}
-                        data-testid="offering-edit"
-                        className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-                      >
-                        <Icon name="edit" size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void remove(offering)}
-                        disabled={working}
-                        aria-label={`Remove ${offering.name}`}
-                        data-testid="offering-remove"
-                        className="flex size-icon-btn shrink-0 items-center justify-center rounded-full text-ink-a40 transition-colors duration-(--duration-fast) hover:bg-surface-container hover:text-text active:bg-surface-container-high disabled:opacity-50"
-                      >
-                        <Icon name="delete" size={18} />
-                      </button>
+                        }
+                      />
                     </li>
                   ))}
                 </ul>

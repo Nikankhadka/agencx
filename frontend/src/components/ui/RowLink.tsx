@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import type { IconName } from "./Icon";
 import { Icon } from "./Icon";
+import { ListRow } from "./ListRow";
 
 export interface RowLinkProps {
   /** Where the row goes. Omitted, pass `onClick` - the row opens a sheet instead. */
@@ -21,35 +21,29 @@ export interface RowLinkProps {
  * agencx-prototype-v6.html lists the places you can go, and it is deliberately
  * not a card: a list of rows scales to a phone without a grid.
  *
+ * RF-1: this is the hub-screen spelling of `ListRow`, not a second grammar.
  * Some of those rows open a sheet rather than a screen - that is how the
  * prototype's Settings list edits a field. Such a row is a button, so it is
  * announced as one; everything else about it is identical.
  */
 export function RowLink({ href, label, icon, detail, onClick }: RowLinkProps) {
-  const className =
-    "flex w-full items-center gap-4 border-b border-hairline px-gutter py-4 text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05";
-  const inner = (
-    <>
-      <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
-        <Icon name={icon} size={20} />
-      </span>
-      <span className="flex-1">
-        <span className="block text-row-label font-medium text-text">{label}</span>
-        {detail ? <span className="mt-2 block text-meta text-ink-a40">{detail}</span> : null}
-      </span>
-      <span aria-hidden="true" className="text-ink-a18">
-        <Icon name="chevron_right" size={20} />
-      </span>
-    </>
-  );
-
-  return href ? (
-    <Link href={href} className={className}>
-      {inner}
-    </Link>
-  ) : (
-    <button type="button" onClick={onClick} className={className}>
-      {inner}
-    </button>
+  return (
+    <ListRow
+      href={href}
+      onClick={onClick}
+      className="border-b border-hairline px-gutter py-4 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
+      leading={
+        <span className="flex size-5 shrink-0 items-center justify-center text-ink-a40">
+          <Icon name={icon} size={20} />
+        </span>
+      }
+      title={label}
+      meta={detail}
+      trailing={
+        <span aria-hidden="true" className="text-ink-a18">
+          <Icon name="chevron_right" size={20} />
+        </span>
+      }
+    />
   );
 }

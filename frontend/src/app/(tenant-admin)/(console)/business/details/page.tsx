@@ -5,6 +5,7 @@ import { RowLink } from "@/components/ui/RowLink";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { abnSummary } from "@/lib/abn";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import { AbnSheet } from "./components/AbnSheet";
 import { ServicesSheet, servicesSummary } from "./components/ServicesSheet";
@@ -37,6 +38,7 @@ export default function BusinessDetailsPage() {
   const [editing, setEditing] = useState<"abn" | "voice" | "services" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useScrollRestoration<HTMLDivElement>("/business/details");
 
   useEffect(() => {
     apiFetch<BusinessProfile>("/api/business/profile")
@@ -67,7 +69,11 @@ export default function BusinessDetailsPage() {
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <ScreenTopbar title="Business details" backHref="/business" />
-      <div className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-16">
+      <div
+        ref={scrollRef}
+        data-testid="business-details-scroll"
+        className="min-h-0 flex-1 overflow-y-auto lg:mx-auto lg:w-full lg:max-w-thread pb-16"
+      >
         <RowLink
           href="/business/details/knowledge"
           label="Knowledge"

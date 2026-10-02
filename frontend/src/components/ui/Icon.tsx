@@ -41,7 +41,8 @@ export type IconName =
   | "edit"
   | "photo_camera"
   | "share"
-  | "send";
+  | "send"
+  | "priority_high";
 
 /** A glyph is one outlined `path`, plus an optional `filled` variant used by
  * nav icons when their item is active. */
@@ -164,6 +165,9 @@ const ICONS: Record<IconName, Glyph> = {
   },
   send: {
     path: "M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Z",
+  },
+  priority_high: {
+    path: "M480-120q-33 0-56.5-23.5T400-200q0-33 23.5-56.5T480-280q33 0 56.5 23.5T560-200q0 33-23.5 56.5T480-120Zm-80-280v-360h160v360H400Z",
   },
 };
 

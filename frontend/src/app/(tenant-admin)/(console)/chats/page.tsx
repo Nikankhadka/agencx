@@ -4,9 +4,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
+import { ListRow, RowIdentity } from "@/components/ui/ListRow";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
+import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import { customerLabel, relativeTime } from "@/lib/format";
 
@@ -47,6 +49,7 @@ function previewOf(row: ConversationSummary): string {
 export default function ChatsPage() {
   const router = useRouter();
   const query = useApiQuery<ConversationSummary[]>("/api/conversations");
+  const scrollRef = useScrollRestoration<HTMLDivElement>("/chats");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
@@ -122,7 +125,7 @@ export default function ChatsPage() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} data-testid="chats-list" className="flex-1 overflow-y-auto">
         {query.error ? (
           <p className="py-4 text-body-sm text-danger">{errorMessage(query.error, "Could not load your chats.")}</p>
         ) : null}
@@ -138,31 +141,36 @@ export default function ChatsPage() {
           />
         ) : null}
         {rows.map((row) => (
-          <button
+          <ListRow
             key={row.id}
-            type="button"
+            testId="chat-row"
+            className="border-b border-hairline py-4 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
             onClick={() => router.push(`/chats/${row.id}`)}
-            data-testid="chat-row"
-            className="w-full border-b border-hairline py-4 text-left transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
-          >
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="min-w-0 truncate text-body font-medium text-text">
-                {customerLabel(row.customer_ref, row.id)}
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
+            leading={<RowIdentity label={customerLabel(row.customer_ref, row.id)} />}
+            title={customerLabel(row.customer_ref, row.id)}
+            // The prototype's `.chat-row` preview is one line; the meta slot
+            // itself does not clamp (Home's waiting rows use two), so the list
+            // that wants one line says so here.
+            meta={<span className="block truncate">{previewOf(row)}</span>}
+            trailing={
+              <>
                 <span className="text-footnote text-text-secondary">
                   {relativeTime(row.last_activity_at ?? row.created_at)}
                 </span>
-                {/* "Action needed" in words, reading exactly like the filter
-                    chip above that selects for it - a bare amber dot named the
-                    state to nobody. Berry dot = the assistant is handling it
-                    itself. Nothing = nothing pending. */}
+                {/* A compact amber exclamation badge, not a text pill: the
+                    words live in the filter chip above, and spelling them out
+                    per row stole the title's width on a phone. Berry dot = the
+                    assistant is handling it itself. Nothing = nothing
+                    pending. */}
                 {row.needs_attention ? (
                   <span
                     data-testid="row-attention"
-                    className="rounded-full bg-highlight px-3 py-1 text-badge font-semibold text-text"
+                    role="img"
+                    aria-label="Action needed"
+                    title="Action needed"
+                    className="grid size-5 place-items-center rounded-full bg-highlight text-text"
                   >
-                    Action needed
+                    <Icon name="priority_high" size={14} />
                   </span>
                 ) : row.status === "open" ? (
                   <span
@@ -171,12 +179,9 @@ export default function ChatsPage() {
                     className="size-[7px] rounded-full bg-accent"
                   />
                 ) : null}
-              </span>
-            </div>
-            <span className="block truncate text-footnote text-text-secondary">
-              {previewOf(row)}
-            </span>
-          </button>
+              </>
+            }
+          />
         ))}
       </div>
       </Container>

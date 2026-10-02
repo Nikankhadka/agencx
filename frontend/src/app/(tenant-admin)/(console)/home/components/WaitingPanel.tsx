@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { ListRow, RowIdentity } from "@/components/ui/ListRow";
 import { relativeTime } from "@/lib/format";
 import type { WaitingRow } from "../lib/brief";
 
@@ -63,27 +63,23 @@ export function WaitingPanel({ rows }: { rows: WaitingRow[] }) {
         }
       >
         {rows.map((row) => (
-          <Link
+          <ListRow
             key={row.id}
             href={`/chats/${row.id}`}
-            data-testid="waiting-row"
-            className="flex items-center gap-2 border-t border-hairline px-4 py-3 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-surface-sunken"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2">
-                <span className="truncate text-body font-medium text-text">{row.name}</span>
-                <span className="shrink-0 text-footnote text-text-secondary">
-                  {relativeTime(row.since)}
+            testId="waiting-row"
+            className="border-t border-hairline px-4 py-3 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
+            leading={<RowIdentity label={row.name} />}
+            title={row.name}
+            meta={<span className="line-clamp-2">{row.summary}</span>}
+            trailing={
+              <>
+                <span className="text-footnote text-text-secondary">{relativeTime(row.since)}</span>
+                <span aria-hidden="true" className="text-ink-a18">
+                  <Icon name="chevron_right" size={20} />
                 </span>
-              </span>
-              <span className="mt-1 block line-clamp-2 text-meta text-ink-a40">
-                {row.summary}
-              </span>
-            </span>
-            <span aria-hidden="true" className="shrink-0 text-ink-a18">
-              <Icon name="chevron_right" size={20} />
-            </span>
-          </Link>
+              </>
+            }
+          />
         ))}
       </div>
 
