@@ -1,9 +1,9 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-5 through
-RF-17); RF-1, RF-2, RF-3, RF-4, and RF-18 are delivered and archived, and U-1
-through U-4 and the onboarding-normalization slice were delivered and walked on
-the preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-6 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18 are delivered and archived, and
+U-1 through U-4 and the onboarding-normalization slice were delivered and walked
+on the preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to
 T-033 are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Refinement.
 
@@ -108,9 +108,9 @@ agree, every workflow below has an implementation ticket, and each ticket is
 implementable without deciding product behavior (the `OPEN:` lines record the
 product questions that still need a founder ruling). The delivered tickets are
 RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
-search), RF-4 (pricing wording), and RF-18 (owner read state); the remaining
-product-refinement tickets are **RF-5 through RF-17**, plus the RF-14 tab-badge
-follow-up.
+search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows), and
+RF-18 (owner read state); the remaining product-refinement tickets are **RF-6
+through RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -273,41 +273,15 @@ archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
 is the agreed behavior above. The hard rules in `design/conventions.md`
 sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, and RF-18. Their full
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18. Their full
 records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
 [12-refinement-rf-4-pricing-wording.md](../../../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md),
+[12-refinement-rf-5-media-workflows.md](../../../archive/phase1-complete/12-refinement-rf-5-media-workflows.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-5: Cover and offering-image workflows
-
-- **Status:** Active - todo.
-- **Visible outcome:** One cover/offering-image workflow covers upload, preview,
-  replacement, and removal, with the same states everywhere (empty, uploading,
-  preview, done, remove); removal is explicit.
-- **Current vs proposed:** Current: the cover photo ships (E-6, Cloudinary) and
-  offering media has an upload/preview field; a single unified workflow across
-  cover and offering images, and explicit removal states, are partial.
-  Proposed: unify the two on one media component and add an explicit remove
-  state.
-- **Design reference:** `agencx-prototype-v6.html` `renderScreen('booking')`
-  `.bk-photo-wrap` with the "Edit photo" control; `design/frontend.md` section
-  6 `FileDropzone` (images are refused for knowledge, not for brand assets).
-  Shipped: `business/page/components/CoverPhoto.tsx`,
-  `business/components/OfferingMediaField.tsx`, and the Cloudinary adapter
-  behind the media endpoints.
-- **Dependencies:** RF-1.
-- **API/DB changes:** Reuse the existing upload and delete endpoints; add an
-  explicit removal call for the cover if one is missing; no schema change.
-- **Acceptance scenarios:** Upload a cover, replace it, and remove it back to
-  the empty state; upload, replace, and remove an offering image; a failed
-  upload recovers without leaving a partial state.
-- **Regression checks:** The E-6 cover tests, the Cloudinary rollback, and the
-  legacy `tenant_assets` reads stay green.
-- **OPEN:** none.
 
 #### RF-6: Document-review workspace clarification, semantics unchanged
 

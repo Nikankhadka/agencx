@@ -130,8 +130,17 @@ live in the ticket files, not here.
   verbatim, priced offerings still format through `money.ts`, and the pricing
   engine never reads it. Record in the archived
   [12-refinement-rf-4-pricing-wording.md](../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md).
-- [ ] RF-5 through RF-17 product refinement: `Active - todo`, next is RF-5
-  (cover and offering-image workflows); no other ticket
+- [x] RF-5 cover and offering-image workflows: merged in `eda75ec`. One shared
+  media field covers the cover band and the offering editor with the same
+  empty, uploading, preview, and saved states and an explicit Remove
+  affordance; the cover removal is confirm-gated through `DELETE
+  /api/business/cover`, shows a local preview while uploading, and restores the
+  previous photo on failure. No backend or schema change. Record in the
+  archived
+  [12-refinement-rf-5-media-workflows.md](../archive/phase1-complete/12-refinement-rf-5-media-workflows.md).
+- [ ] RF-6 through RF-17 product refinement: `Active - todo`, next is RF-6
+  (document-review workspace clarification, semantics unchanged); no other
+  ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -166,7 +175,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-5 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-6 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

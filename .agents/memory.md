@@ -102,6 +102,7 @@
 - **Live-verify authed pages without real Supabase**: mint HS256 JWT, POST to /api/tenants, inject session into localStorage under `sb-<host>-auth-token`. See full recipe in archive.
 - **`Sheet` never unmounts** (it toggles `inert` and translates off-screen so it can animate), so Playwright still calls a closed sheet visible - `toBeHidden()` on the dialog role hangs. Assert on something inside it instead: the sheets render their body only while open, so `expect(page.getByTestId(<a field>)).toHaveCount(0)` is what "closed" means. The knowledge sheet appears to pass a `toBeHidden` check only because its title changes when it closes.
 - **Next mounts its own empty `role="alert"`** (the route announcer), so a bare `getByRole("alert")` is ambiguous. Scope alert assertions to the dialog or region under test (O-9).
+- **E2E cover/media uploads must send decodable image bytes** (2026-10-02, RF-5): `downscale()` falls back to the raw file when `createImageBitmap` cannot decode it, and a configured Cloudinary rejects non-image payloads, so fake byte strings only pass when Cloudinary is unconfigured. Inline a real 1x1 JPEG fixture (base64) for any E2E upload that reaches the server, whether Cloudinary is configured or not.
 
 ### Backend
 
