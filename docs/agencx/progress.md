@@ -100,7 +100,14 @@ live in the ticket files, not here.
 - [ ] R-5 remainder: restore drill on production (the tooling and a local drill
   are built), error tracking live verification. See
   [12-refinement.md](spec/active/12-refinement.md).
-- [ ] RF-1 through RF-17 product refinement: `Active - todo`, no ticket
+- [x] RF-1 shared row grammar, focus visibility, and scroll restoration: merged
+  in `ac11c6f`. One list-row grammar across the console lists, focus returns to
+  the opener after a sheet closes, inner-container scroll is restored, the chat
+  preview is a single truncated line, and the attention indicator is a compact
+  amber exclamation badge. Record in
+  [12-refinement.md](spec/active/12-refinement.md).
+- [ ] RF-2 through RF-17 product refinement: `Active - todo`, next is RF-2
+  (business-detail editing and immediate consistency); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current

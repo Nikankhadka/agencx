@@ -262,7 +262,9 @@ agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
 
 #### RF-1: Shared typography, surfaces, controls, navigation, and focus
 
-- **Status:** Active - todo.
+- **Status:** Done - merged in `ac11c6f`. The shipped row uses one truncated
+  preview line and a compact amber exclamation badge (founder-directed), with
+  the identity/icon leading slot kept.
 - **Visible outcome:** Every console screen shares one type rhythm, surface,
   control, and navigation language; list rows read as one grammar (identity or
   icon slot, primary line, meta line, trailing action); keyboard focus is
