@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
-import { Button } from "@/components/ui/Button";
-import { Icon } from "@/components/ui/Icon";
+import { MediaField, type MediaFieldState } from "./MediaField";
 
 export interface OfferingMediaFieldProps {
   mediaUrl: string;
@@ -24,11 +22,13 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * The offering media picker. A secondary Upload button (with the shared hover
- * fill) opens a hidden file input; a picked file shows a preview chip with
- * Edit (re-pick) and Cancel (drop the pending pick, local only). Removing
- * already-saved media stays on the confirm flow - Cancel never touches the
- * backend. Preview object URLs are revoked on replace and on unmount.
+ * The offering media picker. A URL field and the shared MediaField slot sit
+ * side by side: picking a file stages it locally (no upload until Save) and
+ * shows it in the field's preview state with Edit (re-pick) and Cancel (drop
+ * the pending pick, local only). Removing already-saved media stays on the
+ * parent's confirm flow - Cancel never touches the backend, and the field's
+ * explicit Remove routes straight through `onRemoveSaved`. Preview object URLs
+ * are revoked on replace and on unmount.
  */
 export function OfferingMediaField({
   mediaUrl,
@@ -41,7 +41,6 @@ export function OfferingMediaField({
   onCancelPending,
   onRemoveSaved,
 }: OfferingMediaFieldProps) {
-  const fileRef = useRef<HTMLInputElement>(null);
   // The URL text a file pick replaced, so Cancel can put it back. Owned here
   // so it dies with the modal - no stale restore after save or close.
   const stashedRef = useRef<{ url: string; changed: boolean } | null>(null);
@@ -63,10 +62,7 @@ export function OfferingMediaField({
     setPreviewUrl(url);
   }
 
-  function handlePick(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
+  function handleFile(file: File) {
     if (!mediaFile && mediaUrl && stashedRef.current === null) {
       stashedRef.current = { url: mediaUrl, changed: mediaChanged };
     }
@@ -84,14 +80,18 @@ export function OfferingMediaField({
   function handleCancel() {
     const stashed = stashedRef.current;
     stashedRef.current = null;
-    if (fileRef.current) fileRef.current.value = "";
     setPreview(null);
     onCancelPending(stashed?.url ?? "", stashed ? stashed.changed : false);
   }
 
   const hasPending = mediaFile !== null && !removeMedia;
   const hasUrl = mediaUrl.trim() !== "";
-  const isVideo = mediaFile?.type.startsWith("video/") ?? false;
+  const kind = mediaFile?.type.startsWith("video/") ? "video" : "image";
+  const state: MediaFieldState = hasPending
+    ? "preview"
+    : hasUrl && !removeMedia
+      ? "saved"
+      : "empty";
 
   return (
     <div className="mt-3">
@@ -118,110 +118,40 @@ export function OfferingMediaField({
         >
           Upload media <span className="normal-case">(optional)</span>
         </span>
-        {hasPending && mediaFile ? (
-          <div
-            role="status"
-            data-testid="offering-media-preview"
-            className="mt-2 flex items-center gap-3 rounded-field border border-border bg-surface-sunken px-3 py-2"
-          >
-            {isVideo ? (
-              <video
-                src={previewUrl ?? undefined}
-                muted
-                playsInline
-                preload="metadata"
-                aria-hidden="true"
-                tabIndex={-1}
-                className="h-12 w-12 shrink-0 rounded-md object-cover"
-              />
-            ) : previewUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element --
-                 a blob object URL for the just-picked file, not an asset
-                 next/image could fetch or optimise. */
-              <img
-                src={previewUrl}
-                alt=""
-                className="h-12 w-12 shrink-0 rounded-md object-cover"
-              />
-            ) : (
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-container text-ink-a40">
-                <Icon name="attach_file" size={20} />
-              </span>
-            )}
-            <span className="min-w-0 flex-1">
-              <span
-                data-testid="offering-media-filename"
-                aria-live="polite"
-                className="block truncate text-body-sm font-medium text-text"
-              >
-                {mediaFile.name}
-              </span>
-              <span className="mt-1 block text-meta text-ink-a40">
-                {formatSize(mediaFile.size)} - Ready to save
-              </span>
-            </span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={working}
-              onClick={() => fileRef.current?.click()}
-              data-testid="offering-media-edit"
-              aria-label="Change selected media"
-            >
-              <Icon name="edit" size={14} />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={working}
-              onClick={handleCancel}
-              data-testid="offering-media-cancel"
-              aria-label="Cancel selected media"
-            >
-              <Icon name="cancel" size={14} />
-            </Button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={working}
-            onClick={() => fileRef.current?.click()}
-            data-testid="offering-media-upload"
-            aria-label="Upload media"
-            className="mt-2"
-          >
-            <Icon name="photo_camera" size={16} />
-          </Button>
-        )}
+        <MediaField
+          variant="offering"
+          state={state}
+          kind={kind}
+          src={previewUrl}
+          filename={hasPending && mediaFile ? mediaFile.name : null}
+          detail={
+            hasPending && mediaFile
+              ? `${formatSize(mediaFile.size)} - Ready to save`
+              : null
+          }
+          pickLabel="Upload media"
+          disabled={working}
+          accept="image/*,video/*"
+          onFile={handleFile}
+          onCancel={handleCancel}
+          onRemove={onRemoveSaved}
+          removeLabel="Remove current media"
+          testIds={{
+            field: "offering-media-upload",
+            input: "offering-media-input",
+            preview: "offering-media-preview",
+            filename: "offering-media-filename",
+            edit: "offering-media-edit",
+            cancel: "offering-media-cancel",
+            remove: "offering-media-remove",
+          }}
+        />
         {removeMedia ? (
           <p className="mt-2 text-meta text-ink-a40">
             Current media will be removed when you save.
           </p>
-        ) : hasUrl && !hasPending ? (
-          <button
-            type="button"
-            onClick={onRemoveSaved}
-            disabled={working}
-            data-testid="offering-media-remove"
-            className="mt-2 block text-action font-medium text-danger transition-colors duration-(--duration-fast) hover:underline active:opacity-60 disabled:opacity-50"
-          >
-            Remove current media
-          </button>
         ) : null}
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,video/*"
-        tabIndex={-1}
-        aria-label="Upload offering photo or video"
-        data-testid="offering-media-input"
-        onChange={handlePick}
-        className="hidden"
-      />
     </div>
   );
 }

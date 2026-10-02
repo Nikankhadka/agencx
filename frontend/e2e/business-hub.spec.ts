@@ -17,6 +17,13 @@ import {
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 const STAGE_2_ROWS = ["Schedule", "Money", "Plan"];
 
+// A real, minimal 1x1 white JPEG. The cover path sends whatever the owner
+// picks to the configured media store, and a non-image byte string is refused
+// there - so this fixture has to be a decodable image whether the stack stores
+// it in Cloudinary or in the legacy tenant_assets row.
+const ONE_PX_JPEG_BASE64 =
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD2aiiigD//2Q==";
+
 test.describe("Business hub", () => {
 
   test("holds only rows that open onto something", async ({
@@ -353,6 +360,131 @@ test.describe("Business hub", () => {
     await expect(page.getByTestId("offerings-list")).not.toContainText("M1 media-button probe");
   });
 
+  test("an owner replaces and removes an offering's media by URL", async ({
+    page,
+    request,
+  }) => {
+    const offeringName = "RF-5 media URL probe";
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/offerings");
+
+    await expect(
+      page.getByTestId("offerings-list").or(page.getByText("Nothing added yet.")),
+    ).toBeVisible();
+    const leftovers = page.getByRole("button", { name: `Remove ${offeringName}` });
+    while ((await leftovers.count()) > 0) {
+      await leftovers.first().click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(leftovers).toHaveCount(0);
+    }
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill(offeringName);
+    await page.getByText("Add details", { exact: true }).click();
+    await page.getByTestId("offering-media-url").fill("https://youtu.be/first");
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering added", { exact: true })).toBeVisible();
+
+    // Reopen: the saved URL reads back and the explicit remove is offered.
+    await page.getByRole("button", { name: `Edit ${offeringName}` }).click();
+    const sheet = page.getByRole("dialog", { name: "Edit offering" });
+    await expect(page.getByTestId("offering-media-url")).toHaveValue(
+      "https://youtu.be/first",
+    );
+    await expect(page.getByTestId("offering-media-remove")).toBeVisible();
+
+    // Replace it with another URL.
+    await page.getByTestId("offering-media-url").fill("https://vimeo.com/second");
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering saved", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: `Edit ${offeringName}` }).click();
+    await expect(page.getByTestId("offering-media-url")).toHaveValue(
+      "https://vimeo.com/second",
+    );
+
+    // Removal is explicit and confirmed through the shared dialog, then saved.
+    await page.getByTestId("offering-media-remove").click();
+    await expect(
+      page.getByRole("dialog", { name: "Remove this photo?" }),
+    ).toBeVisible();
+    await page.getByTestId("confirm-accept").click();
+    await expect(
+      page.getByText("Current media will be removed when you save."),
+    ).toBeVisible();
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering saved", { exact: true }).last()).toBeVisible();
+
+    // Reopen: the URL is gone and there is nothing to remove.
+    await page.getByRole("button", { name: `Edit ${offeringName}` }).click();
+    await expect(page.getByTestId("offering-media-url")).toHaveValue("");
+    await expect(page.getByTestId("offering-media-remove")).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Cancel" }).click();
+
+    // Clean up through the real remove path.
+    await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("offerings-list")).not.toContainText(offeringName);
+  });
+
+  test("saving a picked offering image uploads through the shared field", async ({
+    page,
+    request,
+  }) => {
+    const offeringName = "RF-5 media upload probe";
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/offerings");
+
+    await expect(
+      page.getByTestId("offerings-list").or(page.getByText("Nothing added yet.")),
+    ).toBeVisible();
+    const leftovers = page.getByRole("button", { name: `Remove ${offeringName}` });
+    while ((await leftovers.count()) > 0) {
+      await leftovers.first().click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(leftovers).toHaveCount(0);
+    }
+
+    // The local stack has no Cloudinary, so only the upload PUT is mocked. The
+    // pick, the preview and the save are the real shared field and the real
+    // backend; nothing reaches Cloudinary.
+    let uploads = 0;
+    await page.route("**/api/business/offerings/*/media/upload", async (route) => {
+      uploads += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          url: "https://example.test/probe.jpg",
+          type: "image",
+          provider: "cloudinary",
+        }),
+      });
+    });
+
+    await page.getByTestId("offering-add").click();
+    await page.getByTestId("offering-name").fill(offeringName);
+    await page.getByText("Add details", { exact: true }).click();
+    await page.getByTestId("offering-media-input").setInputFiles({
+      name: "probe.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from("probe-image-bytes"),
+    });
+    await expect(page.getByTestId("offering-media-preview")).toBeVisible();
+    await expect(page.getByTestId("offering-media-filename")).toContainText("probe.jpg");
+    await expect(page.getByTestId("offering-media-edit")).toBeVisible();
+    await expect(page.getByTestId("offering-media-cancel")).toBeVisible();
+
+    await page.getByTestId("offering-save").click();
+    await expect(page.getByText("Offering added", { exact: true })).toBeVisible();
+    expect(uploads).toBe(1);
+
+    // Clean up through the real remove path.
+    await page.getByRole("button", { name: `Remove ${offeringName}` }).click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("offerings-list")).not.toContainText(offeringName);
+  });
+
   test("copying puts the full URL, scheme and all, on the clipboard", async ({
     page,
     request,
@@ -399,6 +531,114 @@ test.describe("Business hub", () => {
         /Add|Open/,
       );
     }
+  });
+
+  test("an owner uploads, replaces, and removes the cover photo", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+    // Wait for the page payload: the cover control's remove affordance only
+    // appears once has_cover is known, so checking it any earlier is a race.
+    await expect(page.getByTestId("booking-link")).toBeVisible();
+
+    // Shared tenant: clear anything a previous run left, so this starts empty.
+    if (await page.getByTestId("booking-cover-remove").isVisible()) {
+      await page.getByTestId("booking-cover-remove").click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(page.getByTestId("booking-cover-remove")).toHaveCount(0);
+    }
+    await expect(page.getByTestId("booking-cover")).toContainText("cover photo");
+
+    // Upload: the well takes a real JPEG, downscale re-encodes it client-side,
+    // and the configured media store keeps it - Cloudinary when configured,
+    // the legacy tenant_assets row otherwise. The explicit remove appears.
+    await page.getByTestId("booking-cover-input").setInputFiles({
+      name: "cover-a.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(ONE_PX_JPEG_BASE64, "base64"),
+    });
+    await expect(page.getByText("Cover photo updated", { exact: true }).last()).toBeVisible();
+    await expect(page.getByTestId("booking-cover-remove")).toBeVisible();
+
+    // Replace: a second file lands and the cover is still saved and removable.
+    await page.getByTestId("booking-cover-input").setInputFiles({
+      name: "cover-b.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(ONE_PX_JPEG_BASE64, "base64"),
+    });
+    await expect(page.getByText("Cover photo updated", { exact: true }).last()).toBeVisible();
+    await expect(page.getByTestId("booking-cover-remove")).toBeVisible();
+
+    // Removal is explicit and confirmed, and lands back on the empty well.
+    await page.getByTestId("booking-cover-remove").click();
+    await expect(
+      page.getByRole("dialog", { name: "Remove cover photo?" }),
+    ).toBeVisible();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByText("Cover photo removed", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("booking-cover-remove")).toHaveCount(0);
+    await expect(page.getByTestId("booking-cover")).toContainText("cover photo");
+  });
+
+  test("a failed cover upload restores the previous photo", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+    await expect(page.getByTestId("booking-link")).toBeVisible();
+
+    if (await page.getByTestId("booking-cover-remove").isVisible()) {
+      await page.getByTestId("booking-cover-remove").click();
+      await page.getByTestId("confirm-accept").click();
+      await expect(page.getByTestId("booking-cover-remove")).toHaveCount(0);
+    }
+
+    await page.getByTestId("booking-cover-input").setInputFiles({
+      name: "cover-first.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(ONE_PX_JPEG_BASE64, "base64"),
+    });
+    await expect(page.getByText("Cover photo updated", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("booking-cover-remove")).toBeVisible();
+
+    // Fail only the next PUT; GET keeps working so the old cover can return.
+    await page.route("**/api/business/cover", async (route) => {
+      if (route.request().method() === "PUT") {
+        await route.fulfill({
+          status: 502,
+          contentType: "application/json",
+          body: JSON.stringify({
+            type: "about:blank",
+            detail: "the cover could not be stored",
+            code: "media_upload_failed",
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.getByTestId("booking-cover-input").setInputFiles({
+      name: "cover-fail.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(ONE_PX_JPEG_BASE64, "base64"),
+    });
+    await expect(
+      page.getByText("That image could not be saved. Try a JPEG or PNG under 2MB."),
+    ).toBeVisible();
+    // The failed pick left no partial state: the previous cover is still
+    // rendered and still removable.
+    await expect(page.getByTestId("booking-cover-remove")).toBeVisible();
+    await expect(page.getByTestId("booking-cover").locator("img")).toBeVisible();
+
+    // Clean up through the real remove path.
+    await page.unroute("**/api/business/cover");
+    await page.getByTestId("booking-cover-remove").click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(page.getByTestId("booking-cover-remove")).toHaveCount(0);
   });
 
   test("a link slot takes an address, keeps it, and then opens it", async ({
