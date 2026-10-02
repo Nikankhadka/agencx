@@ -138,9 +138,16 @@ live in the ticket files, not here.
   previous photo on failure. No backend or schema change. Record in the
   archived
   [12-refinement-rf-5-media-workflows.md](../archive/phase1-complete/12-refinement-rf-5-media-workflows.md).
-- [ ] RF-6 through RF-17 product refinement: `Active - todo`, next is RF-6
-  (document-review workspace clarification, semantics unchanged); no other
-  ticket
+- [x] RF-6 document-review workspace clarification: merged in `684a2bf`. Draft
+  rows name their state with the shared status line, the review sheet drops its
+  repeated source line and labels the footer secondary by context ("Discard
+  draft" / "Remove source"), its two sections render in DOM order, and removing
+  a saved source reuses the row-level removal confirmation with the "Removed"
+  toast. Publication semantics unchanged; no API or DB change. Record in the
+  archived
+  [12-refinement-rf-6-document-review-clarity.md](../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md).
+- [ ] RF-7 through RF-17 product refinement: `Active - todo`, next is RF-7
+  (business page composition and contextual owner editing); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -175,7 +182,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-6 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-7 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

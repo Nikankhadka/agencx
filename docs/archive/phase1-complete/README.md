@@ -32,6 +32,7 @@ merged to `development` or `staging`, with its verification narrative.
 | [12-refinement-rf-3-offering-search.md](12-refinement-rf-3-offering-search.md) | RF-3 | Offering search on the owner offerings editor and the storefront catalog with one shared predicate; category grouping unchanged |
 | [12-refinement-rf-4-pricing-wording.md](12-refinement-rf-4-pricing-wording.md) | RF-4 | Fixed price versus display-only pricing wording: migration `0036`, mutual exclusivity with a 120-char cap, storefront and owner rendering through `money.ts` |
 | [12-refinement-rf-5-media-workflows.md](12-refinement-rf-5-media-workflows.md) | RF-5 | One cover/offering-image workflow on a shared media field: explicit remove, local preview while uploading, and failure recovery with no partial state |
+| [12-refinement-rf-6-document-review-clarity.md](12-refinement-rf-6-document-review-clarity.md) | RF-6 | Document-review workspace clarity: named draft state, de-duplicated source line, context-specific Discard/Remove labels aligned with the removal dialog, and DOM order matching visual order |
 | [12-refinement-rf-18-owner-read-state.md](12-refinement-rf-18-owner-read-state.md) | RF-18 | Real per-owner read state in the chat queue: migration `0035`, `POST /api/conversations/{id}/read`, unread row emphasis |
 | [22-production-hardening.md](22-production-hardening.md) | T-022 to T-033 | Production hardening: abuse control, CI hygiene, Sentry, CSP, conversation delete, retention, operator export, privacy/terms, backups; ADRs D32-D36 |
 

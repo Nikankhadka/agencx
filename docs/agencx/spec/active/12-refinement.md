@@ -1,10 +1,11 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-6 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18 are delivered and archived, and
-U-1 through U-4 and the onboarding-normalization slice were delivered and walked
-on the preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to
-T-033 are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-7 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18 are delivered and
+archived, and U-1 through U-4 and the onboarding-normalization slice were
+delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
+T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
+real-deploy walkthrough.
 **Phase 1 area:** Refinement.
 
 This is the single refinement file. It merges the R hardening remainder
@@ -108,9 +109,10 @@ agree, every workflow below has an implementation ticket, and each ticket is
 implementable without deciding product behavior (the `OPEN:` lines record the
 product questions that still need a founder ruling). The delivered tickets are
 RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
-search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows), and
-RF-18 (owner read state); the remaining product-refinement tickets are **RF-6
-through RF-17**, plus the RF-14 tab-badge follow-up.
+search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
+RF-6 (document-review workspace clarification), and RF-18 (owner read state);
+the remaining product-refinement tickets are **RF-7 through RF-17**, plus the
+RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -273,38 +275,16 @@ archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
 is the agreed behavior above. The hard rules in `design/conventions.md`
 sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, and RF-18. Their full
-records, including verification, live in
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18. Their
+full records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
 [12-refinement-rf-4-pricing-wording.md](../../../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md),
 [12-refinement-rf-5-media-workflows.md](../../../archive/phase1-complete/12-refinement-rf-5-media-workflows.md),
+[12-refinement-rf-6-document-review-clarity.md](../../../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-6: Document-review workspace clarification, semantics unchanged
-
-- **Status:** Active - todo.
-- **Visible outcome:** The document-review workspace is clearer to read and
-  edit; publication semantics do not change and no new review behavior is
-  added.
-- **Current vs proposed:** Current: the review sheet ships (O-3, W-8) with
-  read-first documents, capped offering cards, duplicate decisions, and inline
-  editing. Proposed: clarification only - copy, ordering, and state labels -
-  with no change to what saves or publishes.
-- **Design reference:** Shipped
-  `frontend/src/app/(tenant-admin)/(console)/business/details/knowledge/components/ReviewSheet.tsx`
-  and `knowledge/page.tsx`; `design/frontend.md` S2 states table and the W-8
-  paragraph.
-- **Dependencies:** RF-1.
-- **API/DB changes:** None.
-- **Acceptance scenarios:** Every existing review path still saves the same
-  content; nothing answers a customer before Save; the changed copy reads
-  correctly at mobile and desktop widths.
-- **Regression checks:** `make test-e2e` knowledge-review and
-  knowledge-review-mobile specs stay green.
-- **OPEN:** none.
 
 #### RF-7: Business page composition and contextual owner editing
 
