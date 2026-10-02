@@ -765,9 +765,7 @@ async def read_profile_for_display(*, tenant_id: UUID) -> dict[str, Any]:
     return resolve_profile(config if isinstance(config, dict) else {})
 
 
-async def read_public_storefront(
-    *, tenant_id: UUID, search: str | None = None
-) -> dict[str, Any]:
+async def read_public_storefront(*, tenant_id: UUID, search: str | None = None) -> dict[str, Any]:
     """Read only the public presentation fields under the customer context.
 
     RF-3: ``search`` narrows the offerings with the same predicate the owner
