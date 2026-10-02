@@ -1,10 +1,10 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-1 through
-RF-17); U-1 through U-4 and the onboarding-normalization slice delivered and
-walked on the preview on 2026-10-01. Production hardening T-022 to T-026 and
-T-028 to T-033 are built; T-027 (enforce the CSP) waits on a real-deploy
-walkthrough.
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-3 through
+RF-17); RF-1, RF-2, and RF-18 are delivered and archived, and U-1 through U-4
+and the onboarding-normalization slice were delivered and walked on the
+preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to T-033
+are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Refinement.
 
 This is the single refinement file. It merges the R hardening remainder
@@ -106,7 +106,23 @@ precedes split-pane work, which precedes integrated issue resolution. The
 Part 2 design task is complete: the documentation and the prototype authority
 agree, every workflow below has an implementation ticket, and each ticket is
 implementable without deciding product behavior (the `OPEN:` lines record the
-product questions that still need a founder ruling).
+product questions that still need a founder ruling). The delivered tickets are
+RF-1 (shared row grammar), RF-2 (business-detail editing), and RF-18 (owner
+read state); the remaining product-refinement tickets are **RF-3 through
+RF-17**, plus the RF-14 tab-badge follow-up.
+
+### Archive process for delivered RF tickets
+
+Effective now: when an RF ticket merges, its full ticket record moves out of
+this file into its own file in `docs/archive/phase1-complete/`, named
+`12-refinement-rf-<n>-<slug>.md`. That archive file carries the ticket id and
+title, a `Done - merged` status with the merge commit hash and date, the
+agreed-behavior text, the ticket detail block, and a short "Verification"
+section listing the commands run and their results. The block is removed from
+this file, which then lists only undelivered tickets plus a one-line pointer
+to the archived ones. `docs/archive/phase1-complete/README.md` gains an index
+row per archived ticket, and `docs/agencx/progress.md` and
+`docs/agencx/spec/README.md` are updated in the same closeout commit.
 
 Refine the existing application using selected reference workflows and the
 shipped Agencx visual language (Airbnb colour discipline, Plus Jakarta
@@ -173,10 +189,6 @@ knowledge review, and go-live boundaries.
 
 **Business maintenance:**
 
-- **RF-2** - Core business-detail editing after launch (name, hours,
-  description, business contact), in the shipped ABN-editor sheet idiom; the
-  public address is a separate field and stays stable when the name changes.
-  Saved edits appear immediately on the Business page and in customer answers.
 - **RF-3** - Searchable, category-grouped offerings; equal prices never merge
   distinct offerings.
 - **RF-4** - Fixed price (numeric, calculable) versus pricing wording
@@ -255,82 +267,17 @@ attention count when Needs you is non-empty (RF-14).
 
 ### Tickets
 
-Each ticket keeps `Status: Active - todo`; none is implemented by this design
-task. "Current" restates the read-only audit of 2026-10-02 and "Proposed" is the
-agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
-9 bind every ticket.
+Every ticket below keeps `Status: Active - todo`; the delivered tickets are
+archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
+is the agreed behavior above. The hard rules in `design/conventions.md`
+sections 8 and 9 bind every ticket.
 
-#### RF-1: Shared typography, surfaces, controls, navigation, and focus
-
-- **Status:** Done - merged in `ac11c6f`. The shipped row uses one truncated
-  preview line and a compact amber exclamation badge (founder-directed), with
-  the identity/icon leading slot kept.
-- **Visible outcome:** Every console screen shares one type rhythm, surface,
-  control, and navigation language; list rows read as one grammar (identity or
-  icon slot, primary line, meta line, trailing action); keyboard focus is
-  always visible, focus returns after a sheet closes, and a list restores its
-  scroll position when the owner returns. Routes and flow order do not change.
-  U-1 through U-4 are landed pre-work.
-- **Current vs proposed:** Current: U-1 through U-4 shipped shared navigation,
-  buttons, the confirm dialog, and toasts; row grammar is not unified -
-  `components/ui/RowLink.tsx` carries icon, label, detail, and chevron only,
-  with no identity or trailing slot, and Chats, Home, records, and admin lists
-  each build their own row; no scroll preservation exists under `frontend/src`;
-  no E2E asserts a `:focus-visible` ring. Proposed: extend or add a row
-  primitive with identity and trailing slots, migrate the list screens, add
-  focus restoration and scroll preservation, and pin focus visibility with a
-  Playwright check.
-- **Design reference:** `agencx-prototype-v6.html` `#tabbar`, `#screen-layer`,
-  `.dst-topbar`, and the `.bh-row` grammar inside `renderScreen('business')`;
-  `design/frontend.md` sections 4 and 7. Shipped:
-  `frontend/src/components/ui/RowLink.tsx`, `TabBar.tsx`, `ScreenTopbar.tsx`,
-  `Container.tsx`, and the `:focus-visible` rule in
-  `frontend/src/app/globals.css`.
-- **Dependencies:** None. This ticket precedes the visual ports RF-2 through
-  RF-16.
-- **API/DB changes:** None.
-- **Acceptance scenarios:** A keyboard-only owner tabs through Home, Chats, and
-  Business and always sees a focus ring; opening and closing a sheet returns
-  focus to the control that opened it; scrolling a long list, opening a row,
-  and returning restores the scroll position; the migrated rows render the same
-  slots at 360px and 1024px.
-- **Regression checks:** `make lint-frontend`, `make typecheck-frontend`,
-  `make test-frontend`, and `make test-e2e`; the existing U-1 through U-4 checks
-  stay green.
-
-#### RF-2: Business-detail editing and immediate consistency
-
-- **Status:** Active - in progress on `feat/rf-2-business-details`; the
-  implementation lands in the same commit.
-- **Visible outcome:** The owner edits business name, hours, description, and
-  business contact after go-live from the Business hub, in the shipped sheet
-  idiom; saved edits appear on the Business page and in customer answers. The
-  public address is a separate field and stays stable when the name changes.
-- **Current vs proposed:** Current: `/business/details` reads back ABN/GST,
-  services, and assistant voice; none of business name, hours, description, or
-  business contact has an editor, and `PATCH /api/business/profile` refuses
-  extra keys (`backend/app/features/business/api.py` `ProfileUpdate`). Proposed:
-  add an editor per field kind over the same save path, extend the profile
-  model and update handler to accept the new fields, and revalidate that
-  customer answers read the updated profile.
-- **Design reference:** `agencx-prototype-v6.html` `renderScreen('settings')`
-  `.set-field-row` rows and `openSettingsEdit(idx)` sheet; `design/frontend.md`
-  section 4.4 sheet-field recipe. Shipped:
-  `frontend/src/app/(tenant-admin)/(console)/business/details/page.tsx`,
-  `AbnSheet.tsx`, and `backend/app/features/business/api.py` `BusinessProfile` /
-  `ProfileUpdate`.
-- **Dependencies:** RF-1. The field editors follow the same idiom RF-7 uses.
-- **API/DB changes:** Extend `BusinessProfile` and `ProfileUpdate` with `name`,
-  `hours`, `description`, and `business_contact`; store on `tenant_config` or
-  the existing profile storage; no new table.
-- **Acceptance scenarios:** Edit name, hours, description, and contact in turn;
-  each appears immediately on the Business page and in the customer chat's
-  answers; changing the name does not change the public address or link.
-- **Regression checks:** Tenant isolation and onboarding-confirmed values stay
-  intact; the existing ABN, services, and voice editors still save;
-  `make test-backend`, `make test-frontend`, and `make test-e2e`.
-- **OPEN:** whether the public address gains a post-launch editor in this pass,
-  or stays a go-live-only choice from M-4 US-3.
+**Delivered and archived:** RF-1, RF-2, and RF-18. Their full records,
+including verification, live in
+[12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
+[12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
+and
+[12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
 
 #### RF-3: Offering search and category grouping
 
@@ -671,6 +618,10 @@ agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
   existing Chats list and Home brief tests stay green.
 - **OPEN:** whether the legacy **Unread** tab survives alongside Needs you, All,
   and Human handled, or is dropped.
+- **Follow-up (from RF-18):** the console Chats tab badge is still driven by
+  `needs_attention` rather than unread; reconcile it here, since switching it in
+  RF-18 broke `home-brief.spec.ts`. See
+  [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
 
 #### RF-15: Desktop split-pane Chats, mobile navigation preserved
 
@@ -756,44 +707,6 @@ agreed behavior above. The hard rules in `design/conventions.md` sections 8 and
   environment and date; a cross-tenant check proves isolation.
 - **Regression checks:** `make test-e2e`, `make eval-skip-llm`, and the
   deterministic pricing and domain-agnostic invariant tests.
-- **OPEN:** none.
-
-#### RF-18: Owner read state in the chat queue
-
-- **Status:** Done - merged in `e1d5144`. Open follow-up: the console Chats tab
-  badge is still driven by `needs_attention`; RF-14 reconciles it with the
-  unread count.
-- **Visible outcome:** The owner's chat queue carries real per-owner read
-  state: an unread row bolds its title and shows a small accent dot, the Unread
-  filter selects only conversations with a customer message newer than the
-  owner's read marker, and opening a thread clears it. Unread and Action needed
-  are separate axes and may both be true. No double ticks.
-- **Current vs proposed:** Current: `conversations` has no read marker; the
-  Unread filter is a placeholder (`needs_attention || status = 'human'`) that
-  conflates attention with read state, and opening a thread marks nothing.
-  Proposed: add `conversations.owner_read_at` (migration `0035`), compute
-  `unread` in the list query as a customer message newer than the marker,
-  expose `POST /api/conversations/{id}/read` (idempotent, forward-only), and
-  render the emphasis in the list.
-- **Design reference:** `agencx-prototype-v6.html` `.chat-row` (name / time /
-  status / preview); `design/frontend.md` section 7 S1 and the list-row recipe
-  in section 4.4. Shipped: `frontend/src/app/(tenant-admin)/(console)/chats/`
-  and `frontend/src/components/ui/ListRow.tsx`.
-- **Dependencies:** RF-1 (the shared row grammar). RF-14 later moves the queue
-  filtering and paging server-side; the read field rides the existing list
-  response in the meantime.
-- **API/DB changes:** Migration `0035_conversations_owner_read_at.sql` adds
-  `conversations.owner_read_at timestamptz` (nullable; the existing RLS policies
-  are unchanged). `ConversationSummary` gains `unread: bool`. New
-  `POST /api/conversations/{id}/read` returns 204.
-- **Acceptance scenarios:** A conversation with a customer message after the
-  marker (or no marker) is unread; opening it marks it read and returning to the
-  list shows it read; a later customer message makes it unread again; the Unread
-  filter shows only unread rows; a second tenant cannot mark another's
-  conversation read or see its unread state.
-- **Regression checks:** `make lint`, `make typecheck`, `make test`,
-  `make build`, and `make test-e2e`; the chats, tab-shell, and home-brief checks
-  stay green.
 - **OPEN:** none.
 
 ### Verification and boundaries

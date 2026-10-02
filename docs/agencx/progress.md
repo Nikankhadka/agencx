@@ -104,20 +104,20 @@ live in the ticket files, not here.
   in `ac11c6f`. One list-row grammar across the console lists, focus returns to
   the opener after a sheet closes, inner-container scroll is restored, the chat
   preview is a single truncated line, and the attention indicator is a compact
-  amber exclamation badge. Record in
-  [12-refinement.md](spec/active/12-refinement.md).
+  amber exclamation badge. Record in the archived
+  [12-refinement-rf-1-shared-ui.md](../archive/phase1-complete/12-refinement-rf-1-shared-ui.md).
 - [x] RF-18 owner read state in the chat queue: merged in `e1d5144`.
   `conversations.owner_read_at` plus `POST /api/conversations/{id}/read`; the
   Unread filter reads the real field and an unread row bolds its title with a
   small accent dot. Open follow-up: the console Chats tab badge stays on
-  `needs_attention` until RF-14. Record in
-  [12-refinement.md](spec/active/12-refinement.md), ADR D42.
-- [ ] RF-2 business-detail editing and immediate consistency: in progress on
-  `feat/rf-2-business-details`, awaiting merge. Business name, hours,
-  description and contact are editable in the Business details sheets,
-  persisted to both profile jsonb copies, and reach the Business page and
-  customer answers. Record in
-  [12-refinement.md](spec/active/12-refinement.md).
+  `needs_attention` until RF-14. Record in the archived
+  [12-refinement-rf-18-owner-read-state.md](../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md),
+  ADR D42.
+- [x] RF-2 business-detail editing and immediate consistency: merged in
+  `baa0ade`. Business name, hours, description and contact are editable in the
+  Business details sheets, persisted to both profile jsonb copies, and reach
+  the Business page and customer answers. Record in the archived
+  [12-refinement-rf-2-business-detail-editing.md](../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md).
 - [ ] RF-3 through RF-17 product refinement: `Active - todo`, next is RF-3
   (offering search and category grouping); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
@@ -150,7 +150,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-1 through RF-17 (Part 2 spec completed and implementation-ready, no ticket implemented) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-3 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

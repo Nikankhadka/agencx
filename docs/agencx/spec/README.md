@@ -30,7 +30,7 @@ Per-ticket header pattern:
 | Location | Contents | Status |
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
-| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-2 (in progress on `feat/rf-2-business-details`), RF-3 through RF-17 (RF-1 merged in `ac11c6f`, RF-18 merged in `e1d5144`; Part 2 spec completed and implementation-ready) | `Active - todo` |
+| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-3 through RF-17 (RF-1, RF-2, and RF-18 delivered and archived; Part 2 spec completed and implementation-ready) | `Active - todo` |
 
 ## Completed work
 
@@ -38,10 +38,10 @@ All delivered tickets live in
 [the phase-1-complete archive](../../archive/phase1-complete/README.md):
 foundation, onboarding, chat spine, chat grounding, business page, polish,
 hygiene, developer experience, deployment, offerings and media, R-1/R-2
-refinement, walkthrough fixes W-1 through W-9, schema drop W-10, document
-review W-11, auth OTP W-12/W-13, the finalized M-7 storefront, intent and identity (19),
-required services (20), and category management (21) - with the
-walkthrough evidence logs.
+refinement, RF-1/RF-2/RF-18 refinement, walkthrough fixes W-1 through W-9,
+schema drop W-10, document review W-11, auth OTP W-12/W-13, the finalized M-7
+storefront, intent and identity (19), required services (20), and category
+management (21) - with the walkthrough evidence logs.
 
 ## Prototype status
 
@@ -75,3 +75,16 @@ Full scope boundary is in [the PRD](../prd.md); current status is in
 When every ticket in a phase is complete, move its file to
 `docs/archive/phase1-complete/` with `git mv`, index it in that folder's
 `README.md`, then update [progress.md](../progress.md).
+
+### Archive process for delivered RF tickets
+
+When an RF ticket merges, its full ticket record moves out of
+[active/12-refinement.md](active/12-refinement.md) into its own file in
+`docs/archive/phase1-complete/`, named `12-refinement-rf-<n>-<slug>.md`. That
+archive file carries the ticket id and title, a `Done - merged` status with the
+merge commit hash and date, the agreed-behavior text, the ticket detail block,
+and a short "Verification" section listing the commands run and their results.
+The block is removed from the active file, which then lists only undelivered
+tickets plus a one-line pointer to the archived ones. This README gains an
+index row per archived ticket, and `progress.md` is updated in the same
+closeout commit.
