@@ -124,12 +124,12 @@ live in the ticket files, not here.
   equal-priced distinct offerings stay distinct and category grouping is
   unchanged. Record in the archived
   [12-refinement-rf-3-offering-search.md](../archive/phase1-complete/12-refinement-rf-3-offering-search.md).
-- [ ] RF-4 explicit pricing wording: in progress on
-  `feat/rf-4-pricing-wording`, awaiting merge. `offerings.pricing_wording`
-  (migration `0036`) is display-only and mutually exclusive with `price_cents`;
-  the storefront and owner editor render it verbatim, priced offerings still
-  format through `money.ts`, and the pricing engine never reads it. Record in
-  [12-refinement.md](spec/active/12-refinement.md).
+- [x] RF-4 explicit pricing wording: merged in `d6e3552`.
+  `offerings.pricing_wording` (migration `0036`) is display-only and mutually
+  exclusive with `price_cents`; the storefront and owner editor render it
+  verbatim, priced offerings still format through `money.ts`, and the pricing
+  engine never reads it. Record in the archived
+  [12-refinement-rf-4-pricing-wording.md](../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md).
 - [ ] RF-5 through RF-17 product refinement: `Active - todo`, next is RF-5
   (cover and offering-image workflows); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
@@ -139,9 +139,8 @@ live in the ticket files, not here.
   acceptance scenarios, and regression checks. Design intent in
   [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
   there record the product questions that still need a founder ruling (public
-  address editing, price-plus-wording precedence,
-  contextual shortcut fields, chat-card width, the legacy Unread tab, and
-  whether resolution requires takeover).
+  address editing, contextual shortcut fields, chat-card width, the legacy
+  Unread tab, and whether resolution requires takeover).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
@@ -167,7 +166,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-4 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-5 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

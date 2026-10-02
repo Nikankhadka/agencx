@@ -1,10 +1,10 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-4 through
-RF-17); RF-1, RF-2, RF-3, and RF-18 are delivered and archived, and U-1 through
-U-4 and the onboarding-normalization slice were delivered and walked on the
-preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to T-033
-are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-5 through
+RF-17); RF-1, RF-2, RF-3, RF-4, and RF-18 are delivered and archived, and U-1
+through U-4 and the onboarding-normalization slice were delivered and walked on
+the preview on 2026-10-01. Production hardening T-022 to T-026 and T-028 to
+T-033 are built; T-027 (enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Refinement.
 
 This is the single refinement file. It merges the R hardening remainder
@@ -108,8 +108,9 @@ agree, every workflow below has an implementation ticket, and each ticket is
 implementable without deciding product behavior (the `OPEN:` lines record the
 product questions that still need a founder ruling). The delivered tickets are
 RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
-search), and RF-18 (owner read state); the remaining product-refinement tickets
-are **RF-4 through RF-17**, plus the RF-14 tab-badge follow-up.
+search), RF-4 (pricing wording), and RF-18 (owner read state); the remaining
+product-refinement tickets are **RF-5 through RF-17**, plus the RF-14 tab-badge
+follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -272,50 +273,14 @@ archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
 is the agreed behavior above. The hard rules in `design/conventions.md`
 sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, and RF-18. Their full records,
-including verification, live in
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, and RF-18. Their full
+records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
+[12-refinement-rf-4-pricing-wording.md](../../../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-4: Explicit pricing wording across editing, publication, and customer display
-
-- **Status:** Active - in progress on `feat/rf-4-pricing-wording`; the
-  implementation lands in the same commit.
-- **Visible outcome:** An offering carries either a fixed price (numeric,
-  calculable) or owner-confirmed pricing wording (such as "from $12 a head");
-  wording is display-only and never becomes a calculable amount on either
-  surface.
-- **Current vs proposed:** Current: offerings carry `price_cents` only
-  (`backend/app/features/business/api.py` `OfferingCreate` / `OfferingUpdate`);
-  no display-only pricing wording exists anywhere. Proposed: add a
-  `pricing_wording` field through the offering API, the owner editor, the
-  storefront card, the detail sheet, and `CatalogCard`; the
-  deterministic-pricing invariant still holds because wording never enters the
-  pricing engine.
-- **Design reference:** Shipped `frontend/src/app/[slug]/Offerings.tsx`
-  `OfferingRow` and `Storefront.tsx` detail sheet; owner editor
-  `business/components/OfferingsList.tsx`; `frontend/src/lib/money.ts`. v6
-  quote lines (`openQuotePreview`) show the money-rendering idiom only.
-- **Dependencies:** RF-3.
-- **API/DB changes:** Add a nullable `pricing_wording text` column to
-  `offerings` (migration with the implementation ticket) and expose it on
-  create, update, and read.
-- **Acceptance scenarios:** Save wording on an offering with no fixed price and
-  see it on the storefront card and detail; the assistant never derives a total
-  from wording; a priced offering still formats from cents through `money.ts`;
-  wording longer than the cap is refused with a readable message.
-- **Regression checks:** The deterministic-pricing tests stay green; the price
-  gate rejects any model-authored amount; the storefront tests for priced and
-  unpriced offerings.
-- **Resolved:** price and pricing wording are mutually exclusive. The API
-  rejects a request that sets both (or a non-empty price alongside wording)
-  with a readable validation error, and the owner editor is an explicit mode
-  choice (Fixed price / Pricing wording). If legacy or direct data ever carries
-  both, `price_cents` is authoritative and the wording is ignored - wording is
-  never calculable anywhere.
 
 #### RF-5: Cover and offering-image workflows
 
