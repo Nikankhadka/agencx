@@ -227,6 +227,38 @@ async def test_catalog_item_without_direct_price_raises(
         await _quote(tenant_id, [Selection(kind="item", code_or_id=str(item_id), quantity=1)])
 
 
+async def test_rf4_pricing_wording_is_never_calculable(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """RF-4: pricing_wording is display-only. The engine's item read selects
+    ``price_cents`` and nothing else, so an item that carries wording but no
+    fixed price (or wording alongside a price) cannot turn it into a total -
+    wording is structurally absent from the calculable path."""
+    tenant_id = await _seed_tenant(superuser_conn)
+    # Wording only, no price: the engine treats it as having no direct price.
+    wording_only: uuid.UUID = await superuser_conn.fetchval(
+        "insert into offerings (tenant_id, name, price_cents, pricing_wording, active) "
+        "values ($1, 'from $12 a head', null, 'from $12 a head', true) returning id",
+        tenant_id,
+    )
+    with pytest.raises(SelectionError, match="no direct price"):
+        await _quote(
+            tenant_id, [Selection(kind="item", code_or_id=str(wording_only), quantity=1)]
+        )
+
+    # Wording alongside a real price: the engine computes from cents alone and
+    # the wording is nowhere in the output.
+    both: uuid.UUID = await superuser_conn.fetchval(
+        "insert into offerings (tenant_id, name, price_cents, pricing_wording, active) "
+        "values ($1, 'Catering box', 1200, 'from $12 a head', true) returning id",
+        tenant_id,
+    )
+    quote = await _quote(tenant_id, [Selection(kind="item", code_or_id=str(both), quantity=2)])
+    assert quote.line_items[0].unit_amount_cents == 1200
+    assert quote.line_items[0].line_total_cents == 2400
+    assert "wording" not in json.dumps([item.to_dict() for item in quote.line_items])
+
+
 async def test_malformed_item_id_raises(superuser_conn: asyncpg.Connection[Any]) -> None:
     tenant_id = await _seed_tenant(superuser_conn)
     with pytest.raises(SelectionError, match="malformed catalog item id"):

@@ -124,8 +124,14 @@ live in the ticket files, not here.
   equal-priced distinct offerings stay distinct and category grouping is
   unchanged. Record in the archived
   [12-refinement-rf-3-offering-search.md](../archive/phase1-complete/12-refinement-rf-3-offering-search.md).
-- [ ] RF-4 through RF-17 product refinement: `Active - todo`, next is RF-4
-  (explicit pricing wording); no other ticket
+- [ ] RF-4 explicit pricing wording: in progress on
+  `feat/rf-4-pricing-wording`, awaiting merge. `offerings.pricing_wording`
+  (migration `0036`) is display-only and mutually exclusive with `price_cents`;
+  the storefront and owner editor render it verbatim, priced offerings still
+  format through `money.ts`, and the pricing engine never reads it. Record in
+  [12-refinement.md](spec/active/12-refinement.md).
+- [ ] RF-5 through RF-17 product refinement: `Active - todo`, next is RF-5
+  (cover and offering-image workflows); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current

@@ -8,6 +8,8 @@ export interface CatalogOffering {
   category: string | null;
   categories?: Array<{ id: string; name: string; position: number; is_primary: boolean }>;
   price_cents: number | null;
+  /** RF-4: display-only pricing wording, used when there is no fixed price. */
+  pricing_wording?: string | null;
 }
 
 export interface CatalogPayload {
@@ -42,9 +44,9 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-medium text-text">{offering.name}</span>
                     <span className="shrink-0 tabular-nums text-body-sm text-text">
-                      {offering.price_cents === null
-                        ? "Price not listed"
-                        : formatCents(offering.price_cents)}
+                      {offering.price_cents !== null
+                        ? formatCents(offering.price_cents)
+                        : offering.pricing_wording?.trim() || "Price not listed"}
                     </span>
                   </div>
                   {offering.description ? (

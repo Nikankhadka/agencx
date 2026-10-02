@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { OfferingMediaField } from "./OfferingMediaField";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ApiError, apiFetch } from "@/lib/api";
+import { formatCents } from "@/lib/money";
 import { filterOfferings } from "@/lib/offering-search";
 import { CategoryPicker, type CategoryOption } from "@/components/business/CategoryPicker";
 
@@ -17,11 +18,15 @@ interface Offering {
   name: string;
   description: string;
   price_cents: number | null;
+  pricing_wording?: string | null;
   category?: string | null;
   category_id?: string | null;
   categories: Array<{ id: string; name: string; position: number; is_primary: boolean }>;
   media?: { url: string } | null;
 }
+
+/** RF-4: an offering is priced or worded, never both. */
+type PriceMode = "fixed" | "wording";
 
 interface OfferingCategory extends CategoryOption {
   normalized_key: string;
@@ -56,7 +61,9 @@ const UNCATEGORIZED = "Uncategorized";
 interface FormValues {
   name: string;
   description: string;
+  mode: PriceMode;
   price: string;
+  wording: string;
   categoryIds: string[];
   primaryCategoryId: string | null;
   mediaUrl: string;
@@ -68,7 +75,9 @@ interface FormValues {
 const EMPTY_FORM: FormValues = {
   name: "",
   description: "",
+  mode: "fixed",
   price: "",
+  wording: "",
   categoryIds: [],
   primaryCategoryId: null,
   mediaUrl: "",
@@ -78,13 +87,18 @@ const EMPTY_FORM: FormValues = {
 };
 
 function formFor(offering: Offering): FormValues {
+  // A stored wording means the offering is in wording mode; otherwise it is
+  // fixed (which admits the unpriced blank case).
+  const mode: PriceMode = offering.pricing_wording ? "wording" : "fixed";
   return {
     name: offering.name,
     description: offering.description,
+    mode,
     price:
       offering.price_cents === null
         ? ""
         : (offering.price_cents / 100).toFixed(2),
+    wording: offering.pricing_wording ?? "",
     categoryIds: offering.categories.map((category) => category.id),
     primaryCategoryId: offering.category_id ?? null,
     mediaUrl: offering.media?.url ?? "",
@@ -92,6 +106,12 @@ function formFor(offering: Offering): FormValues {
     mediaChanged: false,
     removeMedia: false,
   };
+}
+
+/** The row's price line: a formatted fixed price, or the display-only wording. */
+function priceSummary(offering: Offering): string | null {
+  if (offering.price_cents !== null) return formatCents(offering.price_cents);
+  return offering.pricing_wording ?? null;
 }
 
 export function OfferingsList() {
@@ -245,10 +265,13 @@ export function OfferingsList() {
     if (!editing || !form.name.trim()) return;
     const isNew = editing === "new";
     setWorking(true);
+    // RF-4: exactly one pricing axis is sent. The mode the owner chose clears
+    // the other, so the API's mutual-exclusivity check never sees both.
     const body = {
       name: form.name,
       description: form.description,
-      price_dollars: form.price.trim() || null,
+      price_dollars: form.mode === "fixed" ? form.price.trim() || null : null,
+      pricing_wording: form.mode === "wording" ? form.wording.trim() || null : null,
       category_ids: form.categoryIds,
       primary_category_id: form.primaryCategoryId,
     };
@@ -499,8 +522,8 @@ export function OfferingsList() {
                             {offering.description ? (
                               <span className="block truncate">{offering.description}</span>
                             ) : null}
-                            {offering.price_cents !== null ? (
-                              <span className="block">${(offering.price_cents / 100).toFixed(2)}</span>
+                            {priceSummary(offering) ? (
+                              <span className="block">{priceSummary(offering)}</span>
                             ) : null}
                             {offering.categories.some((category) => !category.is_primary) ? (
                               <span className="mt-1 flex flex-wrap gap-1">
@@ -569,17 +592,37 @@ export function OfferingsList() {
             void save();
           }}
         >
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              required
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Offering"
-              aria-label="Offering name"
-              data-testid="offering-name"
-              className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
-            />
+          <input
+            autoFocus
+            required
+            value={form.name}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder="Offering"
+            aria-label="Offering name"
+            data-testid="offering-name"
+            className="w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+          />
+          {/* RF-4: one explicit mode. Fixed price or pricing wording, never both. */}
+          <div className="mt-2 flex gap-2" role="radiogroup" aria-label="Pricing mode">
+            {(["fixed", "wording"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={form.mode === mode}
+                data-testid={`offering-mode-${mode}`}
+                onClick={() => setForm((current) => ({ ...current, mode }))}
+                className={
+                  form.mode === mode
+                    ? "rounded-chip border-chip border-accent-subtle bg-accent-subtle px-4 py-2 text-chip text-accent-active transition-colors duration-(--duration-fast)"
+                    : "rounded-chip border-chip border-hairline px-4 py-2 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active"
+                }
+              >
+                {mode === "fixed" ? "Fixed price" : "Pricing wording"}
+              </button>
+            ))}
+          </div>
+          {form.mode === "fixed" ? (
             <input
               value={form.price}
               onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
@@ -587,9 +630,19 @@ export function OfferingsList() {
               placeholder="Price"
               aria-label="Price"
               data-testid="offering-price"
-              className="w-24 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+              className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
             />
-          </div>
+          ) : (
+            <input
+              value={form.wording}
+              onChange={(event) => setForm((current) => ({ ...current, wording: event.target.value }))}
+              maxLength={120}
+              placeholder="from $12 a head"
+              aria-label="Pricing wording"
+              data-testid="offering-wording"
+              className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+            />
+          )}
           <textarea
             value={form.description}
             onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}

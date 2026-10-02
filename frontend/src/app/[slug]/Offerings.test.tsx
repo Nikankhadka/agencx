@@ -136,6 +136,21 @@ describe("Offerings catalog density", () => {
     expect(html.match(/Battery replacement/g) ?? []).toHaveLength(1);
   });
 
+  it("renders pricing wording verbatim when there is no fixed price", () => {
+    const html = htmlFor(
+      offering({ name: "Catering box", price_cents: null, pricing_wording: "from $12 a head" }),
+    );
+
+    expect(html).toContain("from $12 a head");
+  });
+
+  it("formats a fixed price through money.ts", () => {
+    const html = htmlFor(offering({ name: "Widget", price_cents: 12345 }));
+
+    // money.ts's Intl formatting, not inline arithmetic.
+    expect(html).toContain("$123.45");
+  });
+
   it("renders a category with a single member", () => {
     const html = catalogHtml([
       offering({ id: "a", name: "Solo item", category: "Only category" }),

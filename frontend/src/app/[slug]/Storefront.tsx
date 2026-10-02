@@ -246,7 +246,16 @@ export function Storefront({
               <VideoMedia media={selected.media} />
             ) : null}
             {selected.description ? <p className="text-prose text-text-secondary">{selected.description}</p> : null}
-            {selected.price_cents !== null ? <p className="text-title-2 font-semibold text-text">{priceLabel(selected.price_cents)}</p> : null}
+            {/* RF-4: fixed price formats from cents; wording shows verbatim. */}
+            {selected.price_cents !== null ? (
+              <p data-testid="offering-detail-price" className="text-title-2 font-semibold text-text">
+                {priceLabel(selected.price_cents)}
+              </p>
+            ) : selected.pricing_wording ? (
+              <p data-testid="offering-detail-wording" className="text-title-2 font-semibold text-text">
+                {selected.pricing_wording}
+              </p>
+            ) : null}
             <button type="button" onClick={() => { setChatOpen(true); composerRef.current?.(`Tell me about ${selected.name}`); setSelected(null); }} className="w-full rounded-field bg-brand px-4 py-3 text-action font-medium text-text-inverse hover:brightness-95 active:brightness-90">Ask about this</button>
           </div>
         ) : null}

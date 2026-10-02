@@ -49,6 +49,7 @@ class BookingPageOffering(BaseModel):
     name: str
     description: str
     price_cents: int | None
+    pricing_wording: str | None = None
     category: str | None = None
     category_id: UUID | None = None
     categories: list[OfferingCategoryMembershipResponse] = Field(default_factory=list)
@@ -123,10 +124,17 @@ class OfferingResponse(BaseModel):
     name: str
     description: str
     price_cents: int | None
+    # RF-4: display-only pricing wording ("from $12 a head"). Never calculable.
+    pricing_wording: str | None = None
     category: str | None = None
     category_id: UUID | None = None
     categories: list[OfferingCategoryMembershipResponse] = Field(default_factory=list)
     media: OfferingMedia | None = None
+
+
+# RF-4: a display-only pricing phrase. Long enough for "from $12 a head", short
+# enough to stay one line on a card; anything longer is refused readably.
+PRICING_WORDING_MAX = 120
 
 
 class OfferingCategoryResponse(BaseModel):
@@ -142,6 +150,7 @@ class OfferingCreate(BaseModel):
     name: str
     description: str = ""
     price_dollars: Decimal | None = None
+    pricing_wording: str | None = None
     category_ids: list[UUID] = Field(default_factory=list)
     primary_category_id: UUID | None = None
 
@@ -162,9 +171,15 @@ class OfferingCreate(BaseModel):
     def _price(cls, value: object) -> Decimal | None:
         return _offering_price(value)
 
+    @field_validator("pricing_wording")
+    @classmethod
+    def _wording(cls, value: str | None) -> str | None:
+        return _normalize_wording(value)
+
     @model_validator(mode="after")
     def _categories(self) -> OfferingCreate:
         _validate_categories(self.category_ids, self.primary_category_id)
+        _validate_price_or_wording(self.price_dollars, self.pricing_wording)
         return self
 
 
@@ -182,6 +197,7 @@ class OfferingUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     price_dollars: Decimal | None = None
+    pricing_wording: str | None = None
     category_ids: list[UUID] | None = None
     primary_category_id: UUID | None = None
 
@@ -204,6 +220,11 @@ class OfferingUpdate(BaseModel):
     def _price(cls, value: object) -> Decimal | None:
         return _offering_price(value)
 
+    @field_validator("pricing_wording")
+    @classmethod
+    def _wording(cls, value: str | None) -> str | None:
+        return _normalize_wording(value)
+
     @model_validator(mode="after")
     def _categories(self) -> OfferingUpdate:
         if (
@@ -215,6 +236,12 @@ class OfferingUpdate(BaseModel):
             if self.category_ids is None:
                 raise ValueError("category_ids must be a list")
             _validate_categories(self.category_ids, self.primary_category_id)
+        # RF-4: a patch that sets both axes at once is refused. Setting only one
+        # is fine; clearing the other is the owner's explicit mode switch.
+        price_in_patch = "price_dollars" in self.model_fields_set
+        wording_in_patch = "pricing_wording" in self.model_fields_set
+        if price_in_patch and wording_in_patch:
+            _validate_price_or_wording(self.price_dollars, self.pricing_wording)
         return self
 
     def updates(self) -> dict[str, object]:
@@ -225,6 +252,14 @@ class OfferingUpdate(BaseModel):
             updates["description"] = self.description
         if "price_dollars" in self.model_fields_set:
             updates["price_cents"] = _price_cents(self.price_dollars)
+            # Choosing a fixed price is the owner's mode: clear any wording.
+            if "pricing_wording" not in self.model_fields_set:
+                updates["pricing_wording"] = None
+        if "pricing_wording" in self.model_fields_set:
+            updates["pricing_wording"] = self.pricing_wording
+            # Choosing wording clears any fixed price, so the two never coexist.
+            if "price_dollars" not in self.model_fields_set:
+                updates["price_cents"] = None
         if "category_ids" in self.model_fields_set:
             updates["categories_supplied"] = True
             updates["category_ids"] = self.category_ids
@@ -237,6 +272,30 @@ def _validate_categories(category_ids: list[UUID], primary_category_id: UUID | N
         raise ValueError("category_ids must be unique")
     if primary_category_id is not None and primary_category_id not in category_ids:
         raise ValueError("primary_category_id must be included in category_ids")
+
+
+def _normalize_wording(value: str | None) -> str | None:
+    """RF-4: trim, cap, and treat blank as "no wording"."""
+    if value is None:
+        return None
+    wording = value.strip()
+    if not wording:
+        return None
+    if len(wording) > PRICING_WORDING_MAX:
+        raise ValueError(
+            f"Keep pricing wording to {PRICING_WORDING_MAX} characters or fewer."
+        )
+    return wording
+
+
+def _validate_price_or_wording(
+    price_dollars: Decimal | None, pricing_wording: str | None
+) -> None:
+    """RF-4: a fixed price and pricing wording are mutually exclusive."""
+    if price_dollars is not None and pricing_wording:
+        raise ValueError(
+            "Choose either a fixed price or pricing wording, not both."
+        )
 
 
 class OfferingCategoryUpdate(BaseModel):
@@ -360,6 +419,7 @@ async def post_offering(
             name=body.name,
             description=body.description,
             price_cents=_price_cents(body.price_dollars),
+            pricing_wording=body.pricing_wording,
             category_ids=body.category_ids,
             primary_category_id=body.primary_category_id,
             embedder=embedder,

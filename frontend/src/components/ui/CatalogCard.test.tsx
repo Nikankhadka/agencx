@@ -67,6 +67,26 @@ describe("CatalogCard", () => {
     expect(html).toContain("$123.45");
   });
 
+  it("shows pricing wording verbatim when there is no fixed price", () => {
+    const catalog: CatalogPayload = {
+      offerings: [
+        {
+          id: "1",
+          name: "Catering box",
+          description: "",
+          category: null,
+          price_cents: null,
+          pricing_wording: "from $12 a head",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(<CatalogCard catalog={catalog} />);
+
+    expect(html).toContain("from $12 a head");
+    expect(html).not.toContain("Price not listed");
+  });
+
   it("groups an offering under every confirmed category", () => {
     const catalog: CatalogPayload = {
       offerings: [

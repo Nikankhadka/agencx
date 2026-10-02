@@ -285,7 +285,7 @@ async def list_offerings(
     needle = _search_needle(search)
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         rows = await conn.fetch(
-            "select o.id, o.name, o.description, o.price_cents, "
+            "select o.id, o.name, o.description, o.price_cents, o.pricing_wording, "
             "o.category, o.category_id, o.active, o.position, "
             "m.type as media_type, m.provider as media_provider, m.url as media_url, m.poster_url "
             "from offerings o left join tenant_media m on m.offering_id = o.id "
@@ -321,6 +321,7 @@ async def create_offering(
     name: str,
     description: str,
     price_cents: int | None,
+    pricing_wording: str | None = None,
     embedder: Embedder,
     category_ids: list[UUID] | None = None,
     primary_category_id: UUID | None = None,
@@ -335,6 +336,7 @@ async def create_offering(
                     "name": name,
                     "description": description,
                     "price_cents": price_cents,
+                    "pricing_wording": pricing_wording,
                     "category_ids": category_ids or [],
                     "primary_category_id": primary_category_id,
                 }
@@ -368,14 +370,14 @@ async def create_offerings_batch(
         if not name or key in existing:
             continue
         row = await conn.fetchrow(
-            "insert into offerings (tenant_id, name, description, price_cents, position) "
-            "values ($1, $2, $3, $4, $5) returning id, name, description, price_cents, "
-            "category, category_id, active, "
-            "position",
+            "insert into offerings (tenant_id, name, description, price_cents, pricing_wording, "
+            "position) values ($1, $2, $3, $4, $5, $6) returning id, name, description, "
+            "price_cents, pricing_wording, category, category_id, active, position",
             tenant_id,
             name,
             str(item.get("description", "")),
             item.get("price_cents"),
+            item.get("pricing_wording"),
             position,
         )
         if row is not None:
@@ -496,16 +498,16 @@ async def update_offering(
             row = await conn.fetchrow(
                 f"update offerings set {assignments} "  # noqa: S608 - fixed API allowlist
                 "where tenant_id = $1 and id = $2 "
-                "returning id, name, description, price_cents, category, category_id, "
-                "active, position",
+                "returning id, name, description, price_cents, pricing_wording, category, "
+                "category_id, active, position",
                 tenant_id,
                 offering_id,
                 *(updates[column] for column in columns),
             )
         else:
             row = await conn.fetchrow(
-                "select id, name, description, price_cents, category, category_id, "
-                "active, position "
+                "select id, name, description, price_cents, pricing_wording, category, "
+                "category_id, active, position "
                 "from offerings where tenant_id=$1 and id=$2",
                 tenant_id,
                 offering_id,
@@ -779,7 +781,8 @@ async def read_public_storefront(
             tenant_id,
         )
         offerings = await conn.fetch(
-            "select o.id, o.name, o.description, o.price_cents, o.category, o.category_id "
+            "select o.id, o.name, o.description, o.price_cents, o.pricing_wording, "
+            "o.category, o.category_id "
             "from offerings o "
             f"where o.tenant_id = $1 and o.active {_SEARCH_PREDICATE} "
             "order by o.position, o.created_at, o.id",  # noqa: S608

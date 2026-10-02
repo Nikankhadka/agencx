@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { navTone } from "@/components/ui/TabBar";
+import { formatCents } from "@/lib/money";
 import { filterOfferings } from "@/lib/offering-search";
 import type { StorefrontOffering } from "@/lib/tenant";
 
@@ -53,12 +54,19 @@ function sectionsOf(offerings: StorefrontOffering[]): Section[] {
 }
 
 /**
- * The owner's price, rendered. Integer cents in, one string out - this is
- * formatting, not arithmetic: nothing here rounds, marks up, or derives an
- * amount, and an offering with no published price simply shows none.
+ * RF-4: the owner's pricing, rendered. A fixed price goes through `money.ts`
+ * (integer cents in, one string out - no arithmetic here); pricing wording is
+ * display text, shown verbatim and never treated as an amount. An offering with
+ * neither simply shows none.
  */
 export function priceLabel(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatCents(cents);
+}
+
+/** The offering's price line: formatted cents, else verbatim wording, else null. */
+function priceLine(offering: StorefrontOffering): string | null {
+  if (offering.price_cents !== null) return priceLabel(offering.price_cents);
+  return offering.pricing_wording?.trim() || null;
 }
 
 function RowMedia({ offering }: { offering: StorefrontOffering }) {
@@ -128,12 +136,12 @@ function OfferingRow({
     >
       <span className="min-w-0 flex-1">
         <span className="block text-card-hl font-semibold text-text">{offering.name}</span>
-        {offering.price_cents !== null ? (
+        {priceLine(offering) ? (
           <span
             data-testid="offering-price"
             className="mt-1 block text-body-sm font-medium text-text tabular-nums"
           >
-            {priceLabel(offering.price_cents)}
+            {priceLine(offering)}
           </span>
         ) : null}
         {offering.description ? (

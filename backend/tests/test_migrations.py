@@ -76,8 +76,10 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # conversations.customer_email, the escalation-scoped contact column; 0034
     # adds multi-category offering memberships while retaining the 0031 primary
     # category columns as a compatibility projection; 0035 adds RF-18's
-    # conversations.owner_read_at, the owner's read marker for the chat queue.
-    assert len(on_disk) == 35, "expected migrations 0001-0035"
+    # conversations.owner_read_at, the owner's read marker for the chat queue;
+    # 0036 adds RF-4's offerings.pricing_wording, the display-only alternative
+    # to a fixed price.
+    assert len(on_disk) == 36, "expected migrations 0001-0036"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 

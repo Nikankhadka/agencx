@@ -1030,6 +1030,8 @@ export interface components {
             description: string;
             /** Price Cents */
             price_cents: number | null;
+            /** Pricing Wording */
+            pricing_wording?: string | null;
             /** Category */
             category?: string | null;
             /** Category Id */
@@ -1520,6 +1522,8 @@ export interface components {
             description: string;
             /** Price Dollars */
             price_dollars?: number | string | null;
+            /** Pricing Wording */
+            pricing_wording?: string | null;
             /** Category Ids */
             category_ids?: string[];
             /** Primary Category Id */
@@ -1560,6 +1564,8 @@ export interface components {
             description: string;
             /** Price Cents */
             price_cents: number | null;
+            /** Pricing Wording */
+            pricing_wording?: string | null;
             /** Category */
             category?: string | null;
             /** Category Id */
@@ -1584,6 +1590,8 @@ export interface components {
             description?: string | null;
             /** Price Dollars */
             price_dollars?: number | string | null;
+            /** Pricing Wording */
+            pricing_wording?: string | null;
             /** Category Ids */
             category_ids?: string[] | null;
             /** Primary Category Id */
@@ -1982,6 +1990,8 @@ export interface components {
             description: string;
             /** Price Cents */
             price_cents: number | null;
+            /** Pricing Wording */
+            pricing_wording?: string | null;
             /** Category */
             category?: string | null;
             /** Category Id */

@@ -35,6 +35,7 @@ class PublicOffering(BaseModel):
     name: str
     description: str
     price_cents: int | None
+    pricing_wording: str | None = None
     category: str | None = None
     category_id: UUID | None = None
     categories: list[PublicOfferingCategory] = Field(default_factory=list)

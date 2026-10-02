@@ -78,6 +78,8 @@ export interface StorefrontOffering {
    * published no price. The page formats it; nothing here computes it.
    */
   price_cents: number | null;
+  /** RF-4: display-only pricing wording, used when there is no fixed price. */
+  pricing_wording?: string | null;
   category?: string | null;
   category_id?: string | null;
   categories?: Array<{ id: string; name: string; position: number; is_primary: boolean }>;

@@ -151,6 +151,7 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "name": "Screen repair",
             "description": "Most models",
             "price_cents": 8950,
+            "pricing_wording": None,
             "category": "Screen repairs",
             "category_id": screen_id,
             "categories": [
@@ -177,6 +178,7 @@ async def test_owner_manages_offerings_and_the_list_reads_the_current_rows(
             "name": "Screen replacement",
             "description": "Most models",
             "price_cents": 9900,
+            "pricing_wording": None,
             "category": "Screen repairs",
             "category_id": screen_id,
             "categories": [
@@ -543,6 +545,7 @@ async def test_storefront_exposes_only_owner_published_content(client: httpx.Asy
             "name": "Screen repair",
             "description": "Repairs for common phone screens.",
             "price_cents": 8950,
+            "pricing_wording": None,
             "category": None,
             "category_id": None,
             "categories": [],
@@ -651,6 +654,7 @@ async def test_a_priceless_offering_reaches_the_storefront_with_no_price(
             "name": "Free diagnosis",
             "description": "",
             "price_cents": None,
+            "pricing_wording": None,
             "category": None,
             "category_id": None,
             "categories": [],
@@ -1152,3 +1156,104 @@ async def test_rf3_storefront_search_narrows_the_catalog(client: httpx.AsyncClie
         await client.get(f"/api/public/tenant/{slug}/storefront", params={"search": "battery"})
     ).json()
     assert [offering["name"] for offering in narrowed["offerings"]] == ["Battery swap"]
+
+
+async def test_rf4_pricing_wording_persists_and_reads_back(client: httpx.AsyncClient) -> None:
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Catering box", "pricing_wording": "  from $12 a head  "},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["pricing_wording"] == "from $12 a head"
+    assert body["price_cents"] is None
+
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    storefront = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+    wording_offering = next(o for o in storefront["offerings"] if o["name"] == "Catering box")
+    assert wording_offering["pricing_wording"] == "from $12 a head"
+    assert wording_offering["price_cents"] is None
+
+
+async def test_rf4_price_and_wording_are_mutually_exclusive(client: httpx.AsyncClient) -> None:
+    import json
+
+    headers, _ = await _signup(client)
+    both = await client.post(
+        "/api/business/offerings",
+        json={"name": "Mixed", "price_dollars": "12", "pricing_wording": "from $12 a head"},
+        headers=headers,
+    )
+    assert both.status_code == 422, both.text
+    assert "either" in json.dumps(both.json()["errors"]).lower()
+
+    # Switching modes clears the other axis.
+    created = await client.post(
+        "/api/business/offerings", json={"name": "Switch", "price_dollars": "12"}, headers=headers
+    )
+    offering_id = created.json()["id"]
+    assert created.json()["pricing_wording"] is None
+
+    worded = await client.patch(
+        f"/api/business/offerings/{offering_id}",
+        json={"pricing_wording": "from $12 a head"},
+        headers=headers,
+    )
+    assert worded.status_code == 200, worded.text
+    assert worded.json()["pricing_wording"] == "from $12 a head"
+    assert worded.json()["price_cents"] is None
+
+    priced = await client.patch(
+        f"/api/business/offerings/{offering_id}",
+        json={"price_dollars": "20"},
+        headers=headers,
+    )
+    assert priced.status_code == 200, priced.text
+    assert priced.json()["price_cents"] == 2000
+    assert priced.json()["pricing_wording"] is None
+
+
+async def test_rf4_pricing_wording_cap_is_enforced(client: httpx.AsyncClient) -> None:
+    import json
+
+    headers, _ = await _signup(client)
+    boundary = await client.post(
+        "/api/business/offerings",
+        json={"name": "At cap", "pricing_wording": "a" * 120},
+        headers=headers,
+    )
+    assert boundary.status_code == 201, boundary.text
+    over = await client.post(
+        "/api/business/offerings",
+        json={"name": "Over cap", "pricing_wording": "a" * 121},
+        headers=headers,
+    )
+    assert over.status_code == 422, over.text
+    assert "120 characters" in json.dumps(over.json()["errors"])
+
+
+async def test_rf4_blank_wording_clears_rather_than_stores(
+    client: httpx.AsyncClient,
+) -> None:
+    headers, _ = await _signup(client)
+    created = await client.post(
+        "/api/business/offerings",
+        json={"name": "Blank", "pricing_wording": "   "},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    assert created.json()["pricing_wording"] is None
+    assert created.json()["price_cents"] is None
+
+
+async def test_rf4_pricing_wording_is_tenant_scoped(client: httpx.AsyncClient) -> None:
+    headers_a, _ = await _signup(client)
+    headers_b, _ = await _signup(client)
+    await client.post(
+        "/api/business/offerings",
+        json={"name": "Wording only", "pricing_wording": "from $12 a head"},
+        headers=headers_a,
+    )
+    assert (await client.get("/api/business/offerings", headers=headers_b)).json() == []

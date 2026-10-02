@@ -282,7 +282,8 @@ and
 
 #### RF-4: Explicit pricing wording across editing, publication, and customer display
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress on `feat/rf-4-pricing-wording`; the
+  implementation lands in the same commit.
 - **Visible outcome:** An offering carries either a fixed price (numeric,
   calculable) or owner-confirmed pricing wording (such as "from $12 a head");
   wording is display-only and never becomes a calculable amount on either
@@ -309,9 +310,12 @@ and
 - **Regression checks:** The deterministic-pricing tests stay green; the price
   gate rejects any model-authored amount; the storefront tests for priced and
   unpriced offerings.
-- **OPEN:** what to render on the storefront and in chat when one offering
-  carries both a fixed price and pricing wording, and whether the API allows
-  both to be set.
+- **Resolved:** price and pricing wording are mutually exclusive. The API
+  rejects a request that sets both (or a non-empty price alongside wording)
+  with a readable validation error, and the owner editor is an explicit mode
+  choice (Fixed price / Pricing wording). If legacy or direct data ever carries
+  both, `price_cents` is authoritative and the wording is ignored - wording is
+  never calculable anywhere.
 
 #### RF-5: Cover and offering-image workflows
 
