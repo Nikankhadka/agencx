@@ -299,3 +299,66 @@ describe("pagination copy", () => {
     expect(last).toMatch(/<button type="button" disabled=""[^>]*>Next<\/button>/);
   });
 });
+
+describe("review workspace clarity", () => {
+  function record(overrides: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
+    return {
+      id: "doc-1",
+      filename: "menu.pdf",
+      doc_type: "other",
+      status: "draft",
+      error: null,
+      sections: [{ heading: "Hours", body: "9 to 5" }],
+      ...overrides,
+    };
+  }
+
+  function workspace(status: string): ReviewWorkspace {
+    return {
+      id: "ws-1",
+      documents: [record({ status })],
+      offering_candidates: [
+        { candidate_id: "c-1", name: "Bowl", description: "", price_cents: null, sources: ["document"] },
+      ],
+    };
+  }
+
+  function renderClarity(sheet: ReviewWorkspace, onboarding = false): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={sheet}
+        onboarding={onboarding}
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("names the footer secondary by context: draft, saved, and onboarding", () => {
+    // Onboarding discards a private draft; business mode is explicit that a
+    // draft is discarded and a saved source is removed.
+    expect(renderClarity(workspace("draft"))).toContain(">Discard draft</button>");
+    expect(renderClarity(workspace("ready"))).toContain(">Remove source</button>");
+    expect(renderClarity(workspace("draft"), true)).toContain(">Discard</button>");
+  });
+
+  it("renders the sections in DOM order matching the visual order", () => {
+    // Business mode leads with the document's own content; onboarding leads
+    // with the offerings the review exists to check.
+    const business = renderClarity(workspace("draft"));
+    expect(business.indexOf("Business information")).toBeLessThan(business.indexOf("Offerings"));
+    const onboarding = renderClarity(workspace("draft"), true);
+    expect(onboarding.indexOf("Offerings")).toBeLessThan(onboarding.indexOf("Business information"));
+  });
+
+  it("drops the repeated source line from the business offerings count", () => {
+    // The intro already names the source, so the count must not repeat it.
+    const business = renderClarity(workspace("draft"));
+    expect(business).toMatch(/<p class="mt-1 text-meta text-ink-a40">1 retained offering/);
+    expect(business).not.toMatch(/<p class="mt-1 text-meta text-ink-a40">From /);
+  });
+});

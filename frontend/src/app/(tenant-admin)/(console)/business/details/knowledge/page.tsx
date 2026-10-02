@@ -212,12 +212,13 @@ export default function KnowledgePage() {
     }
   }
 
-  async function confirmRemove(record: KnowledgeRecord) {
+  async function confirmRemove(record: KnowledgeRecord, layer?: "base" | "top") {
     await confirm({
       title: `Remove ${sourceLabel(record)}?`,
       description: "Its reviewed facts stop answering customers.",
       confirmLabel: "Remove",
       tone: "danger",
+      layer,
       onConfirm: async () => {
         if (await remove(record)) toast.success("Removed");
       },
@@ -252,18 +253,19 @@ export default function KnowledgePage() {
     if (workspace) void discardRecord(workspace.documents[0]);
   }
 
-  /** Discarding from the sheet footer removes the draft and says so - the
-   *  row-level "Removed" toast belongs to the row action, not to this one. */
+  /** Dropping a draft from the sheet footer removes it and says so; a saved
+   *  source goes through `confirmRemove` instead. */
   async function discardRecord(record: KnowledgeRecord) {
     if (await remove(record)) toast.success("Draft discarded");
   }
 
   /**
-   * The sheet footer asks before it discards - but only for a document that
-   * already has a saved version. A draft never answered anything, so dropping
-   * it is not destructive and skips the question. Either way the dialog
-   * paints above the sheet (`layer: "top"`), which otherwise sits at the
-   * same z.
+   * The sheet footer asks before it removes a document that already has a
+   * saved version, reusing the row-level confirmation (title, description,
+   * confirm label, and "Removed" toast). A draft never answered anything, so
+   * dropping it is not destructive and skips the question. The saved-source
+   * path passes `layer: "top"` so the dialog paints above the sheet, which
+   * otherwise sits at the same z.
    */
   async function discardWorkspace() {
     const document = workspace?.documents[0];
@@ -272,16 +274,7 @@ export default function KnowledgePage() {
       dropWorkspace();
       return;
     }
-    await confirm({
-      title: "Discard your changes?",
-      description: "The saved version stays as it is.",
-      confirmLabel: "Discard",
-      tone: "danger",
-      layer: "top",
-      onConfirm: () => {
-        dropWorkspace();
-      },
-    });
+    await confirmRemove(document, "top");
   }
 
   /** Open one record - fetching it first, so a source ingested before this
@@ -408,7 +401,14 @@ export default function KnowledgePage() {
                     </span>
                   }
                   title={sourceLabel(record)}
-                  meta="Read it back before it answers anything"
+                  meta={
+                    <>
+                      <span>{statusLine(record)}</span>
+                      <span className="mt-1 block">
+                        Read it back before it answers anything
+                      </span>
+                    </>
+                  }
                   trailing={
                     <span aria-hidden="true" className="text-accent-active">
                       <Icon name="chevron_right" size={20} />

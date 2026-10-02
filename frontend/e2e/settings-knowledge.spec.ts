@@ -149,6 +149,11 @@ test("a failed source retries into a draft", async ({ page, request }) => {
   ).toBeVisible();
   await expect(disclosure.getByText(KNOWLEDGE_DISCLOSURE)).toBeVisible();
   await expect(disclosure).not.toContainText(/Google|OpenAI|Anthropic|Groq|OpenRouter|Z\.ai/);
+
+  // Opening the draft shows its own footer action: a draft that never
+  // answered anything offers to discard it, not to remove a saved source.
+  await draft.click();
+  await expect(page.getByTestId("knowledge-discard")).toHaveText("Discard draft");
 });
 
 /**
@@ -251,12 +256,17 @@ test("the closed review sheet stays fully off-screen on desktop", async ({
 });
 
 /**
- * Discarding from the review sheet asks first for a document that already
- * has a saved version - a draft never answered anything and skips the
- * question. Fully mocked: the saved record carries sections, so opening it
- * never fetches, and the confirm paints above the sheet it came from.
+ * Removing a saved document from the review sheet asks first - a draft never
+ * answered anything and skips the question. Fully mocked: the saved record
+ * carries sections, so opening it never fetches, and the confirm paints above
+ * the sheet it came from.
+ *
+ * Aligned with the actual DELETE in RF-6: the dialog and toast now say
+ * "Remove", matching the "Remove source" footer action and the row-level
+ * trash, instead of the old "Discard" wording that implied the record
+ * survived.
  */
-test("discarding a saved document asks first, escape leaves it alone", async ({
+test("removing a saved document from the sheet asks first, escape leaves it alone", async ({
   page,
   request,
 }) => {
@@ -274,11 +284,15 @@ test("discarding a saved document asks first, escape leaves it alone", async ({
   const sheet = page.getByRole("dialog", { name: "Edit what I know" });
   await expect(sheet).toBeVisible();
   const discard = page.getByTestId("knowledge-discard");
-  await expect(discard).toHaveText("Remove");
+  await expect(discard).toHaveText("Remove source");
 
-  // Escape asks nothing of the backend and leaves the sheet open.
+  // Escape asks nothing of the backend and leaves the sheet open. The dialog
+  // pins the copy: it names the source and states the consequence.
   await discard.click();
   await expect(page.getByTestId("confirm-accept")).toBeVisible();
+  const confirmDialog = page.getByRole("dialog", { name: "Remove hours.txt?" });
+  await expect(confirmDialog).toBeVisible();
+  await expect(confirmDialog).toContainText("Its reviewed facts stop answering customers.");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("confirm-accept")).toHaveCount(0);
   expect(records.deleteCount()).toBe(0);
@@ -287,7 +301,7 @@ test("discarding a saved document asks first, escape leaves it alone", async ({
   // Accepting removes the record exactly once and says so.
   await discard.click();
   await page.getByTestId("confirm-accept").click();
-  await expect(page.getByText("Draft discarded", { exact: true })).toBeVisible();
+  await expect(page.getByText("Removed", { exact: true })).toBeVisible();
   expect(records.deleteCount()).toBe(1);
   expect(records.deletedIds()).toEqual(["saved-1"]);
   await expect(page.locator("article").filter({ hasText: "hours.txt" })).toHaveCount(0);
