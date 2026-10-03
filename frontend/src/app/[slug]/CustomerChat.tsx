@@ -271,8 +271,8 @@ export function CustomerChat({
     if (!trimmed || busy || escalated) return;
     setBusy(true);
     setInput("");
-    // RF-12: a successful send clears the stored draft. Keeping it through a
-    // failed send is RF-13.
+    // RF-12: the stored draft is cleared at send start, regardless of outcome.
+    // Keeping it through a failed send is RF-13.
     writeSession(draftKey(slug), "");
     setShowStarters(false);
     setMessages((prev) => [

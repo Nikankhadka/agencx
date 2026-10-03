@@ -87,6 +87,34 @@ describe("cardFromResponse", () => {
     expect(cardFromResponse(true)).toEqual({});
     expect(cardFromResponse(["quote"])).toEqual({});
   });
+
+  it("yields no cards for an array response", () => {
+    // An array is not a card object: it has no `type` and its payload checks
+    // would otherwise read array indices as fields.
+    expect(cardFromResponse([])).toEqual({});
+    expect(cardFromResponse([{ type: "quote", quote: { line_items: [] } }])).toEqual({});
+  });
+
+  it("never throws when a card payload is missing its iterable", () => {
+    // QuoteCard/PriceSummaryCard/CatalogCard call `.map`/iterate the payload;
+    // a shape without the array would crash the restore render. Each must
+    // degrade to no card instead.
+    const malformed = [
+      { type: "quote", quote: [] },
+      { type: "quote", quote: {} },
+      { type: "price_summary", summary: {} },
+      { type: "price_summary", summary: [] },
+      { type: "catalog", catalog: {} },
+      { type: "catalog", catalog: [] },
+      { type: "quote" },
+      { type: "price_summary" },
+      { type: "catalog" },
+    ];
+    for (const response of malformed) {
+      expect(() => cardFromResponse(response)).not.toThrow();
+      expect(cardFromResponse(response)).toEqual({});
+    }
+  });
 });
 
 describe("messageFromPublic", () => {

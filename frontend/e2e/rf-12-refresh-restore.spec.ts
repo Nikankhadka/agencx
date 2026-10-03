@@ -196,24 +196,30 @@ test.describe("RF-12 same-tab refresh restore", () => {
         ),
       }),
     );
-    await page.route("**/api/chat/*/messages*", (route) =>
-      route.fulfill({
-        json: [
-          {
-            id: "70000000-0000-4000-8000-000000000001",
-            role: "assistant",
-            content: HANDOFF,
-            created_at: "2026-10-03T04:00:01Z",
-          },
-          {
-            id: "70000000-0000-4000-8000-000000000002",
-            role: "human_agent",
-            content: "A team member will call you shortly.",
-            created_at: "2026-10-03T04:00:02Z",
-          },
-        ],
-      }),
-    );
+    // The human reply is returned ONLY on a poll tick carrying `after`. The
+    // restore fetch sends no `after`, so it restores the transcript without
+    // the reply and the test can only pass if the poll effect actually runs
+    // after the refresh.
+    await page.route("**/api/chat/*/messages*", (route) => {
+      const isPoll = new URL(route.request().url()).searchParams.has("after");
+      const transcript = [
+        {
+          id: "70000000-0000-4000-8000-000000000001",
+          role: "assistant",
+          content: HANDOFF,
+          created_at: "2026-10-03T04:00:01Z",
+        },
+      ];
+      if (isPoll) {
+        transcript.push({
+          id: "70000000-0000-4000-8000-000000000002",
+          role: "human_agent",
+          content: "A team member will call you shortly.",
+          created_at: "2026-10-03T04:00:02Z",
+        });
+      }
+      return route.fulfill({ json: transcript });
+    });
 
     await openChat(page);
     const control = page.getByRole("button", { name: "Ask for a person" });
@@ -224,10 +230,13 @@ test.describe("RF-12 same-tab refresh restore", () => {
     await openChat(page);
     const panel = page.getByRole("complementary", { name: CHAT_BUTTON });
 
-    // handoffSeen restored: the control stays hidden and the poll delivers the
-    // human reply with no further action.
+    // handoffSeen restored: the control stays hidden. The human reply is not in
+    // the restored transcript - it arrives on a later poll tick (the wait is
+    // deliberately generous; POLL_INTERVAL_MS is 5s).
     await expect(panel.getByRole("button", { name: "Ask for a person" })).toHaveCount(0);
-    await expect(panel.getByText("A team member will call you shortly.")).toBeVisible();
+    await expect(panel.getByText("A team member will call you shortly.")).toBeVisible({
+      timeout: 12_000,
+    });
   });
 
   test("an escalated banner restores and the composer stays locked", async ({ page }) => {

@@ -336,8 +336,7 @@ and
   state; a human reply still polls in after restore.
 - **Regression checks:** The customer transcript poll, ticket 19's leak-free
   transcript, and the existing chat-stream tests stay green.
-- **OPEN:** Resolved. No open product questions remained; see the Decisions in
-  the archived record.
+- **OPEN:** none.
 
 #### RF-13: Failed-send recovery and draft preservation
 

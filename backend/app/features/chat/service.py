@@ -291,6 +291,24 @@ async def persist_assistant_turn(
         await record_costs(conn, tenant_id, conversation_id, usages)
 
 
+def _response_from_metadata(raw: object) -> dict[str, Any] | None:
+    """The customer-safe card payload in a message's ``metadata`` blob, if any.
+
+    Only ``metadata["response"]`` is ever exposed; the rest of the blob
+    (inspection verdicts, intent, action, timing) is owner-only (D41). asyncpg
+    returns jsonb as a string unless a codec is registered, so both shapes are
+    handled. Anything malformed - absent, not a dict, or a non-dict
+    ``response`` - yields None rather than a 500 at the response model.
+    """
+    if not raw:
+        return None
+    metadata = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(metadata, dict):
+        return None
+    response = metadata.get("response")
+    return response if isinstance(response, dict) else None
+
+
 async def recent_messages(
     *, tenant_id: UUID, conversation_id: UUID, limit: int
 ) -> list[dict[str, Any]]:
@@ -314,11 +332,9 @@ async def recent_messages(
     messages: list[dict[str, Any]] = []
     for row in reversed(rows):
         message: dict[str, Any] = {"role": row["role"], "content": row["content"]}
-        if row["metadata"]:
-            raw_metadata = row["metadata"]
-            metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else raw_metadata
-            if isinstance(metadata, dict) and metadata.get("response"):
-                message["response"] = metadata["response"]
+        response = _response_from_metadata(row["metadata"])
+        if response is not None:
+            message["response"] = response
         messages.append(message)
     return messages
 
@@ -359,10 +375,8 @@ async def list_messages(
     messages: list[dict[str, Any]] = []
     for row in rows:
         message = dict(row)
-        raw_metadata = message.pop("metadata", None)
-        if raw_metadata:
-            metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else raw_metadata
-            if isinstance(metadata, dict) and metadata.get("response"):
-                message["response"] = metadata["response"]
+        response = _response_from_metadata(message.pop("metadata", None))
+        if response is not None:
+            message["response"] = response
         messages.append(message)
     return messages
