@@ -82,7 +82,29 @@ function hydrateFromSession(
   return storedId;
 }
 
+/**
+ * RF-13: a stable identity for each bubble. Stream events, failures, and retry
+ * all target one message by id, so an update can never land on the wrong bubble
+ * if the array is replaced or grows mid-turn (for example the RF-12 restore
+ * replacing the transcription). A module-level counter is enough: ids are not
+ * rendered, only compared, and monotonic values cannot collide within a session.
+ */
+let messageIdCounter = 0;
+function nextMessageId(): string {
+  messageIdCounter += 1;
+  return `message-${messageIdCounter}`;
+}
+
+/**
+ * RF-13: what an inline Retry on a failed bubble should re-run. A failed send
+ * replays its exact payload; a failed handoff re-runs the handoff. Keeping it
+ * on the bubble is what lets the "Try again?" copy always ship with a working
+ * control.
+ */
+type RetryTarget = { kind: "send"; text: string } | { kind: "handoff" };
+
 interface Message {
+  id?: string;
   role: ChatRole;
   text: string;
   citations?: Citation[];
@@ -92,12 +114,11 @@ interface Message {
   streaming?: boolean;
   error?: boolean;
   /**
-   * RF-13: the exact customer payload that this failed assistant bubble tried
-   * to answer. Retry replays this verbatim, so the button never reads a
-   * neighboring bubble. Absent on a healthy turn and on a handoff failure,
-   * which has no customer payload to replay.
+   * RF-13: set on a failed assistant bubble, and the only thing the inline
+   * Retry reads. A send carries the exact payload; a handoff carries its kind.
+   * Absent on a healthy turn.
    */
-  retryText?: string;
+  retry?: RetryTarget;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -140,7 +161,7 @@ export function CustomerChat({
   // own. A configured welcome follows it, minus anything that would say hello a
   // second time.
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", text: customerOpening(displayName, greeting) },
+    { id: nextMessageId(), role: "assistant", text: customerOpening(displayName, greeting) },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -199,7 +220,12 @@ export function CustomerChat({
         if (!res.ok || cancelled) return;
         const incoming = (await res.json()) as PublicMessage[];
         if (cancelled || incoming.length === 0) return;
-        setMessages(incoming.map<Message>((m) => messageFromPublic(m)));
+        // RF-13: every restored row gets a fresh id so the array has stable
+        // identity too - an in-flight turn targeting a pre-restore id simply
+        // no-ops rather than landing on a historical bubble.
+        setMessages(
+          incoming.map<Message>((m) => ({ ...messageFromPublic(m), id: nextMessageId() })),
+        );
         setShowStarters(false);
       } catch {
         // Transient or unexpected: keep the opening state rather than block.
@@ -239,6 +265,12 @@ export function CustomerChat({
         // cannot learn about any other way, and it is all the poll is for.
         const replies = incoming.filter((m) => m.role === "human_agent");
         if (replies.length === 0) return;
+        // Precompute ids outside the state updater so the updater stays pure.
+        const candidates = replies.map<Message>((m) => ({
+          id: nextMessageId(),
+          role: m.role as ChatRole,
+          text: m.content,
+        }));
         setMessages((prev) => {
           // Dedupe by role + content (the transcript carries no ids the
           // streamed messages share). Applied on every tick, not just the
@@ -246,9 +278,7 @@ export function CustomerChat({
           // and two identical human replies in one thread are far less likely
           // than the double-render this prevents.
           const shown = new Set(prev.map((m) => `${m.role}\0${m.text}`));
-          const additions = replies
-            .filter((m) => !shown.has(`${m.role}\0${m.content}`))
-            .map<Message>((m) => ({ role: m.role as ChatRole, text: m.content }));
+          const additions = candidates.filter((m) => !shown.has(`${m.role}\0${m.text}`));
           return additions.length > 0 ? [...prev, ...additions] : prev;
         });
       } catch {
@@ -265,47 +295,48 @@ export function CustomerChat({
   }, [handoffSeen, escalated, conversationId, slug]);
 
   /**
-   * RF-13: update one assistant bubble by index. A fresh send and a retry both
-   * target the assistant bubble they created, so a stream event lands on the
-   * right turn even though the array may have grown since the request started
-   * (a polled human reply, another turn). Index rather than "last" is what lets
-   * retry reinstate the failed bubble in place instead of appending.
+   * RF-13: update one bubble by its stable id. Targeting an id rather than an
+   * array position means an event cannot land on the wrong turn if the array
+   * grew or was replaced mid-request (for example the RF-12 restore replacing
+   * the transcript). A missing id no-ops rather than corrupting a bubble.
    */
-  function updateAssistantAt(index: number, update: (message: Message) => Partial<Message>) {
+  function updateMessageById(messageId: string, update: (message: Message) => Partial<Message>) {
     setMessages((prev) => {
-      const target = prev[index];
-      if (!target) return prev;
+      const index = prev.findIndex((m) => m.id === messageId);
+      if (index === -1) return prev;
       const next = [...prev];
-      next[index] = { ...target, ...update(target) };
+      next[index] = { ...next[index], ...update(next[index]) };
       return next;
     });
   }
 
   /**
    * RF-13: the shared failure path. It stamps the failed bubble with the retry
-   * affordance and the exact payload, and puts that payload back in the
-   * composer while keeping the stored draft. A handoff failure passes no
-   * payload and only gets the bubble, since there is nothing to replay.
+   * affordance and what Retry should re-run. `restoreComposer` is true only for
+   * a fresh send (whose payload the send already cleared), so a retry failure
+   * never overwrites a newer draft the customer typed in the meantime.
    */
-  function failTurn(index: number, retryText: string | undefined) {
-    updateAssistantAt(index, () => ({
+  function failTurn(messageId: string, retry: RetryTarget, restoreComposer: boolean) {
+    updateMessageById(messageId, () => ({
       text: "Something went wrong just then. Try again?",
       error: true,
       streaming: false,
-      retryText,
+      retry,
     }));
-    if (retryText !== undefined) {
-      setInput(retryText);
-      writeSession(draftKey(slug), retryText);
+    if (restoreComposer && retry.kind === "send") {
+      setInput(retry.text);
+      writeSession(draftKey(slug), retry.text);
     }
   }
 
   /**
-   * RF-13: one attempt at a turn against the live stream, shared by a fresh
-   * send and an explicit retry. The target assistant bubble already exists at
-   * `index`; a failure stamps the payload onto it for a later retry.
+   * RF-13: one attempt at a chat turn against the live stream, shared by a
+   * fresh send and an explicit retry. `restoreComposer` decides whether a
+   * failure puts the payload back in the composer: a fresh send restores it, an
+   * explicit retry does not.
    */
-  async function runTurn(index: number, text: string) {
+  async function runChatTurn(messageId: string, text: string, restoreComposer: boolean) {
+    const retry: RetryTarget = { kind: "send", text };
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
@@ -313,9 +344,9 @@ export function CustomerChat({
         body: JSON.stringify({ slug, conversation_id: conversationId, message: text }),
       });
       if (!res.ok || !res.body) throw new Error("chat request failed");
-      await consumeStream(res.body, index, text);
+      await consumeStream(res.body, messageId, retry, restoreComposer);
     } catch {
-      failTurn(index, text);
+      failTurn(messageId, retry, restoreComposer);
     }
   }
 
@@ -325,46 +356,50 @@ export function CustomerChat({
     setBusy(true);
     // RF-13: the composer clears for normal typing feedback, but the exact
     // payload is held as the in-flight draft so a mid-flight refresh keeps it.
-    // It is cleared only when the turn succeeds (the `done` handler).
+    // The `done` handler clears it, and only while it still matches this turn.
     setInput("");
     writeSession(draftKey(slug), trimmed);
     setShowStarters(false);
-    // The assistant placeholder this turn owns: one past the appended customer
-    // bubble. The single in-flight-turn guard keeps this index stable.
-    const assistantIndex = messages.length + 1;
+    // The bubble this turn owns, by stable id rather than a render-time index.
+    const customerId = nextMessageId();
+    const assistantId = nextMessageId();
     setMessages((prev) => [
       ...prev,
-      { role: "customer", text: trimmed },
-      { role: "assistant", text: "", streaming: true },
+      { id: customerId, role: "customer", text: trimmed },
+      { id: assistantId, role: "assistant", text: "", streaming: true },
     ]);
 
     try {
-      await runTurn(assistantIndex, trimmed);
+      await runChatTurn(assistantId, trimmed, true);
     } finally {
       setBusy(false);
     }
   }
 
-  // RF-13: the explicit retry, the only thing that replays a failed send -
-  // there is no automatic loop. It reuses the failed bubble in place (no second
-  // customer bubble) and posts the stored payload verbatim.
-  async function retry(assistantIndex: number) {
+  // RF-13: the explicit retry, the only thing that replays a failure - there is
+  // no automatic loop. It reinstates the same bubble in place (no second
+  // customer bubble) and re-runs whatever operation failed. It deliberately
+  // leaves the composer and the stored draft alone, so a newer draft the
+  // customer typed after the failure survives.
+  async function retry(messageId: string) {
     if (busy || escalated) return;
-    const text = messages[assistantIndex]?.retryText;
-    if (!text) return;
+    const retryTarget = messages.find((m) => m.id === messageId)?.retry;
+    if (!retryTarget) return;
+    if (retryTarget.kind === "handoff") {
+      await askForPerson(messageId);
+      return;
+    }
     setBusy(true);
-    setInput("");
-    writeSession(draftKey(slug), text);
     // Reinstate the bubble to streaming: drop the error state and the stale
-    // payload, so a second failure stamps it again and a success leaves none.
-    updateAssistantAt(assistantIndex, () => ({
+    // target, so a second failure stamps it again and a success leaves none.
+    updateMessageById(messageId, () => ({
       text: "",
       error: false,
       streaming: true,
-      retryText: undefined,
+      retry: undefined,
     }));
     try {
-      await runTurn(assistantIndex, text);
+      await runChatTurn(messageId, retryTarget.text, false);
     } finally {
       setBusy(false);
     }
@@ -373,13 +408,26 @@ export function CustomerChat({
   // RF-11: the deterministic handoff. It posts no message and runs no agent
   // turn - the backend records the escalation and streams the same handoff
   // reply the assistant's tool would. Busy-guarded like `send`, and hidden
-  // once `handoffSeen` so it cannot be fired twice.
-  async function askForPerson() {
+  // once `handoffSeen` so it cannot be fired twice. `reuseId` lets a failed
+  // handoff's Retry re-run it in that same bubble.
+  async function askForPerson(reuseId?: string) {
     if (busy || !shouldShowAskForPerson({ escalated, handoffSeen })) return;
     setBusy(true);
     setShowStarters(false);
-    const assistantIndex = messages.length;
-    setMessages((prev) => [...prev, { role: "assistant", text: "", streaming: true }]);
+    const assistantId = reuseId ?? nextMessageId();
+    if (reuseId) {
+      updateMessageById(reuseId, () => ({
+        text: "",
+        error: false,
+        streaming: true,
+        retry: undefined,
+      }));
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", text: "", streaming: true },
+      ]);
+    }
 
     try {
       const res = await fetch(`${API_URL}/api/chat/handoff`, {
@@ -388,20 +436,21 @@ export function CustomerChat({
         body: JSON.stringify(handoffRequestBody(slug, conversationId)),
       });
       if (!res.ok || !res.body) throw new Error("handoff request failed");
-      await consumeStream(res.body, assistantIndex, undefined);
+      await consumeStream(res.body, assistantId, { kind: "handoff" }, false);
       // An already-open escalation streams no reply, so drop the empty
       // placeholder rather than leave a blank assistant bubble.
       setMessages((prev) => {
-        const target = prev[assistantIndex];
-        if (target && target.role === "assistant" && target.text === "" && !target.error) {
-          return prev.filter((_, i) => i !== assistantIndex);
+        const placeholder = prev.find((m) => m.id === assistantId);
+        if (placeholder && placeholder.text === "" && !placeholder.error) {
+          return prev.filter((m) => m.id !== assistantId);
         }
         return prev;
       });
     } catch {
-      // A handoff failure has no customer payload, so it gets the bubble with
-      // no retry control (there is nothing for the control to replay).
-      failTurn(assistantIndex, undefined);
+      // A handoff failure has no customer payload, but Retry re-runs the
+      // handoff, so the failed bubble never promises "Try again?" without a
+      // working control.
+      failTurn(assistantId, { kind: "handoff" }, false);
     } finally {
       setBusy(false);
     }
@@ -409,8 +458,9 @@ export function CustomerChat({
 
   async function consumeStream(
     body: ReadableStream<Uint8Array>,
-    targetIndex: number,
-    retryText: string | undefined,
+    targetId: string,
+    retry: RetryTarget,
+    restoreComposer: boolean,
   ) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
@@ -429,15 +479,16 @@ export function CustomerChat({
         // reading rather than abort the in-progress stream.
         const event = parseChatStreamEvent(raw.slice("data: ".length));
         if (!event) continue;
-        handleStreamEvent(event, targetIndex, retryText);
+        handleStreamEvent(event, targetId, retry, restoreComposer);
       }
     }
   }
 
   function handleStreamEvent(
     event: ChatStreamEvent,
-    targetIndex: number,
-    retryText: string | undefined,
+    targetId: string,
+    retry: RetryTarget,
+    restoreComposer: boolean,
   ) {
     switch (event.type) {
       case "conversation":
@@ -447,7 +498,7 @@ export function CustomerChat({
         writeSession(conversationKey(slug), event.conversation_id);
         break;
       case "citations":
-        updateAssistantAt(targetIndex, () => ({ citations: event.citations }));
+        updateMessageById(targetId, () => ({ citations: event.citations }));
         break;
       case "contact":
         // RF-10: the preferred display name. Name only - never an email.
@@ -457,13 +508,13 @@ export function CustomerChat({
         }
         break;
       case "quote":
-        updateAssistantAt(targetIndex, () => ({ quote: event.quote }));
+        updateMessageById(targetId, () => ({ quote: event.quote }));
         break;
       case "price_summary":
-        updateAssistantAt(targetIndex, () => ({ priceSummary: event.summary }));
+        updateMessageById(targetId, () => ({ priceSummary: event.summary }));
         break;
       case "catalog":
-        updateAssistantAt(targetIndex, () => ({ catalog: event.catalog }));
+        updateMessageById(targetId, () => ({ catalog: event.catalog }));
         break;
       case "progress":
         // The in-bubble typing indicator already covers the wait; no
@@ -472,13 +523,13 @@ export function CustomerChat({
       case "redraft":
         // The backend's price gate rejected the streamed draft and is
         // streaming a replacement - clear the rejected text.
-        updateAssistantAt(targetIndex, () => ({ text: "" }));
+        updateMessageById(targetId, () => ({ text: "" }));
         break;
       case "token":
-        updateAssistantAt(targetIndex, (target) => ({ text: target.text + event.text }));
+        updateMessageById(targetId, (target) => ({ text: target.text + event.text }));
         break;
       case "refusal":
-        updateAssistantAt(targetIndex, () => ({ text: event.text }));
+        updateMessageById(targetId, () => ({ text: event.text }));
         break;
       case "handoff":
         // A human was notified. Nothing about the chat changes.
@@ -497,14 +548,15 @@ export function CustomerChat({
         // The backend failed mid-stream and said so on the wire. Without
         // this the bubble would sit in "streaming" forever - show the same
         // retry affordance a network failure gets, carrying the exact payload.
-        failTurn(targetIndex, retryText);
+        failTurn(targetId, retry, restoreComposer);
         break;
       case "done":
-        updateAssistantAt(targetIndex, () => ({ streaming: false, retryText: undefined }));
-        // RF-13: a completed turn clears the in-flight draft. A fresh send and
-        // a retry both pass the customer payload, so only those clear the
-        // composer; a handoff passes none and must not clobber a typed draft.
-        if (retryText !== undefined) {
+        updateMessageById(targetId, () => ({ streaming: false, retry: undefined }));
+        // RF-13: clear the composer and the stored draft only for a completed
+        // send whose payload is still the stored draft. If the customer typed a
+        // newer draft (retry left the composer alone), keep it; a handoff
+        // carries no payload and never clears.
+        if (retry.kind === "send" && readSession(draftKey(slug)) === retry.text) {
           setInput("");
           writeSession(draftKey(slug), "");
         }
@@ -531,8 +583,8 @@ export function CustomerChat({
         </span>
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
-        {messages.map((message, index) => (
-          <ChatBubble key={index} role={message.role} senderLabel={`${displayName} staff`}>
+        {messages.map((message) => (
+          <ChatBubble key={message.id} role={message.role} senderLabel={`${displayName} staff`}>
             <StreamingText
               streaming={message.streaming ?? false}
               pending={message.streaming === true && message.text === ""}
@@ -542,11 +594,11 @@ export function CustomerChat({
             {message.quote ? <QuoteCard quote={message.quote} /> : null}
             {message.priceSummary ? <PriceSummaryCard summary={message.priceSummary} /> : null}
             {message.catalog ? <CatalogCard catalog={message.catalog} /> : null}
-            {message.error && message.retryText ? (
+            {message.error && message.retry ? (
               <button
                 type="button"
                 data-testid="retry"
-                onClick={() => void retry(index)}
+                onClick={() => void retry(message.id ?? "")}
                 className="mt-1 block text-footnote font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
               >
                 Retry
