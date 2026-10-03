@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-11 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-12 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -113,9 +113,9 @@ search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
 RF-6 (document-review workspace clarification), RF-7 (business page composition
 and contextual owner editing), RF-8 (desktop customer chat panels and mobile
 sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
-capture), and RF-18 (owner read
-state); the remaining product-refinement tickets are **RF-11 through RF-17**,
-plus the RF-14 tab-badge follow-up.
+capture), RF-11 (visible human-help action and requested handoff), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-12 through
+RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -280,7 +280,8 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, and RF-18. Their full records, including verification, live in
+RF-9, RF-10, RF-11, and RF-18. Their full records, including verification, live
+in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
@@ -291,46 +292,9 @@ RF-9, RF-10, and RF-18. Their full records, including verification, live in
 [12-refinement-rf-8-desktop-chat-panel.md](../../../archive/phase1-complete/12-refinement-rf-8-desktop-chat-panel.md),
 [12-refinement-rf-9-card-alignment.md](../../../archive/phase1-complete/12-refinement-rf-9-card-alignment.md),
 [12-refinement-rf-10-preferred-name.md](../../../archive/phase1-complete/12-refinement-rf-10-preferred-name.md),
+[12-refinement-rf-11-ask-for-a-person.md](../../../archive/phase1-complete/12-refinement-rf-11-ask-for-a-person.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-11: Visible human-help action and requested handoff
-
-- **Status:** Active - in progress on `feat/rf-11-ask-for-a-person`.
-- **Visible outcome:** A visible **Ask for a person** control lets the customer
-  request a human; the handoff always happens, and when contact is incomplete
-  the handoff reply asks once. The ask never gates or blocks the escalation.
-- **Current vs proposed:** Current: handoff row-first, one contact ask, and
-  never-gating ship (ticket 19); the visible **Ask for a person** control is
-  absent, so a customer cannot request a human explicitly. Proposed: add the
-  control, wire it to the existing escalation/handoff path, and keep the
-  handoff unconditional. The ticket title no longer implies the handoff is
-  gated on a name.
-- **Design reference:** `agencx-prototype-v6.html` thread handoff behavior and
-  `renderThreadScreen`; `design/frontend.md` S1 `Handed off (C-5)` state.
-  Shipped: `components/ui/EscalationBanner.tsx`,
-  `backend/app/agents/agent_node.py` escalation tool, and ticket 19 behavior in
-  `backend/app/agents/escalation.py`.
-- **Dependencies:** RF-10. Continuity (RF-12) covers the resulting states.
-- **API/DB changes:** A new unauthenticated `POST /api/chat/handoff` on the
-  customer surface, body `{slug, conversation_id?}`. It records the same
-  escalation row the assistant's `create_escalation` tool records, through one
-  shared writer (`record_escalation` in `backend/app/agents/escalation.py`), and
-  streams the deterministic handoff reply from `handoff_message`.
-  `conversation_id` is optional so a customer can ask for a person before
-  typing. Reuses the existing escalation/handoff semantics; no schema change.
-- **Acceptance scenarios:** Tapping **Ask for a person** creates an escalation
-  and the handoff reply; an incomplete contact asks once and never blocks; the
-  escalation appears in the owner's Needs you queue; the public transcript
-  leaks no contact detail; an already-open escalation does not hand off twice.
-- **Regression checks:** Ticket 19's tests and the escalation-scoped contact
-  capture stay green.
-- **Decisions:**
-  - A dedicated deterministic endpoint over a synthetic model message, because a
-    visible control must not depend on the model choosing a tool.
-  - The endpoint does not schedule an LLM escalation summary, so a fresh
-    handoff's owner-queue preview falls back to the existing empty state, which
-    RF-14's one-row-per-conversation queue absorbs.
 
 #### RF-12: Same-tab refresh restoration of content, cards, and state
 
