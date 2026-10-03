@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-9 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-10 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -112,8 +112,9 @@ RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
 search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
 RF-6 (document-review workspace clarification), RF-7 (business page composition
 and contextual owner editing), RF-8 (desktop customer chat panels and mobile
-sheets), and RF-18 (owner read state); the remaining product-refinement tickets
-are **RF-9 through RF-17**, plus the RF-14 tab-badge follow-up.
+sheets), RF-9 (offering and price-summary card alignment), and RF-18 (owner read
+state); the remaining product-refinement tickets are **RF-10 through RF-17**,
+plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -277,8 +278,8 @@ delivered tickets are archived. "Current" restates the
 read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, and
-RF-18. Their full records, including verification, live in
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
+RF-9, and RF-18. Their full records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
@@ -287,34 +288,9 @@ RF-18. Their full records, including verification, live in
 [12-refinement-rf-6-document-review-clarity.md](../../../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md),
 [12-refinement-rf-7-business-page-shortcuts.md](../../../archive/phase1-complete/12-refinement-rf-7-business-page-shortcuts.md),
 [12-refinement-rf-8-desktop-chat-panel.md](../../../archive/phase1-complete/12-refinement-rf-8-desktop-chat-panel.md),
+[12-refinement-rf-9-card-alignment.md](../../../archive/phase1-complete/12-refinement-rf-9-card-alignment.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-9: Offering and price-summary card alignment
-
-- **Status:** Active - todo.
-- **Visible outcome:** The offering card and the price-summary card share one
-  width and chrome so they read as one family.
-- **Current vs proposed:** Current: grouping logic is already correct in
-  `CatalogCard.tsx`; the only mismatch is width and chrome -
-  `PriceSummaryCard.tsx` and `QuoteCard.tsx` use `max-w-[420px]`, while
-  `CatalogCard.tsx` uses `max-w-[520px]`. Proposed: pick one width and one
-  chrome and apply it to all three cards.
-- **Design reference:** Shipped `frontend/src/components/ui/CatalogCard.tsx`,
-  `PriceSummaryCard.tsx`, and `QuoteCard.tsx`; `design/frontend.md` section 6
-  `QuoteCard`.
-- **Dependencies:** RF-1, RF-4, and RF-7.
-- **API/DB changes:** None.
-- **Acceptance scenarios:** The offering, price-summary, and quote cards
-  left-align in one column at the same width and share padding, radius, and
-  header treatment.
-- **Regression checks:** `CatalogCard.test.tsx` and `PriceSummaryCard.test.tsx`
-  stay green; a visual check at 360px and 1024px.
-- **Decision (2026-10-03):** the canonical chat-card width is **520px**.
-  `design/frontend.md` section 4.7 already accepts `max-w-[520px]`,
-  `CatalogCard` already used it, and `w-full` means the cap never overflows a
-  narrower viewport; `PriceSummaryCard` and `QuoteCard` move from 420px to
-  520px. OPEN resolved - no question remains.
 
 #### RF-10: Preferred-name capture, correction, and persisted prompt limits
 

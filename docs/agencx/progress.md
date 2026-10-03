@@ -161,17 +161,24 @@ live in the ticket files, not here.
   close. One `CustomerChat` instance is preserved across both presentations
   and across breakpoint changes. No API or DB change. Record in the archived
   [12-refinement-rf-8-desktop-chat-panel.md](../archive/phase1-complete/12-refinement-rf-8-desktop-chat-panel.md).
-- [ ] RF-9 through RF-17 product refinement: `Active - todo`, next is RF-9
-  (offering and price-summary card alignment); no other ticket
-  implemented. The Part 2 design task is complete and implementation-ready:
+- [x] RF-9 offering and price-summary card alignment: merged in `86de712`
+  (PR #70). `CatalogCard`, `PriceSummaryCard`, and `QuoteCard` share one
+  width (`max-w-[520px]`, the value `design/frontend.md` section 4.7 already
+  accepts) and one `Card` chrome, and the quote card's header matches the other
+  two and carries `aria-label="Quote"`; the ticket's OPEN (420px versus 520px)
+  is resolved at 520px. No API or DB change. Record in the archived
+  [12-refinement-rf-9-card-alignment.md](../archive/phase1-complete/12-refinement-rf-9-card-alignment.md).
+- [ ] RF-10 through RF-17 product refinement: `Active - todo`, next is RF-10
+  (preferred-name capture, correction, and persisted prompt limits); no other
+  ticket implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
   versus proposed behavior, design reference, dependencies, API/DB changes,
   acceptance scenarios, and regression checks. Design intent in
   [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
   there record the product questions that still need a founder ruling (public
-  address editing, contextual shortcut fields, chat-card width, the legacy
-  Unread tab, and whether resolution requires takeover).
+  address editing, contextual shortcut fields, the legacy Unread tab, and
+  whether resolution requires takeover).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
@@ -197,7 +204,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-9 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-10 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
