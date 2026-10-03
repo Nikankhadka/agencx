@@ -310,7 +310,11 @@ and
   header treatment.
 - **Regression checks:** `CatalogCard.test.tsx` and `PriceSummaryCard.test.tsx`
   stay green; a visual check at 360px and 1024px.
-- **OPEN:** whether 420px or 520px becomes the canonical chat-card width.
+- **Decision (2026-10-03):** the canonical chat-card width is **520px**.
+  `design/frontend.md` section 4.7 already accepts `max-w-[520px]`,
+  `CatalogCard` already used it, and `w-full` means the cap never overflows a
+  narrower viewport; `PriceSummaryCard` and `QuoteCard` move from 420px to
+  520px. OPEN resolved - no question remains.
 
 #### RF-10: Preferred-name capture, correction, and persisted prompt limits
 

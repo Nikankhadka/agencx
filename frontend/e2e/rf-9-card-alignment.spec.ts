@@ -133,6 +133,7 @@ async function assertAligned(page: Page) {
 
     const widths = boxes.map((b) => b.width);
     const xs = boxes.map((b) => b.x);
+    expect(widths.every((w) => w > 0)).toBe(true);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(1);
 
