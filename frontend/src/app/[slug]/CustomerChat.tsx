@@ -19,7 +19,8 @@ import { QuoteCard, type QuotePayload } from "@/components/ui/QuoteCard";
 import { PriceSummaryCard, type PriceSummaryPayload } from "@/components/ui/PriceSummaryCard";
 import { CatalogCard, type CatalogPayload } from "@/components/ui/CatalogCard";
 import { EscalationBanner } from "@/components/ui/EscalationBanner";
-import { parseChatStreamEvent } from "@/lib/chat-events";
+import { parseChatStreamEvent, type ChatStreamEvent } from "@/lib/chat-events";
+import { handoffRequestBody, shouldShowAskForPerson } from "@/lib/handoff";
 import { customerOpening } from "@/lib/greeting";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -266,89 +267,7 @@ export function CustomerChat({
         body: JSON.stringify({ slug, conversation_id: conversationId, message: trimmed }),
       });
       if (!res.ok || !res.body) throw new Error("chat request failed");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-
-        for (const raw of events) {
-          if (!raw.startsWith("data: ")) continue;
-          // A malformed or partial SSE frame parses to null; skip it and keep
-          // reading rather than abort the in-progress stream.
-          const event = parseChatStreamEvent(raw.slice("data: ".length));
-          if (!event) continue;
-
-          switch (event.type) {
-            case "conversation":
-              setConversationId(event.conversation_id);
-              // RF-10: one conversation per tab; without this a refresh loses
-              // the thread entirely.
-              writeSession(conversationKey(slug), event.conversation_id);
-              break;
-            case "citations":
-              updateLastAssistant(() => ({ citations: event.citations }));
-              break;
-            case "contact":
-              // RF-10: the preferred display name. Name only - never an email.
-              if (event.name) {
-                setCustomerName(event.name);
-                writeSession(nameKey(slug), event.name);
-              }
-              break;
-            case "quote":
-              updateLastAssistant(() => ({ quote: event.quote }));
-              break;
-            case "price_summary":
-              updateLastAssistant(() => ({ priceSummary: event.summary }));
-              break;
-            case "catalog":
-              updateLastAssistant(() => ({ catalog: event.catalog }));
-              break;
-            case "progress":
-              // The in-bubble typing indicator already covers the wait; no
-              // separate status line to update.
-              break;
-            case "redraft":
-              // The backend's price gate rejected the streamed draft and is
-              // streaming a replacement - clear the rejected text.
-              updateLastAssistant(() => ({ text: "" }));
-              break;
-            case "token":
-              updateLastAssistant((last) => ({ text: last.text + event.text }));
-              break;
-            case "refusal":
-              updateLastAssistant(() => ({ text: event.text }));
-              break;
-            case "handoff":
-              // A human was notified. Nothing about the chat changes.
-              setHandoffSeen(true);
-              break;
-            case "escalated":
-              setEscalated(true);
-              break;
-            case "error":
-              // The backend failed mid-stream and said so on the wire. Without
-              // this the bubble would sit in "streaming" forever - show the
-              // same retry affordance a network failure gets below.
-              updateLastAssistant(() => ({
-                text: "Something went wrong just then. Try again?",
-                error: true,
-                streaming: false,
-              }));
-              break;
-            case "done":
-              updateLastAssistant(() => ({ streaming: false }));
-              break;
-          }
-        }
-      }
+      await consumeStream(res.body);
     } catch {
       updateLastAssistant(() => ({
         text: "Something went wrong just then. Try again?",
@@ -357,6 +276,132 @@ export function CustomerChat({
       }));
     } finally {
       setBusy(false);
+    }
+  }
+
+  // RF-11: the deterministic handoff. It posts no message and runs no agent
+  // turn - the backend records the escalation and streams the same handoff
+  // reply the assistant's tool would. Busy-guarded like `send`, and hidden
+  // once `handoffSeen` so it cannot be fired twice.
+  async function askForPerson() {
+    if (busy || !shouldShowAskForPerson({ escalated, handoffSeen })) return;
+    setBusy(true);
+    setShowStarters(false);
+    setMessages((prev) => [...prev, { role: "assistant", text: "", streaming: true }]);
+
+    try {
+      const res = await fetch(`${API_URL}/api/chat/handoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(handoffRequestBody(slug, conversationId)),
+      });
+      if (!res.ok || !res.body) throw new Error("handoff request failed");
+      await consumeStream(res.body);
+      // An already-open escalation streams no reply, so drop the empty
+      // placeholder rather than leave a blank assistant bubble.
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === "assistant" && last.text === "" && !last.error) {
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
+    } catch {
+      updateLastAssistant(() => ({
+        text: "Something went wrong just then. Try again?",
+        error: true,
+        streaming: false,
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function consumeStream(body: ReadableStream<Uint8Array>) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const raw of events) {
+        if (!raw.startsWith("data: ")) continue;
+        // A malformed or partial SSE frame parses to null; skip it and keep
+        // reading rather than abort the in-progress stream.
+        const event = parseChatStreamEvent(raw.slice("data: ".length));
+        if (!event) continue;
+        handleStreamEvent(event);
+      }
+    }
+  }
+
+  function handleStreamEvent(event: ChatStreamEvent) {
+    switch (event.type) {
+      case "conversation":
+        setConversationId(event.conversation_id);
+        // RF-10: one conversation per tab; without this a refresh loses
+        // the thread entirely.
+        writeSession(conversationKey(slug), event.conversation_id);
+        break;
+      case "citations":
+        updateLastAssistant(() => ({ citations: event.citations }));
+        break;
+      case "contact":
+        // RF-10: the preferred display name. Name only - never an email.
+        if (event.name) {
+          setCustomerName(event.name);
+          writeSession(nameKey(slug), event.name);
+        }
+        break;
+      case "quote":
+        updateLastAssistant(() => ({ quote: event.quote }));
+        break;
+      case "price_summary":
+        updateLastAssistant(() => ({ priceSummary: event.summary }));
+        break;
+      case "catalog":
+        updateLastAssistant(() => ({ catalog: event.catalog }));
+        break;
+      case "progress":
+        // The in-bubble typing indicator already covers the wait; no
+        // separate status line to update.
+        break;
+      case "redraft":
+        // The backend's price gate rejected the streamed draft and is
+        // streaming a replacement - clear the rejected text.
+        updateLastAssistant(() => ({ text: "" }));
+        break;
+      case "token":
+        updateLastAssistant((last) => ({ text: last.text + event.text }));
+        break;
+      case "refusal":
+        updateLastAssistant(() => ({ text: event.text }));
+        break;
+      case "handoff":
+        // A human was notified. Nothing about the chat changes.
+        setHandoffSeen(true);
+        break;
+      case "escalated":
+        setEscalated(true);
+        break;
+      case "error":
+        // The backend failed mid-stream and said so on the wire. Without
+        // this the bubble would sit in "streaming" forever - show the
+        // same retry affordance a network failure gets below.
+        updateLastAssistant(() => ({
+          text: "Something went wrong just then. Try again?",
+          error: true,
+          streaming: false,
+        }));
+        break;
+      case "done":
+        updateLastAssistant(() => ({ streaming: false }));
+        break;
     }
   }
 
@@ -423,6 +468,20 @@ export function CustomerChat({
           onSubmit={handleSubmit}
           className="flex shrink-0 flex-col gap-2 border-t border-border pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
+          {/* RF-11: the visible ask-for-a-person control. Ported from the
+              prototype's `.thr-pill-action` idle-call idiom (a centered pill),
+              kept in the composer so it is reachable at 360px and 1024px. */}
+          {shouldShowAskForPerson({ escalated, handoffSeen }) ? (
+            <div className="flex justify-center">
+              <Chip
+                label="Ask for a person"
+                data-testid="ask-for-person"
+                disabled={busy}
+                onClick={() => void askForPerson()}
+                className="disabled:opacity-50"
+              />
+            </div>
+          ) : null}
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <Input

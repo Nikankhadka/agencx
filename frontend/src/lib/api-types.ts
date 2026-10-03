@@ -676,6 +676,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handoff
+         * @description RF-11: the visible "Ask for a person" control, for the customer surface.
+         *
+         *     Deterministic: records the same escalation row the assistant's
+         *     ``create_escalation`` tool would, then streams the same handoff reply, with
+         *     the one contact ask when name/email are still missing. No agent turn runs,
+         *     so the visible handoff never depends on the model choosing the tool.
+         *
+         *     Branches (all resolve before the stream starts, so a failure is still a
+         *     Problem Details response rather than a half-open event stream):
+         *
+         *     - Unknown/inactive slug -> 404; a conversation id that is not this tenant's
+         *       -> 404 (the slug scopes the lookup, same trust model as POST /api/chat).
+         *     - ``human``: a staff member already took the conversation over. Do not
+         *       create a new handoff; stream ``conversation`` -> ``handoff`` -> ``done``,
+         *       the human-handled shape, because the human is already there.
+         *     - ``escalated`` (a tenant limit stopped it): terminal and closed. Do not
+         *       reopen it and do not write a row; stream ``conversation`` -> ``escalated``
+         *       -> ``done``, the same shape POST /api/chat returns for a limit stop.
+         *     - Otherwise: write the deduped escalation row and stream the handoff reply
+         *       plus the one ask when contact is incomplete. If an escalation is already
+         *       open, the dedupe makes the write a no-op and no second reply/ask is sent -
+         *       only the ``handoff`` event, so the client's poll still starts.
+         *
+         *     Never terminal: the conversation stays open (C-5). The row lives in the
+         *     owner's queue; operational alerts may reference the conversation.
+         */
+        post: operations["handoff_api_chat_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/{conversation_id}/messages": {
         parameters: {
             query?: never;
@@ -1341,6 +1385,20 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HandoffRequest
+         * @description RF-11: the visible "Ask for a person" control's body. No message - the
+         *     control is not a customer turn. ``conversation_id`` is optional so a
+         *     customer can ask for a person before typing anything; the endpoint creates
+         *     the conversation in that case and returns its id in the ``conversation``
+         *     event.
+         */
+        HandoffRequest: {
+            /** Slug */
+            slug: string;
+            /** Conversation Id */
+            conversation_id?: string | null;
         };
         /** HealthResponse */
         HealthResponse: {
@@ -4051,6 +4109,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    handoff_api_chat_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffRequest"];
             };
         };
         responses: {

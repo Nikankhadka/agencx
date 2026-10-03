@@ -296,7 +296,7 @@ and
 
 #### RF-11: Visible human-help action and requested handoff
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress on `feat/rf-11-ask-for-a-person`.
 - **Visible outcome:** A visible **Ask for a person** control lets the customer
   request a human; the handoff always happens, and when contact is incomplete
   the handoff reply asks once. The ask never gates or blocks the escalation.
@@ -312,16 +312,25 @@ and
   `backend/app/agents/agent_node.py` escalation tool, and ticket 19 behavior in
   `backend/app/agents/escalation.py`.
 - **Dependencies:** RF-10. Continuity (RF-12) covers the resulting states.
-- **API/DB changes:** Reuse the existing escalation and handoff endpoints; the
-  control posts the same request the assistant's escalation tool records; no
-  schema change.
+- **API/DB changes:** A new unauthenticated `POST /api/chat/handoff` on the
+  customer surface, body `{slug, conversation_id?}`. It records the same
+  escalation row the assistant's `create_escalation` tool records, through one
+  shared writer (`record_escalation` in `backend/app/agents/escalation.py`), and
+  streams the deterministic handoff reply from `handoff_message`.
+  `conversation_id` is optional so a customer can ask for a person before
+  typing. Reuses the existing escalation/handoff semantics; no schema change.
 - **Acceptance scenarios:** Tapping **Ask for a person** creates an escalation
   and the handoff reply; an incomplete contact asks once and never blocks; the
   escalation appears in the owner's Needs you queue; the public transcript
   leaks no contact detail; an already-open escalation does not hand off twice.
 - **Regression checks:** Ticket 19's tests and the escalation-scoped contact
   capture stay green.
-- **OPEN:** none.
+- **Decisions:**
+  - A dedicated deterministic endpoint over a synthetic model message, because a
+    visible control must not depend on the model choosing a tool.
+  - The endpoint does not schedule an LLM escalation summary, so a fresh
+    handoff's owner-queue preview falls back to the existing empty state, which
+    RF-14's one-row-per-conversation queue absorbs.
 
 #### RF-12: Same-tab refresh restoration of content, cards, and state
 
