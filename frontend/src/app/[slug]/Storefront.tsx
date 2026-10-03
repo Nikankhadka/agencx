@@ -14,7 +14,9 @@ import { Sheet } from "@/components/ui/Sheet";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import type { StorefrontData } from "@/lib/tenant";
+import { useMediaQuery, DESKTOP_QUERY } from "@/lib/useMediaQuery";
 import { CustomerChat } from "./CustomerChat";
+import { CustomerChatPanel } from "./CustomerChatPanel";
 import { Offerings, priceLabel } from "./Offerings";
 import { StorefrontHero, type OwnerEditField } from "./StorefrontHero";
 
@@ -135,6 +137,10 @@ export function Storefront({
 }) {
   const router = useRouter();
   const [chatOpen, setChatOpen] = useState(false);
+  // RF-8: at `lg+` the docked panel must not cover the page, so the page is
+  // inset by the panel's width while the chat is open. Below `lg` the modal
+  // sheet covers the viewport and the page needs no inset.
+  const desktop = useMediaQuery(DESKTOP_QUERY);
   const [selected, setSelected] = useState<StorefrontData["offerings"][number] | null>(null);
   const composerRef = useRef<((text: string) => void) | null>(null);
   const [shared, setShared] = useState(false);
@@ -205,7 +211,18 @@ export function Storefront({
   const hasOfferings = storefront.offerings.length > 0;
 
   return (
-    <main className="flex min-h-dvh w-full flex-col bg-surface pb-8">
+    <main
+      className={[
+        "flex min-h-dvh w-full flex-col bg-surface pb-8",
+        // RF-8 desktop: inset the page by the docked panel's width while the
+        // chat is open. The page keeps its normal window scroll, so it stays
+        // visible, scrollable and interactive beside the fixed panel, and
+        // closing the panel never resets that scroll.
+        chatOpen && desktop ? "pr-(--width-panel)" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <header className="sticky top-0 z-10 h-16 border-b border-hairline bg-surface/95 backdrop-blur">
         <Container width="wide" className="flex h-full items-center justify-between">
           <button
@@ -291,21 +308,24 @@ export function Storefront({
         <span>Powered by Agencx</span>
       </footer>
 
-      <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={`Chat with ${storefront.name}`}>
-        <div className="flex h-[calc(85dvh-7rem)] min-h-0 flex-col">
-          {/* Deliberately unkeyed: the sheet keeps its children mounted, so a
-              customer who closes it and reopens it from another entry point is
-              back in the thread they were in, talking to the same conversation
-              rather than orphaning it mid-answer. */}
-          <CustomerChat
-            slug={slug}
-            displayName={storefront.name}
-            greeting={greeting}
-            starterQuestions={starterQuestions}
-            composerRef={composerRef}
-          />
-        </div>
-      </Sheet>
+      <CustomerChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        title={`Chat with ${storefront.name}`}
+      >
+        {/* Deliberately unkeyed and rendered once: the panel keeps its children
+            mounted, so a customer who closes it and reopens it from another
+            entry point is back in the thread they were in, talking to the same
+            conversation rather than orphaning it mid-answer. Crossing `lg` only
+            changes the panel's presentation, never this tree. */}
+        <CustomerChat
+          slug={slug}
+          displayName={storefront.name}
+          greeting={greeting}
+          starterQuestions={starterQuestions}
+          composerRef={composerRef}
+        />
+      </CustomerChatPanel>
       <Sheet open={selected !== null} onClose={() => setSelected(null)} title={selected?.name ?? "Offering details"}>
         {selected ? (
           <div className="space-y-4 p-5">

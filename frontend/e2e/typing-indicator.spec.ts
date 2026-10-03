@@ -14,8 +14,9 @@
  * non-deterministic. Live turns are covered elsewhere.
  *
  * Since M-4 the customer page is a storefront and the conversation lives in a
- * sheet, so every turn here starts by opening it. What is under test is
- * unchanged: the sheet holds the same `CustomerChat`.
+ * sheet (RF-8: a docked panel at desktop, the sheet below `lg`), so every turn
+ * here starts by opening it. What is under test is unchanged: the host holds
+ * the same `CustomerChat`.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -26,11 +27,13 @@ const CUSTOMER_URL = `/${SLUG}`;
 const sse = (...events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
-/** Land on the storefront and open the conversation sheet (M-4). */
+/** Land on the storefront and open the conversation (M-4, RF-8). */
 async function openChat(page: Page) {
   await page.goto(CUSTOMER_URL);
   await page.getByRole("button", { name: "Chat with Bytefix" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  // The default project is desktop, so RF-8 presents the chat as the docked
+  // complementary panel, not the mobile modal sheet.
+  await expect(page.getByRole("complementary", { name: "Chat with Bytefix Repairs" })).toBeVisible();
 }
 
 async function ask(page: Page, question = "What do you charge for a screen?") {

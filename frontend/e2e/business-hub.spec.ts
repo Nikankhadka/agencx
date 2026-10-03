@@ -135,7 +135,9 @@ test.describe("Business hub", () => {
       /youtube-nocookie\.com\/embed\//,
     );
     await details.getByRole("button", { name: "Ask about this" }).click();
-    const chat = page.getByRole("dialog", { name: /Chat with Bytefix/ });
+    // RF-8: the default project is desktop, so the chat opens as the docked
+    // complementary panel rather than the mobile modal sheet.
+    const chat = page.getByRole("complementary", { name: /Chat with Bytefix/ });
     await expect(chat.getByRole("textbox")).toHaveValue(
       "Tell me about M1 test offering",
     );

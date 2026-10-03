@@ -75,6 +75,16 @@ describe("Storefront minimal business", () => {
   });
 });
 
+describe("Storefront chat host", () => {
+  it("renders exactly one chat host, so the thread cannot be duplicated", () => {
+    // RF-8: one `CustomerChatPanel` host wraps the one `CustomerChat`. The
+    // panel renders a single always-mounted wrapper; if a second chat tree or
+    // a second conditional parent ever appeared, this count would be > 1.
+    const html = htmlFor(BASE);
+    expect(html.match(/data-chat-host/g) ?? []).toHaveLength(1);
+  });
+});
+
 describe("Storefront hero veil", () => {
   it("renders the veil band in the cover's place when there is no photo", () => {
     const html = htmlFor(BASE);
