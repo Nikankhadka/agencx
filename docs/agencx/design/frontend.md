@@ -299,7 +299,11 @@ WaitingPanel `max-h-[...]`, the typing-row height, the sheet handle, caret and
 dot sizes. The RF-7 storefront owner-shortcut pencil is the ported prototype
 `.edit-btn`: a 26px circle with a 1.5px hairline border (`size-[26px]
 border-[1.5px]`), kept verbatim because it is fixed prototype geometry the
-scale cannot name.
+scale cannot name. The RF-8 docked customer-chat panel is `--width-panel`
+(384px), a new token because no scale step names the panel width; it is used
+through Tailwind's `w-(--width-panel)` / `pr-(--width-panel)` custom-property
+shorthand, not a `@theme` mapping, so the value needs no `make dev-reset`
+cache wipe.
 
 ### 4.7 Enforcement
 
