@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-8 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-9 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -111,9 +111,9 @@ product questions that still need a founder ruling). The delivered tickets are
 RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
 search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
 RF-6 (document-review workspace clarification), RF-7 (business page composition
-and contextual owner editing), and RF-18 (owner read state); the remaining
-product-refinement tickets are **RF-8 through RF-17**, plus the RF-14 tab-badge
-follow-up.
+and contextual owner editing), RF-8 (desktop customer chat panels and mobile
+sheets), and RF-18 (owner read state); the remaining product-refinement tickets
+are **RF-9 through RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -272,13 +272,13 @@ attention count when Needs you is non-empty (RF-14).
 ### Tickets
 
 Every ticket below is on the active list; each keeps its own `Status` line
-(`Active - todo`, or `Active - in progress` once work starts - RF-8 is the
-latter), and the delivered tickets are archived. "Current" restates the
+(`Active - todo`, or `Active - in progress` once work starts), and the
+delivered tickets are archived. "Current" restates the
 read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18.
-Their full records, including verification, live in
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, and
+RF-18. Their full records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
@@ -286,36 +286,9 @@ Their full records, including verification, live in
 [12-refinement-rf-5-media-workflows.md](../../../archive/phase1-complete/12-refinement-rf-5-media-workflows.md),
 [12-refinement-rf-6-document-review-clarity.md](../../../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md),
 [12-refinement-rf-7-business-page-shortcuts.md](../../../archive/phase1-complete/12-refinement-rf-7-business-page-shortcuts.md),
+[12-refinement-rf-8-desktop-chat-panel.md](../../../archive/phase1-complete/12-refinement-rf-8-desktop-chat-panel.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-8: Desktop customer chat panels and mobile sheets
-
-- **Status:** Active - in progress.
-- **Visible outcome:** On `lg+` the customer chat is a side panel that leaves
-  the business page reachable; below `lg` it is a full-height sheet.
-- **Current vs proposed:** Current: chat renders as a mobile `Sheet` only; no
-  `lg+` desktop side panel exists. Proposed: add the `lg+` side panel while
-  keeping the mobile sheet, with the business page visible beside it.
-- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx`,
-  `Storefront.tsx` (sheet host), and `components/ui/Sheet.tsx`;
-  `design/frontend.md` S3. v6 is mobile-only.
-- **Dependencies:** RF-7.
-- **API/DB changes:** None.
-- **Acceptance scenarios:** At 1024px the chat opens beside the page and the
-  page stays scrollable and interactive; at 360px the sheet is full height with
-  the composer reachable; closing the panel restores the page state.
-- **Regression checks:** The storefront E2E at both widths; focus trap and
-  `aria-modal` behavior for the sheet.
-- **Decisions:** Desktop composition accepted for RF-8: at `lg+` the chat is a
-  docked, non-modal right side panel (`role="complementary"`, no scrim, no
-  `aria-modal`, page visible and interactive, content inset so the panel never
-  covers it); below `lg` it stays the full-height modal bottom sheet with focus
-  trap, `aria-modal`, scrim, Escape and scrim close. Exactly one
-  `CustomerChat` instance is preserved across both presentations and across
-  breakpoint changes - one panel host switches presentation; no second chat
-  tree and no remount on resize.
-- **OPEN:** none.
 
 #### RF-9: Offering and price-summary card alignment
 

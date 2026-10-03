@@ -34,6 +34,7 @@ merged to `development` or `staging`, with its verification narrative.
 | [12-refinement-rf-5-media-workflows.md](12-refinement-rf-5-media-workflows.md) | RF-5 | One cover/offering-image workflow on a shared media field: explicit remove, local preview while uploading, and failure recovery with no partial state |
 | [12-refinement-rf-6-document-review-clarity.md](12-refinement-rf-6-document-review-clarity.md) | RF-6 | Document-review workspace clarity: named draft state, de-duplicated source line, context-specific Discard/Remove labels aligned with the removal dialog, and DOM order matching visual order |
 | [12-refinement-rf-7-business-page-shortcuts.md](12-refinement-rf-7-business-page-shortcuts.md) | RF-7 | Browse-first business page with contextual owner shortcuts opening the same RF-2 editors; server-side owner gating, no API or DB change |
+| [12-refinement-rf-8-desktop-chat-panel.md](12-refinement-rf-8-desktop-chat-panel.md) | RF-8 | Desktop customer chat panel at `lg+` and full-height mobile sheet, one `CustomerChat` instance preserved across presentations and breakpoints; no API or DB change |
 | [12-refinement-rf-18-owner-read-state.md](12-refinement-rf-18-owner-read-state.md) | RF-18 | Real per-owner read state in the chat queue: migration `0035`, `POST /api/conversations/{id}/read`, unread row emphasis |
 | [22-production-hardening.md](22-production-hardening.md) | T-022 to T-033 | Production hardening: abuse control, CI hygiene, Sentry, CSP, conversation delete, retention, operator export, privacy/terms, backups; ADRs D32-D36 |
 
