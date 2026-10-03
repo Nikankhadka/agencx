@@ -236,6 +236,11 @@
 - **LLM-dependent evals are NOT CI-deterministic** (measures quality, not structural security). The CI gate splits absolute gates (retrieval/leakage) from regression gates (generation/trajectory/injection - fail only on drop >3%).
 - **Free-tier LLM models hit 429s** (upstream congestion). The eval suite has transient-failure retry; full live evals need a paid/Azure key.
 
+### E2E and screenshots
+
+- **Next.js dev streaming leaves a hidden `div#S:0` clone of the page** (2026-10-03, RF-17 review-fix): on the host, `page.locator("main")` intermittently matched two `<main>` elements and strict-failed (~10-25% of runs, random business, invisible inside most `make test-e2e` container runs). The second sits under `div#S:0`, a React/Next streaming boundary placeholder that is not part of the app. Use `page.getByRole("main")` (the role query excludes the hidden clone) instead of `locator("main")`; the same trap applies to any bare CSS locator whose hidden clones are reachable.
+- **Next.js's dev-tools indicator (`<nextjs-portal>`) is baked into every local screenshot.** For capture-only specs, register `page.addInitScript` before the first navigation to inject `nextjs-portal{display:none!important}` on `DOMContentLoaded`, guarded on the capture env flag so runs with capture off never touch the page.
+
 ---
 
 ## Conventions Learned
@@ -253,6 +258,7 @@
 - **Four-business walkthrough spec pattern** (2026-10-03, RF-17): `frontend/e2e/rf-17-four-business-walkthrough.spec.ts` parameterizes one test body over a `BUSINESSES` array so the storefront, the chat (stream stubbed via `page.route("**/api/chat")` with that tenant's own card), the queue (`/chats`, open the All tab so a tenant with no open escalation still lists rows), and the business hub (`/business`, the sidebar shows `brand.display_name`) run the same code for all four. Screenshots are opt-in via `RF17_CAPTURE=1` with `RF17_SHOTS_DIR` (default `docs/agencx/evidence/rf-17-2026-10-03`), viewport-only; with it unset the spec asserts and captures nothing, so CI never rewrites tracked files. The spec is NOT in `testIgnore`, so it runs inside `make test-e2e`.
 - **`gen:types` runs on the host, not the frontend container** (2026-10-03, RF-17): `frontend/scripts/gen-api-types.mjs` shells out to `uv run python` against `../../backend`, but the frontend container image has no `uv` (and no sibling `backend/` mount), so the documented `docker compose run --rm --no-deps frontend npm run gen:types -- --check` fails with `ENOENT`. Run `cd frontend && npm run gen:types -- --check` on the host instead - it reports `api-types.ts is up to date`.
 - **Queue `customer_ref` values are seeded per tenant and unique across tenants** (2026-10-03, RF-17): bytefix `alex.rivera`/`jordan.patel`, lumident `patient.a`/`patient.b`, sababa `diner.a`/`diner.b`, wellspring `patient.c`/`patient.d`. The queue renders `customer_ref` verbatim as the row title (`lib/format.ts::customerLabel`), so exact-substring assertions on `chats-list` prove cross-tenant scoping at the surface.
+- **RF-17 captures are regenerated on the HOST, and the e2e count reconciles against the RF-16 archive** (2026-10-03, RF-17 review-fix): run `cd frontend && RF17_CAPTURE=1 RF17_SHOTS_DIR=<repo>/docs/agencx/evidence/rf-17-2026-10-03 npx playwright test e2e/rf-17-four-business-walkthrough.spec.ts --project=chromium` (the frontend must be up at :3000); the containerized runner has no clean path to the repo evidence dir. `make test-e2e` reports 239 = the RF-16 archive's 226 + 5 new RF-17 tests + 8 from the 2 added demo users (sababa, wellspring) expanding `DEMO_USERS` loops (`auth-login.spec.ts` 3 tests x 2 users, `auth-credentials-validation.spec.ts` 1 x 2).
 
 ---
 
