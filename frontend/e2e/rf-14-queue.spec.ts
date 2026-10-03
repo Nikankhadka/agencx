@@ -153,4 +153,50 @@ test.describe("RF-14 Chats queue", () => {
     await expect(handler).toHaveCount(1);
     await expect(handler).toHaveText("You");
   });
+
+  test("an escalated-and-taken-over row shows both the handler and the badge", async ({
+    page,
+    request,
+  }) => {
+    // An open escalation AND a human takeover: two independent axes, so the row
+    // must not drop the handler just because the attention badge is present.
+    await mockQueue(page, [
+      row(uuid(1), {
+        needs_attention: true,
+        status: "human",
+        handler: "human",
+        customer_ref: "Escalated and taken over",
+      }),
+    ]);
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/chats");
+
+    const firstRow = page.getByTestId("chat-row").first();
+    await expect(firstRow.getByTestId("row-attention")).toHaveCount(1);
+    await expect(firstRow.getByTestId("row-handler")).toHaveCount(1);
+    await expect(firstRow.getByTestId("row-handler")).toHaveText("You");
+  });
+
+  test("a filtered tab pages against the filter-scoped total", async ({ page, request }) => {
+    // 60 human-handled rows among 80 total: the Human handled total is 60, so
+    // the second page appends 10 and Load more stops there rather than against
+    // the 80-row dataset.
+    const rows = [
+      ...Array.from({ length: 60 }, (_, index) =>
+        row(uuid(index + 1), { status: "human", handler: "human" }),
+      ),
+      ...Array.from({ length: 20 }, (_, index) => row(uuid(100 + index))),
+    ];
+    await mockQueue(page, rows);
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/chats");
+
+    await page.getByTestId("chats-filter-human").click();
+    await expect(page.getByTestId("chat-row")).toHaveCount(50);
+    await expect(page.getByTestId("chats-load-more")).toBeVisible();
+
+    await page.getByTestId("chats-load-more").click();
+    await expect(page.getByTestId("chat-row")).toHaveCount(60);
+    await expect(page.getByTestId("chats-load-more")).toHaveCount(0);
+  });
 });

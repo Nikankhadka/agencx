@@ -107,8 +107,10 @@ def _items_sql(*, filter_sql: str) -> str:
         f"where {_where_sql(filter_sql=filter_sql)} "
         # Ordered by the stamp the row actually shows. Nulls last puts a
         # conversation with nothing said in it at the bottom, which is where
-        # an empty thread belongs.
-        "order by last_activity_at desc nulls last, c.created_at desc "
+        # an empty thread belongs. c.id desc is a unique final key: without it
+        # two rows tied on both stamps have no stable position, so an
+        # offset page can skip or duplicate them under load.
+        "order by last_activity_at desc nulls last, c.created_at desc, c.id desc "
         "limit $4 offset $5"
     )
 

@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { ConversationCounts, ConversationListResponse } from "@/lib/api-schemas";
-import { PAGE_SIZE, queuePath, type QueueFilter } from "./queue";
+import { queuePath, type QueueFilter } from "./queue";
 
 /**
  * The query-key namespace the queue list uses, keyed by `[filter, q]`. Every
@@ -47,8 +47,12 @@ export function useConversationQueue(filter: QueueFilter, q: string) {
     queryKey: ["conversations", filter, q],
     queryFn: ({ pageParam }) => apiFetch<ConversationListResponse>(queuePath(filter, q, pageParam)),
     initialPageParam: 0,
+    // Sum the rows actually loaded rather than assuming every page was full: a
+    // short non-final page (a row deleted between requests, say) would make
+    // `pages.length * PAGE_SIZE` overshoot and stop paging early. An
+    // exact-multiple total still terminates because loaded == total then.
     getNextPageParam: (lastPage, pages) => {
-      const loaded = pages.length * PAGE_SIZE;
+      const loaded = pages.reduce((count, page) => count + page.items.length, 0);
       return loaded < lastPage.total ? loaded : undefined;
     },
   });

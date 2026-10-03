@@ -76,18 +76,22 @@ test.describe("Home - the greeting and the brief", () => {
       .getByRole("navigation", { name: "Console" })
       .getByRole("link", { name: "Chats" });
 
-    // Both read `needs_attention`; if one says someone is waiting, so must the
-    // other. Disagreement here is the bug the shared source exists to prevent.
+    // RF-14: the panel reads `needs_attention` rows (open escalations) while
+    // the badge reads the server's `needs_you` count (an open escalation OR a
+    // human takeover). So the invariant is one-directional, not equality: if
+    // the panel shows, at least one escalation exists and the badge must show
+    // too. The reverse can differ legitimately - a human-handled thread with no
+    // escalation counts for the badge and not for the panel.
     //
     // Polled, not sampled once: the panel and the badge are fed by two separate
     // queries (Home's and the console layout's), so a bare count() can catch
-    // them mid-flight and call a race a disagreement. A real disagreement
-    // never converges and still fails here, on timeout.
+    // them mid-flight and call a race a disagreement. A real bug never
+    // converges and still fails here, on timeout.
     await expect
       .poll(async () => {
-        const panelShown = await waitingPanel.count();
-        const badgeShown = await chatsTab.locator("span[aria-hidden='true']").count();
-        return panelShown > 0 === badgeShown > 0;
+        const panelShown = (await waitingPanel.count()) > 0;
+        const badgeShown = (await chatsTab.locator("span[aria-hidden='true']").count()) > 0;
+        return !panelShown || badgeShown;
       })
       .toBe(true);
   });

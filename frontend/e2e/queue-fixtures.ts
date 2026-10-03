@@ -50,11 +50,6 @@ export function countsFor(rows: FixtureRow[]): QueueCounts {
   };
 }
 
-/** The envelope for a set of rows, as one page holding all of them. */
-export function listResponse(items: FixtureRow[]): QueueEnvelope {
-  return { items, total: items.length, counts: countsFor(items) };
-}
-
 function applyFilter(rows: FixtureRow[], filter: string): FixtureRow[] {
   if (filter === "needs_you") return rows.filter((row) => row.needs_attention || row.status === "human");
   if (filter === "human") return rows.filter((row) => row.status === "human");
@@ -93,9 +88,14 @@ export async function mockQueue(
     const offset = Number(url.searchParams.get("offset") ?? "0");
     const limit = Number(url.searchParams.get("limit") ?? "50");
     const searched = current().filter((row) => matches(row, q));
+    // The backend scopes items and total to filter + q, but computes counts
+    // over the q-matched set with the filter ignored. Mirror both or a filtered
+    // tab whose total exceeds one page would page against the wrong number.
+    const filtered = applyFilter(searched, filter);
     const envelope: QueueEnvelope = {
-      ...listResponse(searched),
-      items: applyFilter(searched, filter).slice(offset, offset + limit),
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+      counts: countsFor(searched),
     };
     await route.fulfill({ json: envelope });
   });

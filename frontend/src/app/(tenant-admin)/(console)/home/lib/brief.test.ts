@@ -94,11 +94,11 @@ describe("buildBrief", () => {
   it("surfaces a queue card naming the waiting count, singular and plural", () => {
     const one = buildBrief([conversation()], [record()], 1);
     expect(one[0]!.kind).toBe("queue");
-    expect(one[0]!.headline).toBe("1 customer is waiting for you.");
+    expect(one[0]!.headline).toBe("1 conversation needs you.");
     expect(one[0]!.chips[0]!.href).toBe("/chats");
 
     const many = buildBrief([conversation()], [record()], 3);
-    expect(many[0]!.headline).toBe("3 customers are waiting for you.");
+    expect(many[0]!.headline).toBe("3 conversations need you.");
     expect(many[0]!.chips[0]!.label).toBe("Open Chats");
   });
 

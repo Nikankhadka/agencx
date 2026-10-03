@@ -152,7 +152,11 @@ export default function ChatsPage() {
                   </span>
                   {/* A compact amber exclamation badge, not a text pill: the
                       words live in the tab above, and spelling them out per row
-                      stole the title's width on a phone. */}
+                      stole the title's width on a phone. RF-14: handler and
+                      attention are independent axes, so a thread with an open
+                      escalation AND a human takeover shows both - the handler
+                      names who is replying, the badge names that it still needs
+                      the owner. */}
                   {row.needs_attention ? (
                     <span
                       data-testid="row-attention"
@@ -163,17 +167,18 @@ export default function ChatsPage() {
                     >
                       <Icon name="priority_high" size={14} />
                     </span>
-                  ) : row.handler === "human" ? (
-                    // RF-14: a taken-over thread names its handler. The
-                    // assistant's dot would be a lie here - the human is
-                    // replying, not the assistant.
+                  ) : null}
+                  {row.handler === "human" ? (
+                    // A taken-over thread names its handler. The assistant's dot
+                    // would be a lie here - the human is replying, not the
+                    // assistant.
                     <span
                       data-testid="row-handler"
                       className="text-footnote font-medium text-accent-active"
                     >
                       You
                     </span>
-                  ) : row.status === "open" ? (
+                  ) : !row.needs_attention && row.status === "open" ? (
                     <span
                       role="img"
                       aria-label="Being handled for you"

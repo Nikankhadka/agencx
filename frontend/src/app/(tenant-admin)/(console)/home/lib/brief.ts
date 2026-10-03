@@ -91,10 +91,13 @@ export function buildBrief(
   if (needsYou > 0) {
     items.push({
       kind: "queue",
+      // "need you" covers an open escalation and a thread the owner already
+      // took over - both are the owner's to act on - so it stays accurate
+      // whichever mix the count holds.
       headline:
         needsYou === 1
-          ? "1 customer is waiting for you."
-          : `${needsYou} customers are waiting for you.`,
+          ? "1 conversation needs you."
+          : `${needsYou} conversations need you.`,
       chips: [{ label: "Open Chats", href: "/chats" }],
     });
   }

@@ -515,9 +515,11 @@ forward.)
 **The owner's side of the same surface (C-6).** `/chats` (list) and
 `/chats/[id]` (thread) are where the business reads its customer conversations
 and steps into them. Ported from the prototype's `chats` and `renderThreadScreen`
-screens: the **All / Action needed / Unread** filter row, where "Action needed"
-*is* the escalation queue; `chat-row` with name, relative time, a status dot
-(amber = the assistant asked for you, red = it is handling this) and a
+screens: the **Needs you / All / Unread / Human handled** filter row (RF-14),
+where **Needs you** is an open escalation or a conversation a human has taken
+over, and the tabs carry their whole-dataset counts; `chat-row` with name,
+relative time, a handler label or status dot (amber = the assistant asked for
+you, red = it is handling this, "You" = a staff member is replying) and a
 one-line preview that shows the assistant's own summary of what the customer
 wants; and in the thread, the "Handling" / "You're replying" status with the
 take-over and hand-back pills and their symmetrical `thr-pill` stamps. Built on

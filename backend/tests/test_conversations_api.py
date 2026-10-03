@@ -380,6 +380,40 @@ async def test_search_ignores_a_leading_hash_on_the_reference(
     assert str(conversation_id) in {row["id"] for row in hashed["items"]}
 
 
+async def test_search_matches_an_open_escalation_summary(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """q reaches the escalation's summary, not just the name and reference -
+    it is the line the owner actually reads in the queue. A resolved
+    escalation's summary is excluded, matching the needs_you boundary."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    open_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="no-name-here")
+    await _seed_escalation(
+        superuser_conn, tenant_id, open_id, summary="wants a refund for Thursday"
+    )
+    resolved_id = await _seed_conversation(
+        superuser_conn, tenant_id, customer_ref="also-no-name"
+    )
+    await _seed_escalation(
+        superuser_conn,
+        tenant_id,
+        resolved_id,
+        summary="wants a refund for Friday",
+        status="resolved",
+    )
+
+    body = await _list(client, token, q="refund for")
+    assert {row["id"] for row in body["items"]} == {str(open_id)}
+    assert body["total"] == 1
+
+    specific = await _list(client, token, q="Thursday")
+    assert {row["id"] for row in specific["items"]} == {str(open_id)}
+
+    missing = await _list(client, token, q="Friday")
+    assert missing["items"] == []
+    assert missing["total"] == 0
+
+
 async def test_the_queue_filters_searches_and_pages_over_the_whole_dataset(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
