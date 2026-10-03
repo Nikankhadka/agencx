@@ -290,7 +290,7 @@ and
 
 #### RF-8: Desktop customer chat panels and mobile sheets
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress.
 - **Visible outcome:** On `lg+` the customer chat is a side panel that leaves
   the business page reachable; below `lg` it is a full-height sheet.
 - **Current vs proposed:** Current: chat renders as a mobile `Sheet` only; no
@@ -306,6 +306,14 @@ and
   the composer reachable; closing the panel restores the page state.
 - **Regression checks:** The storefront E2E at both widths; focus trap and
   `aria-modal` behavior for the sheet.
+- **Decisions:** Desktop composition accepted for RF-8: at `lg+` the chat is a
+  docked, non-modal right side panel (`role="complementary"`, no scrim, no
+  `aria-modal`, page visible and interactive, content inset so the panel never
+  covers it); below `lg` it stays the full-height modal bottom sheet with focus
+  trap, `aria-modal`, scrim, Escape and scrim close. Exactly one
+  `CustomerChat` instance is preserved across both presentations and across
+  breakpoint changes - one panel host switches presentation; no second chat
+  tree and no remount on resize.
 - **OPEN:** none.
 
 #### RF-9: Offering and price-summary card alignment
