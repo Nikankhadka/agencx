@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-7 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-8 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -110,9 +110,10 @@ implementable without deciding product behavior (the `OPEN:` lines record the
 product questions that still need a founder ruling). The delivered tickets are
 RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
 search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
-RF-6 (document-review workspace clarification), and RF-18 (owner read state);
-the remaining product-refinement tickets are **RF-7 through RF-17**, plus the
-RF-14 tab-badge follow-up.
+RF-6 (document-review workspace clarification), RF-7 (business page composition
+and contextual owner editing), and RF-18 (owner read state); the remaining
+product-refinement tickets are **RF-8 through RF-17**, plus the RF-14 tab-badge
+follow-up.
 
 ### Archive process for delivered RF tickets
 
@@ -275,69 +276,17 @@ archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
 is the agreed behavior above. The hard rules in `design/conventions.md`
 sections 8 and 9 bind every ticket.
 
-**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18. Their
-full records, including verification, live in
+**Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18.
+Their full records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
 [12-refinement-rf-4-pricing-wording.md](../../../archive/phase1-complete/12-refinement-rf-4-pricing-wording.md),
 [12-refinement-rf-5-media-workflows.md](../../../archive/phase1-complete/12-refinement-rf-5-media-workflows.md),
 [12-refinement-rf-6-document-review-clarity.md](../../../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md),
+[12-refinement-rf-7-business-page-shortcuts.md](../../../archive/phase1-complete/12-refinement-rf-7-business-page-shortcuts.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-7: Business page composition and contextual owner editing
-
-- **Status:** Active - in progress on `feat/rf-7-business-page-shortcuts`.
-- **Visible outcome:** The public business page is browse-first (cover,
-  identity, category-grouped offerings, price summaries, links) with clearly
-  labeled chat access, and the owner reaches the same field editors from
-  contextual shortcuts on that page.
-- **Current vs proposed:** Current: the browse-first business page and
-  storefront ship (M-4, M-7); no contextual owner edit shortcuts exist. The
-  storefront price label already routes through `src/lib/money.ts` -
-  `frontend/src/app/[slug]/Offerings.tsx:62-64` delegates to `formatCents` -
-  so the earlier `priceLabel` arithmetic claim is satisfied and the remaining
-  work is the owner-gated shortcuts. Proposed: add contextual shortcuts that
-  open the RF-2 editors, keep one editor per field kind and two entry points,
-  and gate the owner markup server-side so customers and anonymous visitors
-  never receive it.
-- **Design reference:** `agencx-prototype-v6.html` `.edit-btn` (the circular
-  pencil idiom) and the `.set-field-row` / `.set-edit` settings-row idiom;
-  the archived v5 storefront is the accepted structure record. Shipped public
-  route: `frontend/src/app/[slug]/Storefront.tsx`, `StorefrontHero.tsx`,
-  `Offerings.tsx`. The shortcuts reuse the RF-2 editors, imported from the
-  console owner screen at
-  `frontend/src/app/(tenant-admin)/(console)/business/details/components/`
-  (`ProfileFieldSheet.tsx`, `ContactSheet.tsx`); that is the reused-editor
-  path, not `business/page/components/`.
-- **Dependencies:** RF-1 and RF-2.
-- **API/DB changes:** None. The existing authenticated
-  `PATCH /api/business/profile` (RF-2) is the save path, and the price item is
-  already satisfied.
-- **Decisions (founder-ruled 2026-10-03):**
-  - Shortcut fields are **name, hours, description, contact**. There is no
-    separate public-address shortcut; the address lives inside the free-text
-    `business_contact` value.
-  - Owner detection is **server-side**: `resolveViewerSlug` in
-    `frontend/src/lib/tenant.ts` reads the Supabase session cookie (pinned
-    cookie name `sb-<host>-auth-token`, `SUPABASE_INTERNAL_URL || supabaseUrl`)
-    and calls `GET /api/tenants/me`; `frontend/src/app/[slug]/page.tsx:82`
-    compares its slug to the page slug with `isStorefrontOwner` and passes
-    `canEdit` down to `Storefront`.
-  - `description` and `contact` are not published by the storefront
-    (`lib/tenant.ts`; `read_public_storefront` at
-    `backend/app/features/business/service.py` returns neither), so their
-    shortcuts are **owner-only**.
-- **Acceptance scenarios:** A contextual shortcut opens the field's editor with
-  the current value, Save updates the page and customer answers, and Cancel
-  changes nothing; the storefront renders the same price as the owner editor;
-  the owner markup appears only for the matching signed-in tenant owner.
-- **Regression checks:** The storefront tests, the `money.ts` contract tests,
-  and the deterministic-pricing tests stay green. Anonymous and customer HTML
-  (any viewer other than the matching owner) contains no owner controls and no
-  contact value.
-- **OPEN:** None.
 
 #### RF-8: Desktop customer chat panels and mobile sheets
 

@@ -146,8 +146,15 @@ live in the ticket files, not here.
   toast. Publication semantics unchanged; no API or DB change. Record in the
   archived
   [12-refinement-rf-6-document-review-clarity.md](../archive/phase1-complete/12-refinement-rf-6-document-review-clarity.md).
-- [ ] RF-7 through RF-17 product refinement: `Active - todo`, next is RF-7
-  (business page composition and contextual owner editing); no other ticket
+- [x] RF-7 business page composition and contextual owner editing: merged in
+  `10c506f` (PR #68). The browse-first business page gains contextual owner
+  shortcuts that open the same RF-2 editors from the page - one editor per field
+  kind, two entry points, explicit Save and Cancel - with the owner markup gated
+  server-side so customers and anonymous visitors never receive it. No API or DB
+  change. Record in the archived
+  [12-refinement-rf-7-business-page-shortcuts.md](../archive/phase1-complete/12-refinement-rf-7-business-page-shortcuts.md).
+- [ ] RF-8 through RF-17 product refinement: `Active - todo`, next is RF-8
+  (desktop customer chat panels and mobile sheets); no other ticket
   implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -182,7 +189,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-7 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-8 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
