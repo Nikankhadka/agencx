@@ -303,7 +303,9 @@ scale cannot name. The RF-8 docked customer-chat panel is `--width-panel`
 (384px), a new token because no scale step names the panel width; it is used
 through Tailwind's `w-(--width-panel)` / `pr-(--width-panel)` custom-property
 shorthand, not a `@theme` mapping, so the value needs no `make dev-reset`
-cache wipe.
+cache wipe. The RF-15 Chats split-view queue column is `--width-queue` (360px),
+the same pattern through `lg:w-(--width-queue)`, for the same reason and with
+the same no-cache-wipe property.
 
 ### 4.7 Enforcement
 
@@ -514,8 +516,17 @@ forward.)
 
 **The owner's side of the same surface (C-6).** `/chats` (list) and
 `/chats/[id]` (thread) are where the business reads its customer conversations
-and steps into them. Ported from the prototype's `chats` and `renderThreadScreen`
-screens: the **Needs you / All / Unread / Human handled** filter row (RF-14),
+and steps into them. At `lg+` they are one split view (RF-15): the queue list
+on the left and the conversation thread on the right, with no navigation
+between them, and a placeholder in the thread column until a row is selected.
+Below `lg` the two stay list-then-thread - selecting a row shows the full-height
+thread and hides the list, with the bottom tab bar preserved. `/chats/[id]`
+remains a deep link that opens the thread in the split pane; it keeps its
+`ScreenTopbar` back control, which on desktop deselects to the placeholder.
+The list is owned by a route-persistent `chats/layout.tsx`, so it stays mounted
+while the route changes under it. Ported from the prototype's `chats` and
+`renderThreadScreen` screens: the **Needs you / All / Unread / Human handled**
+filter row (RF-14),
 where **Needs you** is an open escalation or a conversation a human has taken
 over, and the tabs carry their whole-dataset counts; `chat-row` with name,
 relative time, a handler label or status dot (amber = the assistant asked for

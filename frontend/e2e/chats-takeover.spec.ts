@@ -26,22 +26,27 @@ test("staff take a conversation over, reply, and hand it back", async ({ page, r
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
   await page.goto(`/chats/${conversationId}`);
 
+  // RF-15: at desktop the queue list sits beside the thread, and its preview
+  // can repeat the customer's last message or a stamp. Scope the transcript
+  // assertions to the thread pane so they cannot match both.
+  const thread = page.getByTestId("chats-thread-pane");
+
   // The assistant has it, and the screen says so rather than leaving the owner
   // to infer it from which controls are showing.
   await expect(page.getByTestId("thread-status")).toHaveText("Handling");
-  await expect(page.getByText("Can I speak to a person please?")).toBeVisible();
+  await expect(thread.getByText("Can I speak to a person please?")).toBeVisible();
 
   await page.getByTestId("take-over").click();
   // Stepping in never asks - it only adds the owner, it takes nothing away.
   await expect(page.getByTestId("confirm-accept")).toHaveCount(0);
   await expect(page.getByTestId("thread-status")).toHaveText("You're replying");
   // The stamp lands in the transcript, so the history says who was speaking.
-  await expect(page.getByText("You took over this conversation")).toBeVisible();
+  await expect(thread.getByText("You took over this conversation")).toBeVisible();
 
   const reply = "Hi, it's Sam from ByteFix - happy to help.";
-  await page.getByRole("textbox").fill(reply);
+  await thread.getByRole("textbox").fill(reply);
   await page.keyboard.press("Enter");
-  await expect(page.getByText(reply)).toBeVisible();
+  await expect(thread.getByText(reply)).toBeVisible();
 
   // The customer's side: still open, and the human's words reached it.
   const transcript = await request.get(
@@ -71,5 +76,5 @@ test("staff take a conversation over, reply, and hand it back", async ({ page, r
   await page.getByTestId("hand-back").click();
   await page.getByTestId("confirm-accept").click();
   await expect(page.getByTestId("thread-status")).toHaveText("Handling");
-  await expect(page.getByText("Handed back to Agencx")).toBeVisible();
+  await expect(thread.getByText("Handed back to Agencx")).toBeVisible();
 });

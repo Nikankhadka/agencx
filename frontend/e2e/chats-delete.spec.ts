@@ -36,15 +36,18 @@ test("the owner deletes a conversation and it leaves the list", async ({ page, r
   // client-side one - a full page load would refetch it and prove nothing.
   await page.getByTestId("chat-row").filter({ hasText: ref }).click();
   await page.waitForURL(`**/chats/${id}`);
-  await expect(page.getByText("Please delete this test conversation.")).toBeVisible();
+  // RF-15: scope to the thread pane - the list preview can repeat the message.
+  await expect(
+    page.getByTestId("chats-thread-pane").getByText("Please delete this test conversation.")
+  ).toBeVisible();
 
   await page.getByTestId("delete-conversation").click();
   await expect(page.getByText("Delete this conversation?")).toBeVisible();
   await page.getByTestId("confirm-accept").click();
 
   await page.waitForURL("**/chats");
-  // The tab resets to Needs you on remount; assert the deletion under All,
-  // where the row would otherwise appear.
+  // RF-15: the route-persistent layout keeps the filter across the split-pane
+  // navigation; assert the deletion under All, where the row would otherwise appear.
   await page.getByTestId("chats-filter-all").click();
   await expect(page.getByText("Conversation deleted")).toBeVisible();
   await expect(page.getByTestId("chat-row").filter({ hasText: ref })).toHaveCount(0);
@@ -86,5 +89,7 @@ test("a conversation the server refuses to delete stays, with the reason shown",
   await page.waitForTimeout(4500);
   await expect(page.getByTestId("delete-error")).toHaveText(reason);
   await expect(page).toHaveURL(new RegExp(`/chats/${id}$`));
-  await expect(page.getByText("Please delete this test conversation.")).toBeVisible();
+  await expect(
+    page.getByTestId("chats-thread-pane").getByText("Please delete this test conversation.")
+  ).toBeVisible();
 });
