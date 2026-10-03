@@ -21,7 +21,7 @@ export interface PriceSummaryPayload {
 
 export function PriceSummaryCard({ summary }: { summary: PriceSummaryPayload }) {
   return (
-    <Card aria-label="Price summary" className="mt-2 w-full max-w-[420px]">
+    <Card aria-label="Price summary" className="mt-2 w-full max-w-[520px]">
       <h3 className="mb-3 text-body font-semibold text-text">Price summary</h3>
       <ul className="flex flex-col gap-2">
         {summary.line_items.map((item) => (
