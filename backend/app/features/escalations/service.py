@@ -16,6 +16,13 @@ from app.shared import db
 # It ships on this surface and on no public one - a customer never reads it.
 _SELECT_COLUMNS = "id, conversation_id, reason, summary, status, created_at, resolved_at"
 
+# RF-16: the explicit-resolution stamp, owner-only like the takeover/handback
+# stamps in features/chat. Written as a ``system`` message so the owner's
+# thread reads that the issue was closed on purpose - replying and handing
+# back are separate actions and never write it. The public transcript filters
+# ``system`` out, so a customer never reads it.
+RESOLUTION_STAMP = "You resolved this issue"
+
 
 async def list_escalations(
     *, tenant_id: str, limit: int, offset: int, role: str = "tenant_admin"
@@ -55,7 +62,8 @@ async def claim(
 async def resolve(
     *, tenant_id: str, escalation_id: str, message: str | None, role: str = "tenant_admin"
 ) -> dict[str, str] | None:
-    """Resolve an open/claimed escalation; ``message`` (if given) becomes a
+    """Resolve an open/claimed escalation; every resolution writes the
+    owner-only ``system`` stamp, and ``message`` (if given) becomes a
     human_agent message in the transcript. None means the escalation was
     already resolved or missing - the caller distinguishes 404 from 409."""
     async with db.tenant_context(tenant_id, role) as conn:
@@ -72,14 +80,30 @@ async def resolve(
                 return None
             return {"conflict": "escalation is already resolved"}
 
+        # RF-16: the stamp always records the resolution, whether or not a
+        # customer-facing message accompanies it.
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'system', $3)",
+            tenant_id,
+            resolved["conversation_id"],
+            RESOLUTION_STAMP,
+        )
+
         if message is not None:
             # T-031: a human_agent reply lands in the transcript the same way
             # any other message does - the customer surface picks it up by
             # polling (no push mechanism exists in this codebase; see
             # CustomerChat.tsx's escalated-state poll).
+            #
+            # RF-16: the message must always read after the stamp. Postgres
+            # ``now()`` is transaction-stable, so rows written in this one
+            # transaction would otherwise tie under the created_at ordering;
+            # the explicit +1 microsecond makes the order stable across a
+            # refresh and across test runs.
             await conn.execute(
-                "insert into messages (tenant_id, conversation_id, role, content) "
-                "values ($1, $2, 'human_agent', $3)",
+                "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+                "values ($1, $2, 'human_agent', $3, now() + interval '1 microsecond')",
                 tenant_id,
                 resolved["conversation_id"],
                 message,

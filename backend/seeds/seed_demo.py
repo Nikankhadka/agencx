@@ -50,6 +50,7 @@ from uuid import UUID, uuid4
 
 import httpx
 
+from app.features.escalations.service import RESOLUTION_STAMP
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
@@ -801,8 +802,24 @@ async def _seed_conversations(
         messages: list[tuple[str, str, str | None, dict[str, Any] | None, int]] = spec["messages"]
         message_ids: list[UUID] = []
         msg_time = created_at
+        escalation: dict[str, Any] | None = spec.get("escalation")
+        # RF-16 consistency: a real resolution writes the owner-only stamp
+        # before the optional human_agent reply (escalations/service.py). Seed
+        # the same pair so the demo world matches shipped behavior instead of
+        # carrying a bare human_agent message with no stamp.
+        stamp_before_human = escalation is not None and escalation["status"] == "resolved"
         for role, content, agent_node, metadata, offset in messages:
             msg_time = created_at + timedelta(seconds=offset)
+            if stamp_before_human and role == "human_agent":
+                await conn.execute(
+                    "insert into messages (id, tenant_id, conversation_id, role, content, "
+                    "created_at) values ($1, $2, $3, 'system', $4, $5)",
+                    uuid4(),
+                    tenant_id,
+                    conv_id,
+                    RESOLUTION_STAMP,
+                    msg_time - timedelta(seconds=1),
+                )
             msg_id = uuid4()
             message_ids.append(msg_id)
             await conn.execute(
@@ -856,7 +873,6 @@ async def _seed_conversations(
                 created_at + timedelta(seconds=tc["on_message_index"]) - timedelta(seconds=1),
             )
 
-        escalation: dict[str, Any] | None = spec.get("escalation")
         if escalation is not None:
             esc_id = uuid4()
             esc_created = created_at + timedelta(seconds=16)

@@ -4,6 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
+import { Button } from "@/components/ui/Button";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { CommandPill } from "@/components/ui/CommandPill";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
@@ -17,14 +18,19 @@ import { clockTime, customerLabel } from "@/lib/format";
 import { invalidateConversationLists } from "../lib/useConversationQueue";
 
 /**
- * C-6 Chats thread: the owner reads a conversation, steps into it, and hands it
- * back.
+ * C-6 Chats thread: the owner reads a conversation, steps into it, hands it
+ * back, and resolves an open issue.
  *
  * The two states this screen exists to make obvious are "my assistant is
  * handling this" and "I am replying". Both are named in the topbar rather than
  * implied by which controls are visible, because an owner who is unsure which
  * one is true will not type - and a message sent while the assistant is still
  * answering puts two voices in one thread.
+ *
+ * RF-16 adds resolution as a third, explicit action: an open escalation shows
+ * the inline resolve shelf whether or not the owner has taken over. It takes
+ * its own confirmation and writes the owner-only stamp; replying and handing
+ * back stay separate and never resolve anything.
  *
  * Ported from agencx-prototype-v6.html's `renderThreadScreen` / `alexTko` /
  * `alexHbk`: `thr-st` status, the take-over and hand-back pills, and the
@@ -37,6 +43,15 @@ const POLL_INTERVAL_MS = 4000;
 
 export default function ChatThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  // Keyed remount: the desktop layout stays mounted across a route change, so
+  // without this the reply draft, error, deleteError, and the RF-16 resolve
+  // open/draft state would leak from one conversation to the next. Keying on
+  // the id resets every hook by unmounting, rather than a reset-effect that
+  // react-hooks/set-state-in-effect would reject.
+  return <ChatThread key={id} id={id} />;
+}
+
+function ChatThread({ id }: { id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -46,6 +61,11 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [draft, setDraft] = useState("");
+  // RF-16: the inline resolve shelf - its own draft, so a message typed for one
+  // issue never carries over to the next, and its own open flag so a failed
+  // submit leaves the text in place to retry.
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [resolveDraft, setResolveDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   // RF-18: the conversation id whose read marker this mount has already sent,
   // so the 4s poll never re-sends it (and a route change to another id still
@@ -101,6 +121,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   // A conversation a tenant limit ended is not one to step into - the cap is
   // the point. The pill is simply absent rather than present-and-failing.
   const stopped = detail?.status === "escalated" || detail?.status === "closed";
+  // RF-16: resolution is available from the Handling state, not only after a
+  // takeover - the endpoint accepts an open or claimed escalation, and gating
+  // the control on takeover would couple two actions the ticket keeps separate.
+  const pendingEscalationId = detail?.pending_escalation_id ?? null;
 
   async function handleTakeover() {
     if (takenOver) {
@@ -126,6 +150,51 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       setReloadToken((token) => token + 1);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : "That didn't go through.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  // RF-16: resolution is its own explicit action. It takes its own
+  // confirmation, and neither replying nor handing back reaches it.
+  async function handleResolve() {
+    if (!pendingEscalationId) return;
+    await confirm({
+      title: "Resolve this issue?",
+      // RF-16/F2: while taken over, the row stays in Needs you until handback
+      // (status is still human), so promising it leaves here would be false.
+      description: takenOver
+        ? "This marks the issue resolved. You are still replying, so hand back to clear it from Needs you. Replying or handing back will not resolve it."
+        : "This marks the issue resolved and removes it from Needs you. Replying or handing back will not resolve it.",
+      confirmLabel: "Resolve",
+      onConfirm: () => resolveIssue(pendingEscalationId),
+    });
+  }
+
+  async function resolveIssue(escalationId: string) {
+    setWorking(true);
+    setError(null);
+    const message = resolveDraft.trim();
+    try {
+      await apiFetch(`/api/escalations/${escalationId}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ message: message || null }),
+      });
+      setResolveDraft("");
+      setResolveOpen(false);
+      await invalidateConversationLists(queryClient);
+      // The stamp and the optional message are in the transcript now; refetch
+      // immediately instead of waiting out the poll interval.
+      setReloadToken((token) => token + 1);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Someone else already resolved it - resync rather than leave the
+        // shelf offering an action that can no longer succeed.
+        setError(err.detail);
+        setReloadToken((token) => token + 1);
+      } else {
+        setError(err instanceof ApiError ? err.detail : "That didn't go through.");
+      }
     } finally {
       setWorking(false);
     }
@@ -227,6 +296,55 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
 
       {stopped ? null : (
         <div className="shrink-0 border-t border-hairline pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+          {pendingEscalationId ? (
+            <div className="mb-3">
+              {resolveOpen ? (
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    data-testid="resolve-message"
+                    aria-label="Message to the customer (optional)"
+                    value={resolveDraft}
+                    onChange={(e) => setResolveDraft(e.target.value)}
+                    placeholder="Optional message to the customer…"
+                    rows={3}
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm text-text placeholder:text-text-tertiary transition-colors duration-(--duration-fast) hover:border-border-strong"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      data-testid="resolve-submit"
+                      loading={working}
+                      onClick={() => void handleResolve()}
+                    >
+                      Resolve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid="resolve-cancel"
+                      disabled={working}
+                      onClick={() => {
+                        setResolveOpen(false);
+                        setResolveDraft("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  data-testid="resolve-issue"
+                  disabled={working}
+                  onClick={() => setResolveOpen(true)}
+                >
+                  Resolve issue
+                </Button>
+              )}
+            </div>
+          ) : null}
           <div className="mb-3 text-center">
             <button
               type="button"

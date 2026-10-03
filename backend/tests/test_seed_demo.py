@@ -26,6 +26,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.escalations.service import RESOLUTION_STAMP
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -389,6 +390,18 @@ async def test_resolved_escalation_has_trailing_human_agent_message(
         conv_id,
     )
     assert has_human
+    # RF-16: the resolution stamp is owner-only and always written before the
+    # optional human_agent reply, matching escalations/service.py. The seeded
+    # demo carries it too, so the world does not diverge from shipped behavior.
+    transcript = await superuser_conn.fetch(
+        "select role, content from messages where conversation_id = $1 order by created_at, id",
+        conv_id,
+    )
+    roles_and_text = [(r["role"], r["content"]) for r in transcript]
+    assert ("system", RESOLUTION_STAMP) in roles_and_text
+    stamp_index = roles_and_text.index(("system", RESOLUTION_STAMP))
+    human_index = next(i for i, (role, _) in enumerate(roles_and_text) if role == "human_agent")
+    assert stamp_index < human_index
 
 
 # --- cost attribution via the real endpoint ------------------------------------

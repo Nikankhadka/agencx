@@ -18,6 +18,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.escalations.service import RESOLUTION_STAMP
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -196,15 +197,16 @@ async def _seed_escalation(
     *,
     summary: str = "asked for a price",
     status: str = "open",
-) -> None:
-    await conn.execute(
+) -> uuid.UUID:
+    escalation_id: uuid.UUID = await conn.fetchval(
         "insert into escalations (tenant_id, conversation_id, reason, summary, status) "
-        "values ($1, $2, 'price_provenance', $3, $4)",
+        "values ($1, $2, 'price_provenance', $3, $4) returning id",
         tenant_id,
         conversation_id,
         summary,
         status,
     )
+    return escalation_id
 
 
 async def test_list_conversations_returns_the_items_total_and_counts(
@@ -792,6 +794,116 @@ async def test_takeover_is_scoped_to_its_own_tenant(
     )
     assert response.status_code == 409
     assert await _status_of(superuser_conn, other_conversation) == "open"
+
+
+# --- RF-16: explicit resolution from the thread ----------------------------
+
+
+async def test_get_conversation_detail_exposes_the_pending_escalation_id(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-16: the thread's resolve control needs the open escalation's id. It is
+    null when none is open, and null again once the escalation is resolved."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    pending_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="pending")
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, pending_id)
+    bare_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="bare")
+
+    detail = await client.get(f"/api/conversations/{pending_id}", headers=_auth(token))
+    assert detail.status_code == 200
+    assert detail.json()["pending_escalation_id"] == str(escalation_id)
+
+    bare = await client.get(f"/api/conversations/{bare_id}", headers=_auth(token))
+    assert bare.json()["pending_escalation_id"] is None
+
+    resolved = await client.post(
+        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert resolved.status_code == 200
+    after = await client.get(f"/api/conversations/{pending_id}", headers=_auth(token))
+    assert after.json()["pending_escalation_id"] is None
+
+
+async def test_resolving_from_handling_writes_the_stamp_and_leaves_needs_you(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-16's OPEN item, decided: resolution is available from the Handling
+    state, not only after a takeover. The conversation is open and no one has
+    taken it over, yet resolve accepts it (the endpoint allows open/claimed)."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="handling")
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+    assert await _status_of(superuser_conn, conversation_id) == "open"
+
+    before = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) in {row["id"] for row in before["items"]}
+
+    response = await client.post(
+        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert response.status_code == 200
+    assert ("system", RESOLUTION_STAMP) in await _roles_and_text(superuser_conn, conversation_id)
+
+    after = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) not in {row["id"] for row in after["items"]}
+
+
+async def test_resolving_while_taken_over_stays_in_needs_you_until_handback(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-16/F2: a taken-over thread is in Needs you by its ``human`` status, so
+    resolving the issue does not clear the row - handback does. The resolve
+    confirmation has to say that, and this pins the behavior it describes."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="taken-over")
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+
+    # Take over first: status becomes human, so the row is in Needs you.
+    taken_over = await client.post(
+        f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
+    )
+    assert taken_over.status_code == 204
+    assert await _status_of(superuser_conn, conversation_id) == "human"
+
+    response = await client.post(
+        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert response.status_code == 200
+    assert ("system", RESOLUTION_STAMP) in await _roles_and_text(superuser_conn, conversation_id)
+
+    # The escalation is resolved, but the human status still holds the row.
+    still = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) in {row["id"] for row in still["items"]}
+
+    # Handback clears the human status, and with no open escalation it leaves.
+    handed_back = await client.post(
+        f"/api/conversations/{conversation_id}/handback", headers=_auth(token)
+    )
+    assert handed_back.status_code == 204
+    after = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) not in {row["id"] for row in after["items"]}
+
+
+async def test_owner_detail_transcript_reads_the_stamp_before_the_message(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="thread")
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+
+    response = await client.post(
+        f"/api/escalations/{escalation_id}/resolve",
+        json={"message": "All sorted - thanks for waiting."},
+        headers=_auth(token),
+    )
+    assert response.status_code == 200
+
+    detail = await client.get(f"/api/conversations/{conversation_id}", headers=_auth(token))
+    transcript = [(m["role"], m["content"]) for m in detail.json()["messages"]]
+    assert transcript == [
+        ("system", RESOLUTION_STAMP),
+        ("human_agent", "All sorted - thanks for waiting."),
+    ]
 
 
 async def _seed_transcript(

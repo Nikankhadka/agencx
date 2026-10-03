@@ -1227,6 +1227,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Pending Escalation Id */
+            pending_escalation_id?: string | null;
             /** Total Cost Usd */
             total_cost_usd: number;
             /** Messages */

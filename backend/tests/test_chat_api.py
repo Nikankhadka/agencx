@@ -22,6 +22,7 @@ import pytest
 import pytest_asyncio
 
 from app.agents.draft_node import REFUSAL_MESSAGE
+from app.features.escalations import service as escalations_service
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT, ToolCall, ToolTurn
 from app.main import app
@@ -842,6 +843,39 @@ async def test_public_messages_returns_transcript_without_system_messages(
     assert [m["role"] for m in body] == ["customer", "assistant", "human_agent"]
     assert body[2]["content"] == "A team member will call you shortly."
     assert not any(m["role"] == "system" for m in body)
+
+
+async def test_public_transcript_after_a_resolve_shows_the_message_not_the_stamp(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-16: resolving writes an owner-only system stamp plus an optional
+    human_agent message. The customer transcript returns the message and never
+    the stamp."""
+    slug = f"chat-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    escalation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into escalations (tenant_id, conversation_id, reason) "
+        "values ($1, $2, 'customer_request') returning id",
+        tenant_id,
+        conversation_id,
+    )
+
+    resolved = await escalations_service.resolve(
+        tenant_id=str(tenant_id),
+        escalation_id=str(escalation_id),
+        message="A team member will call you shortly.",
+    )
+    assert resolved is not None
+
+    response = await client.get(f"/api/chat/{conversation_id}/messages", params={"slug": slug})
+    assert response.status_code == 200
+    body = response.json()
+    assert [m["role"] for m in body] == ["human_agent"]
+    assert body[0]["content"] == "A team member will call you shortly."
+    assert all(m["content"] != escalations_service.RESOLUTION_STAMP for m in body)
 
 
 async def test_public_messages_wrong_tenant_slug_is_404(

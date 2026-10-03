@@ -17,6 +17,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.escalations.service import RESOLUTION_STAMP
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -201,7 +202,7 @@ async def test_claim_another_tenants_escalation_is_404(
     assert response.status_code == 404
 
 
-async def test_resolve_with_message_posts_human_agent_message(
+async def test_resolve_writes_the_stamp_then_the_human_agent_message(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)
@@ -217,17 +218,22 @@ async def test_resolve_with_message_posts_human_agent_message(
     assert body["status"] == "resolved"
     assert body["resolved_at"] is not None
 
+    # RF-16: the owner-only stamp is written first, then the optional
+    # customer-facing message. The order is deterministic, not a same-
+    # transaction created_at tie.
     rows = await superuser_conn.fetch(
         "select role, content from messages where tenant_id = $1 and conversation_id = $2 "
-        "and role = 'human_agent'",
+        "order by created_at, id",
         tenant_id,
         conversation_id,
     )
-    assert len(rows) == 1
-    assert rows[0]["content"] == "A team member will call you shortly."
+    assert [(r["role"], r["content"]) for r in rows] == [
+        ("system", RESOLUTION_STAMP),
+        ("human_agent", "A team member will call you shortly."),
+    ]
 
 
-async def test_resolve_without_message_posts_nothing(
+async def test_resolve_without_message_writes_only_the_stamp(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)
@@ -240,13 +246,13 @@ async def test_resolve_without_message_posts_nothing(
     )
     assert response.status_code == 200
 
-    count = await superuser_conn.fetchval(
-        "select count(*) from messages where tenant_id = $1 and conversation_id = $2 "
-        "and role = 'human_agent'",
+    rows = await superuser_conn.fetch(
+        "select role, content from messages where tenant_id = $1 and conversation_id = $2 "
+        "order by created_at, id",
         tenant_id,
         conversation_id,
     )
-    assert count == 0
+    assert [(r["role"], r["content"]) for r in rows] == [("system", RESOLUTION_STAMP)]
 
 
 async def test_resolve_blank_message_is_treated_as_no_message(
@@ -261,13 +267,13 @@ async def test_resolve_blank_message_is_treated_as_no_message(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
-    count = await superuser_conn.fetchval(
-        "select count(*) from messages where tenant_id = $1 and conversation_id = $2 "
-        "and role = 'human_agent'",
+    rows = await superuser_conn.fetch(
+        "select role, content from messages where tenant_id = $1 and conversation_id = $2 "
+        "order by created_at, id",
         tenant_id,
         conversation_id,
     )
-    assert count == 0
+    assert [(r["role"], r["content"]) for r in rows] == [("system", RESOLUTION_STAMP)]
 
 
 async def test_resolve_already_resolved_escalation_is_409(

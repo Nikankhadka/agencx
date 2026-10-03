@@ -181,7 +181,11 @@ async def get_conversation(
     when the conversation does not belong to this tenant."""
     async with db.tenant_context(tenant_id, role) as conn:
         conversation = await conn.fetchrow(
-            "select id, customer_ref, customer_email, channel, status, created_at "
+            "select id, customer_ref, customer_email, channel, status, created_at, "
+            "  (select e.id from escalations e "
+            "   where e.tenant_id = $1 and e.conversation_id = conversations.id "
+            "     and e.status <> 'resolved' "
+            "   order by e.created_at desc, e.id desc limit 1) as pending_escalation_id "
             "from conversations "
             "where tenant_id = $1 and id = $2",
             tenant_id,
