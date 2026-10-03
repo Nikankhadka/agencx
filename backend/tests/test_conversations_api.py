@@ -391,9 +391,7 @@ async def test_search_matches_an_open_escalation_summary(
     await _seed_escalation(
         superuser_conn, tenant_id, open_id, summary="wants a refund for Thursday"
     )
-    resolved_id = await _seed_conversation(
-        superuser_conn, tenant_id, customer_ref="also-no-name"
-    )
+    resolved_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="also-no-name")
     await _seed_escalation(
         superuser_conn,
         tenant_id,
