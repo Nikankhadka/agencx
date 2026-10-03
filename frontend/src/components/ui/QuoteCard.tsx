@@ -29,11 +29,9 @@ export interface QuotePayload {
  */
 export function QuoteCard({ quote }: { quote: QuotePayload }) {
   return (
-    <Card className="mt-2 w-full max-w-[420px]">
+    <Card aria-label="Quote" className="mt-2 w-full max-w-[520px]">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-footnote font-semibold uppercase text-text-secondary">
-          Quote
-        </span>
+        <h3 className="text-body font-semibold text-text">Quote</h3>
         <Badge tone={toneForStatus(quote.status)}>{quote.status}</Badge>
       </div>
 
