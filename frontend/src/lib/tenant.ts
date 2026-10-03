@@ -1,4 +1,7 @@
-import { headers } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { cookies, headers } from "next/headers";
+import { authCookieOptions } from "./auth-cookie";
+import { serverPublicConfig } from "./public-config";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -36,13 +39,13 @@ async function serverApiBaseUrls(): Promise<string[]> {
  * value cannot turn a valid tenant into the not-found page. All requests are
  * GETs, so retrying another origin is safe.
  */
-async function fetchServerApi(path: string): Promise<Response> {
+async function fetchServerApi(path: string, init: RequestInit = {}): Promise<Response> {
   let notFound: Response | null = null;
   let lastError: unknown;
 
   for (const base of await serverApiBaseUrls()) {
     try {
-      const res = await fetch(`${base}${path}`, { cache: "no-store" });
+      const res = await fetch(`${base}${path}`, { cache: "no-store", ...init });
       if (res.ok) return res;
       if (res.status === 404) {
         notFound ??= res;
@@ -141,4 +144,58 @@ export async function resolveStorefrontBySlug(slug: string): Promise<StorefrontD
   const res = await fetchServerApi(`/api/public/tenant/${encodeURIComponent(slug)}/storefront`);
   if (!res.ok) throw new Error(`storefront resolve failed: ${res.status}`);
   return (await res.json()) as StorefrontData;
+}
+
+/**
+ * RF-7: the signed-in viewer's own tenant slug, or null for an anonymous
+ * visitor. Reads the Supabase session from the request cookies with the same
+ * pinned cookie name and options `src/proxy.ts` uses (supabase-js derives the
+ * name from the public URL, while the fetch may go through
+ * `SUPABASE_INTERNAL_URL`), then calls the internal `GET /api/tenants/me` with
+ * the session access token to learn which tenant the viewer owns.
+ *
+ * In a Server Component `setAll` cannot write cookies, so a refresh here is a
+ * no-op and an expired session simply reads as anonymous - this is UX gating,
+ * not enforcement (the backend verifies the bearer and RLS is the backstop).
+ * Every failure resolves to null so the public page never errors on auth.
+ */
+export async function resolveViewerSlug(): Promise<string | null> {
+  // The whole body is guarded, not just the backend call: the public route
+  // renders for customers, and a malformed public config, a bad URL, or a
+  // corrupt (customer-controlled) `sb-...-auth-token` cookie must degrade to
+  // anonymous rather than 500 the page. Every failure - config, cookie parse,
+  // session read, backend call - resolves to null.
+  try {
+    const { supabaseUrl, supabaseAnonKey } = serverPublicConfig();
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+
+    const cookieName = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+    const fetchUrl = process.env.SUPABASE_INTERNAL_URL || supabaseUrl;
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(fetchUrl, supabaseAnonKey, {
+      cookieOptions: { name: cookieName, ...authCookieOptions() },
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          // Server Component: the response cannot set cookies. Explicit no-op.
+        },
+      },
+    });
+
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return null;
+
+    const res = await fetchServerApi("/api/tenants/me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const me = (await res.json()) as { slug?: unknown };
+    return typeof me.slug === "string" ? me.slug : null;
+  } catch {
+    return null;
+  }
 }

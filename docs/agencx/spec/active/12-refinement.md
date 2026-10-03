@@ -288,33 +288,56 @@ and
 
 #### RF-7: Business page composition and contextual owner editing
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress on `feat/rf-7-business-page-shortcuts`.
 - **Visible outcome:** The public business page is browse-first (cover,
   identity, category-grouped offerings, price summaries, links) with clearly
   labeled chat access, and the owner reaches the same field editors from
   contextual shortcuts on that page.
 - **Current vs proposed:** Current: the browse-first business page and
-  storefront ship (M-4, M-7); no contextual owner edit shortcuts exist; the
-  storefront price label does inline arithmetic in `priceLabel`
-  (`frontend/src/app/[slug]/Offerings.tsx:58-60`) instead of
-  `src/lib/money.ts`. Proposed: add contextual shortcuts that open the RF-2
-  editors, keep one editor per field kind and two entry points, and route the
-  storefront price display through `money.ts`.
-- **Design reference:** `agencx-prototype-v6.html` `renderScreen('booking')` and
-  `renderScreen('business')`; the archived v5 storefront is the accepted
-  structure record. Shipped: `frontend/src/app/[slug]/Storefront.tsx`,
-  `StorefrontHero.tsx`, `Offerings.tsx`, and `business/page/components/`.
+  storefront ship (M-4, M-7); no contextual owner edit shortcuts exist. The
+  storefront price label already routes through `src/lib/money.ts` -
+  `frontend/src/app/[slug]/Offerings.tsx:62-64` delegates to `formatCents` -
+  so the earlier `priceLabel` arithmetic claim is satisfied and the remaining
+  work is the owner-gated shortcuts. Proposed: add contextual shortcuts that
+  open the RF-2 editors, keep one editor per field kind and two entry points,
+  and gate the owner markup server-side so customers and anonymous visitors
+  never receive it.
+- **Design reference:** `agencx-prototype-v6.html` `.edit-btn` (the circular
+  pencil idiom) and the `.set-field-row` / `.set-edit` settings-row idiom;
+  the archived v5 storefront is the accepted structure record. Shipped public
+  route: `frontend/src/app/[slug]/Storefront.tsx`, `StorefrontHero.tsx`,
+  `Offerings.tsx`. The shortcuts reuse the RF-2 editors, imported from the
+  console owner screen at
+  `frontend/src/app/(tenant-admin)/(console)/business/details/components/`
+  (`ProfileFieldSheet.tsx`, `ContactSheet.tsx`); that is the reused-editor
+  path, not `business/page/components/`.
 - **Dependencies:** RF-1 and RF-2.
-- **API/DB changes:** None beyond RF-2; replace `priceLabel`'s arithmetic with
-  `formatCents`.
+- **API/DB changes:** None. The existing authenticated
+  `PATCH /api/business/profile` (RF-2) is the save path, and the price item is
+  already satisfied.
+- **Decisions (founder-ruled 2026-10-03):**
+  - Shortcut fields are **name, hours, description, contact**. There is no
+    separate public-address shortcut; the address lives inside the free-text
+    `business_contact` value.
+  - Owner detection is **server-side**: `resolveViewerSlug` in
+    `frontend/src/lib/tenant.ts` reads the Supabase session cookie (pinned
+    cookie name `sb-<host>-auth-token`, `SUPABASE_INTERNAL_URL || supabaseUrl`)
+    and calls `GET /api/tenants/me`; `frontend/src/app/[slug]/page.tsx:82`
+    compares its slug to the page slug with `isStorefrontOwner` and passes
+    `canEdit` down to `Storefront`.
+  - `description` and `contact` are not published by the storefront
+    (`lib/tenant.ts`; `read_public_storefront` at
+    `backend/app/features/business/service.py` returns neither), so their
+    shortcuts are **owner-only**.
 - **Acceptance scenarios:** A contextual shortcut opens the field's editor with
   the current value, Save updates the page and customer answers, and Cancel
-  changes nothing; the storefront renders the same price as the owner editor.
+  changes nothing; the storefront renders the same price as the owner editor;
+  the owner markup appears only for the matching signed-in tenant owner.
 - **Regression checks:** The storefront tests, the `money.ts` contract tests,
-  and the deterministic-pricing tests stay green.
-- **OPEN:** which fields warrant a contextual shortcut on the Business page
-  (name, hours, description, contact), and whether the public address is among
-  them.
+  and the deterministic-pricing tests stay green. Anonymous and customer HTML
+  (any viewer other than the matching owner) contains no owner controls and no
+  contact value.
+- **OPEN:** None.
 
 #### RF-8: Desktop customer chat panels and mobile sheets
 

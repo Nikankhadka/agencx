@@ -2,16 +2,21 @@
 /* eslint-disable @next/next/no-img-element -- storefront cover is a tenant API response. */
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { ContactSheet } from "@/app/(tenant-admin)/(console)/business/details/components/ContactSheet";
+import { ProfileFieldSheet } from "@/app/(tenant-admin)/(console)/business/details/components/ProfileFieldSheet";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
 import { ServicesOverview } from "@/components/ui/ServicesOverview";
 import { Sheet } from "@/components/ui/Sheet";
+import { apiFetch, ApiError } from "@/lib/api";
+import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import type { StorefrontData } from "@/lib/tenant";
 import { CustomerChat } from "./CustomerChat";
 import { Offerings, priceLabel } from "./Offerings";
-import { StorefrontHero } from "./StorefrontHero";
+import { StorefrontHero, type OwnerEditField } from "./StorefrontHero";
 
 function videoEmbedUrl(provider: string, rawUrl: string): string | null {
   try {
@@ -119,17 +124,67 @@ export function Storefront({
   greeting,
   starterQuestions,
   storefront,
+  canEdit = false,
 }: {
   slug: string;
   logoUrl?: string;
   greeting: string | null;
   starterQuestions: string[];
   storefront: StorefrontData;
+  canEdit?: boolean;
 }) {
+  const router = useRouter();
   const [chatOpen, setChatOpen] = useState(false);
   const [selected, setSelected] = useState<StorefrontData["offerings"][number] | null>(null);
   const composerRef = useRef<((text: string) => void) | null>(null);
   const [shared, setShared] = useState(false);
+  // RF-7: owner-only editing state. The profile is fetched client-side ONLY
+  // when this viewer owns the page, so no owner data enters a customer's HTML
+  // or network.
+  const [editing, setEditing] = useState<OwnerEditField | null>(null);
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canEdit) return;
+    apiFetch<BusinessProfile>("/api/business/profile")
+      .then((next) => setProfile(next))
+      .catch(() => setProfile(null));
+  }, [canEdit]);
+
+  function openEditor(field: OwnerEditField) {
+    // RF-7: the shortcuts only render once the profile has loaded, but guard
+    // here too - opening an editor from an unloaded profile would let Save
+    // PATCH blank values over the owner's real contact/description/hours.
+    if (!profile) return;
+    setError(null);
+    setEditing(field);
+  }
+
+  async function save(next: ProfileUpdate) {
+    // Belt and braces: no code path may PATCH from the unloaded state.
+    if (!profile) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setProfile(
+        await apiFetch<BusinessProfile>("/api/business/profile", {
+          method: "PATCH",
+          body: JSON.stringify(next),
+        }),
+      );
+      setEditing(null);
+      // The page is server-rendered from the profile, so refresh it to show
+      // the saved name/hours; customer answers read the same profile (RF-2).
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "That didn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function share() {
     const url = typeof window === "undefined" ? `/${slug}` : window.location.href;
     try {
@@ -189,14 +244,28 @@ export function Storefront({
       {hasOfferings ? (
         <>
           <div className="mx-auto w-full max-w-5xl md:px-gutter md:pt-6">
-            <StorefrontHero slug={slug} logoUrl={logoUrl} storefront={storefront} />
+            <StorefrontHero
+              slug={slug}
+              logoUrl={logoUrl}
+              storefront={storefront}
+              canEdit={canEdit && profile !== null}
+              profile={profile}
+              onEdit={openEditor}
+            />
           </div>
           <Offerings offerings={storefront.offerings} onSelect={setSelected} />
         </>
       ) : (
         <div className="flex flex-1 flex-col">
           <div className="mx-auto w-full max-w-5xl md:px-gutter md:pt-6">
-            <StorefrontHero slug={slug} logoUrl={logoUrl} storefront={storefront} />
+            <StorefrontHero
+              slug={slug}
+              logoUrl={logoUrl}
+              storefront={storefront}
+              canEdit={canEdit && profile !== null}
+              profile={profile}
+              onEdit={openEditor}
+            />
           </div>
           {/* 20: with no catalog the overview is all the page can say about
               what this business does, so it renders here rather than leaving
@@ -260,6 +329,61 @@ export function Storefront({
           </div>
         ) : null}
       </Sheet>
+
+      {/* RF-7: the RF-2 editors, reused verbatim - one editor per field kind,
+          two entry points. Rendered only for the owner AND only once the
+          profile has loaded, so a customer's DOM carries no owner markup and
+          triggers no profile fetch, and an early open/save can never PATCH
+          blank values over the owner's real profile. */}
+      {canEdit && profile !== null ? (
+        <>
+          <ProfileFieldSheet
+            open={editing === "name"}
+            field="name"
+            title="Edit business name"
+            label="Business name"
+            value={profile.name}
+            placeholder="Bytefix Repairs"
+            busy={busy}
+            error={error}
+            onClose={() => setEditing(null)}
+            onSave={save}
+          />
+          <ProfileFieldSheet
+            open={editing === "hours"}
+            field="hours"
+            title="Edit opening hours"
+            label="Opening hours"
+            value={profile.hours}
+            placeholder="Mon to Fri 9am to 6pm"
+            busy={busy}
+            error={error}
+            onClose={() => setEditing(null)}
+            onSave={save}
+          />
+          <ProfileFieldSheet
+            open={editing === "description"}
+            field="description"
+            title="Edit description"
+            label="Description"
+            value={profile.description}
+            placeholder="What your business does, in your own words"
+            multiline
+            busy={busy}
+            error={error}
+            onClose={() => setEditing(null)}
+            onSave={save}
+          />
+          <ContactSheet
+            open={editing === "contact"}
+            profile={profile}
+            busy={busy}
+            error={error}
+            onClose={() => setEditing(null)}
+            onSave={save}
+          />
+        </>
+      ) : null}
     </main>
   );
 }
