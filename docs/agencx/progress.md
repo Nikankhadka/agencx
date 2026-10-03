@@ -168,8 +168,17 @@ live in the ticket files, not here.
   two and carries `aria-label="Quote"`; the ticket's OPEN (420px versus 520px)
   is resolved at 520px. No API or DB change. Record in the archived
   [12-refinement-rf-9-card-alignment.md](../archive/phase1-complete/12-refinement-rf-9-card-alignment.md).
-- [ ] RF-10 through RF-17 product refinement: `Active - todo`, next is RF-10
-  (preferred-name capture, correction, and persisted prompt limits); no other
+- [x] RF-10 preferred-name capture, correction, and persisted prompt limits:
+  merged in `edab038` (PR #71). During the opening phase the assistant asks for
+  a preferred name at most twice, tracked by a persisted, atomic counter
+  (migration `0037`); the stored name reaches the customer surface as a
+  name-only `contact` SSE event and shows in a display-only chip that is
+  correctable in natural language through `set_customer_contact` and survives
+  same-tab refresh; after the cap the prompt stops silently. Ticket 19's handoff
+  contact capture is unchanged. Record in the archived
+  [12-refinement-rf-10-preferred-name.md](../archive/phase1-complete/12-refinement-rf-10-preferred-name.md).
+- [ ] RF-11 through RF-17 product refinement: `Active - todo`, next is RF-11
+  (visible human-help action and requested handoff); no other
   ticket implemented. The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -204,7 +213,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-10 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-11 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-10 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-11 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -112,8 +112,9 @@ RF-1 (shared row grammar), RF-2 (business-detail editing), RF-3 (offering
 search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
 RF-6 (document-review workspace clarification), RF-7 (business page composition
 and contextual owner editing), RF-8 (desktop customer chat panels and mobile
-sheets), RF-9 (offering and price-summary card alignment), and RF-18 (owner read
-state); the remaining product-refinement tickets are **RF-10 through RF-17**,
+sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
+capture), and RF-18 (owner read
+state); the remaining product-refinement tickets are **RF-11 through RF-17**,
 plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
@@ -279,7 +280,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, and RF-18. Their full records, including verification, live in
+RF-9, RF-10, and RF-18. Their full records, including verification, live in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
 [12-refinement-rf-3-offering-search.md](../../../archive/phase1-complete/12-refinement-rf-3-offering-search.md),
@@ -289,70 +290,9 @@ RF-9, and RF-18. Their full records, including verification, live in
 [12-refinement-rf-7-business-page-shortcuts.md](../../../archive/phase1-complete/12-refinement-rf-7-business-page-shortcuts.md),
 [12-refinement-rf-8-desktop-chat-panel.md](../../../archive/phase1-complete/12-refinement-rf-8-desktop-chat-panel.md),
 [12-refinement-rf-9-card-alignment.md](../../../archive/phase1-complete/12-refinement-rf-9-card-alignment.md),
+[12-refinement-rf-10-preferred-name.md](../../../archive/phase1-complete/12-refinement-rf-10-preferred-name.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-10: Preferred-name capture, correction, and persisted prompt limits
-
-- **Status:** Active - in progress.
-- **Visible outcome:** During the opening phase the assistant asks for a
-  preferred name at most twice; the name is shown on the customer surface in a
-  small chip, correctable by natural language, persists across refresh, and the
-  prompt stops silently after the cap.
-- **Current vs proposed:** Current: no opening-phase name ask or counter exists;
-  the customer surface shows no name; `customer_ref` storage and owner display
-  ship. Proposed: define the opening phase, persist the ask counter in a new
-  `conversations` column, and add the customer-facing name chip and correction
-  path through `set_customer_contact`.
-- **Design reference:** `agencx-prototype-v6.html` `initName()` name pill in the
-  onboarding thread (`#ni`); the opened account shows the customer reference.
-  Shipped: `backend/app/agents/agent_node.py` `set_customer_contact`
-  (`_set_customer_contact_impl`) and
-  `frontend/src/app/[slug]/CustomerChat.tsx` header.
-- **Dependencies:** RF-1. RF-11 follows name capture.
-- **API/DB changes:** Shipped migration `0037` adds
-  `conversations.opening_name_asks integer not null default 0`; the agent node
-  increments it atomically once per opening-phase ask and caps at two. The
-  stored `customer_ref` reaches the customer surface as a name-only `contact`
-  SSE event (never the owner-only email). Same-tab refresh persists the
-  conversation id and displayed name in `sessionStorage` and restores the text
-  transcript through the existing `GET /api/chat/{id}/messages`; no new endpoint
-  was added.
-- **Acceptance scenarios:** The first two opening-phase name prompts show; a
-  third non-answer stops the prompt silently; a first name or nickname is
-  accepted without verification; the chip shows the stored name; a
-  natural-language correction ("call me Sam") updates `customer_ref` and the
-  chip; a refresh keeps the chip; no phone, email, or other contact detail is
-  collected.
-- **Regression checks:** Ticket 19's handoff contact capture and its
-  never-blocking behavior stay green; name refusal, correction, and duplicate
-  names; the public transcript stays leak-free.
-- **Decision (2026-10-03):** The opening phase is the window before the first
-  `escalations` row for the conversation. The chat API already short-circuits
-  `human`/`escalated` statuses before the graph runs, so the escalation-existence
-  check is the complete boundary.
-- **Decision (2026-10-03):** The ask counter is deterministic and persisted, not
-  model-counted. The agent node runs exactly once per turn (retries re-enter the
-  draft node), so at turn start, when the name is unknown, no escalation row
-  exists, and `opening_name_asks < 2`, it appends the opening ask instruction and
-  increments the column by exactly one in the same turn. At the cap it appends a
-  one-line suppression; when the name is known or a handoff exists it appends
-  nothing (the known-name path keeps the existing "never ask again" line).
-- **Decision (2026-10-03):** `customer_ref` reaches the customer surface as a new
-  SSE `contact` event carrying the name only, never email (email is owner-only,
-  ticket 19). It is emitted at turn start when a name is stored and again
-  whenever `set_customer_contact` stores or changes one; the controller passes it
-  through live next to `citations`/`quote` because a redraft cannot invalidate it.
-- **Decision (2026-10-03):** Same-tab refresh persists the conversation id and
-  the displayed name in `sessionStorage` and restores the text transcript through
-  the existing `GET /api/chat/{id}/messages`. Cards, composer draft, and banner
-  state stay RF-12. A name chip over an empty thread would be a visibly broken
-  state.
-- **Decision (2026-10-03):** The name chip is display-only (a `<span>`, not a
-  Button/Chip) rendered above the message list in `CustomerChat`, with
-  `data-testid="customer-name-chip"`. It uses the prototype `.svc-lbl` recipe
-  through existing theme tokens, so `check:tokens` passes with no hex.
-- **OPEN:** none.
 
 #### RF-11: Visible human-help action and requested handoff
 
