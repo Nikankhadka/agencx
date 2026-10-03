@@ -310,10 +310,14 @@ and
   (`_set_customer_contact_impl`) and
   `frontend/src/app/[slug]/CustomerChat.tsx` header.
 - **Dependencies:** RF-1. RF-11 follows name capture.
-- **API/DB changes:** Add `conversations.opening_name_asks integer not null
-  default 0` (migration with the implementation ticket); expose `customer_ref`
-  on the customer chat read so the chip can render; the counter increments on
-  each opening-phase name prompt and caps at two.
+- **API/DB changes:** Shipped migration `0037` adds
+  `conversations.opening_name_asks integer not null default 0`; the agent node
+  increments it atomically once per opening-phase ask and caps at two. The
+  stored `customer_ref` reaches the customer surface as a name-only `contact`
+  SSE event (never the owner-only email). Same-tab refresh persists the
+  conversation id and displayed name in `sessionStorage` and restores the text
+  transcript through the existing `GET /api/chat/{id}/messages`; no new endpoint
+  was added.
 - **Acceptance scenarios:** The first two opening-phase name prompts show; a
   third non-answer stops the prompt silently; a first name or nickname is
   accepted without verification; the chip shows the stored name; a

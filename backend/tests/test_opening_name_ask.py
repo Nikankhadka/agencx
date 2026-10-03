@@ -124,6 +124,12 @@ async def test_opening_asks_are_capped_at_two_then_suppressed(
 ) -> None:
     tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
 
+    # The opening ask collects no contact detail: pin the prohibition on the
+    # guidance constant itself, not only on the contract.
+    guidance = _OPENING_NAME_GUIDANCE.lower()
+    for forbidden in ("surname", "phone", "email"):
+        assert forbidden in guidance
+
     # Turn 1 and turn 2 each carry the ask instruction and bump the counter.
     for expected in (1, 2):
         provider = _prose_provider()

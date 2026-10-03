@@ -635,7 +635,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         # so this is normally a version check, not an assembly.
         package = await get_package(conn, ctx.tenant_id)
         contact = await conn.fetchrow(
-            "select c.customer_ref, c.customer_email, c.opening_name_asks, "
+            "select c.customer_ref, c.customer_email, "
             "exists(select 1 from escalations e where e.tenant_id = c.tenant_id "
             "and e.conversation_id = c.id) as handed_off "
             "from conversations c where c.id = $1 and c.tenant_id = $2",
@@ -644,7 +644,6 @@ async def run(state: AgentState) -> dict[str, Any]:
         )
         customer_name = _clean_contact(contact["customer_ref"] if contact else None, limit=80)
         customer_email = _clean_contact(contact["customer_email"] if contact else None, limit=254)
-        opening_name_asks = int(contact["opening_name_asks"]) if contact else 0
         # D39: the opening phase is the window before the first escalation or
         # handoff. The chat API short-circuits human/escalated statuses before
         # the graph runs, so the existence of an escalation row is the whole
@@ -683,21 +682,32 @@ async def run(state: AgentState) -> dict[str, Any]:
                 + f" Use them naturally when they fit; never ask for {never_ask} again."
             )
         # RF-10/D39: one deterministic ask per turn, at most _OPENING_NAME_ASK_CAP
-        # turns, persisted on the row. The agent node runs exactly once per turn
-        # (retries re-enter the draft node, never here), so this both counts and
-        # caps without the model ever being trusted to count.
+        # turns, persisted on the row. The decide-and-increment is a single
+        # conditional UPDATE rather than a read-then-write: the row is the shared
+        # resource, so two concurrent turns on the same conversation cannot both
+        # pass the cap check and each inject an ask. The UPDATE's own WHERE also
+        # re-checks "no stored name / no handoff", so a name or escalation that
+        # lands between the earlier read and this write still wins the race. A
+        # returned row means this turn owns the ask; no row means the cap (or a
+        # name/handoff) got there first, so the prompt goes quiet.
         if not name_known and opening_phase:
-            if opening_name_asks < _OPENING_NAME_ASK_CAP:
+            new_ask_count = await conn.fetchval(
+                "update conversations c set opening_name_asks = opening_name_asks + 1 "
+                "where c.id = $1 and c.tenant_id = $2 "
+                "and c.opening_name_asks < $3 "
+                "and coalesce(trim(c.customer_ref), '') = '' "
+                "and not exists (select 1 from escalations e "
+                "where e.tenant_id = c.tenant_id and e.conversation_id = c.id) "
+                "returning c.opening_name_asks",
+                UUID(state["conversation_id"]),
+                ctx.tenant_id,
+                _OPENING_NAME_ASK_CAP,
+            )
+            if new_ask_count is not None:
                 system_prompt += "\n\n" + _OPENING_NAME_GUIDANCE
-                await conn.execute(
-                    "update conversations set opening_name_asks = opening_name_asks + 1 "
-                    "where id = $1 and tenant_id = $2",
-                    UUID(state["conversation_id"]),
-                    ctx.tenant_id,
-                )
             else:
-                # At the cap: a one-line suppression so the prompt goes quiet
-                # instead of simply omitting the ask and leaving the model to guess.
+                # At the cap or beaten by a name/handoff: a one-line suppression
+                # so the prompt goes quiet instead of leaving the model to guess.
                 system_prompt += "\n\n" + _OPENING_NAME_SUPPRESS
         messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
         tail = state["messages"][-_HISTORY_MESSAGES:]
