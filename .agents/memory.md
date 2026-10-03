@@ -198,6 +198,12 @@
   production. Both workflows used to filter on `[main]`, so `ci.yml` gated
   nothing on push and `deploy.yml` never fired once. Check the branch list
   before trusting a workflow trigger here.
+- **CI cancels the superseded run on a rapid re-push** (2026-10-03): `ci.yml`
+  sets `concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }`,
+  so two pushes to `development` in quick succession mark the older run
+  `cancelled`, not `failed`. Read the newest head SHA's run for the branch
+  verdict; a `cancelled` older run is expected, and only a non-success
+  conclusion on the newest run is a real red.
 - **`NEXT_PUBLIC_*` are inlined at BUILD time**, so `frontend/Dockerfile` takes
   them as build args. `ENV X=$X` with an undefined ARG sets an empty string and
   *shadows* anything the build environment supplied - unverified against a real
