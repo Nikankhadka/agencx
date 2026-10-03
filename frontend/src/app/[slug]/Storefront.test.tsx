@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { StorefrontData } from "@/lib/tenant";
 import { Storefront } from "./Storefront";
+
+// Storefront calls useRouter for the post-save refresh; the App Router context
+// is not mounted under a bare renderToStaticMarkup, so the hook is stubbed.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
 /**
  * M-7: the storefront is a no-image-first composition. These tests pin the
@@ -162,5 +166,45 @@ describe("Storefront offerings", () => {
     expect(html).toContain("Nail trim");
     expect(html).toContain("What we offer");
     expect(html.match(/offering-price/g) ?? []).toHaveLength(1);
+  });
+});
+
+describe("Storefront owner shortcuts", () => {
+  const OWNED: StorefrontData = {
+    ...BASE,
+    name: "Bytefix Repairs",
+    hours: "Mon to Fri 9am to 5pm",
+  };
+
+  function ownerHtml(canEdit: boolean): string {
+    return renderToStaticMarkup(
+      <Storefront
+        slug="bytefix"
+        greeting={null}
+        starterQuestions={[]}
+        storefront={OWNED}
+        canEdit={canEdit}
+      />,
+    );
+  }
+
+  it("renders no owner controls and no contact value for a customer", () => {
+    const html = ownerHtml(false);
+
+    expect(html).not.toContain("owner-edit-name");
+    expect(html).not.toContain("owner-edit-hours");
+    expect(html).not.toContain("owner-edit-fields");
+    expect(html).not.toContain("owner-edit-description");
+    expect(html).not.toContain("owner-edit-contact");
+  });
+
+  it("renders all four shortcuts when the viewer owns the page", () => {
+    const html = ownerHtml(true);
+
+    expect(html).toContain('data-testid="owner-edit-name"');
+    expect(html).toContain('data-testid="owner-edit-hours"');
+    expect(html).toContain('data-testid="owner-edit-fields"');
+    expect(html).toContain('data-testid="owner-edit-description"');
+    expect(html).toContain('data-testid="owner-edit-contact"');
   });
 });

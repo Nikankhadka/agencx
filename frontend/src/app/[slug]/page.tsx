@@ -3,7 +3,9 @@ import {
   customerSurfaceConfig,
   resolveStorefrontBySlug,
   resolveTenantBySlug,
+  resolveViewerSlug,
 } from "@/lib/tenant";
+import { isStorefrontOwner } from "@/lib/owner";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Container } from "@/components/ui/Container";
 import { CustomerChat } from "./CustomerChat";
@@ -73,6 +75,12 @@ export default async function CustomerHome({
     );
   }
 
+  // RF-7: owner controls are gated server-side so a customer's HTML never
+  // carries them. Reading the session only happens once a storefront exists;
+  // an anonymous visitor has no token, so no /api/tenants/me call is made.
+  // UX only - the backend bearer check stays the enforcement boundary.
+  const canEdit = isStorefrontOwner(await resolveViewerSlug(), slug);
+
   return (
     <>
       <Storefront
@@ -81,6 +89,7 @@ export default async function CustomerHome({
         greeting={greeting}
         starterQuestions={starterQuestions}
         storefront={storefront}
+        canEdit={canEdit}
       />
     </>
   );

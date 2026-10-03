@@ -1,10 +1,97 @@
+"use client";
 /* eslint-disable @next/next/no-img-element -- storefront cover is a tenant API response. */
 
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Icon } from "@/components/ui/Icon";
+import type { BusinessProfile } from "@/lib/api-schemas";
 import type { StorefrontData } from "@/lib/tenant";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** RF-7: the fields the storefront surfaces an owner edit shortcut for. */
+export type OwnerEditField = "name" | "hours" | "description" | "contact";
+
+/** The prototype's `PENCIL_SVG` (12x12, stroked) - the `.edit-btn` glyph. */
+const PENCIL_PATH = "M8.5 1.5L10.5 3.5L4 10H2V8L8.5 1.5Z";
+
+/**
+ * RF-7: the prototype's circular `.edit-btn` (26px, 1.5px hairline border,
+ * muted glyph, accent on hover), one shared control for every shortcut.
+ */
+export function EditPencil({
+  label,
+  testId,
+  onClick,
+}: {
+  label: string;
+  testId?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+      className="flex size-[26px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-ink-a12 text-ink-a40 transition-colors duration-(--duration-fast) hover:border-accent-a35 hover:text-accent-active active:opacity-60"
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path
+          d={PENCIL_PATH}
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * RF-7: the prototype's `.set-field-row` / `.set-edit` settings-row idiom, used
+ * for the two fields the storefront does not publish (description, contact).
+ * Owner-only - the caller never renders it for a customer.
+ */
+export function OwnerFieldRow({
+  label,
+  value,
+  placeholder,
+  testId,
+  editTestId,
+  onEdit,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  testId: string;
+  editTestId: string;
+  onEdit: () => void;
+}) {
+  const filled = value.trim().length > 0;
+  return (
+    <div
+      data-testid={testId}
+      className="flex items-center justify-between gap-3 border-b border-hairline py-2 last:border-b-0"
+    >
+      <span className="shrink-0 text-meta text-ink-a40">{label}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`min-w-0 truncate text-body-sm ${filled ? "text-text" : "text-ink-a40"}`}>
+          {filled ? value : placeholder}
+        </span>
+        <button
+          type="button"
+          onClick={onEdit}
+          data-testid={editTestId}
+          className="shrink-0 text-chip font-medium text-accent-active transition-opacity duration-(--duration-fast) hover:underline active:opacity-60"
+        >
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function linkLabel(key: string) {
   return key === "website" ? "Website" : key.slice(0, 1).toUpperCase() + key.slice(1);
@@ -20,15 +107,27 @@ function linkLabel(key: string) {
  * sentence); the legacy combined tagline stays in the payload but is
  * no longer rendered. Long facts wrap instead of truncating (v4 edge case:
  * nothing clipped or ellipsized).
+ *
+ * RF-7: when `canEdit`, the same hero grows pencil shortcuts beside the name
+ * and hours plus an owner-only block for the two unpublished fields. For every
+ * other viewer the markup is byte-identical to the shipped customer hero - each
+ * owner branch is a separate tree, never an always-present wrapper - so no
+ * owner control or contact value can reach a customer.
  */
 export function StorefrontHero({
   slug,
   logoUrl,
   storefront,
+  canEdit = false,
+  profile = null,
+  onEdit,
 }: {
   slug: string;
   logoUrl?: string;
   storefront: StorefrontData;
+  canEdit?: boolean;
+  profile?: BusinessProfile | null;
+  onEdit?: (field: OwnerEditField) => void;
 }) {
   return (
     <>
@@ -56,9 +155,22 @@ export function StorefrontHero({
         <div data-testid="hero-mark" className="-mt-12 flex w-fit rounded-full ring-4 ring-surface">
           <BrandMark logoUrl={logoUrl} name={storefront.name} size="lg" />
         </div>
-        <h1 className="mt-3 min-w-0 wrap-anywhere text-title-1 font-bold text-text">
-          {storefront.name}
-        </h1>
+        {canEdit ? (
+          <div className="mt-3 flex items-center gap-2">
+            <h1 className="min-w-0 wrap-anywhere text-title-1 font-bold text-text">
+              {storefront.name}
+            </h1>
+            <EditPencil
+              label="Edit business name"
+              testId="owner-edit-name"
+              onClick={() => onEdit?.("name")}
+            />
+          </div>
+        ) : (
+          <h1 className="mt-3 min-w-0 wrap-anywhere text-title-1 font-bold text-text">
+            {storefront.name}
+          </h1>
+        )}
         {storefront.services?.length ? (
           <p className="mt-2 max-w-prose text-body text-text-secondary">
             {storefront.services.join(", ")}
@@ -72,9 +184,22 @@ export function StorefrontHero({
               </span>
             ) : null}
             {storefront.hours ? (
-              <span className="inline-flex max-w-full items-center rounded-chip bg-surface-container px-3 py-1 text-chip font-medium text-text-secondary">
-                <span className="min-w-0 wrap-anywhere">{storefront.hours}</span>
-              </span>
+              canEdit ? (
+                <span className="inline-flex max-w-full items-center gap-2">
+                  <span className="inline-flex max-w-full items-center rounded-chip bg-surface-container px-3 py-1 text-chip font-medium text-text-secondary">
+                    <span className="min-w-0 wrap-anywhere">{storefront.hours}</span>
+                  </span>
+                  <EditPencil
+                    label="Edit opening hours"
+                    testId="owner-edit-hours"
+                    onClick={() => onEdit?.("hours")}
+                  />
+                </span>
+              ) : (
+                <span className="inline-flex max-w-full items-center rounded-chip bg-surface-container px-3 py-1 text-chip font-medium text-text-secondary">
+                  <span className="min-w-0 wrap-anywhere">{storefront.hours}</span>
+                </span>
+              )
             ) : null}
           </div>
         ) : null}
@@ -93,6 +218,26 @@ export function StorefrontHero({
               </a>
             ))}
           </nav>
+        ) : null}
+        {canEdit ? (
+          <div data-testid="owner-edit-fields" className="mt-4 max-w-prose">
+            <OwnerFieldRow
+              label="Description"
+              value={profile?.description ?? ""}
+              placeholder="Add a short description"
+              testId="owner-field-description"
+              editTestId="owner-edit-description"
+              onEdit={() => onEdit?.("description")}
+            />
+            <OwnerFieldRow
+              label="Business contact"
+              value={profile?.business_contact ?? ""}
+              placeholder="Add how customers reach you"
+              testId="owner-field-contact"
+              editTestId="owner-edit-contact"
+              onEdit={() => onEdit?.("contact")}
+            />
+          </div>
         ) : null}
       </section>
     </>
