@@ -13,6 +13,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
+const LUMIDENT = DEMO_USERS.find((u) => u.email === "owner@lumident.dev")!;
 const ORIGINAL_NAME = "Bytefix Repairs";
 const ORIGINAL_HOURS = "Monday to Friday 9am to 6pm, Saturday 10am to 2pm";
 const ORIGINAL_CONTACT = "owner@bytefix.dev";
@@ -45,8 +46,10 @@ test.describe("RF-7 storefront owner shortcuts", () => {
     await expect(page.getByTestId("profile-description-input")).toHaveCount(0);
 
     // Contact opens the one contact editor and Save stores the current value.
-    // The shared tenant's contact is mutated by other specs, so this captures
-    // whatever is current, proves the round trip, then restores it.
+    // The shortcut only renders once the owner profile has loaded (RF-7), so
+    // this capture cannot race the fetch and overwrite a real contact with a
+    // blank. The shared tenant's contact is mutated by other specs, so this
+    // captures whatever is current, proves the round trip, then restores it.
     await openEditor(page, "owner-edit-contact", "contact-detail-input");
     const originalContact = await page.getByTestId("contact-detail-input").inputValue();
     await page.getByTestId("contact-detail-input").fill("rf7-contact@example.com");
@@ -141,7 +144,30 @@ test.describe("RF-7 storefront owner shortcuts", () => {
     }
   });
 
-  test("the storefront shows the same price as the owner editor at 360 and 1024", async ({
+  test("another tenant's owner sees no owner controls and no contact value", async ({
+    page,
+    request,
+  }) => {
+    // Regression check (12-refinement.md RF-7): any viewer other than the
+    // matching owner gets the customer DOM. A different signed-in tenant owner
+    // is the case an anonymous-only check misses.
+    await loginAsTenantAdmin(page, request, LUMIDENT);
+    await page.goto("/bytefix");
+
+    await expect(async () => {
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
+      await expect(page.getByTestId("owner-edit-name")).toHaveCount(0);
+      await expect(page.getByTestId("owner-edit-hours")).toHaveCount(0);
+      await expect(page.getByTestId("owner-edit-fields")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Edit business name" })).toHaveCount(0);
+    }).toPass({ timeout: 15_000 });
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toContain(ORIGINAL_CONTACT);
+    expect(body).not.toContain("Add how customers reach you");
+  });
+
+  test("the storefront and the console offerings list show the same price at 360 and 1024", async ({
     page,
     request,
   }) => {

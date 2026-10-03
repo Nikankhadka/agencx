@@ -16,9 +16,10 @@ const PENCIL_PATH = "M8.5 1.5L10.5 3.5L4 10H2V8L8.5 1.5Z";
 
 /**
  * RF-7: the prototype's circular `.edit-btn` (26px, 1.5px hairline border,
- * muted glyph, accent on hover), one shared control for every shortcut.
+ * muted glyph, accent on hover), one shared control for every shortcut. The
+ * fixed geometry is recorded as a `frontend.md` section 4.6 Exceptions entry.
  */
-export function EditPencil({
+function EditPencil({
   label,
   testId,
   onClick,
@@ -54,7 +55,7 @@ export function EditPencil({
  * for the two fields the storefront does not publish (description, contact).
  * Owner-only - the caller never renders it for a customer.
  */
-export function OwnerFieldRow({
+function OwnerFieldRow({
   label,
   value,
   placeholder,

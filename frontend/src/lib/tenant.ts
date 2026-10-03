@@ -160,30 +160,35 @@ export async function resolveStorefrontBySlug(slug: string): Promise<StorefrontD
  * Every failure resolves to null so the public page never errors on auth.
  */
 export async function resolveViewerSlug(): Promise<string | null> {
-  const { supabaseUrl, supabaseAnonKey } = serverPublicConfig();
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  const cookieName = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
-  const fetchUrl = process.env.SUPABASE_INTERNAL_URL || supabaseUrl;
-  const cookieStore = await cookies();
-
-  const supabase = createServerClient(fetchUrl, supabaseAnonKey, {
-    cookieOptions: { name: cookieName, ...authCookieOptions() },
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll() {
-        // Server Component: the response cannot set cookies. Explicit no-op.
-      },
-    },
-  });
-
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) return null;
-
+  // The whole body is guarded, not just the backend call: the public route
+  // renders for customers, and a malformed public config, a bad URL, or a
+  // corrupt (customer-controlled) `sb-...-auth-token` cookie must degrade to
+  // anonymous rather than 500 the page. Every failure - config, cookie parse,
+  // session read, backend call - resolves to null.
   try {
+    const { supabaseUrl, supabaseAnonKey } = serverPublicConfig();
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+
+    const cookieName = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+    const fetchUrl = process.env.SUPABASE_INTERNAL_URL || supabaseUrl;
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(fetchUrl, supabaseAnonKey, {
+      cookieOptions: { name: cookieName, ...authCookieOptions() },
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          // Server Component: the response cannot set cookies. Explicit no-op.
+        },
+      },
+    });
+
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return null;
+
     const res = await fetchServerApi("/api/tenants/me", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });

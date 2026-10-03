@@ -296,7 +296,10 @@ prototype says so: `--space-thread-*` (14/16/18/44/20),
 `env()` / `max()` safe-area expression. Fixed geometry the scale cannot name
 also stays: bubble `max-w-[85%]`, sidebar `w-56`, `max-w-xs` form widths,
 WaitingPanel `max-h-[...]`, the typing-row height, the sheet handle, caret and
-dot sizes.
+dot sizes. The RF-7 storefront owner-shortcut pencil is the ported prototype
+`.edit-btn`: a 26px circle with a 1.5px hairline border (`size-[26px]
+border-[1.5px]`), kept verbatim because it is fixed prototype geometry the
+scale cannot name.
 
 ### 4.7 Enforcement
 

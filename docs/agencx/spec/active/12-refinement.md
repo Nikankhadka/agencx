@@ -306,10 +306,11 @@ and
   pencil idiom) and the `.set-field-row` / `.set-edit` settings-row idiom;
   the archived v5 storefront is the accepted structure record. Shipped public
   route: `frontend/src/app/[slug]/Storefront.tsx`, `StorefrontHero.tsx`,
-  `Offerings.tsx`. The spec's earlier `business/page/components/` path is the
-  **console** owner screen
-  (`frontend/src/app/(tenant-admin)/(console)/business/page/`), not the public
-  route.
+  `Offerings.tsx`. The shortcuts reuse the RF-2 editors, imported from the
+  console owner screen at
+  `frontend/src/app/(tenant-admin)/(console)/business/details/components/`
+  (`ProfileFieldSheet.tsx`, `ContactSheet.tsx`); that is the reused-editor
+  path, not `business/page/components/`.
 - **Dependencies:** RF-1 and RF-2.
 - **API/DB changes:** None. The existing authenticated
   `PATCH /api/business/profile` (RF-2) is the save path, and the price item is
@@ -318,11 +319,12 @@ and
   - Shortcut fields are **name, hours, description, contact**. There is no
     separate public-address shortcut; the address lives inside the free-text
     `business_contact` value.
-  - Owner detection is **server-side** in
-    `frontend/src/app/[slug]/page.tsx`, reusing the `createServerClient` cookie
-    pattern in `frontend/src/proxy.ts` (pinned cookie name
-    `sb-<host>-auth-token`, `SUPABASE_INTERNAL_URL || supabaseUrl`), then
-    passing `canEdit` down to `Storefront`.
+  - Owner detection is **server-side**: `resolveViewerSlug` in
+    `frontend/src/lib/tenant.ts` reads the Supabase session cookie (pinned
+    cookie name `sb-<host>-auth-token`, `SUPABASE_INTERNAL_URL || supabaseUrl`)
+    and calls `GET /api/tenants/me`; `frontend/src/app/[slug]/page.tsx:82`
+    compares its slug to the page slug with `isStorefrontOwner` and passes
+    `canEdit` down to `Storefront`.
   - `description` and `contact` are not published by the storefront
     (`lib/tenant.ts`; `read_public_storefront` at
     `backend/app/features/business/service.py` returns neither), so their

@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { BusinessProfile } from "@/lib/api-schemas";
 import type { StorefrontData } from "@/lib/tenant";
 import { Storefront } from "./Storefront";
+import { StorefrontHero } from "./StorefrontHero";
 
 // Storefront calls useRouter for the post-save refresh; the App Router context
 // is not mounted under a bare renderToStaticMarkup, so the hook is stubbed.
@@ -176,7 +178,7 @@ describe("Storefront owner shortcuts", () => {
     hours: "Mon to Fri 9am to 5pm",
   };
 
-  function ownerHtml(canEdit: boolean): string {
+  function storefrontHtml(canEdit: boolean): string {
     return renderToStaticMarkup(
       <Storefront
         slug="bytefix"
@@ -189,7 +191,7 @@ describe("Storefront owner shortcuts", () => {
   }
 
   it("renders no owner controls and no contact value for a customer", () => {
-    const html = ownerHtml(false);
+    const html = storefrontHtml(false);
 
     expect(html).not.toContain("owner-edit-name");
     expect(html).not.toContain("owner-edit-hours");
@@ -198,13 +200,58 @@ describe("Storefront owner shortcuts", () => {
     expect(html).not.toContain("owner-edit-contact");
   });
 
-  it("renders all four shortcuts when the viewer owns the page", () => {
-    const html = ownerHtml(true);
+  it("renders no owner controls until the owner profile has loaded", () => {
+    // canEdit is true, but the client profile fetch has not resolved
+    // (renderToStaticMarkup runs no effects): every owner affordance must be
+    // absent so an early open/save can never PATCH blank values over the real
+    // profile.
+    const html = storefrontHtml(true);
+
+    expect(html).not.toContain("owner-edit-name");
+    expect(html).not.toContain("owner-edit-hours");
+    expect(html).not.toContain("owner-edit-fields");
+    expect(html).not.toContain("owner-edit-description");
+    expect(html).not.toContain("owner-edit-contact");
+  });
+});
+
+describe("StorefrontHero owner shortcuts", () => {
+  const OWNED: StorefrontData = {
+    ...BASE,
+    name: "Bytefix Repairs",
+    hours: "Mon to Fri 9am to 5pm",
+  };
+  // The hero is the loaded-state seam - Storefront only lets canEdit through
+  // once its profile state is non-null.
+  const PROFILE: BusinessProfile = {
+    name: "Bytefix Repairs",
+    hours: "Mon to Fri 9am to 5pm",
+    description: "",
+    business_contact: "",
+    abn: "",
+    gst: "",
+    services: [],
+    customer_voice_preset: "warm_casual",
+    customer_voice_custom_style: "",
+  };
+
+  function heroHtml(canEdit: boolean, profile: BusinessProfile | null): string {
+    return renderToStaticMarkup(
+      <StorefrontHero slug="bytefix" storefront={OWNED} canEdit={canEdit} profile={profile} />,
+    );
+  }
+
+  it("renders all four shortcuts once the viewer owns the page and the profile is loaded", () => {
+    const html = heroHtml(true, PROFILE);
 
     expect(html).toContain('data-testid="owner-edit-name"');
     expect(html).toContain('data-testid="owner-edit-hours"');
     expect(html).toContain('data-testid="owner-edit-fields"');
     expect(html).toContain('data-testid="owner-edit-description"');
     expect(html).toContain('data-testid="owner-edit-contact"');
+  });
+
+  it("ignores the profile and keeps the customer DOM when the viewer is not the owner", () => {
+    expect(heroHtml(false, null)).toBe(heroHtml(false, PROFILE));
   });
 });

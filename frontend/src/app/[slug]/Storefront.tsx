@@ -18,19 +18,6 @@ import { CustomerChat } from "./CustomerChat";
 import { Offerings, priceLabel } from "./Offerings";
 import { StorefrontHero, type OwnerEditField } from "./StorefrontHero";
 
-/** RF-7: a full profile shape for the contact editor before the fetch lands. */
-const EMPTY_PROFILE: BusinessProfile = {
-  name: "",
-  hours: "",
-  description: "",
-  business_contact: "",
-  abn: "",
-  gst: "",
-  services: [],
-  customer_voice_preset: "warm_casual",
-  customer_voice_custom_style: "",
-};
-
 function videoEmbedUrl(provider: string, rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
@@ -167,11 +154,17 @@ export function Storefront({
   }, [canEdit]);
 
   function openEditor(field: OwnerEditField) {
+    // RF-7: the shortcuts only render once the profile has loaded, but guard
+    // here too - opening an editor from an unloaded profile would let Save
+    // PATCH blank values over the owner's real contact/description/hours.
+    if (!profile) return;
     setError(null);
     setEditing(field);
   }
 
   async function save(next: ProfileUpdate) {
+    // Belt and braces: no code path may PATCH from the unloaded state.
+    if (!profile) return;
     setBusy(true);
     setError(null);
     try {
@@ -255,7 +248,7 @@ export function Storefront({
               slug={slug}
               logoUrl={logoUrl}
               storefront={storefront}
-              canEdit={canEdit}
+              canEdit={canEdit && profile !== null}
               profile={profile}
               onEdit={openEditor}
             />
@@ -269,7 +262,7 @@ export function Storefront({
               slug={slug}
               logoUrl={logoUrl}
               storefront={storefront}
-              canEdit={canEdit}
+              canEdit={canEdit && profile !== null}
               profile={profile}
               onEdit={openEditor}
             />
@@ -338,16 +331,18 @@ export function Storefront({
       </Sheet>
 
       {/* RF-7: the RF-2 editors, reused verbatim - one editor per field kind,
-          two entry points. Rendered only for the owner, so a customer's DOM
-          carries no owner markup and triggers no profile fetch. */}
-      {canEdit ? (
+          two entry points. Rendered only for the owner AND only once the
+          profile has loaded, so a customer's DOM carries no owner markup and
+          triggers no profile fetch, and an early open/save can never PATCH
+          blank values over the owner's real profile. */}
+      {canEdit && profile !== null ? (
         <>
           <ProfileFieldSheet
             open={editing === "name"}
             field="name"
             title="Edit business name"
             label="Business name"
-            value={profile?.name ?? ""}
+            value={profile.name}
             placeholder="Bytefix Repairs"
             busy={busy}
             error={error}
@@ -359,7 +354,7 @@ export function Storefront({
             field="hours"
             title="Edit opening hours"
             label="Opening hours"
-            value={profile?.hours ?? ""}
+            value={profile.hours}
             placeholder="Mon to Fri 9am to 6pm"
             busy={busy}
             error={error}
@@ -371,7 +366,7 @@ export function Storefront({
             field="description"
             title="Edit description"
             label="Description"
-            value={profile?.description ?? ""}
+            value={profile.description}
             placeholder="What your business does, in your own words"
             multiline
             busy={busy}
@@ -381,7 +376,7 @@ export function Storefront({
           />
           <ContactSheet
             open={editing === "contact"}
-            profile={profile ?? EMPTY_PROFILE}
+            profile={profile}
             busy={busy}
             error={error}
             onClose={() => setEditing(null)}
