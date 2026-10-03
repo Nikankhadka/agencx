@@ -46,8 +46,8 @@ test("the owner deletes a conversation and it leaves the list", async ({ page, r
   await page.getByTestId("confirm-accept").click();
 
   await page.waitForURL("**/chats");
-  // The tab resets to Needs you on remount; assert the deletion under All,
-  // where the row would otherwise appear.
+  // RF-15: the route-persistent layout keeps the filter across the split-pane
+  // navigation; assert the deletion under All, where the row would otherwise appear.
   await page.getByTestId("chats-filter-all").click();
   await expect(page.getByText("Conversation deleted")).toBeVisible();
   await expect(page.getByTestId("chat-row").filter({ hasText: ref })).toHaveCount(0);

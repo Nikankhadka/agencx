@@ -19,9 +19,9 @@ import ChatsQueue from "./ChatsQueue";
  * Visibility is route plus breakpoint CSS only - `usePathname()` says whether a
  * thread is open, and the `lg` classes decide what a wide viewport does with
  * that. No JS media query: the browser never needs to know the breakpoint, just
- * to apply it (D2). The root is `overflow-hidden` so the console layout's
- * `overflow-y-auto` wrapper does not fight the list's and thread's own internal
- * scrolling (D5).
+ * to apply it (D2). The root is `overflow-hidden`: the console layout already
+ * wraps children in an `overflow-y-auto` region, and the list and thread scroll
+ * inside their own panes, so without it the two would produce double scrollbars.
  */
 
 export default function ChatsLayout({ children }: { children: ReactNode }) {

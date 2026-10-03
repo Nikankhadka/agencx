@@ -118,6 +118,13 @@ test.describe("RF-15 - desktop split-pane Chats, mobile navigation preserved", (
     const thread = page.getByTestId("chats-thread-pane");
     await expect(thread.locator("header")).toContainText(CASEY_LABEL);
     await expect(thread.getByText(CUSTOMER_MESSAGE)).toBeVisible();
+
+    // The thread's own topbar back control deselects on desktop too: the URL
+    // returns to /chats, the list stays mounted, and the placeholder is back.
+    await page.getByTestId("chats-thread-pane").getByRole("button", { name: "Back" }).click();
+    await expect(page).toHaveURL(/\/chats$/);
+    await expect(page.getByTestId("chats-list-pane")).toBeVisible();
+    await expect(page.getByTestId("chats-empty-pane")).toBeVisible();
   });
 
   test("/chats/<id> deep-links to the same split state", async ({ page }) => {
