@@ -26,7 +26,7 @@ seed. Both detach - the stack keeps running until `make stop`.
 make install    # deps into their container volumes (uv sync + npm ci)
 make services   # Postgres + pgvector, GoTrue, auth-proxy
 make migrate    # forward-only migrations
-make seed       # demo world: two tenants, three logins, conversations
+make seed       # demo world: four tenants, five logins, conversations
 make dev        # backend :8000 + frontend :3000 as containers
 ```
 
@@ -56,7 +56,9 @@ stack cannot be a make prerequisite.
 |---|---|---|
 | Customer chat | `http://localhost:3000/bytefix` | none |
 | | `http://localhost:3000/lumident` | none |
-| Tenant console | `http://localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev` |
+| | `http://localhost:3000/sababa` | none |
+| | `http://localhost:3000/wellspring` | none |
+| Tenant console | `http://localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev`, `owner@sababa.dev`, `owner@wellspring.dev` |
 | Platform | `http://localhost:3000/admin` | `founder@wren.dev` / `wren-demo` |
 | Backend API | `http://localhost:8000` | |
 | GoTrue (via auth-proxy) | `http://localhost:54321` | |

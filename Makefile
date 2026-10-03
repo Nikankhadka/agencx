@@ -162,7 +162,7 @@ migrate: ## Apply forward-only DB migrations
 	$(BE) python -m app.shared.migrate
 
 .PHONY: seed
-seed: migrate ## Seed the full demo world (three tenants, auth users, conversations)
+seed: migrate ## Seed the full demo world (four tenants, auth users, conversations)
 	@printf "\033[0;32m>>> Seeding\033[0m\n"
 	$(BE) python -m seeds.seed_demo
 

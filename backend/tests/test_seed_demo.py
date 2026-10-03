@@ -30,7 +30,9 @@ from app.features.escalations.service import RESOLUTION_STAMP
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
-from seeds import seed_demo, seed_sababa
+from seeds import seed_demo, seed_general_clinic, seed_sababa
+from seeds.seed_general_clinic import SLUG as WELLSPRING_SLUG
+from seeds.seed_general_clinic import WELLSPRING_PROFILE
 from seeds.seed_sababa import SABABA_PROFILE
 from seeds.seed_sababa import SLUG as SABABA_SLUG
 from seeds.seed_tenant1_phoneshop import BYTEFIX_PROFILE
@@ -132,7 +134,7 @@ def test_gotrue_service_token_mints_from_the_jwt_secret_without_one(
     assert payload["role"] == "service_role"
 
 
-# --- all three tenants + data ----------------------------------------------------
+# --- all four tenants + data -----------------------------------------------------
 
 
 async def test_all_tenants_exist_with_data(
@@ -141,6 +143,7 @@ async def test_all_tenants_exist_with_data(
     bytefix_id = seeded["bytefix_id"]
     lumident_id = seeded["lumident_id"]
     sababa_id = seeded["sababa_id"]
+    wellspring_id = seeded["wellspring_id"]
 
     lumident_catalog_n = len(seed_demo.LUMIDENT_CATALOG)
     lumident_rules_n = len(seed_demo.LUMIDENT_PRICING_RULES)
@@ -159,6 +162,13 @@ async def test_all_tenants_exist_with_data(
             len(seed_sababa.CATALOG_ITEMS),
             len(seed_sababa.PRICING_RULES),
             SABABA_PROFILE,
+        ),
+        (
+            wellspring_id,
+            WELLSPRING_SLUG,
+            len(seed_general_clinic.CATALOG_ITEMS),
+            len(seed_general_clinic.PRICING_RULES),
+            WELLSPRING_PROFILE,
         ),
     ]:
         row = await superuser_conn.fetchrow(
@@ -208,30 +218,30 @@ async def test_tenants_differ_only_in_data(
     seeded: dict[str, uuid.UUID], superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     """Domain-agnostic proof stays data-side: bytefix is phone repair,
-    lumident is dental, sababa is a restaurant, but all run identical code -
-    differ only in config + docs."""
-    bytefix_cfg = await superuser_conn.fetchval(
-        "select config from tenant_config where tenant_id = $1", seeded["bytefix_id"]
-    )
-    lumident_cfg = await superuser_conn.fetchval(
-        "select config from tenant_config where tenant_id = $1", seeded["lumident_id"]
-    )
-    sababa_cfg = await superuser_conn.fetchval(
-        "select config from tenant_config where tenant_id = $1", seeded["sababa_id"]
-    )
+    lumident is dental, sababa is a restaurant, wellspring is a general
+    clinic, but all run identical code - differ only in config + docs."""
+    keys = ("bytefix_id", "lumident_id", "sababa_id", "wellspring_id")
+    configs = {
+        key: await superuser_conn.fetchval(
+            "select config from tenant_config where tenant_id = $1", seeded[key]
+        )
+        for key in keys
+    }
     # Distinct greetings + starter questions - the data-side difference.
-    assert len({bytefix_cfg, lumident_cfg, sababa_cfg}) == 3
-    names: dict[str, set[str]] = {}
-    for key in ("bytefix_id", "lumident_id", "sababa_id"):
-        names[key] = {
+    assert len(set(configs.values())) == 4
+    names: dict[str, set[str]] = {
+        key: {
             r["name"]
             for r in await superuser_conn.fetch(
                 "select name from offerings where tenant_id = $1", seeded[key]
             )
         }
-    assert names["bytefix_id"].isdisjoint(names["lumident_id"])
-    assert names["bytefix_id"].isdisjoint(names["sababa_id"])
-    assert names["lumident_id"].isdisjoint(names["sababa_id"])  # no overlap - three verticals
+        for key in keys
+    }
+    # No offering name is shared by any pair - four disjoint verticals.
+    for i, left in enumerate(keys):
+        for right in keys[i + 1 :]:
+            assert names[left].isdisjoint(names[right]), (left, right)
 
 
 # --- membership -----------------------------------------------------------------
@@ -260,6 +270,13 @@ async def test_membership_rows(
     assert sababa_owner_row is not None
     assert sababa_owner_row["tenant_id"] == seeded["sababa_id"]
     assert sababa_owner_row["role"] == "owner"
+
+    wellspring_owner_row = await superuser_conn.fetchrow(
+        "select tenant_id, role from users where id = $1", seeded["wellspring_owner"]
+    )
+    assert wellspring_owner_row is not None
+    assert wellspring_owner_row["tenant_id"] == seeded["wellspring_id"]
+    assert wellspring_owner_row["role"] == "owner"
 
     admin_count = await superuser_conn.fetchval(
         "select count(*) from platform_admins where user_id = $1", seeded["founder"]
@@ -297,6 +314,11 @@ async def test_conversation_counts_and_statuses(
         "select count(*) from conversations where tenant_id = $1", seeded["sababa_id"]
     )
     assert sababa_count == 2
+
+    wellspring_count = await superuser_conn.fetchval(
+        "select count(*) from conversations where tenant_id = $1", seeded["wellspring_id"]
+    )
+    assert wellspring_count == 2
 
 
 async def test_message_ordering_strictly_increasing(
@@ -447,8 +469,8 @@ async def test_platform_tenants_table_shows_nonzero_for_all(
     resp = await client.get("/api/platform/tenants", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200, resp.text
     tenants = {t["slug"]: t for t in resp.json()}
-    assert set(tenants) >= {BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG}
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG):
+    assert set(tenants) >= {BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG}
+    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG):
         assert tenants[slug]["conversation_count"] > 0, slug
         assert tenants[slug]["cost_usd"] > 0, slug
 
@@ -489,7 +511,7 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
     # a platform admin exactly once (global count not asserted - session-shared
     # wren_test accumulates other tests' admin rows, and the real seed only
     # manages the founder's row by design).
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG):
+    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG):
         assert (
             await superuser_conn.fetchval("select count(*) from tenants where slug = $1", slug) == 1
         )
