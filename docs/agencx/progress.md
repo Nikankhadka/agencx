@@ -109,8 +109,8 @@ live in the ticket files, not here.
 - [x] RF-18 owner read state in the chat queue: merged in `e1d5144`.
   `conversations.owner_read_at` plus `POST /api/conversations/{id}/read`; the
   Unread filter reads the real field and an unread row bolds its title with a
-  small accent dot. Open follow-up: the console Chats tab badge stays on
-  `needs_attention` until RF-14. Record in the archived
+  small accent dot. The Chats tab badge follow-up was resolved by RF-14, which
+  moved it onto the server Needs you count. Record in the archived
   [12-refinement-rf-18-owner-read-state.md](../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md),
   ADR D42.
 - [x] RF-2 business-detail editing and immediate consistency: merged in
@@ -207,7 +207,19 @@ live in the ticket files, not here.
   a handoff failure carries a working inline retry; nothing auto-replays. No API
   or DB change. Record in the archived
   [12-refinement-rf-13-failed-send-recovery.md](../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md).
-- [ ] RF-14 through RF-17 product refinement: `Active - todo`, next is RF-14.
+- [x] RF-14 complete-dataset queue filtering, searching, pagination, and
+  attention counts: merged in `3d8ca72` (PR #75). `GET /api/conversations`
+  answers an envelope `{items,total,counts}` with a `filter`
+  (`all`/`needs_you`/`unread`/`human`), a `q` search over name, reference, and
+  open-escalation summary, and a derived `handler`; the Chats queue opens on
+  Needs you (an open escalation or a human takeover) with per-tab counts and
+  a server-backed "Load more", and the console badge is reconciled onto the
+  Needs you count, closing the RF-18 follow-up. No migration: every value is
+  derived or counted from existing state. Decisions: Unread retained as a
+  fourth tab; envelope over `X-Total-Count`; counts respect `q` but not the
+  filter. Record in the archived
+  [12-refinement-rf-14-complete-queue.md](../archive/phase1-complete/12-refinement-rf-14-complete-queue.md).
+- [ ] RF-15 through RF-17 product refinement: `Active - todo`, next is RF-15.
   The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -215,8 +227,8 @@ live in the ticket files, not here.
   acceptance scenarios, and regression checks. Design intent in
   [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
   there record the product questions that still need a founder ruling (public
-  address editing, contextual shortcut fields, the legacy Unread tab, and
-  whether resolution requires takeover).
+  address editing, contextual shortcut fields, and whether resolution requires
+  takeover).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
@@ -242,7 +254,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-14 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-13 and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-15 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-14 and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

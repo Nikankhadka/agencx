@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-14 through
-RF-17); RF-1 through RF-13, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-15 through
+RF-17); RF-1 through RF-14, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -115,9 +115,10 @@ and contextual owner editing), RF-8 (desktop customer chat panels and mobile
 sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
 capture), RF-11 (visible human-help action and requested handoff), RF-12
 (same-tab refresh restoration of content, cards, and state), RF-13
-(failed-send recovery and draft preservation), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-14 through
-RF-17**, plus the RF-14 tab-badge follow-up.
+(failed-send recovery and draft preservation), RF-14 (complete-dataset queue
+filtering, searching, pagination, and attention counts), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-15 through
+RF-17**.
 
 ### Archive process for delivered RF tickets
 
@@ -282,7 +283,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, RF-12, RF-13, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -297,44 +298,9 @@ in
 [12-refinement-rf-11-ask-for-a-person.md](../../../archive/phase1-complete/12-refinement-rf-11-ask-for-a-person.md),
 [12-refinement-rf-12-refresh-restore.md](../../../archive/phase1-complete/12-refinement-rf-12-refresh-restore.md),
 [12-refinement-rf-13-failed-send-recovery.md](../../../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md),
+[12-refinement-rf-14-complete-queue.md](../../../archive/phase1-complete/12-refinement-rf-14-complete-queue.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-14: Complete-dataset queue filtering, searching, pagination, and attention counts
-
-- **Status:** Active - todo.
-- **Visible outcome:** Chats opens on **Needs you** (an open escalation or
-  `conversations.status = 'human'`); All and Human handled are retained. Rows
-  carry identity or reference, attention reason, handler, and waiting time;
-  attention counts sit beside the tabs; filter, search, and paging apply to the
-  complete dataset with a server total behind "Load more".
-- **Current vs proposed:** Current: tabs are All/Action needed/Unread with no
-  Needs you or Human handled; there is no handler field; the client filters the
-  first 50 rows only (`chats/page.tsx`); there is no pagination; attention
-  counts appear only on the nav tab. Proposed: server-side filter, search, and
-  paging with a total; a derived `handler` field; counts beside the tabs.
-- **Design reference:** `agencx-prototype-v6.html` `renderScreen('chats')`
-  `.chat-row` and filter row, `openChatsSearch()` / `filterChats()`;
-  `design/frontend.md` S1 owner-surface paragraph. Shipped:
-  `frontend/src/app/(tenant-admin)/(console)/chats/page.tsx`,
-  `home/lib/brief.ts`, and `components/ui/TabBar.tsx`.
-- **Dependencies:** RF-1. Queue filtering precedes split-pane work (RF-15).
-- **API/DB changes:** Extend `GET /api/conversations` with `q` (search), a
-  `needs_you` / `human` filter, and a server total (response envelope or
-  `X-Total-Count`); add a derived `handler` field to `ConversationSummary` from
-  `conversations.status = 'human'`; no new column required. Pagination keeps
-  `limit`/`offset` and returns the total for "Load more".
-- **Acceptance scenarios:** Seed 200 or more conversations including older
-  unresolved issues beyond the first page; Needs you returns open escalations
-  and human-handled threads; All returns everything; Human handled returns only
-  `status = 'human'`; search matches a name or reference across the whole
-  dataset, not the first page; "Load more" appends and stops at the total; the
-  tab counts match the dataset.
-- **Regression checks:** Tenant isolation on the conversations read; the
-  existing Chats list and Home brief tests stay green.
-- **Resolved 2026-10-03:** the Unread tab is retained as a fourth tab (the
-  design authority documents All/Action needed/Unread, and RF-18 shipped unread
-  as a separate axis); the console Chats badge now shows the Needs you count.
 
 #### RF-15: Desktop split-pane Chats, mobile navigation preserved
 
