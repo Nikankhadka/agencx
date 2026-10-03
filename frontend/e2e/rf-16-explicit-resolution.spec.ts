@@ -104,4 +104,12 @@ test("replying and handing back never resolve the issue", async ({ page, request
 
   await expect(thread.getByTestId("resolve-issue")).toBeVisible();
   await expect(thread.getByText(RESOLUTION_STAMP)).toHaveCount(0);
+
+  // F8 hygiene: this test opened an escalation in the shared serial demo world.
+  // Resolve it through the UI, which both proves resolution works after a
+  // handback and leaves no escalated row behind for later tests. No message.
+  await thread.getByTestId("resolve-issue").click();
+  await thread.getByTestId("resolve-submit").click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(thread.getByTestId("resolve-issue")).toHaveCount(0);
 });

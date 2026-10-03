@@ -202,7 +202,7 @@ async def test_claim_another_tenants_escalation_is_404(
     assert response.status_code == 404
 
 
-async def test_resolve_with_message_posts_human_agent_message(
+async def test_resolve_writes_the_stamp_then_the_human_agent_message(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)

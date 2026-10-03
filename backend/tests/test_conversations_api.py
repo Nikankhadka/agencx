@@ -848,6 +848,42 @@ async def test_resolving_from_handling_writes_the_stamp_and_leaves_needs_you(
     assert str(conversation_id) not in {row["id"] for row in after["items"]}
 
 
+async def test_resolving_while_taken_over_stays_in_needs_you_until_handback(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-16/F2: a taken-over thread is in Needs you by its ``human`` status, so
+    resolving the issue does not clear the row - handback does. The resolve
+    confirmation has to say that, and this pins the behavior it describes."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="taken-over")
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+
+    # Take over first: status becomes human, so the row is in Needs you.
+    taken_over = await client.post(
+        f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
+    )
+    assert taken_over.status_code == 204
+    assert await _status_of(superuser_conn, conversation_id) == "human"
+
+    response = await client.post(
+        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert response.status_code == 200
+    assert ("system", RESOLUTION_STAMP) in await _roles_and_text(superuser_conn, conversation_id)
+
+    # The escalation is resolved, but the human status still holds the row.
+    still = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) in {row["id"] for row in still["items"]}
+
+    # Handback clears the human status, and with no open escalation it leaves.
+    handed_back = await client.post(
+        f"/api/conversations/{conversation_id}/handback", headers=_auth(token)
+    )
+    assert handed_back.status_code == 204
+    after = await _list(client, token, filter="needs_you")
+    assert str(conversation_id) not in {row["id"] for row in after["items"]}
+
+
 async def test_owner_detail_transcript_reads_the_stamp_before_the_message(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:

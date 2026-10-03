@@ -533,8 +533,13 @@ relative time, a handler label or status dot (amber = the assistant asked for
 you, red = it is handling this, "You" = a staff member is replying) and a
 one-line preview that shows the assistant's own summary of what the customer
 wants; and in the thread, the "Handling" / "You're replying" status with the
-take-over and hand-back pills and their symmetrical `thr-pill` stamps. Built on
-`ChatBubble` with `perspective="operator"`, which mirrors which side is
+take-over and hand-back pills and their symmetrical `thr-pill` stamps. RF-16
+adds resolution as a third explicit action: an open escalation shows an inline
+"Resolve issue" shelf from either state, takes its own confirmation and optional
+customer-facing message, and writes the owner-only "You resolved this issue"
+`thr-pill`. Replying and handing back stay separate and never resolve, and while
+taken over the confirmation says the row leaves Needs you only on handback.
+Built on `ChatBubble` with `perspective="operator"`, which mirrors which side is
 outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 
 ### S2 - Business (tenant app tab 3) - show-back of profile + knowledge

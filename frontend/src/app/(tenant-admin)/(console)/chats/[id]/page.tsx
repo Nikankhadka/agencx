@@ -43,6 +43,15 @@ const POLL_INTERVAL_MS = 4000;
 
 export default function ChatThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  // Keyed remount: the desktop layout stays mounted across a route change, so
+  // without this the reply draft, error, deleteError, and the RF-16 resolve
+  // open/draft state would leak from one conversation to the next. Keying on
+  // the id resets every hook by unmounting, rather than a reset-effect that
+  // react-hooks/set-state-in-effect would reject.
+  return <ChatThread key={id} id={id} />;
+}
+
+function ChatThread({ id }: { id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -152,8 +161,11 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
     if (!pendingEscalationId) return;
     await confirm({
       title: "Resolve this issue?",
-      description:
-        "This marks the issue resolved and removes it from Needs you. Replying or handing back will not resolve it.",
+      // RF-16/F2: while taken over, the row stays in Needs you until handback
+      // (status is still human), so promising it leaves here would be false.
+      description: takenOver
+        ? "This marks the issue resolved. You are still replying, so hand back to clear it from Needs you. Replying or handing back will not resolve it."
+        : "This marks the issue resolved and removes it from Needs you. Replying or handing back will not resolve it.",
       confirmLabel: "Resolve",
       onConfirm: () => resolveIssue(pendingEscalationId),
     });
