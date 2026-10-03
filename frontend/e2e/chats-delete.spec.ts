@@ -29,6 +29,9 @@ test("the owner deletes a conversation and it leaves the list", async ({ page, r
 
   await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
   await page.goto("/chats");
+  // RF-14: the queue opens on Needs you; this fresh conversation has no
+  // escalation, so switch to All to find it.
+  await page.getByTestId("chats-filter-all").click();
   // Opened through the list, not by URL, so the list checked afterwards is the
   // client-side one - a full page load would refetch it and prove nothing.
   await page.getByTestId("chat-row").filter({ hasText: ref }).click();
@@ -40,6 +43,9 @@ test("the owner deletes a conversation and it leaves the list", async ({ page, r
   await page.getByTestId("confirm-accept").click();
 
   await page.waitForURL("**/chats");
+  // The tab resets to Needs you on remount; assert the deletion under All,
+  // where the row would otherwise appear.
+  await page.getByTestId("chats-filter-all").click();
   await expect(page.getByText("Conversation deleted")).toBeVisible();
   await expect(page.getByTestId("chat-row").filter({ hasText: ref })).toHaveCount(0);
 

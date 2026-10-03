@@ -15,6 +15,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
+import { mockQueue } from "./queue-fixtures";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
@@ -27,9 +28,11 @@ function conversationRows(count: number) {
     status: "open",
     created_at: "2026-01-01T00:00:00Z",
     message_count: 1,
-    // The first row carries the attention pill and a long preview, so the
-    // single-line truncation is tested under the same squeeze the phone sees.
-    needs_attention: index === 0,
+    // Every row carries the attention pill so the default Needs you tab (RF-14)
+    // renders the whole set - the scroll-restoration test needs all 40. The
+    // first row also carries the long preview, so the single-line truncation is
+    // tested under the same squeeze the phone sees.
+    needs_attention: true,
     last_message: `Message ${index + 1} with a deliberately long preview that would wrap onto several lines at phone width if the row did not truncate it to one`,
     // The attention row carries the long "Yesterday" stamp the founder's
     // morgan.chen row had, so the title squeeze is reproduced under the pill.
@@ -37,6 +40,7 @@ function conversationRows(count: number) {
       index === 0
         ? new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
         : "2026-01-01T00:00:00Z",
+    handler: "assistant",
   }));
 }
 
@@ -60,9 +64,7 @@ test.describe("RF-1 shared row grammar", () => {
     page,
     request,
   }) => {
-    await page.route("**/api/conversations", async (route) => {
-      await route.fulfill({ json: conversationRows(3) });
-    });
+    await mockQueue(page, conversationRows(3));
     await loginAsTenantAdmin(page, request, BYTEFIX);
 
     for (const width of [360, 1024]) {
@@ -118,8 +120,8 @@ test.describe("RF-1 shared row grammar", () => {
       // pill; the words "Action needed" are not rendered in the row at all.
       const badge = row.getByTestId("row-attention");
       await expect(badge).toBeVisible();
-      await expect(badge).toHaveAttribute("aria-label", "Action needed");
-      await expect(row).not.toContainText("Action needed");
+      await expect(badge).toHaveAttribute("aria-label", "Needs you");
+      await expect(row).not.toContainText("Needs you");
     }
   });
 
@@ -172,9 +174,7 @@ test.describe("RF-1 shared row grammar", () => {
   });
 
   test("returning to a list restores its scroll position", async ({ page, request }) => {
-    await page.route("**/api/conversations", async (route) => {
-      await route.fulfill({ json: conversationRows(40) });
-    });
+    await mockQueue(page, conversationRows(40));
     await page.route("**/api/conversations/**", async (route) => {
       await route.fulfill({
         json: {

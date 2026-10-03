@@ -16,10 +16,12 @@ import {
  * the dead surface the PRD forbids. Stage 2's quote and order approvals become
  * further kinds in this same list - the card never changes.
  *
- * Waiting customers are not a `BriefItem` - see `waitingRows` below. A list of
- * customers is a different shape from a headline-plus-chips card, and one
- * BriefItem already collapsed every waiting customer into whichever one
- * happened to be first; the WaitingPanel this feeds shows every row.
+ * Waiting customers are not a `BriefItem` in the escalation sense - see
+ * `waitingRows` below. A list of customers is a different shape from a
+ * headline-plus-chips card, and one BriefItem already collapsed every waiting
+ * customer into whichever one happened to be first; the WaitingPanel this
+ * feeds shows every row. RF-14 adds a `queue` card that names the count and
+ * links to Chats, which is a headline-plus-chip shape and therefore belongs.
  */
 export interface BriefChip {
   label: string;
@@ -27,7 +29,7 @@ export interface BriefChip {
 }
 
 export interface BriefItem {
-  kind: "draft" | "share";
+  kind: "draft" | "queue" | "share";
   headline: string;
   note?: string;
   chips: BriefChip[];
@@ -78,8 +80,24 @@ export function waitingRows(conversations: ConversationSummary[]): WaitingRow[] 
 export function buildBrief(
   conversations: ConversationSummary[],
   records: KnowledgeRecord[],
+  needsYou: number,
 ): BriefItem[] {
   const items: BriefItem[] = [];
+
+  // RF-14/D38: the queue's own count, straight from the server - an open
+  // escalation or a taken-over thread. The card leads with it so the brief
+  // says how many are waiting even when the WaitingPanel's escalation view is
+  // empty (a human-handled thread needs the owner but has no escalation row).
+  if (needsYou > 0) {
+    items.push({
+      kind: "queue",
+      headline:
+        needsYou === 1
+          ? "1 customer is waiting for you."
+          : `${needsYou} customers are waiting for you.`,
+      chips: [{ label: "Open Chats", href: "/chats" }],
+    });
+  }
 
   // A draft answers nothing until it is saved (D19), so an unread one is the
   // owner's assistant sitting on knowledge it is not allowed to use yet.

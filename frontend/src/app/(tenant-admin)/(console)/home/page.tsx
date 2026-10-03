@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
 import { useScrollRestoration } from "@/lib/useScrollRestoration";
-import type { ConversationSummary } from "@/lib/api-schemas";
+import type { ConversationListResponse } from "@/lib/api-schemas";
 import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
 import { buildBrief, waitingRows } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
@@ -59,15 +59,18 @@ export default function HomePage() {
       .catch(() => setName(null));
   }, []);
 
-  const conversations = useApiQuery<ConversationSummary[]>("/api/conversations");
+  const conversations = useApiQuery<ConversationListResponse>("/api/conversations");
   const records = useApiQuery<KnowledgeRecord[]>("/api/knowledge/records");
 
   // Both queries have to have answered before the brief means anything: an
   // empty conversation list is the share nudge's trigger, so composing while
   // one is still in flight would flash a card that is about to be wrong.
   const ready = conversations.data !== undefined && records.data !== undefined;
-  const waiting = ready ? waitingRows(conversations.data) : [];
-  const items = ready ? buildBrief(conversations.data, records.data) : [];
+  const waiting = ready ? waitingRows(conversations.data.items) : [];
+  // RF-14: the brief's queue card leads with how many are waiting, the same
+  // server count the Chats badge shows.
+  const needsYou = conversations.data?.counts.needs_you ?? 0;
+  const items = ready && conversations.data ? buildBrief(conversations.data.items, records.data, needsYou) : [];
 
   return (
     <main

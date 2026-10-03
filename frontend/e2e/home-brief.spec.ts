@@ -15,6 +15,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
+import { mockQueue } from "./queue-fixtures";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
@@ -28,6 +29,7 @@ function waitingConversations(count: number) {
     needs_attention: true,
     pending_summary: "The customer needs a personal response from the owner.",
     pending_since: `2026-01-0${index + 1}T00:00:00Z`,
+    handler: "assistant",
   }));
 }
 
@@ -36,10 +38,7 @@ async function mockConversations(
   rows: () => ReturnType<typeof waitingConversations>,
   onRequest?: () => void,
 ) {
-  await page.route("**/api/conversations", async (route) => {
-    onRequest?.();
-    await route.fulfill({ json: rows() });
-  });
+  await mockQueue(page, rows, onRequest);
 }
 
 test.describe("Home - the greeting and the brief", () => {

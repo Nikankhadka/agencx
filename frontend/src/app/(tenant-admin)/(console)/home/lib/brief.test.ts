@@ -88,13 +88,31 @@ function record(over: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
 
 describe("buildBrief", () => {
   it("is empty when a live business has nothing outstanding", () => {
-    expect(buildBrief([conversation()], [record()])).toEqual([]);
+    expect(buildBrief([conversation()], [record()], 0)).toEqual([]);
+  });
+
+  it("surfaces a queue card naming the waiting count, singular and plural", () => {
+    const one = buildBrief([conversation()], [record()], 1);
+    expect(one[0]!.kind).toBe("queue");
+    expect(one[0]!.headline).toBe("1 customer is waiting for you.");
+    expect(one[0]!.chips[0]!.href).toBe("/chats");
+
+    const many = buildBrief([conversation()], [record()], 3);
+    expect(many[0]!.headline).toBe("3 customers are waiting for you.");
+    expect(many[0]!.chips[0]!.label).toBe("Open Chats");
+  });
+
+  it("omits the queue card when nobody is waiting", () => {
+    expect(buildBrief([conversation()], [record()], 0).some((i) => i.kind === "queue")).toBe(
+      false,
+    );
   });
 
   it("surfaces an unsaved draft by its source, not its filename when it is a link", () => {
     const items = buildBrief(
       [conversation()],
       [record({ status: "draft", filename: "https://sababa.example/menu" })],
+      0,
     );
     expect(items).toHaveLength(1);
     expect(items[0]!.kind).toBe("draft");
@@ -107,6 +125,7 @@ describe("buildBrief", () => {
     const items = buildBrief(
       [conversation()],
       [record({ id: "a", status: "draft" }), record({ id: "b", status: "draft" })],
+      0,
     );
     expect(items[0]!.headline).toBe("2 sources are read and waiting for you to check them.");
     expect(items[0]!.note).toContain("until you save them");
@@ -114,16 +133,16 @@ describe("buildBrief", () => {
 
   it("ignores records that are not drafts", () => {
     expect(
-      buildBrief([conversation()], [record({ status: "failed" }), record({ id: "b" })]),
+      buildBrief([conversation()], [record({ status: "failed" }), record({ id: "b" })], 0),
     ).toEqual([]);
   });
 
   it("nudges sharing only while no customer has ever written", () => {
-    const items = buildBrief([], []);
+    const items = buildBrief([], [], 0);
     expect(items).toHaveLength(1);
     expect(items[0]!.kind).toBe("share");
     expect(items[0]!.chips[0]!.href).toBe("/business");
 
-    expect(buildBrief([conversation()], []).some((i) => i.kind === "share")).toBe(false);
+    expect(buildBrief([conversation()], [], 0).some((i) => i.kind === "share")).toBe(false);
   });
 });
