@@ -325,6 +325,13 @@ async def stream_chat_response(
                         # is safe to show immediately instead of holding it back.
                         # RF-10's ``contact`` is the same class of bookkeeping: a
                         # stored preferred name that a redraft cannot invalidate.
+                        # RF-12: a formal quote is the one card this branch can
+                        # carry, so capture it for the persisted row; a quoted
+                        # turn emits no price_summary/catalog event. At most one
+                        # card event is produced per turn, so the single-slot
+                        # ``response`` shape stays one ``{"type": ...}`` dict.
+                        if etype == "quote":
+                            response_payload = dict(event)
                         yield event
                     elif etype in ("price_summary", "catalog"):
                         response_payload = dict(event)

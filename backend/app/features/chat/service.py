@@ -342,7 +342,7 @@ async def list_messages(
         if exists is None:
             raise ValueError("conversation not found")
         rows = await conn.fetch(
-            "select id, role, content, created_at from messages "
+            "select id, role, content, created_at, metadata from messages "
             "where tenant_id = $1 and conversation_id = $2 "
             "and role in ('customer', 'assistant', 'human_agent') "
             "and ($3::timestamptz is null or created_at > $3) "
@@ -353,4 +353,16 @@ async def list_messages(
             after,
             limit,
         )
-    return [dict(row) for row in rows]
+    # RF-12: surface the customer-safe card payload for restore, and nothing
+    # else from metadata. The raw blob holds owner-only inspection verdicts,
+    # intent, action, and timing (D41); metadata itself is dropped from the row.
+    messages: list[dict[str, Any]] = []
+    for row in rows:
+        message = dict(row)
+        raw_metadata = message.pop("metadata", None)
+        if raw_metadata:
+            metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else raw_metadata
+            if isinstance(metadata, dict) and metadata.get("response"):
+                message["response"] = metadata["response"]
+        messages.append(message)
+    return messages

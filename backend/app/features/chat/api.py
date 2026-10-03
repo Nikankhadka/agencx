@@ -13,7 +13,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -57,6 +57,11 @@ class PublicMessage(BaseModel):
     role: str
     content: str
     created_at: datetime
+    # RF-12: the customer-safe card payload only (``metadata["response"]``),
+    # read back so a same-tab refresh can restore a turn's quote, catalog, or
+    # price-summary card. Never the rest of ``messages.metadata`` - inspection
+    # verdicts, intent, action, timing are owner-only (D41).
+    response: dict[str, Any] | None = None
 
 
 def _sse(event: dict[str, object]) -> str:

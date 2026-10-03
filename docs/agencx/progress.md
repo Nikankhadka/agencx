@@ -186,9 +186,20 @@ live in the ticket files, not here.
   already-open escalation does not hand off twice. No schema change. Record in
   the archived
   [12-refinement-rf-11-ask-for-a-person.md](../archive/phase1-complete/12-refinement-rf-11-ask-for-a-person.md).
-- [ ] RF-12 through RF-17 product refinement: `Active - todo`, next is RF-12
-  (same-tab refresh restoration of content, cards, and state); no other
-  ticket implemented. The Part 2 design task is complete and implementation-ready:
+- [ ] RF-12 same-tab refresh restoration of content, cards, and state:
+  implemented on `feat/rf-12-refresh-restore`, PR open. The customer-safe
+  `response` card payload rides `PublicMessage`/`list_messages` (read from
+  `messages.metadata`; the raw owner-only blob never reaches the surface), a
+  formal quote turn now captures its live `quote` event into
+  `metadata.response`, and `CustomerChat` persists and restores the
+  conversation id, unsent composer draft, and handoff/escalated banner flags in
+  `sessionStorage`, so cards, draft, and the human-reply poll survive a
+  refresh. No schema change. Evidence: `make migrate` no pending; backend 1265
+  tests; frontend 353 tests; `make eval-skip-llm` GATE PASSED; targeted e2e
+  RF-12/RF-10/RF-11 11 passed; full `make test-e2e` 208 passed.
+- [ ] RF-13 through RF-17 product refinement: `Active - todo`, next is RF-13
+  (failed-send recovery and draft preservation); no other ticket implemented.
+  The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
   versus proposed behavior, design reference, dependencies, API/DB changes,
@@ -222,7 +233,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-12 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - in progress` | R-3, R-4 remainder, R-5 remainder; RF-13 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, and RF-18 delivered and archived; RF-12 on `feat/rf-12-refresh-restore`, PR open) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

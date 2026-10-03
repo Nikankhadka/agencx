@@ -2027,6 +2027,10 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Response */
+            response?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * PublicOffering

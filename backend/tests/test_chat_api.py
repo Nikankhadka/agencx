@@ -1162,3 +1162,168 @@ async def test_chat_omits_intent_when_the_escalation_carries_none(
     )
     assert metadata["action"] == "escalate"
     assert "intent" not in metadata
+
+
+# --- RF-12: transcript restore of the customer-safe response payload --------
+
+
+async def test_public_messages_returns_only_the_response_payload(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-12: the public transcript returns ``metadata["response"]`` so a
+    refresh can rebuild a card, and never the owner-only keys sitting beside it
+    in the same blob (D41). The whole response body is scanned, not just the
+    one field, so a future shape change cannot re-leak a key unnoticed."""
+    slug = f"chat-restore-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    response_payload = {
+        "type": "price_summary",
+        "summary": {
+            "line_items": [],
+            "subtotal_cents": 12000,
+            "tax_cents": 960,
+            "total_cents": 12960,
+            "disclaimer": "Prices are estimates.",
+        },
+    }
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, metadata) "
+        "values ($1, $2, 'assistant', $3, $4)",
+        tenant_id,
+        conversation_id,
+        "Here is your price summary.",
+        json.dumps(
+            {
+                "response": response_payload,
+                "inspection": {"grounding": "pass"},
+                "intent": "offer",
+                "action": "respond",
+                "price_summary_ms": 123.4,
+                "limit_escalation": "daily_budget",
+            }
+        ),
+    )
+
+    response = await client.get(f"/api/chat/{conversation_id}/messages", params={"slug": slug})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["response"] == response_payload
+    # The owner-only keys (and the metadata wrapper itself) never reach the wire.
+    assert "metadata" not in response.text
+    for owner_only_key in (
+        "inspection",
+        "intent",
+        "action",
+        "price_summary_ms",
+        "limit_escalation",
+    ):
+        assert owner_only_key not in response.text
+
+
+async def test_public_messages_without_a_response_payload_returns_none(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """A plain text turn persists metadata with no ``response`` key; the
+    transcript must still answer, with the field null/absent rather than
+    erroring."""
+    slug = f"chat-restore-none-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    conversation_id: uuid.UUID = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, metadata) "
+        "values ($1, $2, 'assistant', $3, $4)",
+        tenant_id,
+        conversation_id,
+        "We are open weekdays 9-5.",
+        json.dumps({"inspection": {}, "intent": "information", "action": "respond"}),
+    )
+
+    response = await client.get(f"/api/chat/{conversation_id}/messages", params={"slug": slug})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0].get("response") is None
+
+
+class FakeFormalQuoteProvider(ToolAwareFakeProvider):
+    """A formal quote turn: routes to quoting and calls ``get_quote_inputs``,
+    so draft_node emits a ``quote`` event (not a ``price_summary`` one). Mirrors
+    test_quoting_agent.py's ``_quoting_provider`` at the HTTP boundary."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            tool_call_sequence=[
+                ToolTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_q",
+                            name="get_quote_inputs",
+                            args={
+                                "selections": [
+                                    {"rule_code": "screen-repair-a", "quantity": 1},
+                                ]
+                            },
+                        )
+                    ]
+                ),
+                ToolTurn(text="ok", tool_calls=[]),
+            ],
+            extract_route="quoting",
+            stream_text="Here is your quote.",
+        )
+
+
+async def _seed_tenant_with_pricing_rule(conn: asyncpg.Connection[Any], *, slug: str) -> uuid.UUID:
+    tenant_id: uuid.UUID = await conn.fetchval(
+        "insert into tenants (slug, name, status) values ($1, $2, 'active') returning id",
+        slug,
+        "Formal Quote Chat Test Co",
+    )
+    await conn.execute("insert into tenant_config (tenant_id) values ($1)", tenant_id)
+    await conn.execute(
+        "insert into pricing_rules (tenant_id, code, label, unit_amount_cents) "
+        "values ($1, 'screen-repair-a', 'Screen repair (tier A)', 12000)",
+        tenant_id,
+    )
+    return tenant_id
+
+
+async def test_chat_persists_a_formal_quote_payload_on_the_message_row(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """RF-12: a formal quote turn used to persist no ``response``, so its
+    QuoteCard could not restore. The controller now captures the live ``quote``
+    event, and ``metadata["response"]`` must equal exactly what streamed - the
+    same parity the price_summary/catalog tests pin for their card types."""
+    slug = f"chat-formal-quote-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_pricing_rule(superuser_conn, slug=slug)
+    app.dependency_overrides[get_llm_provider] = FakeFormalQuoteProvider
+
+    response = await client.post(
+        "/api/chat", json={"slug": slug, "message": "How much is a screen repair?"}
+    )
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    conversation_id = events[0]["conversation_id"]
+
+    quote_events = [e for e in events if e["type"] == "quote"]
+    assert len(quote_events) == 1, "exactly one quote event reaches the customer stream"
+    assert quote_events[0]["quote"]["total_cents"] == 12000
+
+    row = await superuser_conn.fetchrow(
+        "select metadata from messages where tenant_id = $1 and conversation_id = $2 "
+        "and role = 'assistant'",
+        tenant_id,
+        uuid.UUID(conversation_id),
+    )
+    assert row is not None
+    metadata = json.loads(row["metadata"])
+    assert metadata["response"] == quote_events[0]
+    assert metadata["response"]["type"] == "quote"
+    assert metadata["response"]["quote"]["total_cents"] == 12000
