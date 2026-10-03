@@ -229,7 +229,23 @@ live in the ticket files, not here.
   CSS; 360px queue token; mobile visibility route-keyed. Record in the
   archived
   [12-refinement-rf-15-chats-split-pane.md](../archive/phase1-complete/12-refinement-rf-15-chats-split-pane.md).
-- [ ] RF-16 through RF-17 product refinement: `Active - todo`, next is RF-16.
+- [x] RF-16 explicit issue resolution in the conversation workspace: merged in
+  `c59d4d0` (PR #77). Resolution is an explicit third action in the Chats
+  thread (`/chats/[id]`): `ConversationDetail` carries a derived
+  `pending_escalation_id`, the thread shows an inline resolve shelf from the
+  Handling state whether or not the owner has taken over, with its own
+  confirmation and an optional customer-facing message, and
+  `POST /api/escalations/{id}/resolve` always writes the owner-only `system`
+  stamp `RESOLUTION_STAMP = "You resolved this issue"` before the optional
+  `human_agent` message; replying and handing back never resolve. No migration,
+  no schema change, no new route. Decisions: resolution is available from
+  Handling, not gated on takeover; the stamp is an owner-only `system` message
+  reusing the transcript role filter; the stamp is written first at
+  `now() + interval '1 microsecond'` for deterministic order; the thread reads
+  the escalation id from the derived `pending_escalation_id`; resolving while
+  taken over does not clear Needs you, handback does. Record in the archived
+  [12-refinement-rf-16-explicit-resolution.md](../archive/phase1-complete/12-refinement-rf-16-explicit-resolution.md).
+- [ ] RF-17 product refinement: `Active - todo`.
   The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -237,8 +253,7 @@ live in the ticket files, not here.
   acceptance scenarios, and regression checks. Design intent in
   [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
   there record the product questions that still need a founder ruling (public
-  address editing, contextual shortcut fields, and whether resolution requires
-  takeover).
+  address editing and contextual shortcut fields).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
@@ -264,7 +279,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-16 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-15 and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-16 and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

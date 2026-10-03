@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-16 through
-RF-17); RF-1 through RF-15, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-17);
+RF-1 through RF-16, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -117,9 +117,8 @@ capture), RF-11 (visible human-help action and requested handoff), RF-12
 (same-tab refresh restoration of content, cards, and state), RF-13
 (failed-send recovery and draft preservation), RF-14 (complete-dataset queue
 filtering, searching, pagination, and attention counts), RF-15 (desktop
-split-pane Chats), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-16 through
-RF-17**.
+split-pane Chats), RF-16 (explicit issue resolution), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-17**.
 
 ### Archive process for delivered RF tickets
 
@@ -284,7 +283,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, RF-16, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -301,44 +300,9 @@ in
 [12-refinement-rf-13-failed-send-recovery.md](../../../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md),
 [12-refinement-rf-14-complete-queue.md](../../../archive/phase1-complete/12-refinement-rf-14-complete-queue.md),
 [12-refinement-rf-15-chats-split-pane.md](../../../archive/phase1-complete/12-refinement-rf-15-chats-split-pane.md),
+[12-refinement-rf-16-explicit-resolution.md](../../../archive/phase1-complete/12-refinement-rf-16-explicit-resolution.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-16: Explicit issue resolution in the conversation workspace
-
-- **Status:** Active - todo.
-- **Visible outcome:** From the conversation workspace the owner resolves an
-  issue explicitly, with its own confirmation and an owner-only `thr-pill`
-  system stamp; an optional customer-facing message may accompany the
-  resolution. Replying or handing back never silently resolves. Takeover,
-  reply, resolution, and handback stay distinct, and the owner and customer
-  transcripts agree across all four and a refresh.
-- **Current vs proposed:** Current: the resolve endpoint exists
-  (`POST /api/escalations/{id}/resolve`) but its UI is the hidden Wren-era
-  `/escalations` table; the thread has takeover, handback, reply, and delete
-  only; resolve writes no stamp; handback already never silently resolves.
-  Proposed: move resolution into the thread, write a `system` message stamp on
-  resolve, allow an optional customer-facing message, and keep reply and
-  handback from resolving anything. Customer-facing handoff copy matches the
-  shipped bubble.
-- **Design reference:** `agencx-prototype-v6.html` `renderThreadScreen`
-  `.thr-pill` stamps and `alexTko` / `alexHbk`; `design/frontend.md` S1 `The
-  owner's side of the same surface (C-6)`. Shipped: `chats/[id]/page.tsx`,
-  `backend/app/features/escalations/api.py` (`ResolveRequest`), and `service.py`
-  `resolve`.
-- **Dependencies:** RF-14 and RF-15.
-- **API/DB changes:** `resolve` writes an owner-only `system` message (the
-  `thr-pill` stamp); the existing optional message becomes a `human_agent`
-  message. No schema change (`messages.role` already allows `system`).
-- **Acceptance scenarios:** Resolving from the thread asks for confirmation,
-  writes a stamp, and optionally posts a customer-visible message; reply alone
-  does not resolve; handback alone does not resolve; after resolving, the issue
-  leaves Needs you and the stamp survives a refresh; the customer transcript
-  shows the optional message and not the owner-only stamp.
-- **Regression checks:** The escalations resolve tests, ticket 19's transcripts,
-  and the never-silent-resolve behavior stay green.
-- **OPEN:** whether resolution is available from the "Handling" state or only
-  after the owner takes over.
 
 #### RF-17: Four-business walkthroughs with visual and behavioral evidence
 

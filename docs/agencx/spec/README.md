@@ -30,7 +30,7 @@ Per-ticket header pattern:
 | Location | Contents | Status |
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
-| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-16 through RF-17 (RF-1 through RF-15 and RF-18 delivered and archived; Part 2 spec completed and implementation-ready) | `Active - todo` |
+| [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder; RF-17 (RF-1 through RF-16 and RF-18 delivered and archived; Part 2 spec completed and implementation-ready) | `Active - todo` |
 
 ## Completed work
 
@@ -38,7 +38,7 @@ All delivered tickets live in
 [the phase-1-complete archive](../../archive/phase1-complete/README.md):
 foundation, onboarding, chat spine, chat grounding, business page, polish,
 hygiene, developer experience, deployment, offerings and media, R-1/R-2
-refinement, RF-1 through RF-15 and RF-18 refinement, walkthrough fixes W-1 through W-9,
+refinement, RF-1 through RF-16 and RF-18 refinement, walkthrough fixes W-1 through W-9,
 schema drop W-10, document review W-11, auth OTP W-12/W-13, the finalized M-7
 storefront, intent and identity (19), required services (20), and category
 management (21) - with the walkthrough evidence logs.
