@@ -88,6 +88,9 @@ async def get_conversation_detail(
         "channel": conversation["channel"],
         "status": conversation["status"],
         "created_at": conversation["created_at"],
+        # RF-16: the thread's resolve control posts to this escalation, so the
+        # owner surface needs its id. Null once every escalation is resolved.
+        "pending_escalation_id": conversation["pending_escalation_id"],
         "total_cost_usd": float(rows["total_cost"]),
         "messages": messages,
     }

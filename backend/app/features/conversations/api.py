@@ -85,6 +85,10 @@ class ConversationDetail(BaseModel):
     channel: str
     status: str
     created_at: datetime
+    # RF-16: the open escalation this thread can resolve, if any. Owner-only -
+    # it rides the tenant-admin detail and no public surface. Null when every
+    # escalation on the conversation is resolved.
+    pending_escalation_id: UUID | None = None
     total_cost_usd: float
     messages: list[MessageDetail]
 
