@@ -300,7 +300,7 @@ and
 
 #### RF-13: Failed-send recovery and draft preservation
 
-- **Status:** Active - todo.
+- **Status:** Active - PR open on feat/rf-13-failed-send-recovery.
 - **Visible outcome:** A failed send recovers in place: the failed bubble offers
   an explicit retry that replays the exact failed payload, and the draft
   survives the failure. Nothing replays automatically.

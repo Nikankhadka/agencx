@@ -91,6 +91,13 @@ interface Message {
   catalog?: CatalogPayload;
   streaming?: boolean;
   error?: boolean;
+  /**
+   * RF-13: the exact customer payload that this failed assistant bubble tried
+   * to answer. Retry replays this verbatim, so the button never reads a
+   * neighboring bubble. Absent on a healthy turn and on a handoff failure,
+   * which has no customer payload to replay.
+   */
+  retryText?: string;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -257,24 +264,74 @@ export function CustomerChat({
     };
   }, [handoffSeen, escalated, conversationId, slug]);
 
-  function updateLastAssistant(update: (last: Message) => Partial<Message>) {
+  /**
+   * RF-13: update one assistant bubble by index. A fresh send and a retry both
+   * target the assistant bubble they created, so a stream event lands on the
+   * right turn even though the array may have grown since the request started
+   * (a polled human reply, another turn). Index rather than "last" is what lets
+   * retry reinstate the failed bubble in place instead of appending.
+   */
+  function updateAssistantAt(index: number, update: (message: Message) => Partial<Message>) {
     setMessages((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
       const next = [...prev];
-      const last = next[next.length - 1];
-      if (last) next[next.length - 1] = { ...last, ...update(last) };
+      next[index] = { ...target, ...update(target) };
       return next;
     });
+  }
+
+  /**
+   * RF-13: the shared failure path. It stamps the failed bubble with the retry
+   * affordance and the exact payload, and puts that payload back in the
+   * composer while keeping the stored draft. A handoff failure passes no
+   * payload and only gets the bubble, since there is nothing to replay.
+   */
+  function failTurn(index: number, retryText: string | undefined) {
+    updateAssistantAt(index, () => ({
+      text: "Something went wrong just then. Try again?",
+      error: true,
+      streaming: false,
+      retryText,
+    }));
+    if (retryText !== undefined) {
+      setInput(retryText);
+      writeSession(draftKey(slug), retryText);
+    }
+  }
+
+  /**
+   * RF-13: one attempt at a turn against the live stream, shared by a fresh
+   * send and an explicit retry. The target assistant bubble already exists at
+   * `index`; a failure stamps the payload onto it for a later retry.
+   */
+  async function runTurn(index: number, text: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, conversation_id: conversationId, message: text }),
+      });
+      if (!res.ok || !res.body) throw new Error("chat request failed");
+      await consumeStream(res.body, index, text);
+    } catch {
+      failTurn(index, text);
+    }
   }
 
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || busy || escalated) return;
     setBusy(true);
+    // RF-13: the composer clears for normal typing feedback, but the exact
+    // payload is held as the in-flight draft so a mid-flight refresh keeps it.
+    // It is cleared only when the turn succeeds (the `done` handler).
     setInput("");
-    // RF-12: the stored draft is cleared at send start, regardless of outcome.
-    // Keeping it through a failed send is RF-13.
-    writeSession(draftKey(slug), "");
+    writeSession(draftKey(slug), trimmed);
     setShowStarters(false);
+    // The assistant placeholder this turn owns: one past the appended customer
+    // bubble. The single in-flight-turn guard keeps this index stable.
+    const assistantIndex = messages.length + 1;
     setMessages((prev) => [
       ...prev,
       { role: "customer", text: trimmed },
@@ -282,19 +339,32 @@ export function CustomerChat({
     ]);
 
     try {
-      const res = await fetch(`${API_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, conversation_id: conversationId, message: trimmed }),
-      });
-      if (!res.ok || !res.body) throw new Error("chat request failed");
-      await consumeStream(res.body);
-    } catch {
-      updateLastAssistant(() => ({
-        text: "Something went wrong just then. Try again?",
-        error: true,
-        streaming: false,
-      }));
+      await runTurn(assistantIndex, trimmed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // RF-13: the explicit retry, the only thing that replays a failed send -
+  // there is no automatic loop. It reuses the failed bubble in place (no second
+  // customer bubble) and posts the stored payload verbatim.
+  async function retry(assistantIndex: number) {
+    if (busy || escalated) return;
+    const text = messages[assistantIndex]?.retryText;
+    if (!text) return;
+    setBusy(true);
+    setInput("");
+    writeSession(draftKey(slug), text);
+    // Reinstate the bubble to streaming: drop the error state and the stale
+    // payload, so a second failure stamps it again and a success leaves none.
+    updateAssistantAt(assistantIndex, () => ({
+      text: "",
+      error: false,
+      streaming: true,
+      retryText: undefined,
+    }));
+    try {
+      await runTurn(assistantIndex, text);
     } finally {
       setBusy(false);
     }
@@ -308,6 +378,7 @@ export function CustomerChat({
     if (busy || !shouldShowAskForPerson({ escalated, handoffSeen })) return;
     setBusy(true);
     setShowStarters(false);
+    const assistantIndex = messages.length;
     setMessages((prev) => [...prev, { role: "assistant", text: "", streaming: true }]);
 
     try {
@@ -317,28 +388,30 @@ export function CustomerChat({
         body: JSON.stringify(handoffRequestBody(slug, conversationId)),
       });
       if (!res.ok || !res.body) throw new Error("handoff request failed");
-      await consumeStream(res.body);
+      await consumeStream(res.body, assistantIndex, undefined);
       // An already-open escalation streams no reply, so drop the empty
       // placeholder rather than leave a blank assistant bubble.
       setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === "assistant" && last.text === "" && !last.error) {
-          return prev.slice(0, -1);
+        const target = prev[assistantIndex];
+        if (target && target.role === "assistant" && target.text === "" && !target.error) {
+          return prev.filter((_, i) => i !== assistantIndex);
         }
         return prev;
       });
     } catch {
-      updateLastAssistant(() => ({
-        text: "Something went wrong just then. Try again?",
-        error: true,
-        streaming: false,
-      }));
+      // A handoff failure has no customer payload, so it gets the bubble with
+      // no retry control (there is nothing for the control to replay).
+      failTurn(assistantIndex, undefined);
     } finally {
       setBusy(false);
     }
   }
 
-  async function consumeStream(body: ReadableStream<Uint8Array>) {
+  async function consumeStream(
+    body: ReadableStream<Uint8Array>,
+    targetIndex: number,
+    retryText: string | undefined,
+  ) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -356,12 +429,16 @@ export function CustomerChat({
         // reading rather than abort the in-progress stream.
         const event = parseChatStreamEvent(raw.slice("data: ".length));
         if (!event) continue;
-        handleStreamEvent(event);
+        handleStreamEvent(event, targetIndex, retryText);
       }
     }
   }
 
-  function handleStreamEvent(event: ChatStreamEvent) {
+  function handleStreamEvent(
+    event: ChatStreamEvent,
+    targetIndex: number,
+    retryText: string | undefined,
+  ) {
     switch (event.type) {
       case "conversation":
         setConversationId(event.conversation_id);
@@ -370,7 +447,7 @@ export function CustomerChat({
         writeSession(conversationKey(slug), event.conversation_id);
         break;
       case "citations":
-        updateLastAssistant(() => ({ citations: event.citations }));
+        updateAssistantAt(targetIndex, () => ({ citations: event.citations }));
         break;
       case "contact":
         // RF-10: the preferred display name. Name only - never an email.
@@ -380,13 +457,13 @@ export function CustomerChat({
         }
         break;
       case "quote":
-        updateLastAssistant(() => ({ quote: event.quote }));
+        updateAssistantAt(targetIndex, () => ({ quote: event.quote }));
         break;
       case "price_summary":
-        updateLastAssistant(() => ({ priceSummary: event.summary }));
+        updateAssistantAt(targetIndex, () => ({ priceSummary: event.summary }));
         break;
       case "catalog":
-        updateLastAssistant(() => ({ catalog: event.catalog }));
+        updateAssistantAt(targetIndex, () => ({ catalog: event.catalog }));
         break;
       case "progress":
         // The in-bubble typing indicator already covers the wait; no
@@ -395,13 +472,13 @@ export function CustomerChat({
       case "redraft":
         // The backend's price gate rejected the streamed draft and is
         // streaming a replacement - clear the rejected text.
-        updateLastAssistant(() => ({ text: "" }));
+        updateAssistantAt(targetIndex, () => ({ text: "" }));
         break;
       case "token":
-        updateLastAssistant((last) => ({ text: last.text + event.text }));
+        updateAssistantAt(targetIndex, (target) => ({ text: target.text + event.text }));
         break;
       case "refusal":
-        updateLastAssistant(() => ({ text: event.text }));
+        updateAssistantAt(targetIndex, () => ({ text: event.text }));
         break;
       case "handoff":
         // A human was notified. Nothing about the chat changes.
@@ -418,16 +495,19 @@ export function CustomerChat({
         break;
       case "error":
         // The backend failed mid-stream and said so on the wire. Without
-        // this the bubble would sit in "streaming" forever - show the
-        // same retry affordance a network failure gets below.
-        updateLastAssistant(() => ({
-          text: "Something went wrong just then. Try again?",
-          error: true,
-          streaming: false,
-        }));
+        // this the bubble would sit in "streaming" forever - show the same
+        // retry affordance a network failure gets, carrying the exact payload.
+        failTurn(targetIndex, retryText);
         break;
       case "done":
-        updateLastAssistant(() => ({ streaming: false }));
+        updateAssistantAt(targetIndex, () => ({ streaming: false, retryText: undefined }));
+        // RF-13: a completed turn clears the in-flight draft. A fresh send and
+        // a retry both pass the customer payload, so only those clear the
+        // composer; a handoff passes none and must not clobber a typed draft.
+        if (retryText !== undefined) {
+          setInput("");
+          writeSession(draftKey(slug), "");
+        }
         break;
     }
   }
@@ -462,10 +542,11 @@ export function CustomerChat({
             {message.quote ? <QuoteCard quote={message.quote} /> : null}
             {message.priceSummary ? <PriceSummaryCard summary={message.priceSummary} /> : null}
             {message.catalog ? <CatalogCard catalog={message.catalog} /> : null}
-            {message.error ? (
+            {message.error && message.retryText ? (
               <button
                 type="button"
-                onClick={() => void send(messages[index - 1]?.text ?? "")}
+                data-testid="retry"
+                onClick={() => void retry(index)}
                 className="mt-1 block text-footnote font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
               >
                 Retry
