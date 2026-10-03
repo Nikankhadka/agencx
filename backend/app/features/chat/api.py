@@ -41,6 +41,17 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+class HandoffRequest(BaseModel):
+    """RF-11: the visible "Ask for a person" control's body. No message - the
+    control is not a customer turn. ``conversation_id`` is optional so a
+    customer can ask for a person before typing anything; the endpoint creates
+    the conversation in that case and returns its id in the ``conversation``
+    event."""
+
+    slug: str
+    conversation_id: UUID | None = None
+
+
 class PublicMessage(BaseModel):
     id: UUID
     role: str
@@ -50,6 +61,33 @@ class PublicMessage(BaseModel):
 
 def _sse(event: dict[str, object]) -> str:
     return f"data: {json.dumps(event)}\n\n"
+
+
+def _stream(request: Request, events: AsyncIterator[dict[str, object]]) -> StreamingResponse:
+    """Frame controller events as SSE, with the same mid-stream error fallback
+    for every chat-shaped endpoint (POST /api/chat and POST /api/chat/handoff)."""
+
+    async def safe_events() -> AsyncIterator[dict[str, object]]:
+        try:
+            async for event in events:
+                yield event
+        except Exception:
+            # The stream has already begun, so the failure cannot become a
+            # Problem Details response - it goes out as an `error` event
+            # instead. Log it here regardless: this is the last place the
+            # traceback exists, and swallowing it would leave a customer's
+            # failed turn with no record at all.
+            logger.exception("chat stream failed mid-turn")
+            yield {
+                "type": "error",
+                "code": "internal_error",
+                "detail": "Something went wrong on my side - please send that again.",
+                "request_id": request_id(request),
+            }
+
+    return StreamingResponse(
+        (_sse(event) async for event in safe_events()), media_type="text/event-stream"
+    )
 
 
 @router.post("")
@@ -84,27 +122,7 @@ async def chat(
         ) from exc
 
     def _wrap(events: AsyncIterator[dict[str, object]]) -> StreamingResponse:
-        async def safe_events() -> AsyncIterator[dict[str, object]]:
-            try:
-                async for event in events:
-                    yield event
-            except Exception:
-                # The stream has already begun, so the failure cannot become a
-                # Problem Details response - it goes out as an `error` event
-                # instead. Log it here regardless: this is the last place the
-                # traceback exists, and swallowing it would leave a customer's
-                # failed turn with no record at all.
-                logger.exception("chat stream failed mid-turn")
-                yield {
-                    "type": "error",
-                    "code": "internal_error",
-                    "detail": "Something went wrong on my side - please send that again.",
-                    "request_id": request_id(request),
-                }
-
-        return StreamingResponse(
-            (_sse(event) async for event in safe_events()), media_type="text/event-stream"
-        )
+        return _stream(request, events)
 
     # T-020/C-5: a limit stop is terminal - such a conversation never gets
     # another agent turn (the customer's message above is still kept, so the
@@ -138,6 +156,72 @@ async def chat(
             reranker=reranker,
             limits=limits,
         )
+    )
+
+
+@router.post("/handoff")
+async def handoff(request: Request, body: HandoffRequest) -> StreamingResponse:
+    """RF-11: the visible "Ask for a person" control, for the customer surface.
+
+    Deterministic: records the same escalation row the assistant's
+    ``create_escalation`` tool would, then streams the same handoff reply, with
+    the one contact ask when name/email are still missing. No agent turn runs,
+    so the visible handoff never depends on the model choosing the tool.
+
+    Branches (all resolve before the stream starts, so a failure is still a
+    Problem Details response rather than a half-open event stream):
+
+    - Unknown/inactive slug -> 404; a conversation id that is not this tenant's
+      -> 404 (the slug scopes the lookup, same trust model as POST /api/chat).
+    - ``human``: a staff member already took the conversation over. Do not
+      create a new handoff; stream ``conversation`` -> ``handoff`` -> ``done``,
+      the human-handled shape, because the human is already there.
+    - ``escalated`` (a tenant limit stopped it): terminal and closed. Do not
+      reopen it and do not write a row; stream ``conversation`` -> ``escalated``
+      -> ``done``, the same shape POST /api/chat returns for a limit stop.
+    - Otherwise: write the deduped escalation row and stream the handoff reply
+      plus the one ask when contact is incomplete. If an escalation is already
+      open, the dedupe makes the write a no-op and no second reply/ask is sent -
+      only the ``handoff`` event, so the client's poll still starts.
+
+    Never terminal: the conversation stays open (C-5). The row lives in the
+    owner's queue; operational alerts may reference the conversation.
+    """
+    try:
+        tenant_id = await service.resolve_active_tenant(body.slug)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown tenant slug"
+        ) from exc
+
+    try:
+        (
+            conversation_id,
+            status_now,
+            name_known,
+            email_known,
+        ) = await service.resolve_or_create_conversation(
+            tenant_id=tenant_id, conversation_id=body.conversation_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="conversation not found"
+        ) from exc
+
+    if status_now == "escalated":
+        return _stream(
+            request, controller.stream_escalated_response(conversation_id=conversation_id)
+        )
+    if status_now == "human":
+        return _stream(request, controller.stream_human_handled(conversation_id=conversation_id))
+    return _stream(
+        request,
+        controller.stream_handoff_response(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            name_known=name_known,
+            email_known=email_known,
+        ),
     )
 
 

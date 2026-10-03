@@ -83,6 +83,41 @@ async def resolve_conversation(
     return conversation_id, status, limits, over_budget
 
 
+async def resolve_or_create_conversation(
+    *, tenant_id: UUID, conversation_id: UUID | None
+) -> tuple[UUID, str, bool, bool]:
+    """RF-11: open or fetch the conversation for the customer-initiated handoff.
+
+    The "Ask for a person" control carries no message, so unlike
+    ``resolve_conversation`` this writes no ``messages`` row - it only resolves
+    the conversation and reads whether the contact fields are already present
+    (so the handoff reply knows whether to ask). A conversation is created when
+    the id is omitted, because a customer may want a person before typing
+    anything. Returns
+    ``(conversation_id, status, name_known, email_known)``; raises ValueError
+    when a supplied id is not this tenant's."""
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        if conversation_id is not None:
+            row = await conn.fetchrow(
+                "select status, customer_ref, customer_email "
+                "from conversations where id = $1 and tenant_id = $2",
+                conversation_id,
+                tenant_id,
+            )
+            if row is None:
+                raise ValueError("conversation not found")
+            return (
+                conversation_id,
+                str(row["status"]),
+                bool(row["customer_ref"]),
+                bool(row["customer_email"]),
+            )
+        conversation_id = await conn.fetchval(
+            "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+        )
+        return conversation_id, "open", False, False
+
+
 async def record_limit_escalation(
     *, tenant_id: UUID, conversation_id: UUID, reason: str, message: str, terminal: bool = True
 ) -> None:

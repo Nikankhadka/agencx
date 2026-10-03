@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field
 from app.agents.contract import contract_prelude
 from app.agents.draft_node import citation_source
 from app.agents.drafting import MONEY_GUIDANCE
-from app.agents.escalation import normalize_email
+from app.agents.escalation import normalize_email, record_escalation
 from app.agents.intent import ESCALATION_REASONS, as_intent, intent_for_route, intent_for_tools
 from app.agents.spotlight import Spotlight, new_spotlight
 from app.agents.state import AgentState, GraphContext
@@ -355,33 +355,6 @@ async def _get_quote_inputs_impl(
         "tax_cents": quote.tax_cents,
         "total_cents": quote.total_cents,
     }
-
-
-async def _create_escalation_impl(
-    conn: Any,
-    tenant_id: UUID,
-    conversation_id: UUID,
-    reason: str,
-    summary: str = "",
-    intent: str | None = None,
-) -> bool:
-    # C-5: records the handoff, does not end the conversation. The status flip
-    # that used to live here is gone from every agent-side path - see
-    # app/agents/escalation.py for why. Only limit escalations still terminate.
-    # False means one was already open on this conversation (the insert was a
-    # no-op), so the caller must not hand off a second time.
-    created = await conn.fetchval(
-        "insert into escalations (tenant_id, conversation_id, reason, summary, intent) "
-        "values ($1, $2, $3, $4, $5) "
-        "on conflict (tenant_id, conversation_id) where status = 'open' do nothing "
-        "returning id",
-        tenant_id,
-        conversation_id,
-        reason,
-        summary or None,
-        as_intent(intent),
-    )
-    return created is not None
 
 
 async def _set_customer_contact_impl(
@@ -934,12 +907,18 @@ async def run(state: AgentState) -> dict[str, Any]:
                         )
                     elif call.name == "create_escalation":
                         ce_args = _CreateEscalationArgs.model_validate(call.args)
-                        created = await _create_escalation_impl(
-                            conn,
-                            ctx.tenant_id,
-                            UUID(state["conversation_id"]),
-                            ce_args.reason,
-                            ce_args.summary,
+                        # C-5: records the handoff, does not end the conversation.
+                        # The shared writer dedupes against any still-open
+                        # escalation; False means the caller must not hand off a
+                        # second time. The status flip that used to live here is
+                        # gone from every agent-side path - see
+                        # app/agents/escalation.py for why.
+                        created = await record_escalation(
+                            conn=conn,
+                            tenant_id=ctx.tenant_id,
+                            conversation_id=UUID(state["conversation_id"]),
+                            reason=ce_args.reason,
+                            summary=ce_args.summary,
                             intent=ce_args.intent,
                         )
                         if created:

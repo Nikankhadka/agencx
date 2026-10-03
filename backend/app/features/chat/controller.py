@@ -26,6 +26,7 @@ from uuid import UUID
 from langgraph.errors import GraphRecursionError
 
 from app.agents import escalation_summary
+from app.agents.escalation import HUMAN_REQUESTED_REASON, handoff_message, record_escalation
 from app.agents.graph import get_graph
 from app.agents.spotlight import scan_input
 from app.agents.state import AgentState, GraphContext
@@ -36,7 +37,7 @@ from app.llm.provider import LLMProvider
 from app.observability.cost import TokenUsage, collect_usage
 from app.observability.tracing import get_tracer
 from app.retrieval.rerank import Reranker
-from app.shared import config
+from app.shared import config, db
 from app.shared.limits import (
     BUDGET_ESCALATION_REASON,
     BUDGET_UNAVAILABLE_MESSAGE,
@@ -142,6 +143,48 @@ async def stream_human_handled(*, conversation_id: UUID) -> AsyncIterator[dict[s
     normally.
     """
     yield {"type": "conversation", "conversation_id": str(conversation_id)}
+    yield {"type": "handoff"}
+    yield {"type": "done"}
+
+
+async def stream_handoff_response(
+    *,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    name_known: bool,
+    email_known: bool,
+) -> AsyncIterator[dict[str, object]]:
+    """RF-11: the customer tapped "Ask for a person". Deterministic - no graph
+    and no model, so the visible handoff does not depend on the model choosing
+    the escalation tool.
+
+    The row is written first and the reply is streamed after, so the one
+    contact ask never gates the handoff (the order escalation.py's node uses).
+    When an escalation is already open, the shared writer's dedupe makes the
+    insert a no-op and only the ``handoff`` event goes out - no second reply
+    and no second ask, mirroring the assistant tool's already-open branch.
+    Contact is read by the caller and passed in; only whether it is complete
+    matters, never its value, so no detail can ride this stream."""
+    yield {"type": "conversation", "conversation_id": str(conversation_id)}
+    # No escalation_summary is scheduled here on purpose: this handoff is
+    # deterministic and must not depend on a model call. The row is listed
+    # (reason human_requested, summary NULL); the owner queue-preview's empty
+    # state is RF-14's one-row-per-conversation redesign.
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        created = await record_escalation(
+            conn=conn,
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            reason=HUMAN_REQUESTED_REASON,
+        )
+    if not created:
+        yield {"type": "handoff"}
+        yield {"type": "done"}
+        return
+    yield {
+        "type": "refusal",
+        "text": handoff_message(name_known=name_known, email_known=email_known),
+    }
     yield {"type": "handoff"}
     yield {"type": "done"}
 

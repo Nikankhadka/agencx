@@ -82,6 +82,46 @@ def normalize_email(value: str | None) -> str | None:
 
 _DEFAULT_REASON = "unspecified"
 
+# RF-11: the reason recorded when the customer asks for a person from the
+# visible control. Named here, not only in the endpoint, because the
+# deterministic endpoint and the assistant tool must describe the same handoff.
+HUMAN_REQUESTED_REASON = "human_requested"
+
+
+async def record_escalation(
+    *,
+    conn: db.AppConnection,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    reason: str,
+    intent: str | None = None,
+    summary: str | None = None,
+) -> bool:
+    """The one escalation-row writer, shared by every handoff path.
+
+    The assistant's ``create_escalation`` tool, this module's escalation node,
+    and RF-11's customer-initiated endpoint all insert through here, so the
+    dedupe semantics cannot drift between them. 0011_escalations_dedupe.sql's
+    partial unique index makes the insert a no-op whenever a still-open
+    escalation already exists on this conversation - the "already open" case
+    that keeps the owner's queue at one item per conversation while the chat
+    continues and may hand off again. Returns False in that case, and the
+    caller must not hand off a second time. ``intent`` is coerced through
+    ``as_intent`` (unknown/None -> NULL), never trusted.
+    """
+    created = await conn.fetchval(
+        "insert into escalations (tenant_id, conversation_id, reason, summary, intent) "
+        "values ($1, $2, $3, $4, $5) "
+        "on conflict (tenant_id, conversation_id) where status = 'open' do nothing "
+        "returning id",
+        tenant_id,
+        conversation_id,
+        reason,
+        summary or None,
+        as_intent(intent),
+    )
+    return created is not None
+
 
 async def run(state: AgentState) -> dict[str, Any]:
     runtime = get_runtime(GraphContext)
@@ -89,24 +129,18 @@ async def run(state: AgentState) -> dict[str, Any]:
     writer = get_stream_writer()
 
     reason = state.get("escalation_reason") or _DEFAULT_REASON
-    intent = as_intent(state.get("intent"))
     conversation_id = UUID(state["conversation_id"])
 
     async with db.tenant_context(ctx.tenant_id, "customer") as conn:
-        # 0011_escalations_dedupe.sql's partial unique index makes this a
-        # no-op if a concurrent turn on the same conversation already
-        # escalated it, so only the first of two racing turns records a row.
-        # It also means a second handoff on a still-open escalation adds
-        # nothing to the owner's queue - which is what C-5 wants, since the
-        # conversation now continues and may well hand off again.
-        await conn.execute(
-            "insert into escalations (tenant_id, conversation_id, reason, intent) "
-            "values ($1, $2, $3, $4) "
-            "on conflict (tenant_id, conversation_id) where status = 'open' do nothing",
-            ctx.tenant_id,
-            conversation_id,
-            reason,
-            intent,
+        # A concurrent turn on the same conversation may already have recorded
+        # this handoff; the shared writer dedupes it against the partial unique
+        # index and the owner sees one open item, not one per attempt.
+        await record_escalation(
+            conn=conn,
+            tenant_id=ctx.tenant_id,
+            conversation_id=conversation_id,
+            reason=reason,
+            intent=state.get("intent"),
         )
     # A producing node upstream (price_gate on its second violation) may have
     # already streamed and set a handoff message - don't stream a second one.
