@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { useMediaQuery } from "@/lib/useMediaQuery";
+import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { useRestoreFocusTarget } from "@/lib/useRestoreFocusTarget";
-
-/** `lg` in Tailwind v4's default scale. Kept as a local constant, not a
- *  Tailwind `lg:` class, because the presentation is a JS/ARIA switch too. */
-const DESKTOP_QUERY = "(min-width: 1024px)";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -61,8 +57,9 @@ export function CustomerChatPanel({
       // scroll the page to bring the panel's first control into view.
       (first ?? panel)?.focus({ preventScroll: true });
     } else {
-      // Modal sheet: remember the page scroll and pin the background so the
-      // document cannot scroll behind the scrim; Escape/scrim close restores it.
+      // Modal sheet: remember the page's scroll position so closing it can
+      // restore the customer's place. There is no scroll lock; the scrim sits
+      // over the page.
       scrollBeforeOpen.current = window.scrollY;
       (first ?? panel)?.focus();
     }
@@ -142,7 +139,7 @@ export function CustomerChatPanel({
           "bg-surface",
           "flex flex-col p-4",
           desktop
-            ? "pointer-events-auto absolute inset-y-0 right-0 z-50 w-(--width-panel) max-w-full shadow-drawer transition-transform duration-(--duration-base) ease-out lg:border-l lg:border-hairline"
+            ? "pointer-events-auto absolute inset-y-0 right-0 z-50 w-(--width-panel) max-w-full transition-transform duration-(--duration-base) ease-out lg:border-l lg:border-hairline"
             : // Full viewport minus safe areas: the sheet fills the screen
               // (not the old 85% cap), so the composer is always reachable.
               "absolute inset-x-0 bottom-0 h-dvh rounded-t-3xl pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet transition-transform duration-(--duration-push) ease-push",

@@ -14,7 +14,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import type { StorefrontData } from "@/lib/tenant";
-import { useMediaQuery } from "@/lib/useMediaQuery";
+import { useMediaQuery, DESKTOP_QUERY } from "@/lib/useMediaQuery";
 import { CustomerChat } from "./CustomerChat";
 import { CustomerChatPanel } from "./CustomerChatPanel";
 import { Offerings, priceLabel } from "./Offerings";
@@ -119,9 +119,6 @@ function AssistantInvite({ name, onChat }: { name: string; onChat: () => void })
 function scrollTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
-
-/** `lg`, kept in sync with `CustomerChatPanel`'s presentation query. */
-const DESKTOP_QUERY = "(min-width: 1024px)";
 
 export function Storefront({
   slug,

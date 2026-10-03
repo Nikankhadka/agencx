@@ -92,11 +92,10 @@ test.describe("the public storefront", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Bytefix");
 
     await page.getByRole("button", { name: "Chat with Bytefix" }).click();
-    // RF-8: at this project's desktop viewport the chat is the docked panel
-    // (`complementary`), not the mobile modal sheet (`dialog`).
-    const chat = page
-      .getByRole("complementary", { name: "Chat with Bytefix Repairs" })
-      .or(page.getByRole("dialog", { name: "Chat with Bytefix Repairs" }));
+    // RF-8: the default project is desktop, so the chat is the docked
+    // `complementary` panel, not the mobile modal sheet. Pinned directly so a
+    // regression back to the modal sheet cannot pass.
+    const chat = page.getByRole("complementary", { name: "Chat with Bytefix Repairs" });
     await expect(chat).toBeVisible();
     await expect(chat).toContainText("Bytefix");
   });
@@ -158,10 +157,9 @@ test.describe("the public storefront", () => {
       await page.goto(`/${tenant.slug}`);
       await page.getByRole("button", { name: `Chat with ${tenant.name}` }).click();
       // RF-8: the default project is desktop, so the chat opens as the docked
-      // panel; the mobile modal sheet is covered by rf-8's spec.
-      const sheet = page
-        .getByRole("complementary", { name: `Chat with ${tenant.name}` })
-        .or(page.getByRole("dialog", { name: `Chat with ${tenant.name}` }));
+      // `complementary` panel; the mobile modal sheet is covered by rf-8's spec.
+      // Pinned directly so a regression back to the modal sheet cannot pass.
+      const sheet = page.getByRole("complementary", { name: `Chat with ${tenant.name}` });
       await expect(sheet).toBeVisible();
 
       const identity = `Hi, I'm ${tenant.name}'s assistant. How can I help today?`;

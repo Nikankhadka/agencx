@@ -110,6 +110,73 @@ test.describe("RF-8 desktop chat panel (1024px)", () => {
     // Focus returned to the control that opened the chat.
     expect(await opener.evaluate((el) => el === document.activeElement)).toBe(true);
   });
+
+  test("is not a focus trap: Tab walks out to a page control", async ({ page }) => {
+    await page.goto(`/${SLUG}`);
+    await openChat(page);
+
+    const panel = page.getByRole("complementary", { name: CHAT_BUTTON });
+    await expect(panel).toBeVisible();
+
+    // Start on the panel's first control. The footer links precede the panel
+    // in the DOM, so a backward Tab is the shortest walk out of it.
+    await page.getByRole("button", { name: "Close chat" }).focus();
+    expect(await panel.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+
+    await page.keyboard.press("Shift+Tab");
+    // Non-modal: focus leaves the panel and lands on the page behind it
+    // (the footer's Terms link), rather than being trapped inside.
+    expect(await panel.evaluate((el) => el.contains(document.activeElement))).toBe(false);
+    await expect(page.getByRole("link", { name: "Terms" })).toBeFocused();
+  });
+});
+
+/**
+ * The core requirement: exactly one chat host, and crossing `lg` only swaps the
+ * presentation, never remounts the thread. Deliberately not inside a
+ * `test.use({ viewport })` block so the viewport can move within the test.
+ */
+test.describe("RF-8 chat survives crossing the lg breakpoint", () => {
+  test("one host, and the thread survives 1280 -> 900 -> 1280", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/${SLUG}`);
+
+    await page.getByRole("button", { name: CHAT_BUTTON }).click();
+    const host = page.locator("[data-chat-host]");
+    await expect(host).toHaveCount(1);
+    await expect(page.getByRole("complementary", { name: CHAT_BUTTON })).toBeVisible();
+
+    // Drive the thread: a starter question (seeded for bytefix) sends on click;
+    // the answer is scripted so the test does not depend on a live provider.
+    await page.route("**/api/chat", (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body:
+          `data: ${JSON.stringify({
+            type: "conversation",
+            conversation_id: "11111111-1111-4111-8111-111111111111",
+          })}\n\n` +
+          `data: ${JSON.stringify({ type: "token", text: "A screen repair is $129." })}\n\n` +
+          `data: ${JSON.stringify({ type: "done" })}\n\n`,
+      }),
+    );
+    await page.getByTestId("starter-0").click();
+    await expect(host.getByText("A screen repair is $129.")).toBeVisible();
+
+    // Down across `lg` to the mobile sheet presentation, then back up. The
+    // children are unkeyed and rendered once, so a remount here would empty the
+    // thread while the host count stayed 1 - asserting the content is the proof.
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(page.getByRole("dialog", { name: CHAT_BUTTON })).toBeVisible();
+    await expect(page.locator("[data-chat-host]")).toHaveCount(1);
+    await expect(page.locator("[data-chat-host]").getByText("A screen repair is $129.")).toBeVisible();
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByRole("complementary", { name: CHAT_BUTTON })).toBeVisible();
+    await expect(page.locator("[data-chat-host]")).toHaveCount(1);
+    await expect(page.locator("[data-chat-host]").getByText("A screen repair is $129.")).toBeVisible();
+  });
 });
 
 test.describe("RF-8 mobile chat sheet (360px)", () => {

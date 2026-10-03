@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+/**
+ * The desktop breakpoint (`lg` in Tailwind v4's default scale) the storefront
+ * switches the chat presentation at. Owned here so the panel's presentation
+ * (`CustomerChatPanel`) and the page's inset (`Storefront`) cannot drift.
+ */
+export const DESKTOP_QUERY = "(min-width: 1024px)";
+
 /** The slice of `MediaQueryList` this module uses - enough to mock. */
 export interface MediaQueryMatcher {
   matches: boolean;

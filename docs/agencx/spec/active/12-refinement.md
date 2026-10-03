@@ -271,10 +271,11 @@ attention count when Needs you is non-empty (RF-14).
 
 ### Tickets
 
-Every ticket below keeps `Status: Active - todo`; the delivered tickets are
-archived. "Current" restates the read-only audit of 2026-10-02 and "Proposed"
-is the agreed behavior above. The hard rules in `design/conventions.md`
-sections 8 and 9 bind every ticket.
+Every ticket below is on the active list; each keeps its own `Status` line
+(`Active - todo`, or `Active - in progress` once work starts - RF-8 is the
+latter), and the delivered tickets are archived. "Current" restates the
+read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
+hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, and RF-18.
 Their full records, including verification, live in

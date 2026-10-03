@@ -9,7 +9,10 @@ import { CustomerChatPanel } from "./CustomerChatPanel";
  * here. Live behavior (scroll, page interactivity, focus) is covered by
  * `e2e/rf-8-desktop-chat-panel.spec.ts`.
  */
-vi.mock("@/lib/useMediaQuery", () => ({ useMediaQuery: vi.fn(() => false) }));
+vi.mock("@/lib/useMediaQuery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/useMediaQuery")>()),
+  useMediaQuery: vi.fn(() => false),
+}));
 import { useMediaQuery } from "@/lib/useMediaQuery";
 
 function html(open: boolean): string {
