@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-15 through
-RF-17); RF-1 through RF-14, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-16 through
+RF-17); RF-1 through RF-15, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -116,8 +116,9 @@ sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
 capture), RF-11 (visible human-help action and requested handoff), RF-12
 (same-tab refresh restoration of content, cards, and state), RF-13
 (failed-send recovery and draft preservation), RF-14 (complete-dataset queue
-filtering, searching, pagination, and attention counts), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-15 through
+filtering, searching, pagination, and attention counts), RF-15 (desktop
+split-pane Chats), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-16 through
 RF-17**.
 
 ### Archive process for delivered RF tickets
@@ -283,7 +284,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -299,42 +300,9 @@ in
 [12-refinement-rf-12-refresh-restore.md](../../../archive/phase1-complete/12-refinement-rf-12-refresh-restore.md),
 [12-refinement-rf-13-failed-send-recovery.md](../../../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md),
 [12-refinement-rf-14-complete-queue.md](../../../archive/phase1-complete/12-refinement-rf-14-complete-queue.md),
+[12-refinement-rf-15-chats-split-pane.md](../../../archive/phase1-complete/12-refinement-rf-15-chats-split-pane.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-15: Desktop split-pane Chats, mobile navigation preserved
-
-- **Status:** Active - in progress.
-- **Visible outcome:** At `lg+` Chats is a split pane (list left, thread right)
-  with no navigation between them; mobile keeps list-then-thread with the
-  bottom bar preserved. `/chats/[id]` remains a deep link that opens the thread
-  in the split pane.
-- **Current vs proposed:** Current: list and thread are separate routes reached
-  by navigation; no split pane exists. Proposed: add the `lg+` split pane while
-  keeping both routes; `/chats/[id]` selects the thread pane.
-- **Design reference:** `agencx-prototype-v6.html` `renderScreen('chats')` plus
-  `renderThreadScreen` (list-then-screen in v6; the split pane is the `lg+`
-  composition of the same two); `design/frontend.md` section 7 tenant console
-  shell. Shipped: `chats/page.tsx` and `chats/[id]/page.tsx`.
-- **Dependencies:** RF-14 (queue filtering precedes split-pane work).
-- **API/DB changes:** None.
-- **Acceptance scenarios:** At 1024px, selecting a row loads the thread in the
-  right pane and keeps the list; `/chats/[id]` deep-links to the same state; at
-  360px the list navigates to the full thread with the bar visible; browser
-  back returns to the list state.
-- **Regression checks:** The existing Chats E2E, focus order, and the mobile bar
-  behavior stay green.
-- **OPEN:** none.
-- **Decisions:** D1 - a route-persistent `chats/layout.tsx` owns the queue list
-  (the smallest structure that renders at both `/chats` and `/chats/[id]`);
-  parallel routes rejected. D2 - the desktop boundary is `lg` (min-width
-  1024px), matching RF-8 and the storefront; visibility is route plus
-  breakpoint CSS keyed on `usePathname()`, never a JS media query. D3 -
-  `--width-queue: 360px` in `theme.css`, used only through Tailwind's
-  `lg:w-(--width-queue)` custom-property shorthand (not a `@theme` mapping, so
-  no `make dev-reset`); Exceptions entry added to `frontend.md` 4.6. D4 - the
-  mobile list-then-thread is CSS visibility keyed on the route, and the console
-  `TabBar` is untouched.
 
 #### RF-16: Explicit issue resolution in the conversation workspace
 

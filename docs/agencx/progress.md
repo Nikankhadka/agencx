@@ -219,7 +219,17 @@ live in the ticket files, not here.
   fourth tab; envelope over `X-Total-Count`; counts respect `q` but not the
   filter. Record in the archived
   [12-refinement-rf-14-complete-queue.md](../archive/phase1-complete/12-refinement-rf-14-complete-queue.md).
-- [ ] RF-15 through RF-17 product refinement: `Active - todo`, next is RF-15.
+- [x] RF-15 desktop split-pane Chats, mobile navigation preserved: merged in
+  `24e4dc5` (PR #76). At `lg+` the queue list and the conversation
+  thread are one split view with the list kept mounted by a route-persistent
+  `chats/layout.tsx`; below `lg` the surface stays list-then-thread with the
+  bottom bar, and `/chats/[id]` deep-links into the split. `chats/page.tsx`
+  is the desktop placeholder; `--width-queue: 360px` is a new token. No API
+  or DB change. Decisions: route-persistent layout; `lg`/1024 boundary in
+  CSS; 360px queue token; mobile visibility route-keyed. Record in the
+  archived
+  [12-refinement-rf-15-chats-split-pane.md](../archive/phase1-complete/12-refinement-rf-15-chats-split-pane.md).
+- [ ] RF-16 through RF-17 product refinement: `Active - todo`, next is RF-16.
   The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -254,7 +264,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-15 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-14 and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-16 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-15 and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
