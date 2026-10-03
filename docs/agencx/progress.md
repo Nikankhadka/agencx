@@ -245,15 +245,19 @@ live in the ticket files, not here.
   the escalation id from the derived `pending_escalation_id`; resolving while
   taken over does not clear Needs you, handback does. Record in the archived
   [12-refinement-rf-16-explicit-resolution.md](../archive/phase1-complete/12-refinement-rf-16-explicit-resolution.md).
-- [ ] RF-17 product refinement: `Active - todo`.
-  The Part 2 design task is complete and implementation-ready:
-  documentation and prototype authority agree, every workflow has an
-  implementation ticket, and each ticket names its visible outcome, current
-  versus proposed behavior, design reference, dependencies, API/DB changes,
-  acceptance scenarios, and regression checks. Design intent in
-  [12-refinement.md](spec/active/12-refinement.md) Part 2; the `OPEN:` lines
-  there record the product questions that still need a founder ruling (public
-  address editing and contextual shortcut fields).
+- [x] RF-17 four-business walkthroughs with visual and behavioral evidence:
+  merged in `236000e` (PR #78). The four seeded businesses (cafe `sababa`,
+  retail-repair `bytefix`, dental `lumident`, general clinic `wellspring`) are
+  walked on identical workflow code with configuration-only differences by a new
+  deterministic five-test Playwright spec plus a cross-tenant isolation check;
+  24 screenshots map to the named tests in the evidence ledger
+  [rf-17-2026-10-03](evidence/rf-17-2026-10-03/README.md). The fourth business is
+  a config-only seed, with no API/DB/schema change and no vertical branching.
+  Decisions: the general clinic was added as seed data so the domain-agnostic
+  invariant holds; evidence runs on the local Docker Compose stack and never
+  touches the production-sharing preview; the spec is a permanent regression
+  spec with `RF17_CAPTURE` opt-in, viewport-only. Record in the archived
+  [12-refinement-rf-17-four-business-walkthrough.md](../archive/phase1-complete/12-refinement-rf-17-four-business-walkthrough.md).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
@@ -279,7 +283,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-16 and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

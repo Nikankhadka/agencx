@@ -1,11 +1,10 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-17);
-RF-1 through RF-16, and RF-18 are delivered and
-archived, and U-1 through U-4 and the onboarding-normalization slice were
-delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
-T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
-real-deploy walkthrough.
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder);
+RF-1 through RF-18 are delivered and archived, and U-1 through U-4 and the
+onboarding-normalization slice were delivered and walked on the preview on
+2026-10-01. Production hardening T-022 to T-026 and T-028 to T-033 are built;
+T-027 (enforce the CSP) waits on a real-deploy walkthrough.
 **Phase 1 area:** Refinement.
 
 This is the single refinement file. It merges the R hardening remainder
@@ -99,7 +98,7 @@ owner, urgency trigger, and validation command where applicable.
 
 ## Part 2 - Product refinement (RF-1 through RF-17)
 
-**Status:** Active - todo. Design intent; production changes follow as
+**Status:** Done - RF-1 through RF-18 delivered and archived. Design intent; production changes follow as
 small, connected tickets. RF-1 precedes visual ports. RF-7 follows the
 business-maintenance tickets; RF-8 and RF-9 follow it. RF-11 follows name
 capture, and continuity covers those resulting states. Queue filtering
@@ -117,8 +116,9 @@ capture), RF-11 (visible human-help action and requested handoff), RF-12
 (same-tab refresh restoration of content, cards, and state), RF-13
 (failed-send recovery and draft preservation), RF-14 (complete-dataset queue
 filtering, searching, pagination, and attention counts), RF-15 (desktop
-split-pane Chats), RF-16 (explicit issue resolution), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-17**.
+split-pane Chats), RF-16 (explicit issue resolution), RF-17 (four-business
+walkthroughs), and RF-18 (owner read state); every Part 2 product-refinement
+ticket is delivered.
 
 ### Archive process for delivered RF tickets
 
@@ -283,7 +283,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, RF-16, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, RF-16, RF-17, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -301,34 +301,9 @@ in
 [12-refinement-rf-14-complete-queue.md](../../../archive/phase1-complete/12-refinement-rf-14-complete-queue.md),
 [12-refinement-rf-15-chats-split-pane.md](../../../archive/phase1-complete/12-refinement-rf-15-chats-split-pane.md),
 [12-refinement-rf-16-explicit-resolution.md](../../../archive/phase1-complete/12-refinement-rf-16-explicit-resolution.md),
+[12-refinement-rf-17-four-business-walkthrough.md](../../../archive/phase1-complete/12-refinement-rf-17-four-business-walkthrough.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-17: Four-business walkthroughs with visual and behavioral evidence
-
-- **Status:** Active - todo.
-- **Visible outcome:** Four businesses (cafe, retail/repair, dental clinic, and
-  general clinic) are walked on identical workflow code with
-  configuration-driven content, with screenshots per state and E2E checks, plus
-  a ledger of what was verified where.
-- **Current vs proposed:** Current: four-business visual and behavioral
-  walkthroughs and the evidence ledger are specified but not yet assembled for
-  the refined experience. Proposed: run every ticket's existing checks within
-  each ticket, then verify the assembled experience once across all four
-  businesses. RF-17 verifies the assembled experience rather than postponing
-  testing.
-- **Design reference:** Existing walkthrough evidence under
-  `docs/agencx/evidence/` and the four seeded businesses; no prototype change.
-  Shipped: `frontend/e2e/`.
-- **Dependencies:** RF-1 through RF-16.
-- **API/DB changes:** None.
-- **Acceptance scenarios:** Each business completes the refined owner queue,
-  business page, storefront, and customer chat flows with config-only
-  differences; every screenshot maps to a named E2E check; the ledger names the
-  environment and date; a cross-tenant check proves isolation.
-- **Regression checks:** `make test-e2e`, `make eval-skip-llm`, and the
-  deterministic pricing and domain-agnostic invariant tests.
-- **OPEN:** none.
 
 ### Verification and boundaries
 

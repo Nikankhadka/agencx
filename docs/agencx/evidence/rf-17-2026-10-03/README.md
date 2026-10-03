@@ -12,8 +12,8 @@ with configuration-only differences.
 | Date | 2026-10-03 |
 | Base URL | `http://localhost:3000` (customer pages `/{slug}`, console `/chats` and `/business`); backend `http://localhost:8000` |
 | Branch | `feat/rf-17-four-business-walkthrough` |
-| Evidence commit | `4373b3e142c51344f99754eb6e22255dc5644bfe` (spec and screenshots) |
-| Base commit | `ee337c5` (RF-17 Slice 1, the fourth config-only tenant) |
+| Base commit | `53baef5` (development before RF-17) |
+| Merged as | `236000e434333a3710f9da9b19bfc135a52145ef` (squash) |
 | Browser | Chromium, desktop 1440x900 and mobile 390x844 (viewport-only captures) |
 
 Every screen here reads the seeded demo world: `sababa` (cafe), `bytefix`
