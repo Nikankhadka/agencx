@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-13 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, RF-12, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-14 through
+RF-17); RF-1 through RF-13, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -114,8 +114,9 @@ RF-6 (document-review workspace clarification), RF-7 (business page composition
 and contextual owner editing), RF-8 (desktop customer chat panels and mobile
 sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
 capture), RF-11 (visible human-help action and requested handoff), RF-12
-(same-tab refresh restoration of content, cards, and state), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-13 through
+(same-tab refresh restoration of content, cards, and state), RF-13
+(failed-send recovery and draft preservation), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-14 through
 RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
@@ -281,7 +282,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, RF-12, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, RF-13, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -295,31 +296,9 @@ in
 [12-refinement-rf-10-preferred-name.md](../../../archive/phase1-complete/12-refinement-rf-10-preferred-name.md),
 [12-refinement-rf-11-ask-for-a-person.md](../../../archive/phase1-complete/12-refinement-rf-11-ask-for-a-person.md),
 [12-refinement-rf-12-refresh-restore.md](../../../archive/phase1-complete/12-refinement-rf-12-refresh-restore.md),
+[12-refinement-rf-13-failed-send-recovery.md](../../../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-13: Failed-send recovery and draft preservation
-
-- **Status:** Active - in progress.
-- **Visible outcome:** A failed send recovers in place: the failed bubble offers
-  an explicit retry that replays the exact failed payload, and the draft
-  survives the failure. Nothing replays automatically.
-- **Current vs proposed:** Current: an error state and Retry exist in-session,
-  but Retry replays the previous bubble rather than the failed payload
-  (`CustomerChat.tsx` reads `messages[index - 1]?.text`), and the draft is
-  cleared before send and not restored. Proposed: keep the draft in a slot
-  cleared only on success, and retry the stored failed payload.
-- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx` send,
-  error, and retry paths; `design/frontend.md` S1 and S3 `Error / disconnect`
-  states (inline retry in the failed bubble).
-- **Dependencies:** RF-12 (draft persistence).
-- **API/DB changes:** None.
-- **Acceptance scenarios:** Force a network failure, confirm the draft stays in
-  the composer and the failed bubble carries Retry; Retry sends the exact
-  original text once; a success clears the draft; no automatic replay occurs.
-- **Regression checks:** The `redraft` price-gate path and the existing
-  error-state tests stay green.
-- **OPEN:** none.
 
 #### RF-14: Complete-dataset queue filtering, searching, pagination, and attention counts
 

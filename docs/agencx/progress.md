@@ -197,8 +197,17 @@ live in the ticket files, not here.
   locks the composer after a limit stop; a malformed persisted card degrades to
   a plain transcript. No schema change. Record in the archived
   [12-refinement-rf-12-refresh-restore.md](../archive/phase1-complete/12-refinement-rf-12-refresh-restore.md).
-- [ ] RF-13 through RF-17 product refinement: `Active - todo`, next is RF-13
-  (failed-send recovery and draft preservation); no other ticket implemented.
+- [x] RF-13 failed-send recovery and draft preservation: merged in `0652b60`
+  (PR #74). A failed send recovers in place: the failed message stores the exact
+  payload as a discriminated retry target (send or handoff) and an inline Retry
+  replays it once by a stable message id without appending a duplicate customer
+  bubble; the draft is held as the in-flight payload and in `sessionStorage`,
+  restored after a failure, and cleared only on success, so a newer draft
+  survives a retry. The in-stream `error` event is treated as a failed send and
+  a handoff failure carries a working inline retry; nothing auto-replays. No API
+  or DB change. Record in the archived
+  [12-refinement-rf-13-failed-send-recovery.md](../archive/phase1-complete/12-refinement-rf-13-failed-send-recovery.md).
+- [ ] RF-14 through RF-17 product refinement: `Active - todo`, next is RF-14.
   The Part 2 design task is complete and implementation-ready:
   documentation and prototype authority agree, every workflow has an
   implementation ticket, and each ticket names its visible outcome, current
@@ -233,7 +242,7 @@ live in the ticket files, not here.
 | Location | Status | Contents |
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
-| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-13 through RF-17 (Part 2 spec completed and implementation-ready; RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, RF-12, and RF-18 delivered and archived) |
+| [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder; RF-14 through RF-17 (Part 2 spec completed and implementation-ready; RF-1 through RF-13 and RF-18 delivered and archived) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items
