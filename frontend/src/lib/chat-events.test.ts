@@ -30,6 +30,13 @@ describe("parseChatStreamEvent", () => {
     const event = parseChatStreamEvent('{"type":"conversation","conversation_id":"abc-123"}');
     expect(event).toEqual({ type: "conversation", conversation_id: "abc-123" });
   });
+
+  it("parses a contact event, which carries the preferred name only", () => {
+    // RF-10: the customer surface may learn a name; it must never receive the
+    // owner-only email (ticket 19), so the event's shape is pinned to name.
+    const event = parseChatStreamEvent('{"type":"contact","name":"Sam"}');
+    expect(event).toEqual({ type: "contact", name: "Sam" });
+  });
 });
 
 /**

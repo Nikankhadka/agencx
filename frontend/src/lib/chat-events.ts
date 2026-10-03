@@ -29,6 +29,13 @@ export type ChatStreamEvent =
   | { type: "quote"; quote: QuotePayload }
   | { type: "price_summary"; summary: PriceSummaryPayload }
   | { type: "catalog"; catalog: CatalogPayload }
+  /**
+   * RF-10: the customer's preferred display name for this conversation, sent at
+   * turn start when one is stored and again whenever `set_customer_contact`
+   * stores or changes it. The name only - never an email, which is owner-only
+   * (ticket 19) and never rides the customer surface.
+   */
+  | { type: "contact"; name?: string }
   | { type: "progress"; stage: ProgressStage }
   | { type: "redraft" }
   | { type: "token"; text: string }

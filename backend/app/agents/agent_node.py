@@ -100,6 +100,28 @@ _TOOL_GUIDANCE = (
     "number or any other personal detail."
 )
 
+# RF-10/D39: the opening phase (before the first escalation or handoff) is where
+# the assistant asks for a preferred first name. The ask is a display name for
+# the conversation, not a contact detail, so it belongs here, before any
+# handoff, and it stops after _OPENING_NAME_ASK_CAP turns whether or not the
+# customer answered. The counter is persisted on the conversation, so a refresh
+# cannot hand the customer a third ask.
+_OPENING_NAME_ASK_CAP = 2
+
+_OPENING_NAME_GUIDANCE = (
+    "Early in the conversation, ask what you should call them - a first name or "
+    "nickname to use for this chat. It is a display name, not a contact detail: "
+    "accept whatever they give without checking it, and never ask for a surname, "
+    "phone number, email address, address, or any other contact detail. Ask for "
+    "it in your reply, then carry on helping them, and store the name with "
+    "set_customer_contact when they give it."
+)
+
+_OPENING_NAME_SUPPRESS = (
+    "You have already asked for a preferred name and they have not given one. Do "
+    "not ask again; just help with what they need."
+)
+
 # The customer bubble renders plain text with citation chips - it does not parse
 # markdown, so asterisks and hyphens arrive on screen as asterisks and hyphens.
 # frontend.md section 9 makes that a rule rather than a rendering accident: chat
@@ -613,15 +635,26 @@ async def run(state: AgentState) -> dict[str, Any]:
         # so this is normally a version check, not an assembly.
         package = await get_package(conn, ctx.tenant_id)
         contact = await conn.fetchrow(
-            "select customer_ref, customer_email from conversations "
-            "where id = $1 and tenant_id = $2",
+            "select c.customer_ref, c.customer_email, "
+            "exists(select 1 from escalations e where e.tenant_id = c.tenant_id "
+            "and e.conversation_id = c.id) as handed_off "
+            "from conversations c where c.id = $1 and c.tenant_id = $2",
             UUID(state["conversation_id"]),
             ctx.tenant_id,
         )
         customer_name = _clean_contact(contact["customer_ref"] if contact else None, limit=80)
         customer_email = _clean_contact(contact["customer_email"] if contact else None, limit=254)
+        # D39: the opening phase is the window before the first escalation or
+        # handoff. The chat API short-circuits human/escalated statuses before
+        # the graph runs, so the existence of an escalation row is the whole
+        # boundary here.
+        opening_phase = contact is not None and not bool(contact["handed_off"])
         name_known = bool(customer_name)
         email_known = bool(customer_email)
+        if name_known:
+            # RF-10: re-announce a stored name at turn start so the chip can
+            # render on a turn where nothing else changed. Name only, never email.
+            writer({"type": "contact", "name": customer_name})
         # W-5/W-9: state-borne for the same reason as offerings_text below - the
         # draft node re-enters on a redraft with no package of its own, and
         # re-reading the tenant there is the per-turn query this ticket removes.
@@ -648,6 +681,34 @@ async def run(state: AgentState) -> dict[str, Any]:
                 + " ".join(known)
                 + f" Use them naturally when they fit; never ask for {never_ask} again."
             )
+        # RF-10/D39: one deterministic ask per turn, at most _OPENING_NAME_ASK_CAP
+        # turns, persisted on the row. The decide-and-increment is a single
+        # conditional UPDATE rather than a read-then-write: the row is the shared
+        # resource, so two concurrent turns on the same conversation cannot both
+        # pass the cap check and each inject an ask. The UPDATE's own WHERE also
+        # re-checks "no stored name / no handoff", so a name or escalation that
+        # lands between the earlier read and this write still wins the race. A
+        # returned row means this turn owns the ask; no row means the cap (or a
+        # name/handoff) got there first, so the prompt goes quiet.
+        if not name_known and opening_phase:
+            new_ask_count = await conn.fetchval(
+                "update conversations c set opening_name_asks = opening_name_asks + 1 "
+                "where c.id = $1 and c.tenant_id = $2 "
+                "and c.opening_name_asks < $3 "
+                "and coalesce(trim(c.customer_ref), '') = '' "
+                "and not exists (select 1 from escalations e "
+                "where e.tenant_id = c.tenant_id and e.conversation_id = c.id) "
+                "returning c.opening_name_asks",
+                UUID(state["conversation_id"]),
+                ctx.tenant_id,
+                _OPENING_NAME_ASK_CAP,
+            )
+            if new_ask_count is not None:
+                system_prompt += "\n\n" + _OPENING_NAME_GUIDANCE
+            else:
+                # At the cap or beaten by a name/handoff: a one-line suppression
+                # so the prompt goes quiet instead of leaving the model to guess.
+                system_prompt += "\n\n" + _OPENING_NAME_SUPPRESS
         messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
         tail = state["messages"][-_HISTORY_MESSAGES:]
         for m in tail:
@@ -933,6 +994,9 @@ async def run(state: AgentState) -> dict[str, Any]:
                         if stored["name"]:
                             customer_name = stored["name"]
                             name_known = True
+                            # RF-10: a stored or corrected name updates the chip.
+                            # Name only - email is owner-only (ticket 19).
+                            writer({"type": "contact", "name": stored["name"]})
                         if stored["email"]:
                             customer_email = stored["email"]
                             email_known = True

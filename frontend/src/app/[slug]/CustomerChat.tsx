@@ -24,6 +24,48 @@ import { customerOpening } from "@/lib/greeting";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// RF-10: same-tab refresh keys. sessionStorage (not localStorage) is deliberate -
+// this is continuity for one tab, not a durable identity. The conversation id
+// lets a reload restore the transcript; the name keeps the chip coherent even
+// before the fetch resolves. Cards, composer draft, and banner state stay RF-12.
+const conversationKey = (slug: string) => `agencx:chat:conversation:${slug}`;
+const nameKey = (slug: string) => `agencx:chat:name:${slug}`;
+
+function readSession(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(key: string, value: string): void {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable (private mode, quota): refresh restoration is a
+    // nicety, never worth failing a turn or a render over.
+  }
+}
+
+/**
+ * Hydrate the chip name and conversation id from sessionStorage into React
+ * state, returning the stored id (or null). Kept a module-level function rather
+ * than inlined in the effect for the same reason `subscribeToMediaQuery` is:
+ * the effect then wires the external store instead of directly setting state.
+ */
+function hydrateFromSession(
+  slug: string,
+  setName: (name: string) => void,
+  setId: (id: string) => void,
+): string | null {
+  const storedName = readSession(nameKey(slug));
+  if (storedName) setName(storedName);
+  const storedId = readSession(conversationKey(slug));
+  if (storedId) setId(storedId);
+  return storedId;
+}
+
 interface Message {
   role: ChatRole;
   text: string;
@@ -87,6 +129,9 @@ export function CustomerChat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  // RF-10: the customer's preferred display name, shown in a small chip. Null
+  // until a `contact` event or a sessionStorage restore supplies one.
+  const [customerName, setCustomerName] = useState<string | null>(null);
   // C-5 split one flag in two. `escalated` means a tenant limit ended the
   // conversation - the only case that locks the composer. `handoffSeen` means
   // the assistant asked a human to look at something, which is a notification,
@@ -108,6 +153,36 @@ export function CustomerChat({
       composerRef.current = null;
     };
   }, [composerRef]);
+
+  // RF-10: same-tab refresh. Restore the stored name (so the chip is coherent
+  // before the fetch resolves) and, when a conversation id was stored, the text
+  // transcript via the existing public messages endpoint. Cards, draft, and
+  // banner state stay RF-12. A failed restore falls back to the opening state.
+  useEffect(() => {
+    const storedId = hydrateFromSession(slug, setCustomerName, setConversationId);
+    if (!storedId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ slug });
+        const res = await fetch(
+          `${API_URL}/api/chat/${storedId}/messages?${params.toString()}`,
+        );
+        if (!res.ok || cancelled) return;
+        const incoming = (await res.json()) as PublicMessage[];
+        if (cancelled || incoming.length === 0) return;
+        setMessages(
+          incoming.map<Message>((m) => ({ role: m.role as ChatRole, text: m.content })),
+        );
+        setShowStarters(false);
+      } catch {
+        // Transient or unexpected: keep the opening state rather than block.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   // T-031/C-5: once a topic has been handed to a human, that human may reply
   // (the escalations resolve flow inserts a human_agent message). No push
@@ -213,9 +288,19 @@ export function CustomerChat({
           switch (event.type) {
             case "conversation":
               setConversationId(event.conversation_id);
+              // RF-10: one conversation per tab; without this a refresh loses
+              // the thread entirely.
+              writeSession(conversationKey(slug), event.conversation_id);
               break;
             case "citations":
               updateLastAssistant(() => ({ citations: event.citations }));
+              break;
+            case "contact":
+              // RF-10: the preferred display name. Name only - never an email.
+              if (event.name) {
+                setCustomerName(event.name);
+                writeSession(nameKey(slug), event.name);
+              }
               break;
             case "quote":
               updateLastAssistant(() => ({ quote: event.quote }));
@@ -282,6 +367,17 @@ export function CustomerChat({
 
   return (
     <>
+      {customerName ? (
+        // RF-10: display-only, so a span rather than a Button/Chip (which are
+        // interactive). Prototype `.svc-lbl` recipe: text-chip type, chip radius,
+        // accent wash, teal-m text. Name only, never an email.
+        <span
+          data-testid="customer-name-chip"
+          className="mt-4 inline-flex w-fit items-center rounded-chip bg-accent-a07 px-3 py-1 text-chip font-medium text-info"
+        >
+          You&apos;re chatting as {customerName}
+        </span>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
         {messages.map((message, index) => (
           <ChatBubble key={index} role={message.role} senderLabel={`${displayName} staff`}>

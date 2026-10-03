@@ -1,0 +1,11 @@
+-- 0037_conversations_opening_name_asks.sql - RF-10 opening-phase ask counter.
+--
+-- The opening phase is the window before the first escalation or handoff. The
+-- assistant asks for a preferred first name at most twice during it, and the
+-- count persists on the conversation so a same-tab refresh cannot hand the
+-- customer a third ask (D39). It is not null with a default of 0 so every
+-- existing row reads as "not asked yet". This is a plain column add:
+-- conversations already has FORCE ROW LEVEL SECURITY plus its tenant_isolation
+-- and staff policies, and a new column is governed by those unchanged, so the
+-- tenant boundary does not move and no new RLS policy is needed.
+alter table conversations add column opening_name_asks integer not null default 0;

@@ -121,6 +121,19 @@ def test_contract_scopes_contact_capture_to_the_handoff() -> None:
     assert "ask once more for it so the business can follow up" in contract
 
 
+def test_contract_allows_the_preferred_name_before_any_handoff() -> None:
+    """RF-10/D39: a preferred first name or nickname is a display name for the
+    conversation, not a contact detail, so the assistant may ask for it during
+    the opening phase - before any handoff. This is the rule the opening-phase
+    ask instruction leans on, and it deliberately sits above the handoff-scoped
+    contact rules, which it does not reopen."""
+    contract = customer_contract("Bytefix Repairs")
+    assert (
+        "A preferred first name or nickname is a display name for this chat, not a\n"
+        "  contact detail, so you may ask for it before any handoff" in contract
+    )
+
+
 def test_contract_carries_the_copy_rule_amendment_verbatim() -> None:
     """Amendment 3: "assistant" names the surface, the other four words stay out
     of routine copy, and a direct question is still answered honestly."""
