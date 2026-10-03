@@ -98,6 +98,8 @@ test.describe("Chats - telling one row from another", () => {
 
     await page.getByTestId("chat-row").first().click();
     await page.waitForURL(`**/chats/${ANONYMOUS_ID}`);
-    await expect(page.locator("header")).toContainText("#4F9A2C");
+    // RF-15: the desktop split pane renders the list topbar and the thread
+    // topbar at once, so the header that carries the label is the thread's.
+    await expect(page.getByTestId("chats-thread-pane").locator("header")).toContainText("#4F9A2C");
   });
 });

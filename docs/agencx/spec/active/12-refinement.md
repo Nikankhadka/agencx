@@ -304,7 +304,7 @@ and
 
 #### RF-15: Desktop split-pane Chats, mobile navigation preserved
 
-- **Status:** Active - todo.
+- **Status:** Active - in progress.
 - **Visible outcome:** At `lg+` Chats is a split pane (list left, thread right)
   with no navigation between them; mobile keeps list-then-thread with the
   bottom bar preserved. `/chats/[id]` remains a deep link that opens the thread
@@ -325,6 +325,16 @@ and
 - **Regression checks:** The existing Chats E2E, focus order, and the mobile bar
   behavior stay green.
 - **OPEN:** none.
+- **Decisions:** D1 - a route-persistent `chats/layout.tsx` owns the queue list
+  (the smallest structure that renders at both `/chats` and `/chats/[id]`);
+  parallel routes rejected. D2 - the desktop boundary is `lg` (min-width
+  1024px), matching RF-8 and the storefront; visibility is route plus
+  breakpoint CSS keyed on `usePathname()`, never a JS media query. D3 -
+  `--width-queue: 360px` in `theme.css`, used only through Tailwind's
+  `lg:w-(--width-queue)` custom-property shorthand (not a `@theme` mapping, so
+  no `make dev-reset`); Exceptions entry added to `frontend.md` 4.6. D4 - the
+  mobile list-then-thread is CSS visibility keyed on the route, and the console
+  `TabBar` is untouched.
 
 #### RF-16: Explicit issue resolution in the conversation workspace
 
