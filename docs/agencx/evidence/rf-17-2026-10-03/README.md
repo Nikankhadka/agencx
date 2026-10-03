@@ -80,7 +80,7 @@ string passed to `test(...)`, which is what `make test-e2e` prints.
 | 03 | `03-wellspring-chat-start-desktop.png` | same test | Pass - own greeting and consultation/results starters |
 | 04 | `04-wellspring-chat-reply-desktop.png` | same test | Pass - own catalog card, `$85.00` |
 | 05 | `05-wellspring-queue-desktop.png` | same test | Pass - `patient.c` / `patient.d`, no other tenant's refs |
-| 06 | `06-wellspring-business-hub-desktop.png` | same test | Pass - console shows "Wellspring Medical Centre" |
+| 06 | `06-wellspring-business-hub-desktop.png` | same test | Pass - the DOM assertion confirms the full name "Wellspring Medical Centre"; the 1440px sidebar truncates it visually ("Wellspring ...") |
 
 ## Cross-tenant isolation
 
@@ -103,7 +103,7 @@ tests; this is the surface proof of what a customer actually receives.
 
 | Command | Result |
 |---|---|
-| `make test-e2e` | 239 passed, 0 failed, 0 flaky (5.3m); the 5 RF-17 tests pass inside it |
+| `make test-e2e` | 239 passed, 0 failed, 0 flaky (5.5m); `playwright test --list` also reports "Total: 239 tests in 46 files", and the 5 RF-17 tests pass inside it |
 | `make seed-tenant1 && make eval-skip-llm` | GATE PASSED - money guardrail 21/21, leakage 12/12 each direction, retrieval recall@5 1.000 |
 | `npm run gen:types -- --check` (host) | `api-types.ts is up to date` |
 | `make lint` | frontend ESLint + `check:tokens` OK; backend `ruff` + `lint-imports` 3 contracts kept |
@@ -111,6 +111,11 @@ tests; this is the surface proof of what a customer actually receives.
 | `make format-check` | 227 files already formatted |
 | `make build` | production build succeeds |
 | `git status --short` | only the intended spec, ledger, and screenshots |
+
+The RF-16 archive records 226; the 13-test delta is 5 new RF-17 tests plus 8
+from the 2 added demo users (sababa, wellspring) expanding the `DEMO_USERS`
+loops (`auth-login.spec.ts` 3 tests x 2 users = +6;
+`auth-credentials-validation.spec.ts` 1 test x 2 users = +2).
 
 ## Decisions
 
@@ -130,3 +135,7 @@ tests; this is the surface proof of what a customer actually receives.
   clips and scrolls horizontally because the list pane is narrow. This is the
   existing `overflow-x-auto` behavior at that width, not introduced here, and
   it does not block the walkthrough.
+- The generated `.agents/map.md` still describes `seed_demo.py` as "bytefix +
+  lumident tenants" (line 143). It is a GENERATED file with no documented
+  regeneration target in this repo, so it was left untouched; regenerating it
+  is a separate generated-file follow-up.

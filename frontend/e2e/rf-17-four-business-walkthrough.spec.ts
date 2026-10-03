@@ -44,6 +44,24 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: path.join(SHOTS_DIR, name) });
 }
 
+/**
+ * Hide Next.js's dev-tools indicator (a `<nextjs-portal>` custom element pinned
+ * to the bottom-left of every local dev page). It is not part of the app and
+ * overlaps a price row on the mobile storefront capture, so captures hide it.
+ * Registered only under RF17_CAPTURE, and before the first navigation, so with
+ * capture off the page is never touched and no assertion sees this.
+ */
+async function hideDevIndicator(page: Page): Promise<void> {
+  if (!CAPTURE) return;
+  await page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.textContent = "nextjs-portal{display:none!important}";
+      document.head.appendChild(style);
+    });
+  });
+}
+
 const sse = (...events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
@@ -189,8 +207,6 @@ function cardTurn(business: BusinessCase): string {
   );
 }
 
-test.describe.configure({ mode: "serial" });
-
 test.describe("RF-17 four-business walkthrough", () => {
   for (const business of BUSINESSES) {
     const chatButton = `Chat with ${business.name}`;
@@ -200,6 +216,7 @@ test.describe("RF-17 four-business walkthrough", () => {
 
     test(title, async ({ page, request }) => {
       test.setTimeout(180_000);
+      await hideDevIndicator(page);
       await page.setViewportSize(DESKTOP);
 
       // --- 1. Public storefront, anonymous -------------------------------
@@ -207,7 +224,7 @@ test.describe("RF-17 four-business walkthrough", () => {
       await expect(async () => {
         await expect(page.getByRole("heading", { level: 1 })).toContainText(business.name);
       }).toPass({ timeout: 15_000 });
-      await expect(page.locator("main")).toContainText(business.uniqueOffering);
+      await expect(page.getByRole("main")).toContainText(business.uniqueOffering);
       await page.waitForTimeout(300);
       await shot(page, `01-${business.slug}-storefront-desktop.png`);
 
@@ -301,7 +318,7 @@ test.describe("RF-17 four-business walkthrough", () => {
       await page.goto(`/${business.slug}`);
       await expect(async () => {
         await expect(page.getByRole("heading", { level: 1 })).toContainText(business.name);
-        const main = page.locator("main");
+        const main = page.getByRole("main");
         for (const other of BUSINESSES) {
           if (other.slug === business.slug) {
             await expect(main).toContainText(other.uniqueOffering);
