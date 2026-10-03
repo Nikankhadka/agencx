@@ -110,7 +110,7 @@ make demo
 
 Starts the whole stack as compose services (database + GoTrue auth + auth-proxy
 + backend + frontend), fixes env files, runs migrations and a seeded demo world
-(two tenants, three logins). `make stop` brings it down; `make dev` restarts it
+(four tenants, five logins). `make stop` brings it down; `make dev` restarts it
 without reseeding.
 
 ### Manual (step by step)
@@ -119,7 +119,7 @@ without reseeding.
 make install    # deps into their container volumes
 make services   # Postgres + pgvector, GoTrue, auth-proxy
 make migrate    # apply schema
-make seed       # full demo world (two tenants + auth users)
+make seed       # full demo world (four tenants + auth users)
 make dev        # backend :8000 + frontend :3000 as containers
 ```
 

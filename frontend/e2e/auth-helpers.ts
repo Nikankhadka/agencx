@@ -30,6 +30,16 @@ export const DEMO_USERS: DemoUser[] = [
     surface: "tenant-admin",
   },
   {
+    email: "owner@sababa.dev",
+    password: "wren-demo",
+    surface: "tenant-admin",
+  },
+  {
+    email: "owner@wellspring.dev",
+    password: "wren-demo",
+    surface: "tenant-admin",
+  },
+  {
     email: "founder@wren.dev",
     password: "wren-demo",
     surface: "platform",
