@@ -78,7 +78,9 @@ _PROFILE_LABELS: tuple[tuple[str, str], ...] = (
 # lives in ``app/agents/contract.py``, which this module may not import (the
 # import contracts in backend/pyproject.toml forbid app.services -> app.agents),
 # so the size is pinned here and held to it by a test in test_agent_contract.py.
-_CONTRACT_OVERHEAD_CHARS = 4400
+# Bumped 4400 -> 4500 by RF-10: the preferred-name sentence pushed the longest
+# render from 4279 to 4440.
+_CONTRACT_OVERHEAD_CHARS = 4500
 
 
 @dataclass(frozen=True)

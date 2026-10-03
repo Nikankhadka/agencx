@@ -78,8 +78,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # category columns as a compatibility projection; 0035 adds RF-18's
     # conversations.owner_read_at, the owner's read marker for the chat queue;
     # 0036 adds RF-4's offerings.pricing_wording, the display-only alternative
-    # to a fixed price.
-    assert len(on_disk) == 36, "expected migrations 0001-0036"
+    # to a fixed price; 0037 adds RF-10's conversations.opening_name_asks, the
+    # persisted opening-phase preferred-name ask counter.
+    assert len(on_disk) == 37, "expected migrations 0001-0037"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
@@ -352,6 +353,55 @@ async def test_escalation_intent_and_customer_email_columns(
             "select customer_email from conversations where id = $1", second["id"]
         )
         is None
+    )
+    await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
+
+
+async def test_conversations_opening_name_asks_column(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Pin 0037: the opening-phase ask counter is an integer, not null, default 0.
+
+    It persists on the row (not in turn state) so a same-tab refresh cannot hand
+    the customer a third ask. Existing conversations backfill to 0.
+    """
+    column = await superuser_conn.fetchrow(
+        """
+        select data_type, is_nullable, column_default
+          from information_schema.columns
+         where table_name = 'conversations' and column_name = 'opening_name_asks'
+        """
+    )
+    assert column is not None, "conversations.opening_name_asks missing"
+    assert column["data_type"] == "integer"
+    assert column["is_nullable"] == "NO"
+    assert column["column_default"] == "0"
+    tenant_id = await superuser_conn.fetchval(
+        """
+        insert into tenants (slug, name) values ('t002-name-asks', 'T002')
+        on conflict (slug) do update set name = excluded.name
+        returning id
+        """
+    )
+    conversation_id = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    # A fresh row defaults to 0, and the counter increments in place.
+    assert (
+        await superuser_conn.fetchval(
+            "select opening_name_asks from conversations where id = $1", conversation_id
+        )
+        == 0
+    )
+    await superuser_conn.execute(
+        "update conversations set opening_name_asks = opening_name_asks + 1 where id = $1",
+        conversation_id,
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select opening_name_asks from conversations where id = $1", conversation_id
+        )
+        == 1
     )
     await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
 

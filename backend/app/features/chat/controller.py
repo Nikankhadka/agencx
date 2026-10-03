@@ -275,11 +275,13 @@ async def stream_chat_response(
                         # reach the customer - the T-021/US-060 invariant is
                         # untouched.
                         yield event
-                    elif etype in ("citations", "quote"):
+                    elif etype in ("citations", "quote", "contact"):
                         # Non-prose, and unchanged by a redraft (the quote row and
                         # the retrieved chunks a redraft stays grounded in don't
                         # move, and the redraft paths never re-emit them), so it
                         # is safe to show immediately instead of holding it back.
+                        # RF-10's ``contact`` is the same class of bookkeeping: a
+                        # stored preferred name that a redraft cannot invalidate.
                         yield event
                     elif etype in ("price_summary", "catalog"):
                         response_payload = dict(event)
