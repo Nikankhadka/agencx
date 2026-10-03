@@ -20,17 +20,24 @@ import { PriceSummaryCard, type PriceSummaryPayload } from "@/components/ui/Pric
 import { CatalogCard, type CatalogPayload } from "@/components/ui/CatalogCard";
 import { EscalationBanner } from "@/components/ui/EscalationBanner";
 import { parseChatStreamEvent, type ChatStreamEvent } from "@/lib/chat-events";
+import { messageFromPublic } from "@/lib/chat-restore";
+import type { PublicMessage } from "@/lib/api-schemas";
 import { handoffRequestBody, shouldShowAskForPerson } from "@/lib/handoff";
 import { customerOpening } from "@/lib/greeting";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// RF-10: same-tab refresh keys. sessionStorage (not localStorage) is deliberate -
-// this is continuity for one tab, not a durable identity. The conversation id
-// lets a reload restore the transcript; the name keeps the chip coherent even
-// before the fetch resolves. Cards, composer draft, and banner state stay RF-12.
+// RF-10/RF-12: same-tab refresh keys. sessionStorage (not localStorage) is
+// deliberate - this is continuity for one tab, not a durable identity. The
+// conversation id lets a reload restore the transcript and cards; the name
+// keeps the chip coherent before the fetch resolves; the draft and the two
+// banner flags round out the state a refresh would otherwise drop. No owner-only
+// value is ever stored here.
 const conversationKey = (slug: string) => `agencx:chat:conversation:${slug}`;
 const nameKey = (slug: string) => `agencx:chat:name:${slug}`;
+const draftKey = (slug: string) => `agencx:chat:draft:${slug}`;
+const handoffKey = (slug: string) => `agencx:chat:handoff:${slug}`;
+const escalatedKey = (slug: string) => `agencx:chat:escalated:${slug}`;
 
 function readSession(key: string): string | null {
   try {
@@ -50,20 +57,28 @@ function writeSession(key: string, value: string): void {
 }
 
 /**
- * Hydrate the chip name and conversation id from sessionStorage into React
- * state, returning the stored id (or null). Kept a module-level function rather
- * than inlined in the effect for the same reason `subscribeToMediaQuery` is:
- * the effect then wires the external store instead of directly setting state.
+ * Hydrate the chip name, conversation id, composer draft, and banner flags from
+ * sessionStorage into React state, returning the stored id (or null). Kept a
+ * module-level function rather than inlined in the effect for the same reason
+ * `subscribeToMediaQuery` is: the effect then wires the external store instead
+ * of directly setting state.
  */
 function hydrateFromSession(
   slug: string,
   setName: (name: string) => void,
   setId: (id: string) => void,
+  setDraft: (draft: string) => void,
+  setHandoffSeen: (value: boolean) => void,
+  setEscalated: (value: boolean) => void,
 ): string | null {
   const storedName = readSession(nameKey(slug));
   if (storedName) setName(storedName);
   const storedId = readSession(conversationKey(slug));
   if (storedId) setId(storedId);
+  const storedDraft = readSession(draftKey(slug));
+  if (storedDraft) setDraft(storedDraft);
+  if (readSession(handoffKey(slug)) === "1") setHandoffSeen(true);
+  if (readSession(escalatedKey(slug)) === "1") setEscalated(true);
   return storedId;
 }
 
@@ -76,13 +91,6 @@ interface Message {
   catalog?: CatalogPayload;
   streaming?: boolean;
   error?: boolean;
-}
-
-interface PublicMessage {
-  id: string;
-  role: string;
-  content: string;
-  created_at: string;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -149,18 +157,30 @@ export function CustomerChat({
 
   useEffect(() => {
     if (!composerRef) return;
-    composerRef.current = setInput;
+    composerRef.current = (text: string) => {
+      setInput(text);
+      // RF-12: a seeded question is still an unsent draft, so it persists too.
+      writeSession(draftKey(slug), text);
+    };
     return () => {
       composerRef.current = null;
     };
-  }, [composerRef]);
+  }, [composerRef, slug]);
 
-  // RF-10: same-tab refresh. Restore the stored name (so the chip is coherent
-  // before the fetch resolves) and, when a conversation id was stored, the text
-  // transcript via the existing public messages endpoint. Cards, draft, and
-  // banner state stay RF-12. A failed restore falls back to the opening state.
+  // RF-10/RF-12: same-tab refresh. Restore the stored name (so the chip is
+  // coherent before the fetch resolves), composer draft, and banner flags, and
+  // when a conversation id was stored, the text transcript (with each turn's
+  // restored card) via the existing public messages endpoint. A failed restore
+  // falls back to the opening state.
   useEffect(() => {
-    const storedId = hydrateFromSession(slug, setCustomerName, setConversationId);
+    const storedId = hydrateFromSession(
+      slug,
+      setCustomerName,
+      setConversationId,
+      setInput,
+      setHandoffSeen,
+      setEscalated,
+    );
     if (!storedId) return;
     let cancelled = false;
     void (async () => {
@@ -172,9 +192,7 @@ export function CustomerChat({
         if (!res.ok || cancelled) return;
         const incoming = (await res.json()) as PublicMessage[];
         if (cancelled || incoming.length === 0) return;
-        setMessages(
-          incoming.map<Message>((m) => ({ role: m.role as ChatRole, text: m.content })),
-        );
+        setMessages(incoming.map<Message>((m) => messageFromPublic(m)));
         setShowStarters(false);
       } catch {
         // Transient or unexpected: keep the opening state rather than block.
@@ -253,6 +271,9 @@ export function CustomerChat({
     if (!trimmed || busy || escalated) return;
     setBusy(true);
     setInput("");
+    // RF-12: the stored draft is cleared at send start, regardless of outcome.
+    // Keeping it through a failed send is RF-13.
+    writeSession(draftKey(slug), "");
     setShowStarters(false);
     setMessages((prev) => [
       ...prev,
@@ -385,9 +406,15 @@ export function CustomerChat({
       case "handoff":
         // A human was notified. Nothing about the chat changes.
         setHandoffSeen(true);
+        // RF-12: persist it so a refresh keeps the human-reply poll running and
+        // the "Ask for a person" control hidden.
+        writeSession(handoffKey(slug), "1");
         break;
       case "escalated":
         setEscalated(true);
+        // RF-12: a limit stop is terminal; a refresh must restore the locked
+        // composer and the banner, not reopen the chat.
+        writeSession(escalatedKey(slug), "1");
         break;
       case "error":
         // The backend failed mid-stream and said so on the wire. Without
@@ -487,7 +514,11 @@ export function CustomerChat({
               <Input
                 label="Message"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // RF-12: persist the unsent draft so a refresh restores it.
+                  writeSession(draftKey(slug), e.target.value);
+                }}
                 disabled={busy}
                 autoFocus
               />

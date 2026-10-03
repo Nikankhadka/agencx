@@ -298,31 +298,38 @@ and
 
 #### RF-12: Same-tab refresh restoration of content, cards, and state
 
-- **Status:** Active - todo.
+- **Status:** Active - PR open on feat/rf-12-refresh-restore.
 - **Visible outcome:** After a same-tab refresh the conversation content,
   structured cards, and relevant state restore: the conversation id, composer
   draft, and handoff or escalated banner.
-- **Current vs proposed:** Current: `conversationId` lives in memory
-  (`CustomerChat.tsx`); nothing persists it; the history endpoint
-  `GET /api/chat/{conversation_id}/messages` returns only `id`, `role`,
-  `content`, and `created_at` and filters to `customer`, `assistant`, and
-  `human_agent` (`backend/app/features/chat/api.py` and `service.py`), so cards
-  and stamps cannot restore. Proposed: persist the conversation id, draft, and
-  banner state in the browser for the same tab, widen the history query to
-  return the customer-safe `response` card payload read from
-  `messages.metadata`, and restore quote, catalog, and price-summary cards from
-  that payload.
+- **Current vs proposed:** Current: `conversationId` lived in memory
+  (`CustomerChat.tsx`) with nothing persisting it, and the history endpoint
+  `GET /api/chat/{conversation_id}/messages` returned only `id`, `role`,
+  `content`, and `created_at` (filtered to `customer`, `assistant`, and
+  `human_agent` in `backend/app/features/chat/api.py` and `service.py`), so
+  cards and stamps could not restore. Shipped: `PublicMessage` and
+  `list_messages` also return the customer-safe `response` card payload read
+  from `messages.metadata`, and the customer surface persists the conversation
+  id, unsent composer draft, and handoff/escalated banner flags in
+  `sessionStorage`, restoring the transcript - with each turn's quote, catalog,
+  or price-summary card - through that same endpoint. A formal quote turn now
+  captures its live `quote` event into `metadata.response`, so its QuoteCard
+  restores too.
 - **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx` and
-  `backend/app/features/chat/api.py` / `service.py`; card payloads in
-  `messages.metadata` (`backend/migrations/0012_messages_metadata.sql`);
-  `design/frontend.md` S1 `Drop-off / return` state.
+  `frontend/src/lib/chat-restore.ts`; `backend/app/features/chat/api.py` /
+  `service.py` / `controller.py`; card payloads in `messages.metadata`
+  (`backend/migrations/0012_messages_metadata.sql`); `design/frontend.md` S1
+  `Drop-off / return` state.
 - **Dependencies:** RF-11 for the handoff and escalated banner states. Queue
   filtering and split-pane work do not block this.
-- **API/DB changes:** Widen `PublicMessage` and `list_messages` to return the
-  customer-safe `response` card payload only, read from `messages.metadata`;
-  never the raw metadata blob, which holds owner-only inspection verdicts,
-  intent, action, and timing (D41). No schema change (`messages.metadata`
-  exists).
+- **API/DB changes:** Shipped: `PublicMessage` gains
+  `response: dict[str, Any] | None`, and `list_messages` selects `metadata` and
+  extracts only `metadata["response"]` per row - never the raw metadata blob,
+  which holds owner-only inspection verdicts, intent, action, and timing (D41).
+  `stream_chat_response` now also captures the live `quote` event into
+  `response_payload` beside the existing `price_summary`/`catalog` capture, so
+  a formal quote persists a restorable card. No schema change
+  (`messages.metadata` exists).
 - **Acceptance scenarios:** Send a few turns, refresh, and see the transcript,
   any quote/catalog/price-summary card, the unsent draft, and the handoff or
   escalated banner restored; a refresh with no conversation renders the opening
