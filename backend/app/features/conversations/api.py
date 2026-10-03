@@ -38,6 +38,22 @@ class ConversationSummary(BaseModel):
     pending_since: datetime | None = None
     last_message: str | None = None
     last_activity_at: datetime | None = None
+    # RF-14/D38: who is replying, derived from conversations.status. "human"
+    # once a staff member has taken the thread over, otherwise the assistant.
+    handler: str = "assistant"
+
+
+class ConversationCounts(BaseModel):
+    all: int
+    needs_you: int
+    unread: int
+    human: int
+
+
+class ConversationListResponse(BaseModel):
+    items: list[ConversationSummary]
+    total: int
+    counts: ConversationCounts
 
 
 class ToolCallDetail(BaseModel):
@@ -73,25 +89,33 @@ class ConversationDetail(BaseModel):
     messages: list[MessageDetail]
 
 
-@router.get("", response_model=list[ConversationSummary])
+@router.get("", response_model=ConversationListResponse)
 async def list_conversations(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_tenant_admin)],
     status_filter: Annotated[
         Literal["open", "human", "escalated", "closed"] | None, Query(alias="status")
     ] = None,
+    filter: Annotated[Literal["all", "needs_you", "unread", "human"], Query()] = "all",
+    q: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[ConversationSummary]:
-    return [
-        ConversationSummary(**row)
-        for row in await controller.list_conversations(
-            tenant_id=str(admin.tenant_id),
-            status_filter=status_filter,
-            limit=limit,
-            offset=offset,
-            role=admin.role,
-        )
-    ]
+) -> ConversationListResponse:
+    """RF-14/D38: one page of the owner's Chats queue plus the server total and
+    the per-tab counts, all computed over the tenant's complete dataset."""
+    result = await controller.list_conversations(
+        tenant_id=str(admin.tenant_id),
+        status_filter=status_filter,
+        limit=limit,
+        offset=offset,
+        queue_filter=filter,
+        q=q,
+        role=admin.role,
+    )
+    return ConversationListResponse(
+        items=[ConversationSummary(**row) for row in result["items"]],
+        total=result["total"],
+        counts=ConversationCounts(**result["counts"]),
+    )
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)

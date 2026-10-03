@@ -9,7 +9,7 @@ import os
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import asyncpg
@@ -107,7 +107,7 @@ async def test_list_conversations_returns_only_this_tenants_rows(
 
     response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert len(body) == 1
     assert body[0]["id"] == str(conversation_id)
     assert body[0]["customer_ref"] == "cust-1"
@@ -116,7 +116,7 @@ async def test_list_conversations_returns_only_this_tenants_rows(
     other_response = await client.get(
         "/api/conversations", headers={"Authorization": f"Bearer {other_token}"}
     )
-    assert len(other_response.json()) == 1
+    assert len(other_response.json()["items"]) == 1
 
 
 async def test_list_conversations_filters_by_status(
@@ -130,7 +130,7 @@ async def test_list_conversations_filters_by_status(
         "/api/conversations?status=escalated", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert len(body) == 1
     assert body[0]["id"] == str(escalated_id)
 
@@ -153,16 +153,303 @@ async def test_list_conversations_surfaces_the_open_escalation(
 
     response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    row = response.json()[0]
+    row = response.json()["items"][0]
     assert row["needs_attention"] is True
     assert row["pending_summary"] == "Wants a price for catering Friday"
     assert datetime.fromisoformat(row["pending_since"]) == escalation_created_at
 
 
+# --- RF-14: filtering, searching, paging, and counts over the whole queue ---
+
+
+async def _list(client: httpx.AsyncClient, token: str, **params: Any) -> dict[str, Any]:
+    response = await client.get("/api/conversations", params=params, headers=_auth(token))
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+async def _seed_message(
+    conn: asyncpg.Connection[Any],
+    tenant_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    *,
+    role: str = "customer",
+    content: str = "hi",
+    created_at: datetime | None = None,
+) -> None:
+    await conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+        "values ($1, $2, $3, $4, $5)",
+        tenant_id,
+        conversation_id,
+        role,
+        content,
+        created_at or datetime.now(UTC),
+    )
+
+
+async def _seed_escalation(
+    conn: asyncpg.Connection[Any],
+    tenant_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    *,
+    summary: str = "asked for a price",
+    status: str = "open",
+) -> None:
+    await conn.execute(
+        "insert into escalations (tenant_id, conversation_id, reason, summary, status) "
+        "values ($1, $2, 'price_provenance', $3, $4)",
+        tenant_id,
+        conversation_id,
+        summary,
+        status,
+    )
+
+
+async def test_list_conversations_returns_the_items_total_and_counts(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    await _seed_conversation(superuser_conn, tenant_id, customer_ref="cust-1")
+
+    body = await _list(client, token)
+    assert set(body) == {"items", "total", "counts"}
+    assert isinstance(body["items"], list)
+    assert body["total"] == 1
+    assert set(body["counts"]) == {"all", "needs_you", "unread", "human"}
+
+
+async def test_needs_you_is_an_open_escalation_or_a_taken_over_thread(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    await _seed_conversation(superuser_conn, tenant_id, customer_ref="plain")
+    human_id = await _seed_conversation(
+        superuser_conn, tenant_id, status="human", customer_ref="human"
+    )
+    escalated_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="escalated")
+    await _seed_escalation(superuser_conn, tenant_id, escalated_id, summary="wants a price")
+    resolved_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="resolved")
+    await _seed_escalation(
+        superuser_conn, tenant_id, resolved_id, summary="old news", status="resolved"
+    )
+
+    body = await _list(client, token, filter="needs_you")
+    assert {row["id"] for row in body["items"]} == {str(human_id), str(escalated_id)}
+    assert body["total"] == 2
+    assert body["counts"]["needs_you"] == 2
+
+
+async def test_human_filter_returns_only_taken_over_threads(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    human_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_conversation(superuser_conn, tenant_id, status="open")
+
+    body = await _list(client, token, filter="human")
+    assert {row["id"] for row in body["items"]} == {str(human_id)}
+    assert body["total"] == 1
+
+
+async def test_unread_filter_reuses_the_rf18_predicate(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    unread_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="unread")
+    await _seed_message(superuser_conn, tenant_id, unread_id)
+    read_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="read")
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        read_id,
+        created_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    await superuser_conn.execute(
+        "update conversations set owner_read_at = now() where id = $1", read_id
+    )
+    assistant_only_id = await _seed_conversation(
+        superuser_conn, tenant_id, customer_ref="assistant"
+    )
+    await _seed_message(superuser_conn, tenant_id, assistant_only_id, role="assistant")
+
+    body = await _list(client, token, filter="unread")
+    assert {row["id"] for row in body["items"]} == {str(unread_id)}
+    assert body["total"] == 1
+    assert body["counts"]["unread"] == 1
+
+
+async def test_handler_is_derived_from_status(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    assistant_id = await _seed_conversation(superuser_conn, tenant_id, status="open")
+    human_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+
+    body = await _list(client, token)
+    handlers = {row["id"]: row["handler"] for row in body["items"]}
+    assert handlers[str(assistant_id)] == "assistant"
+    assert handlers[str(human_id)] == "human"
+
+
+async def test_counts_cover_the_whole_dataset_and_match_the_active_filter(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    # Unread open, no escalation.
+    unread_open_id = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_message(superuser_conn, tenant_id, unread_open_id)
+    # Needs you via an open escalation, and unread too.
+    escalated_id = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_message(superuser_conn, tenant_id, escalated_id)
+    await _seed_escalation(superuser_conn, tenant_id, escalated_id)
+    # Needs you via human status; read, so not unread.
+    human_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        human_id,
+        created_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    await superuser_conn.execute(
+        "update conversations set owner_read_at = now() where id = $1", human_id
+    )
+    # Read open, no escalation: in all only.
+    read_open_id = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        read_open_id,
+        created_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    await superuser_conn.execute(
+        "update conversations set owner_read_at = now() where id = $1", read_open_id
+    )
+
+    body = await _list(client, token)
+    assert body["counts"] == {"all": 4, "needs_you": 2, "unread": 2, "human": 1}
+    for label in ("all", "needs_you", "unread", "human"):
+        page = await _list(client, token, filter=label)
+        assert page["total"] == page["counts"][label], label
+
+
+async def test_the_queue_and_its_counts_never_show_another_tenant(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    other_token, other_tenant_id = await _signup_tenant_admin(client)
+
+    mine_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="mine")
+    await _seed_message(superuser_conn, tenant_id, mine_id)
+    await _seed_escalation(superuser_conn, tenant_id, mine_id)
+
+    other_human_id = await _seed_conversation(
+        superuser_conn, other_tenant_id, status="human", customer_ref="theirs-human"
+    )
+    other_escalated_id = await _seed_conversation(
+        superuser_conn, other_tenant_id, customer_ref="theirs-escalated"
+    )
+    await _seed_message(superuser_conn, other_tenant_id, other_escalated_id)
+    await _seed_escalation(superuser_conn, other_tenant_id, other_escalated_id)
+
+    body = await _list(client, token)
+    assert {row["id"] for row in body["items"]} == {str(mine_id)}
+    assert body["total"] == 1
+    assert body["counts"] == {"all": 1, "needs_you": 1, "unread": 1, "human": 0}
+
+    other_body = await _list(client, other_token)
+    assert {row["id"] for row in other_body["items"]} == {
+        str(other_human_id),
+        str(other_escalated_id),
+    }
+    assert other_body["total"] == 2
+    assert other_body["counts"]["all"] == 2
+
+
+async def test_search_ignores_a_leading_hash_on_the_reference(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+    fragment = str(conversation_id).replace("-", "")[:8]
+
+    plain = await _list(client, token, q=fragment)
+    hashed = await _list(client, token, q=f"#{fragment}")
+    assert str(conversation_id) in {row["id"] for row in plain["items"]}
+    assert str(conversation_id) in {row["id"] for row in hashed["items"]}
+
+
+async def test_the_queue_filters_searches_and_pages_over_the_whole_dataset(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Past 200 rows, a page bound must not look like a complete answer."""
+    token, tenant_id = await _signup_tenant_admin(client)
+
+    # 205 conversations, newest first (i=1 is the most recent). Each carries a
+    # customer message stamped at the conversation's own created_at so
+    # last_activity_at is explicit and the ordering is deterministic.
+    await superuser_conn.execute(
+        "insert into conversations (tenant_id, customer_ref, created_at) "
+        "select $1, 'bulk-' || lpad(i::text, 4, '0'), "
+        "       now() - (i::text || ' minutes')::interval "
+        "from generate_series(1, 205) as i",
+        tenant_id,
+    )
+    await superuser_conn.execute(
+        "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+        "select c.tenant_id, c.id, 'customer', 'hello', c.created_at "
+        "from conversations c where c.tenant_id = $1",
+        tenant_id,
+    )
+    # The old unresolved issue: the oldest activity, so it sorts past page 1.
+    old_id = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id, customer_ref, created_at) "
+        "values ($1, 'old-needs-you', now() - interval '400 days') returning id",
+        tenant_id,
+    )
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        old_id,
+        created_at=datetime.now(UTC) - timedelta(days=400),
+    )
+    await _seed_escalation(superuser_conn, tenant_id, old_id, summary="forgotten refund")
+
+    first = await _list(client, token, filter="all", limit=50, offset=0)
+    assert first["total"] == 206
+    assert len(first["items"]) == 50
+    assert str(old_id) not in {row["id"] for row in first["items"]}
+
+    # "Load more": the offset that covers the old issue returns it.
+    last = await _list(client, token, filter="all", limit=50, offset=200)
+    assert str(old_id) in {row["id"] for row in last["items"]}
+
+    # Search by name across the whole dataset, not just page 1.
+    by_name = await _list(client, token, q="bulk-0200")
+    assert [row["customer_ref"] for row in by_name["items"]] == ["bulk-0200"]
+    assert by_name["total"] == 1
+
+    # Search by a conversation-reference fragment for a row off page 1.
+    target_id = await superuser_conn.fetchval(
+        "select id from conversations where tenant_id = $1 and customer_ref = $2",
+        tenant_id,
+        "bulk-0200",
+    )
+    fragment = str(target_id).replace("-", "")[:8]
+    by_ref = await _list(client, token, q=fragment)
+    assert str(target_id) in {row["id"] for row in by_ref["items"]}
+
+    # Needs you reaches the old escalation regardless of the page bound.
+    needs = await _list(client, token, filter="needs_you")
+    assert {row["id"] for row in needs["items"]} == {str(old_id)}
+
+
 async def _unread_of(client: httpx.AsyncClient, token: str, conversation_id: uuid.UUID) -> bool:
     response = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    return bool(next(row for row in response.json() if row["id"] == str(conversation_id))["unread"])
+    items = response.json()["items"]
+    return bool(next(row for row in items if row["id"] == str(conversation_id))["unread"])
 
 
 async def test_unread_tracks_customer_messages_after_the_read_marker(
@@ -334,7 +621,7 @@ async def test_get_conversation_detail_exposes_customer_email(
 
     listed = await client.get("/api/conversations", headers={"Authorization": f"Bearer {token}"})
     assert listed.status_code == 200
-    summary = next(row for row in listed.json() if row["id"] == str(conversation_id))
+    summary = next(row for row in listed.json()["items"] if row["id"] == str(conversation_id))
     assert "customer_email" not in summary
 
 
