@@ -1,7 +1,7 @@
 # Phase 1 refinement (R + RF)
 
-**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-12 through
-RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, and RF-18 are delivered and
+**Status:** Active - todo (R-3, R-4 remainder, R-5 remainder, RF-13 through
+RF-17); RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10, RF-11, RF-12, and RF-18 are delivered and
 archived, and U-1 through U-4 and the onboarding-normalization slice were
 delivered and walked on the preview on 2026-10-01. Production hardening T-022 to
 T-026 and T-028 to T-033 are built; T-027 (enforce the CSP) waits on a
@@ -113,8 +113,9 @@ search), RF-4 (pricing wording), RF-5 (cover and offering-image workflows),
 RF-6 (document-review workspace clarification), RF-7 (business page composition
 and contextual owner editing), RF-8 (desktop customer chat panels and mobile
 sheets), RF-9 (offering and price-summary card alignment), RF-10 (preferred-name
-capture), RF-11 (visible human-help action and requested handoff), and RF-18
-(owner read state); the remaining product-refinement tickets are **RF-12 through
+capture), RF-11 (visible human-help action and requested handoff), RF-12
+(same-tab refresh restoration of content, cards, and state), and RF-18
+(owner read state); the remaining product-refinement tickets are **RF-13 through
 RF-17**, plus the RF-14 tab-badge follow-up.
 
 ### Archive process for delivered RF tickets
@@ -280,7 +281,7 @@ read-only audit of 2026-10-02 and "Proposed" is the agreed behavior above. The
 hard rules in `design/conventions.md` sections 8 and 9 bind every ticket.
 
 **Delivered and archived:** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8,
-RF-9, RF-10, RF-11, and RF-18. Their full records, including verification, live
+RF-9, RF-10, RF-11, RF-12, and RF-18. Their full records, including verification, live
 in
 [12-refinement-rf-1-shared-ui.md](../../../archive/phase1-complete/12-refinement-rf-1-shared-ui.md),
 [12-refinement-rf-2-business-detail-editing.md](../../../archive/phase1-complete/12-refinement-rf-2-business-detail-editing.md),
@@ -293,50 +294,9 @@ in
 [12-refinement-rf-9-card-alignment.md](../../../archive/phase1-complete/12-refinement-rf-9-card-alignment.md),
 [12-refinement-rf-10-preferred-name.md](../../../archive/phase1-complete/12-refinement-rf-10-preferred-name.md),
 [12-refinement-rf-11-ask-for-a-person.md](../../../archive/phase1-complete/12-refinement-rf-11-ask-for-a-person.md),
+[12-refinement-rf-12-refresh-restore.md](../../../archive/phase1-complete/12-refinement-rf-12-refresh-restore.md),
 and
 [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
-
-#### RF-12: Same-tab refresh restoration of content, cards, and state
-
-- **Status:** Active - PR open on feat/rf-12-refresh-restore.
-- **Visible outcome:** After a same-tab refresh the conversation content,
-  structured cards, and relevant state restore: the conversation id, composer
-  draft, and handoff or escalated banner.
-- **Current vs proposed:** Current: `conversationId` lived in memory
-  (`CustomerChat.tsx`) with nothing persisting it, and the history endpoint
-  `GET /api/chat/{conversation_id}/messages` returned only `id`, `role`,
-  `content`, and `created_at` (filtered to `customer`, `assistant`, and
-  `human_agent` in `backend/app/features/chat/api.py` and `service.py`), so
-  cards and stamps could not restore. Shipped: `PublicMessage` and
-  `list_messages` also return the customer-safe `response` card payload read
-  from `messages.metadata`, and the customer surface persists the conversation
-  id, unsent composer draft, and handoff/escalated banner flags in
-  `sessionStorage`, restoring the transcript - with each turn's quote, catalog,
-  or price-summary card - through that same endpoint. A formal quote turn now
-  captures its live `quote` event into `metadata.response`, so its QuoteCard
-  restores too.
-- **Design reference:** Shipped `frontend/src/app/[slug]/CustomerChat.tsx` and
-  `frontend/src/lib/chat-restore.ts`; `backend/app/features/chat/api.py` /
-  `service.py` / `controller.py`; card payloads in `messages.metadata`
-  (`backend/migrations/0012_messages_metadata.sql`); `design/frontend.md` S1
-  `Drop-off / return` state.
-- **Dependencies:** RF-11 for the handoff and escalated banner states. Queue
-  filtering and split-pane work do not block this.
-- **API/DB changes:** Shipped: `PublicMessage` gains
-  `response: dict[str, Any] | None`, and `list_messages` selects `metadata` and
-  extracts only `metadata["response"]` per row - never the raw metadata blob,
-  which holds owner-only inspection verdicts, intent, action, and timing (D41).
-  `stream_chat_response` now also captures the live `quote` event into
-  `response_payload` beside the existing `price_summary`/`catalog` capture, so
-  a formal quote persists a restorable card. No schema change
-  (`messages.metadata` exists).
-- **Acceptance scenarios:** Send a few turns, refresh, and see the transcript,
-  any quote/catalog/price-summary card, the unsent draft, and the handoff or
-  escalated banner restored; a refresh with no conversation renders the opening
-  state; a human reply still polls in after restore.
-- **Regression checks:** The customer transcript poll, ticket 19's leak-free
-  transcript, and the existing chat-stream tests stay green.
-- **OPEN:** none.
 
 #### RF-13: Failed-send recovery and draft preservation
 
