@@ -1,75 +1,54 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { ListRow, RowIdentity } from "@/components/ui/ListRow";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
-import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
+import { errorMessage } from "@/lib/useApiQuery";
 import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { ConversationSummary } from "@/lib/api-schemas";
 import { customerLabel, relativeTime } from "@/lib/format";
+import { FILTERS, waitingTimeOf, type QueueFilter } from "./lib/queue";
+import { useConversationQueue, useDebounced } from "./lib/useConversationQueue";
 
 /**
- * C-6 Chats: every customer conversation, and which ones want the owner.
+ * RF-14/D38 Chats: the owner's queue, filtered, searched, and paged on the
+ * server over the whole tenant dataset.
  *
- * This is the owner's queue. The Escalations table still exists for the
- * Wren-era console, but an owner does not think in escalation rows - they think
- * "who is waiting on me?", which is what the Action needed filter answers. Each
- * row carries the assistant's own one-line summary of what the customer wants,
- * so triage happens here rather than by opening four threads.
+ * The old screen filtered the first 50 rows it held, so a busy tenant's older
+ * unresolved issues hid behind a page bound that looked like a complete
+ * answer. Now the tab is a server query (`filter=`), the search is a server
+ * query (`q=`), and "Load more" counts down against a server `total`. Needs
+ * you opens the screen because that is what an owner means by "who is waiting
+ * on me?"; All, Unread, and Human handled sit beside it.
  *
- * Ported from agencx-prototype-v6.html's `chats` screen: filter row, `chat-row`
- * with name / time / status / preview, and the search bar. Two departures from
- * the prototype, both because it only ever mocked named customers: the row
- * falls back to the conversation's short reference rather than a literal
- * "Customer" every row shares, and the amber attention indicator is a compact
- * exclamation badge. RF-18 adds real owner read state: an unread row bolds its
- * name and carries a small accent dot, separate from the attention badge.
+ * Ported from agencx-prototype-v6.html's `chats` screen: the filter row,
+ * `chat-row` with name / time / status / preview, and the search bar. The
+ * amber attention indicator stays a compact exclamation badge; RF-18's unread
+ * state bolds the name and carries a small accent dot, a separate axis. A
+ * taken-over row names its handler ("You") where the assistant's brand dot
+ * would otherwise sit.
  */
 
-type Filter = "all" | "action" | "unread";
-
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "action", label: "Action needed" },
-  { id: "unread", label: "Unread" },
-];
-
-/**
- * The line under the name. The assistant's summary of what the customer wants
- * beats the last message whenever there is one - "Balance outstanding 4 days.
- * Send a reminder?" tells the owner more than whatever was said most recently.
- */
+/** The line under the name. The assistant's summary of what the customer wants
+ * beats the last message whenever there is one. */
 function previewOf(row: ConversationSummary): string {
   return row.pending_summary?.trim() || row.last_message?.trim() || "No messages yet";
 }
 
 export default function ChatsPage() {
   const router = useRouter();
-  const query = useApiQuery<ConversationSummary[]>("/api/conversations");
   const scrollRef = useScrollRestoration<HTMLDivElement>("/chats");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<QueueFilter>("needs_you");
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
-
-  const rows = useMemo(() => {
-    const all = query.data ?? [];
-    const byFilter = all.filter((row) => {
-      if (filter === "action") return row.needs_attention;
-      // RF-18: real per-owner read state, a customer message newer than the
-      // marker. A separate axis from "Action needed".
-      if (filter === "unread") return row.unread;
-      return true;
-    });
-    const needle = search.trim().toLowerCase();
-    if (!needle) return byFilter;
-    return byFilter.filter((row) =>
-      `${customerLabel(row.customer_ref, row.id)} ${previewOf(row)}`.toLowerCase().includes(needle)
-    );
-  }, [query.data, filter, search]);
+  // Settle the box before it becomes the query, so typing a name is one
+  // request rather than one per keystroke.
+  const debouncedSearch = useDebounced(search);
+  const queue = useConversationQueue(filter, debouncedSearch);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
@@ -92,99 +71,137 @@ export default function ChatsPage() {
       />
 
       <Container className="flex min-h-0 flex-1 flex-col">
-      {searching ? (
-        <div className="border-b border-hairline py-2">
-          <input
-            autoFocus
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations…"
-            aria-label="Search conversations"
-            data-testid="chats-search"
-            className="w-full bg-transparent py-1 text-body-sm text-text outline-none placeholder:text-text-tertiary"
-          />
-        </div>
-      ) : null}
-
-      <div className="flex gap-2 overflow-x-auto py-3">
-        {FILTERS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setFilter(option.id)}
-            aria-pressed={filter === option.id}
-            data-testid={`chats-filter-${option.id}`}
-            className={
-              filter === option.id
-                ? "shrink-0 rounded-chip border-chip border-accent-subtle bg-accent-subtle px-4 py-2 text-chip text-accent-active transition-colors duration-(--duration-fast)"
-                : "shrink-0 rounded-chip border-chip border-hairline px-4 py-2 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active active:bg-accent-a09"
-            }
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
-      <div ref={scrollRef} data-testid="chats-list" className="flex-1 overflow-y-auto">
-        {query.error ? (
-          <p className="py-4 text-body-sm text-danger">{errorMessage(query.error, "Could not load your chats.")}</p>
+        {searching ? (
+          <div className="border-b border-hairline py-2">
+            <input
+              autoFocus
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search conversations…"
+              aria-label="Search conversations"
+              data-testid="chats-search"
+              className="w-full bg-transparent py-1 text-body-sm text-text outline-none placeholder:text-text-tertiary"
+            />
+          </div>
         ) : null}
-        {!query.error && rows.length === 0 ? (
-          <EmptyState
-            icon="forum"
-            title={search ? "No conversations found." : "No conversations yet."}
-            description={
-              search
-                ? "Try a different name or word."
-                : "When a customer messages you, the conversation shows up here."
-            }
-          />
-        ) : null}
-        {rows.map((row) => (
-          <ListRow
-            key={row.id}
-            testId="chat-row"
-            className="border-b border-hairline py-4 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
-            onClick={() => router.push(`/chats/${row.id}`)}
-            leading={<RowIdentity label={customerLabel(row.customer_ref, row.id)} />}
-            unread={row.unread}
-            title={customerLabel(row.customer_ref, row.id)}
-            // The prototype's `.chat-row` preview is one line; the meta slot
-            // itself does not clamp (Home's waiting rows use two), so the list
-            // that wants one line says so here.
-            meta={<span className="block truncate">{previewOf(row)}</span>}
-            trailing={
-              <>
-                <span className="text-footnote text-text-secondary">
-                  {relativeTime(row.last_activity_at ?? row.created_at)}
-                </span>
-                {/* A compact amber exclamation badge, not a text pill: the
-                    words live in the filter chip above, and spelling them out
-                    per row stole the title's width on a phone. Berry dot = the
-                    assistant is handling it itself. Nothing = nothing
-                    pending. */}
-                {row.needs_attention ? (
+
+        <div className="flex gap-2 overflow-x-auto py-3">
+          {FILTERS.map((option) => {
+            const count = queue.counts?.[option.id] ?? 0;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setFilter(option.id)}
+                aria-pressed={filter === option.id}
+                data-testid={`chats-filter-${option.id}`}
+                className={
+                  filter === option.id
+                    ? "shrink-0 rounded-chip border-chip border-accent-subtle bg-accent-subtle px-4 py-2 text-chip text-accent-active transition-colors duration-(--duration-fast)"
+                    : "shrink-0 rounded-chip border-chip border-hairline px-4 py-2 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active active:bg-accent-a09"
+                }
+              >
+                {option.label}
+                {count > 0 ? (
                   <span
-                    data-testid="row-attention"
-                    role="img"
-                    aria-label="Action needed"
-                    title="Action needed"
-                    className="grid size-5 place-items-center rounded-full bg-highlight text-text"
+                    data-testid={`chats-filter-count-${option.id}`}
+                    className="ml-1 tabular-nums"
                   >
-                    <Icon name="priority_high" size={14} />
+                    {count}
                   </span>
-                ) : row.status === "open" ? (
-                  <span
-                    role="img"
-                    aria-label="Being handled for you"
-                    className="size-[7px] rounded-full bg-accent"
-                  />
                 ) : null}
-              </>
-            }
-          />
-        ))}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div ref={scrollRef} data-testid="chats-list" className="flex-1 overflow-y-auto">
+          {queue.error ? (
+            <p className="py-4 text-body-sm text-danger">
+              {errorMessage(queue.error, "Could not load your chats.")}
+            </p>
+          ) : null}
+          {!queue.error && queue.items.length === 0 && !queue.isPending ? (
+            <EmptyState
+              icon="forum"
+              title={debouncedSearch ? "No conversations found." : "No conversations yet."}
+              description={
+                debouncedSearch
+                  ? "Try a different name or word."
+                  : "When a customer messages you, the conversation shows up here."
+              }
+            />
+          ) : null}
+          {queue.items.map((row) => (
+            <ListRow
+              key={row.id}
+              testId="chat-row"
+              className="border-b border-hairline py-4 transition-colors duration-(--duration-fast) hover:bg-surface-container active:bg-ink-a05"
+              onClick={() => router.push(`/chats/${row.id}`)}
+              leading={<RowIdentity label={customerLabel(row.customer_ref, row.id)} />}
+              unread={row.unread}
+              title={customerLabel(row.customer_ref, row.id)}
+              // The prototype's `.chat-row` preview is one line; the meta slot
+              // itself does not clamp (Home's waiting rows use two), so the list
+              // that wants one line says so here.
+              meta={<span className="block truncate">{previewOf(row)}</span>}
+              trailing={
+                <>
+                  <span className="text-footnote text-text-secondary">
+                    {relativeTime(waitingTimeOf(row))}
+                  </span>
+                  {/* A compact amber exclamation badge, not a text pill: the
+                      words live in the tab above, and spelling them out per row
+                      stole the title's width on a phone. RF-14: handler and
+                      attention are independent axes, so a thread with an open
+                      escalation AND a human takeover shows both - the handler
+                      names who is replying, the badge names that it still needs
+                      the owner. */}
+                  {row.needs_attention ? (
+                    <span
+                      data-testid="row-attention"
+                      role="img"
+                      aria-label="Needs you"
+                      title="Needs you"
+                      className="grid size-5 place-items-center rounded-full bg-highlight text-text"
+                    >
+                      <Icon name="priority_high" size={14} />
+                    </span>
+                  ) : null}
+                  {row.handler === "human" ? (
+                    // A taken-over thread names its handler. The assistant's dot
+                    // would be a lie here - the human is replying, not the
+                    // assistant.
+                    <span
+                      data-testid="row-handler"
+                      className="text-footnote font-medium text-accent-active"
+                    >
+                      You
+                    </span>
+                  ) : !row.needs_attention && row.status === "open" ? (
+                    <span
+                      role="img"
+                      aria-label="Being handled for you"
+                      className="size-[7px] rounded-full bg-accent"
+                    />
+                  ) : null}
+                </>
+              }
+            />
+          ))}
+
+          {queue.hasMore ? (
+            <button
+              type="button"
+              data-testid="chats-load-more"
+              onClick={() => void queue.loadMore()}
+              disabled={queue.isFetchingNextPage}
+              className="my-4 w-full rounded-chip border-chip border-hairline px-4 py-3 text-chip text-text-secondary transition-colors duration-(--duration-fast) hover:bg-accent-a07 hover:text-accent-active active:bg-accent-a09 disabled:opacity-60"
+            >
+              {queue.isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          ) : null}
+        </div>
       </Container>
     </div>
   );

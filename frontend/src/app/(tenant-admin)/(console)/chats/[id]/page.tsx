@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { ConversationDetail } from "@/lib/api-schemas";
 import { clockTime, customerLabel } from "@/lib/format";
+import { invalidateConversationLists } from "../lib/useConversationQueue";
 
 /**
  * C-6 Chats thread: the owner reads a conversation, steps into it, and hands it
@@ -73,7 +74,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
         if (readRequestedFor.current !== id) {
           readRequestedFor.current = id;
           void apiFetch(`/api/conversations/${id}/read`, { method: "POST" })
-            .then(() => queryClient.invalidateQueries({ queryKey: ["/api/conversations"] }))
+            .then(() => invalidateConversationLists(queryClient))
             .catch(() => {
               if (readRequestedFor.current === id) readRequestedFor.current = null;
             });
@@ -152,7 +153,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
     }
     // The console layout re-polls the list every 4s, but until that tick the
     // deleted row would still show, and opening it lands on a not-found.
-    await queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+    await invalidateConversationLists(queryClient);
     toast.success("Conversation deleted");
     router.replace("/chats");
   }

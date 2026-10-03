@@ -8,6 +8,10 @@ import type { components } from "./api-types";
 type Schemas = components["schemas"];
 
 export type ConversationSummary = Schemas["ConversationSummary"];
+// RF-14/D38: the queue list is an envelope now - the page of items, the server
+// total "Load more" counts down against, and the per-tab counts.
+export type ConversationListResponse = Schemas["ConversationListResponse"];
+export type ConversationCounts = Schemas["ConversationCounts"];
 export type ConversationDetail = Schemas["ConversationDetail"];
 export type MessageDetail = Schemas["MessageDetail"];
 export type ToolCallDetail = Schemas["ToolCallDetail"];

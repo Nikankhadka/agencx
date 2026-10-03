@@ -332,12 +332,9 @@ and
   tab counts match the dataset.
 - **Regression checks:** Tenant isolation on the conversations read; the
   existing Chats list and Home brief tests stay green.
-- **OPEN:** whether the legacy **Unread** tab survives alongside Needs you, All,
-  and Human handled, or is dropped.
-- **Follow-up (from RF-18):** the console Chats tab badge is still driven by
-  `needs_attention` rather than unread; reconcile it here, since switching it in
-  RF-18 broke `home-brief.spec.ts`. See
-  [12-refinement-rf-18-owner-read-state.md](../../../archive/phase1-complete/12-refinement-rf-18-owner-read-state.md).
+- **Resolved 2026-10-03:** the Unread tab is retained as a fourth tab (the
+  design authority documents All/Action needed/Unread, and RF-18 shipped unread
+  as a separate axis); the console Chats badge now shows the Needs you count.
 
 #### RF-15: Desktop split-pane Chats, mobile navigation preserved
 

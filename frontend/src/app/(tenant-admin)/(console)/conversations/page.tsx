@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Select";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useApiQuery, errorMessage } from "@/lib/useApiQuery";
-import type { ConversationSummary } from "@/lib/api-schemas";
+import type { ConversationListResponse, ConversationSummary } from "@/lib/api-schemas";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -30,11 +30,11 @@ export default function ConversationsPage() {
   const router = useRouter();
   const [status, setStatus] = useState("all");
   const query = status === "all" ? "" : `?status=${status}`;
-  const { data, isPending, error } = useApiQuery<ConversationSummary[]>(
+  const { data, isPending, error } = useApiQuery<ConversationListResponse>(
     `/api/conversations${query}`,
     { queryKey: ["conversations", status] },
   );
-  const conversations = data ?? [];
+  const conversations = data?.items ?? [];
 
   const columns: TableColumn<ConversationSummary>[] = useMemo(
     () => [

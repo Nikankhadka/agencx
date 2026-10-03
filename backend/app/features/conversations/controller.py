@@ -8,7 +8,7 @@ shape that api.py's response models validate against.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -22,13 +22,17 @@ async def list_conversations(
     status_filter: str | None,
     limit: int,
     offset: int,
+    queue_filter: Literal["all", "needs_you", "unread", "human"] = "all",
+    q: str | None = None,
     role: str = "tenant_admin",
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     return await service.list_conversations(
         tenant_id=tenant_id,
         status_filter=status_filter,
         limit=limit,
         offset=offset,
+        queue_filter=queue_filter,
+        q=q,
         role=role,
     )
 

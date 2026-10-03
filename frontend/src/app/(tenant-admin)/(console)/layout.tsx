@@ -10,7 +10,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useAuth } from "@/components/AuthProvider";
 import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
-import type { ConversationSummary } from "@/lib/api-schemas";
+import type { ConversationListResponse } from "@/lib/api-schemas";
 
 /**
  * E-1 / D21: the tenant app shell. Three destinations - Home, Chats, Business
@@ -81,15 +81,17 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .catch(() => setTenant(null));
   }, [session]);
 
-  // The prototype's `#ndot`, widened into a count: the Chats tab says how
-  // many are waiting, from wherever the owner happens to be standing. Same
-  // source as the Chats screen's "Action needed" filter and the home
-  // WaitingPanel, so none of the three can ever disagree.
-  const conversations = useApiQuery<ConversationSummary[]>("/api/conversations", {
+  // The prototype's `#ndot`, widened into a count: the Chats tab says how many
+  // are waiting, from wherever the owner happens to be standing. RF-14/D38:
+  // that is the server's needs_you count - an open escalation or a taken-over
+  // thread - the same number the Chats screen opens on, so the badge and the
+  // queue can never disagree. (The old client count over needs_attention was
+  // the RF-18 follow-up this reconciles.)
+  const conversations = useApiQuery<ConversationListResponse>("/api/conversations", {
     enabled: Boolean(session),
     refetchInterval: 4000,
   });
-  const waitingCount = (conversations.data ?? []).filter((row) => row.needs_attention).length;
+  const waitingCount = conversations.data?.counts?.needs_you ?? 0;
   const items = NAV_ITEMS.map((item) =>
     item.href === "/chats" ? { ...item, count: waitingCount } : item
   );

@@ -756,7 +756,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Conversations */
+        /**
+         * List Conversations
+         * @description RF-14/D38: one page of the owner's Chats queue plus the server total and
+         *     the per-tab counts, all computed over the tenant's complete dataset.
+         */
         get: operations["list_conversations_api_conversations_get"];
         put?: never;
         post?: never;
@@ -1192,6 +1196,17 @@ export interface components {
             /** Widget */
             widget?: ("text" | "chips" | "masked" | "cta" | "phone") | null;
         };
+        /** ConversationCounts */
+        ConversationCounts: {
+            /** All */
+            all: number;
+            /** Needs You */
+            needs_you: number;
+            /** Unread */
+            unread: number;
+            /** Human */
+            human: number;
+        };
         /** ConversationDetail */
         ConversationDetail: {
             /**
@@ -1216,6 +1231,14 @@ export interface components {
             total_cost_usd: number;
             /** Messages */
             messages: components["schemas"]["MessageDetail"][];
+        };
+        /** ConversationListResponse */
+        ConversationListResponse: {
+            /** Items */
+            items: components["schemas"]["ConversationSummary"][];
+            /** Total */
+            total: number;
+            counts: components["schemas"]["ConversationCounts"];
         };
         /** ConversationSummary */
         ConversationSummary: {
@@ -1253,6 +1276,11 @@ export interface components {
             last_message?: string | null;
             /** Last Activity At */
             last_activity_at?: string | null;
+            /**
+             * Handler
+             * @default assistant
+             */
+            handler: string;
         };
         /** CorrectionPayload */
         CorrectionPayload: {
@@ -4235,6 +4263,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("open" | "human" | "escalated" | "closed") | null;
+                filter?: "all" | "needs_you" | "unread" | "human";
+                q?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -4250,7 +4280,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationSummary"][];
+                    "application/json": components["schemas"]["ConversationListResponse"];
                 };
             };
             /** @description Validation failed */

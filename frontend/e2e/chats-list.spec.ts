@@ -17,6 +17,7 @@
 
 import { test, expect } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
+import { mockQueue } from "./queue-fixtures";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
 
@@ -33,6 +34,7 @@ const ROWS = [
     pending_summary: "Customer requested the menu items.",
     pending_since: "2026-01-01T00:00:00Z",
     last_activity_at: "2026-01-01T00:00:00Z",
+    handler: "assistant",
   },
   {
     id: "a1b2c3d4-0b7e-4d3a-9c21-77a1b2c3d4e5",
@@ -43,14 +45,13 @@ const ROWS = [
     needs_attention: false,
     last_message: "Thanks, see you Friday.",
     last_activity_at: "2026-01-01T00:00:00Z",
+    handler: "assistant",
   },
 ];
 
 test.describe("Chats - telling one row from another", () => {
   test.beforeEach(async ({ page }) => {
-    await page.route("**/api/conversations", async (route) => {
-      await route.fulfill({ json: ROWS });
-    });
+    await mockQueue(page, ROWS);
   });
 
   test("an unnamed customer is identified by the conversation's short reference", async ({
@@ -60,6 +61,8 @@ test.describe("Chats - telling one row from another", () => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
+    // The default tab is Needs you; switch to All to see both fixture rows.
+    await page.getByTestId("chats-filter-all").click();
     const rows = page.getByTestId("chat-row");
     await expect(rows).toHaveCount(2);
     await expect(rows.first()).toContainText("#4F9A2C");
@@ -72,6 +75,7 @@ test.describe("Chats - telling one row from another", () => {
     await page.getByRole("button", { name: "Search conversations" }).click();
     await page.getByTestId("chats-search").fill("4f9a");
     await expect(page.getByTestId("chat-row")).toHaveCount(1);
+    await expect(page.getByTestId("chat-row").first()).toContainText("#4F9A2C");
   });
 
   test("a row that wants the owner carries a labelled icon badge", async ({ page, request }) => {
@@ -81,10 +85,11 @@ test.describe("Chats - telling one row from another", () => {
     const badge = page.getByTestId("row-attention");
     await expect(badge).toHaveCount(1);
     await expect(badge).toBeVisible();
-    await expect(badge).toHaveAttribute("aria-label", "Action needed");
+    // RF-14 renamed the label from "Action needed" to "Needs you".
+    await expect(badge).toHaveAttribute("aria-label", "Needs you");
     // The row itself no longer spells it out - the icon and its accessible
     // name are the signal, so the title keeps its width on a phone.
-    await expect(page.getByTestId("chat-row").first()).not.toContainText("Action needed");
+    await expect(page.getByTestId("chat-row").first()).not.toContainText("Needs you");
   });
 
   test("the thread header carries the same label as its row", async ({ page, request }) => {

@@ -15,6 +15,124 @@ from typing import Any, Literal
 
 from app.shared import db
 
+# RF-14 / D38: the queue is answered by the server over the whole tenant
+# dataset. The filter is derived from state the row already carries - an open
+# escalation, the human-takeover status, and the RF-18 read marker - so no new
+# column is needed. Every count is the same predicate run as a query.
+#
+# An "open" escalation is any row that is not resolved, matching the
+# pending_summary/needs_attention subqueries below and the D38 definition.
+_NEEDS_YOU_SQL = (
+    "(c.status = 'human' or exists ("
+    " select 1 from escalations e"
+    " where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved'))"
+)
+
+# RF-18's unread definition, kept in exactly one place: a customer message
+# newer than the owner's read marker, or no marker yet. The list column and the
+# unread filter both read this string so the two can never drift.
+_UNREAD_SQL = (
+    "exists (select 1 from messages m"
+    " where m.tenant_id = $1 and m.conversation_id = c.id"
+    "   and m.role = 'customer'"
+    "   and (c.owner_read_at is null or m.created_at > c.owner_read_at))"
+)
+
+_FILTER_SQL: dict[str, str] = {
+    "all": "true",
+    "needs_you": _NEEDS_YOU_SQL,
+    "human": "c.status = 'human'",
+    "unread": _UNREAD_SQL,
+}
+
+# Search matches the whole tenant dataset: customer name, the conversation
+# reference (the id's hex with dashes removed), and the latest open
+# escalation's summary. A leading "#" is ignored only for the reference match,
+# so a value copied from the list as "#4F9A2C" still finds its row. $3 is the
+# trimmed query; empty means no search. The value is always bound, never
+# interpolated.
+_SEARCH_SQL = (
+    "($3 = '' or "
+    " strpos(lower(c.customer_ref), lower($3)) > 0 "
+    " or strpos(lower(replace(c.id::text, '-', '')), "
+    "      lower(case when left($3, 1) = '#' then substr($3, 2) else $3 end)) > 0 "
+    " or strpos(lower((select e.summary from escalations e"
+    "      where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved'"
+    "      order by e.created_at desc limit 1)), lower($3)) > 0)"
+)
+
+
+def _where_sql(*, filter_sql: str) -> str:
+    """The tenant scope + status + search + one queue filter, shared by the
+    items and total queries. The counts query uses the same scope with no queue
+    filter and applies each predicate as an aggregate filter instead."""
+    return (
+        "c.tenant_id = $1 "
+        "and ($2::text is null or c.status = $2) "
+        f"and {_SEARCH_SQL} "
+        f"and {filter_sql}"
+    )
+
+
+def _items_sql(*, filter_sql: str) -> str:
+    # C-6 adds the three things the owner's Chats list reads at a glance:
+    # whether a human is wanted (an open escalation), what it is about (that
+    # escalation's summary), and the last thing said. All three are correlated
+    # subqueries against the row being listed rather than a join + group-by,
+    # which keeps one row per conversation without the list having to
+    # de-duplicate anything. RF-14 adds handler, derived from status.
+    return (
+        "select c.id, c.customer_ref, c.status, c.created_at, "
+        "  (select count(*) from messages m "
+        "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system') "
+        "   as message_count, "
+        "  (select e.summary from escalations e "
+        "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved' "
+        "   order by e.created_at desc limit 1) as pending_summary, "
+        "  (select e.created_at from escalations e "
+        "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved' "
+        "   order by e.created_at desc limit 1) as pending_since, "
+        "  exists (select 1 from escalations e "
+        "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved') "
+        "   as needs_attention, "
+        f"  {_UNREAD_SQL} as unread, "
+        "  (select m.content from messages m "
+        "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system' "
+        "   order by m.created_at desc, m.id desc limit 1) as last_message, "
+        "  (select m.created_at from messages m "
+        "   where m.tenant_id = $1 and m.conversation_id = c.id "
+        "   order by m.created_at desc, m.id desc limit 1) as last_activity_at, "
+        "  case when c.status = 'human' then 'human' else 'assistant' end as handler "
+        "from conversations c "
+        f"where {_where_sql(filter_sql=filter_sql)} "
+        # Ordered by the stamp the row actually shows. Nulls last puts a
+        # conversation with nothing said in it at the bottom, which is where
+        # an empty thread belongs. c.id desc is a unique final key: without it
+        # two rows tied on both stamps have no stable position, so an
+        # offset page can skip or duplicate them under load.
+        "order by last_activity_at desc nulls last, c.created_at desc, c.id desc "
+        "limit $4 offset $5"
+    )
+
+
+def _total_sql(*, filter_sql: str) -> str:
+    return f"select count(*) from conversations c where {_where_sql(filter_sql=filter_sql)}"
+
+
+def _counts_sql() -> str:
+    """Every tab count over the tenant's whole dataset with q applied but the
+    active filter and pagination ignored. The active filter's count equals the
+    total whenever there is no search, which is the invariant the client's
+    "Load more" relies on."""
+    where = _where_sql(filter_sql="true")
+    return (
+        'select count(*) as "all", '
+        f"  count(*) filter (where {_NEEDS_YOU_SQL}) as needs_you, "
+        f"  count(*) filter (where {_UNREAD_SQL}) as unread, "
+        "  count(*) filter (where c.status = 'human') as human "
+        f"from conversations c where {where}"
+    )
+
 
 async def list_conversations(
     *,
@@ -22,57 +140,38 @@ async def list_conversations(
     status_filter: str | None,
     limit: int,
     offset: int,
+    queue_filter: Literal["all", "needs_you", "unread", "human"] = "all",
+    q: str | None = None,
     role: str = "tenant_admin",
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
+    """One queue page plus the server total and the per-tab counts, all read
+    inside a single tenant context."""
+    search = (q or "").strip()
+    filter_sql = _FILTER_SQL[queue_filter]
     async with db.tenant_context(tenant_id, role) as conn:
-        # C-6 adds the three things the owner's Chats list reads at a glance:
-        # whether a human is wanted (an open escalation), what it is about
-        # (that escalation's summary), and the last thing said. All three are
-        # correlated subqueries against the row being listed rather than a join
-        # + group-by, which keeps one row per conversation without the list
-        # having to de-duplicate anything.
-        rows = await conn.fetch(
-            "select c.id, c.customer_ref, c.status, c.created_at, "
-            "  (select count(*) from messages m "
-            "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system') "
-            "   as message_count, "
-            "  (select e.summary from escalations e "
-            "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved' "
-            "   order by e.created_at desc limit 1) as pending_summary, "
-            "  (select e.created_at from escalations e "
-            "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved' "
-            "   order by e.created_at desc limit 1) as pending_since, "
-            "  exists (select 1 from escalations e "
-            "   where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved') "
-            "   as needs_attention, "
-            # RF-18: unread is a separate axis from needs_attention. A
-            # conversation is unread when the owner has never opened it, or a
-            # customer message is newer than the marker. Tenant-scoped and
-            # correlated against the listed row, like every other subquery here.
-            "  exists (select 1 from messages m "
-            "   where m.tenant_id = $1 and m.conversation_id = c.id "
-            "     and m.role = 'customer' "
-            "     and (c.owner_read_at is null or m.created_at > c.owner_read_at)) "
-            "   as unread, "
-            "  (select m.content from messages m "
-            "   where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system' "
-            "   order by m.created_at desc, m.id desc limit 1) as last_message, "
-            "  (select m.created_at from messages m "
-            "   where m.tenant_id = $1 and m.conversation_id = c.id "
-            "   order by m.created_at desc, m.id desc limit 1) as last_activity_at "
-            "from conversations c "
-            "where c.tenant_id = $1 and ($2::text is null or c.status = $2) "
-            # Ordered by the stamp the row actually shows. Nulls last puts a
-            # conversation with nothing said in it at the bottom, which is
-            # where an empty thread belongs.
-            "order by last_activity_at desc nulls last, c.created_at desc "
-            "limit $3 offset $4",
+        item_rows = await conn.fetch(
+            _items_sql(filter_sql=filter_sql),
             tenant_id,
             status_filter,
+            search,
             limit,
             offset,
         )
-    return [dict(row) for row in rows]
+        total = await conn.fetchval(
+            _total_sql(filter_sql=filter_sql), tenant_id, status_filter, search
+        )
+        counts = await conn.fetchrow(_counts_sql(), tenant_id, status_filter, search)
+        assert counts is not None
+    return {
+        "items": [dict(row) for row in item_rows],
+        "total": int(total),
+        "counts": {
+            "all": int(counts["all"]),
+            "needs_you": int(counts["needs_you"]),
+            "unread": int(counts["unread"]),
+            "human": int(counts["human"]),
+        },
+    }
 
 
 async def get_conversation(
