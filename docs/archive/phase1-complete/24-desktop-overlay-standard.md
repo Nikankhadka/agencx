@@ -1,6 +1,6 @@
 # 24: Desktop overlay standard
 
-**Status:** Active - in progress on `feat/24-desktop-overlay-standard`.
+**Status:** Done - merged in `c85e96f` on 2026-10-05.
 **Phase 1 area:** Tenant console and storefront UI.
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -169,3 +169,16 @@ removes the per-caller drift.
   `desktop` caller
 - `docs/agencx/design/frontend.md` sections 4.5-4.8
 - `frontend/src/lib/useMediaQuery.ts` (`DESKTOP_QUERY`)
+
+## Verification
+
+- `make lint-frontend`, `make typecheck-frontend`, `make test-frontend`: 365
+  passed (43 files)
+- New `overlay-standard.spec.ts`: 4 passed (form sheet centered at 448px or
+  less and content-sized at 1280; bottom-anchored full width at 390; document
+  sheet at 768px or less; tall offering Modal capped with a scrolling body)
+- Sheet-related regression specs (`settings-abn`, `settings-voice`,
+  `settings-knowledge`, `business-details-rf2`, `knowledge-review`,
+  `knowledge-review-mobile`, `mobile-voice-sheet`, `storefront`,
+  `storefront-mobile`, `rf-7-business-page-shortcuts`,
+  `rf-8-desktop-chat-panel`, `business-hub`): 80 passed

@@ -250,6 +250,7 @@
 
 - **Next.js dev streaming leaves a hidden `div#S:0` clone of the page** (2026-10-03, RF-17 review-fix): on the host, `page.locator("main")` intermittently matched two `<main>` elements and strict-failed (~10-25% of runs, random business, invisible inside most `make test-e2e` container runs). The second sits under `div#S:0`, a React/Next streaming boundary placeholder that is not part of the app. Use `page.getByRole("main")` (the role query excludes the hidden clone) instead of `locator("main")`; the same trap applies to any bare CSS locator whose hidden clones are reachable.
 - **Next.js's dev-tools indicator (`<nextjs-portal>`) is baked into every local screenshot.** For capture-only specs, register `page.addInitScript` before the first navigation to inject `nextjs-portal{display:none!important}` on `DOMContentLoaded`, guarded on the capture env flag so runs with capture off never touch the page.
+- **An aborted `business-hub` run leaves active probe offerings that poison the next run** (2026-10-05, ticket 25 verification): `create_offerings_batch` skips a name that already exists and `create_offering` then raises `ValueError`, which the API maps to 404 "offering name already exists". After a failed add/media test leaves rows like `M1 test offering` or `RF-5 media URL probe` active, later runs 404 on Save and cascade through the spec. Re-run `make seed` before re-running those specs; the in-spec cleanup loops only remove the names they know about.
 
 ---
 

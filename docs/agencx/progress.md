@@ -42,6 +42,7 @@ live in the ticket files, not here.
 | Developer experience, deployment, security and API reliability | K-1, B-4, R-1, R-2, R-4 US-1, R-5 US-1 |
 | Walkthrough fixes, schema drop, document review, auth OTP | W-1 through W-13, migration `0029`, hosted-verified |
 | Intent and identity, required services, category management | 19, 20, 21 |
+| Storefront and console refinement batch | 23 through 28 |
 
 ## What is next
 
@@ -59,33 +60,13 @@ live in the ticket files, not here.
   Free-versus-Pro decision are still open founder items). Billing and
    notifications are out of scope. Ticket file
    [12-refinement.md](spec/active/12-refinement.md) Part 4.
-- [x] Ticket 24 (desktop overlay standard): merged in `c85e96f`. At `lg+`
-  every sheet centers and height-caps - form sheets at `max-w-md`, document
-  surfaces at the new `--width-doc` (768px) - and `Modal` scrolls its body;
-  below `lg` sheets are unchanged. Ticket file
-  [24-desktop-overlay-standard.md](spec/active/24-desktop-overlay-standard.md).
-- [x] Ticket 28 (knowledge review list layout): merged in `3823740`.
-  Offerings lead in both review modes, the collapsed list caps at three below
-  `lg` and five at `lg+`, and "Review all N offerings" and "Add offering"
-  moved below the cards. Ticket file
-  [28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md).
-- [x] Ticket 23 (sparse storefront layout): merged in `b64736a`. The
-  no-offerings assistant invitation aligns to the page's `max-w-5xl` column
-  and sizes to content instead of stretching to the viewport. Ticket file
-  [23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md).
-- [x] Ticket 26 (business page actions): merged in `c14ff4f`. The
-  empty-catalog services overview gains an Edit action opening the existing
-  services sheet, and pending offering candidates get a review card on the
-  page. Ticket file
-  [26-business-page-actions.md](spec/active/26-business-page-actions.md).
-- [x] Ticket 27 (Home brief link target): merged in `33a63b6`. The "Get your
-  link" chip points at `/business/page` instead of the hub. Ticket file
-  [27-home-brief-chip.md](spec/active/27-home-brief-chip.md).
-- [ ] Ticket 25 (media replace hardening): in progress. Failed row writes
-  destroy the new upload, Cloudinary cover writes clear the stale local
-  fallback row, and deletes remove the row before the cloud object. Ticket
-  file
-  [25-media-replace-hardening.md](spec/active/25-media-replace-hardening.md).
+- [x] Storefront and console refinement batch 23-28: all six merged (23
+  `b64736a`, 24 `c85e96f`, 25 `72f2944`, 26 `c14ff4f`, 27 `33a63b6`,
+  28 `3823740`). Sparse-storefront invitation alignment, the desktop overlay
+  standard, media replace hardening, Business page services edit plus
+  candidate review, the Home link chip target, and the offerings-first review
+  list. Archived ticket files are indexed in
+  [the phase-1-complete archive](../archive/phase1-complete/README.md).
 - [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -311,13 +292,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/24-desktop-overlay-standard.md](spec/active/24-desktop-overlay-standard.md) | `Done - merged in c85e96f` | Desktop overlay standard |
-| [spec/active/28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md) | `Done - merged in 3823740` | Knowledge review list layout |
-| [spec/active/23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md) | `Done - merged in b64736a` | Sparse storefront layout |
-| [spec/active/26-business-page-actions.md](spec/active/26-business-page-actions.md) | `Done - merged in c14ff4f` | Business page actions |
-| [spec/active/27-home-brief-chip.md](spec/active/27-home-brief-chip.md) | `Done - merged in 33a63b6` | Home brief link target |
-| [spec/active/25-media-replace-hardening.md](spec/active/25-media-replace-hardening.md) | `Active - in progress` | Media replace hardening |
-| [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
+| [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items
 are validated or explicitly accepted as deferred.

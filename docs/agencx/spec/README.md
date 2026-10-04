@@ -31,12 +31,6 @@ Per-ticket header pattern:
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived; Part 2 spec completed and delivered) | `Active - todo` |
-| [active/24-desktop-overlay-standard.md](active/24-desktop-overlay-standard.md) | Desktop overlay standard | `Done - merged in c85e96f` |
-| [active/28-knowledge-review-list-layout.md](active/28-knowledge-review-list-layout.md) | Knowledge review list layout | `Done - merged in 3823740` |
-| [active/23-sparse-storefront-layout.md](active/23-sparse-storefront-layout.md) | Sparse storefront layout | `Done - merged in b64736a` |
-| [active/26-business-page-actions.md](active/26-business-page-actions.md) | Business page actions | `Done - merged in c14ff4f` |
-| [active/27-home-brief-chip.md](active/27-home-brief-chip.md) | Home brief link target | `Done - merged in 33a63b6` |
-| [active/25-media-replace-hardening.md](active/25-media-replace-hardening.md) | Media replace hardening | `Active - in progress` |
 
 ## Completed work
 
@@ -47,7 +41,8 @@ hygiene, developer experience, deployment, offerings and media, R-1/R-2
 refinement, RF-1 through RF-18 refinement, walkthrough fixes W-1 through W-9,
 schema drop W-10, document review W-11, auth OTP W-12/W-13, the finalized M-7
 storefront, intent and identity (19), required services (20), and category
-management (21) - with the walkthrough evidence logs.
+management (21) - plus the 2026-10 storefront and console refinement batch
+(23 through 28) - with the walkthrough evidence logs.
 
 ## Prototype status
 

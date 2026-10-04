@@ -46,6 +46,12 @@ merged to `development` or `staging`, with its verification narrative.
 | [12-refinement-rf-17-four-business-walkthrough.md](12-refinement-rf-17-four-business-walkthrough.md) | RF-17 | Four-business assembled walkthrough (cafe, retail/repair, dental, general clinic) on identical config-driven code, a fourth config-only seed (wellspring), a permanent five-test Playwright walkthrough with cross-tenant isolation, and 24 screenshots mapped to named E2E checks |
 | [12-refinement-rf-18-owner-read-state.md](12-refinement-rf-18-owner-read-state.md) | RF-18 | Real per-owner read state in the chat queue: migration `0035`, `POST /api/conversations/{id}/read`, unread row emphasis |
 | [22-production-hardening.md](22-production-hardening.md) | T-022 to T-033 | Production hardening: abuse control, CI hygiene, Sentry, CSP, conversation delete, retention, operator export, privacy/terms, backups; ADRs D32-D36 |
+| [23-sparse-storefront-layout.md](23-sparse-storefront-layout.md) | 23 | Sparse storefront layout: the no-offerings assistant invitation aligns to the page's `max-w-5xl` column and sizes to content; M-7's full-page stretch superseded |
+| [24-desktop-overlay-standard.md](24-desktop-overlay-standard.md) | 24 | Desktop overlay standard: at `lg+` every Sheet is a centered height-capped dialog (forms `max-w-md`, documents `--width-doc` 768px) and Modal scrolls its body; CustomerChatPanel unchanged |
+| [25-media-replace-hardening.md](25-media-replace-hardening.md) | 25 | Media replace hardening: failed row writes destroy the new upload, Cloudinary cover writes clear the stale local fallback row, deletes are row-first with a logged non-fatal cloud failure |
+| [26-business-page-actions.md](26-business-page-actions.md) | 26 | Business page actions: empty-catalog services overview gains an owner-only Edit (reused sheet, PATCH plus refetch) and pending candidates get the Home review card; public DOM unchanged |
+| [27-home-brief-chip.md](27-home-brief-chip.md) | 27 | Home brief link target: the "Get your link" chip points at `/business/page` instead of the hub |
+| [28-knowledge-review-list-layout.md](28-knowledge-review-list-layout.md) | 28 | Knowledge review list layout: offerings lead in both modes, the collapsed cap is 3 below `lg` and 5 at `lg+`, and Review all/Add offering sit below the cards |
 
 Evidence:
 

@@ -1,6 +1,6 @@
 # 25: Media replace hardening
 
-**Status:** Active - in progress on `fix/25-media-replace-hardening`.
+**Status:** Done - merged in `72f2944` on 2026-10-05.
 **Phase 1 area:** Backend, business media.
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -112,3 +112,12 @@ gone. The fix closes those paths; it does not build a sweeper.
 
 - RF-5 cover and offering-image workflows (archived) - the replace flow
 - `docs/agencx/design/database.md` - `tenant_media` / `tenant_assets`
+
+## Verification
+
+- `make lint-backend` and `make typecheck-backend`: clean (226 files)
+- `make format-check`: clean
+- `make test-backend`: 1283 passed
+- New failure-path tests: DB-write failure destroys the new upload, a
+  Cloudinary cover write clears the stale local fallback row, and delete
+  survives a failing cloud destroy on both offering media and cover

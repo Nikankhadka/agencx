@@ -1,6 +1,6 @@
 # 28: Knowledge review list layout
 
-**Status:** Active - in progress on `feat/28-knowledge-review-list-layout`.
+**Status:** Done - merged in `3823740` on 2026-10-05.
 **Phase 1 area:** Knowledge review (onboarding and Business > Details > Knowledge).
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -158,3 +158,10 @@ controls right below them,
   superseded here
 - `docs/agencx/design/frontend.md` (responsive and list idioms)
 - `frontend/src/lib/useMediaQuery.ts` (`DESKTOP_QUERY`)
+
+## Verification
+
+- `make lint-frontend`, `make typecheck-frontend`, `make test-frontend`: 366
+  passed (43 files)
+- Targeted e2e `knowledge-review.spec.ts`, `knowledge-review-mobile.spec.ts`,
+  `onboarding-url.spec.ts`: 13 passed

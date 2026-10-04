@@ -1,6 +1,6 @@
 # 23: Sparse storefront layout
 
-**Status:** Active - in progress on `feat/23-sparse-storefront-layout`.
+**Status:** Done - merged in `b64736a` on 2026-10-05.
 **Phase 1 area:** Storefront UI.
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -113,3 +113,12 @@ overview,
 - M-7 finalized storefront (archived) - full-page invitation intent
   superseded here
 - `docs/agencx/design/frontend.md` (columns and container idioms)
+
+## Verification
+
+- `make lint-frontend`, `make typecheck-frontend`, `make test-frontend`: 366
+  passed (43 files)
+- Visual check at 390 and 1280 against a temporarily emptied bytefix catalog
+  (offerings restored afterwards): the invitation sits in the same `max-w-5xl`
+  column as the hero and the services overview, sizes to content, and the
+  footer stays bottom-anchored

@@ -1,6 +1,6 @@
 # 26: Business page actions
 
-**Status:** Active - in progress on `feat/26-business-page-actions`.
+**Status:** Done - merged in `c14ff4f` on 2026-10-05.
 **Phase 1 area:** Tenant console, Business page.
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -137,3 +137,16 @@ What you offer but not from the page those offerings will appear on.
 - RF-2 business-detail editing (archived) - the profile save path reused here
 - `frontend/src/components/knowledge/OfferingSuggestions.tsx` - the existing
   review entry and endpoints
+
+## Verification
+
+- `make lint-frontend`, `make typecheck-frontend`, `make test-frontend`: 369
+  passed (44 files)
+- New `business-page-actions.spec.ts`: 2 passed (services Edit opens the
+  sheet, PATCHes, and refetches the page; the candidates card opens the
+  suggestions sheet)
+- Regression specs (`business-hub`, `storefront`,
+  `rf-7-business-page-shortcuts`, `business-details-rf2`): passed on a clean
+  seed. An earlier run failed on leaked probe offerings from an aborted prior
+  run (POST 404 "offering name already exists") and was resolved with
+  `make seed`

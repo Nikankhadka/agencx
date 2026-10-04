@@ -1,6 +1,6 @@
 # 27: Home brief link target
 
-**Status:** Active - in progress on `fix/27-home-brief-chip`.
+**Status:** Done - merged in `33a63b6` on 2026-10-05.
 **Phase 1 area:** Tenant console, Home.
 
 Numbering note: 23 through 28 are the 2026-10 storefront and console
@@ -77,3 +77,10 @@ rather than one hop short of it.
 ## References
 
 - E-4 Home and brief (archived) - the share nudge's origin
+
+## Verification
+
+- `make lint-frontend`, `make typecheck-frontend`, `make test-frontend`: 369
+  passed (44 files)
+- `brief.test.ts` pins the share chip at `/business/page`; no e2e targets
+  this chip
