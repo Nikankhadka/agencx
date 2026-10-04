@@ -200,7 +200,10 @@ export function Offerings({
   const [activeId, setActiveId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const intersectingRef = useRef<Set<string>>(new Set());
-  const scrollLockRef = useRef(0);
+  // Held while a smooth jump is in flight (a timer id, or undefined when
+  // unlocked). The observer fires for every section the animation crosses, and
+  // those crossings are not user scrolls.
+  const scrollLockRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -216,7 +219,7 @@ export function Offerings({
           if (entry.isIntersecting) intersecting.add(entry.target.id);
           else intersecting.delete(entry.target.id);
         }
-        if (Date.now() < scrollLockRef.current) return;
+        if (scrollLockRef.current !== undefined) return;
         const visible = sections.filter((section) => intersecting.has(section.id));
         const current = visible[visible.length - 1];
         if (current) setActiveId(current.id);
@@ -230,7 +233,10 @@ export function Offerings({
   function goToSection(event: MouseEvent<HTMLAnchorElement>, id: string) {
     event.preventDefault();
     setActiveId(id);
-    scrollLockRef.current = Date.now() + 900;
+    window.clearTimeout(scrollLockRef.current);
+    scrollLockRef.current = window.setTimeout(() => {
+      scrollLockRef.current = undefined;
+    }, 900);
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.getElementById(id)?.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
