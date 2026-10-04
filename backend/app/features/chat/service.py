@@ -86,14 +86,13 @@ async def resolve_conversation(
 async def resolve_or_create_conversation(
     *, tenant_id: UUID, conversation_id: UUID | None
 ) -> tuple[UUID, str, bool, bool]:
-    """RF-11: open or fetch the conversation for the customer-initiated handoff.
+    """Open or fetch the conversation for a deterministic handoff.
 
-    The "Ask for a person" control carries no message, so unlike
-    ``resolve_conversation`` this writes no ``messages`` row - it only resolves
-    the conversation and reads whether the contact fields are already present
-    (so the handoff reply knows whether to ask). A conversation is created when
-    the id is omitted, because a customer may want a person before typing
-    anything. Returns
+    A handoff carries no message, so unlike ``resolve_conversation`` this writes
+    no ``messages`` row - it only resolves the conversation and reads whether
+    the contact fields are already present (so the handoff reply knows whether
+    to ask). A conversation is created when the id is omitted, because a handoff
+    can arrive before the customer types anything. Returns
     ``(conversation_id, status, name_known, email_known)``; raises ValueError
     when a supplied id is not this tenant's."""
     async with db.tenant_context(tenant_id, "customer") as conn:

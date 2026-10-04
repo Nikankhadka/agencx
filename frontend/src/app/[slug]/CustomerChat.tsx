@@ -22,7 +22,6 @@ import { EscalationBanner } from "@/components/ui/EscalationBanner";
 import { parseChatStreamEvent, type ChatStreamEvent } from "@/lib/chat-events";
 import { messageFromPublic } from "@/lib/chat-restore";
 import type { PublicMessage } from "@/lib/api-schemas";
-import { handoffRequestBody, shouldShowAskForPerson } from "@/lib/handoff";
 import { customerOpening } from "@/lib/greeting";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -95,14 +94,6 @@ function nextMessageId(): string {
   return `message-${messageIdCounter}`;
 }
 
-/**
- * RF-13: what an inline Retry on a failed bubble should re-run. A failed send
- * replays its exact payload; a failed handoff re-runs the handoff. Keeping it
- * on the bubble is what lets the "Try again?" copy always ship with a working
- * control.
- */
-type RetryTarget = { kind: "send"; text: string } | { kind: "handoff" };
-
 interface Message {
   id?: string;
   role: ChatRole;
@@ -115,10 +106,10 @@ interface Message {
   error?: boolean;
   /**
    * RF-13: set on a failed assistant bubble, and the only thing the inline
-   * Retry reads. A send carries the exact payload; a handoff carries its kind.
-   * Absent on a healthy turn.
+   * Retry reads. It carries the exact payload to replay. Absent on a healthy
+   * turn.
    */
-  retry?: RetryTarget;
+  retry?: string;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -312,20 +303,21 @@ export function CustomerChat({
 
   /**
    * RF-13: the shared failure path. It stamps the failed bubble with the retry
-   * affordance and what Retry should re-run. `restoreComposer` is true only for
-   * a fresh send (whose payload the send already cleared), so a retry failure
-   * never overwrites a newer draft the customer typed in the meantime.
+   * affordance and the exact payload Retry should replay. `restoreComposer` is
+   * true only for a fresh send (whose payload the send already cleared), so a
+   * retry failure never overwrites a newer draft the customer typed in the
+   * meantime.
    */
-  function failTurn(messageId: string, retry: RetryTarget, restoreComposer: boolean) {
+  function failTurn(messageId: string, text: string, restoreComposer: boolean) {
     updateMessageById(messageId, () => ({
       text: "Something went wrong just then. Try again?",
       error: true,
       streaming: false,
-      retry,
+      retry: text,
     }));
-    if (restoreComposer && retry.kind === "send") {
-      setInput(retry.text);
-      writeSession(draftKey(slug), retry.text);
+    if (restoreComposer) {
+      setInput(text);
+      writeSession(draftKey(slug), text);
     }
   }
 
@@ -336,7 +328,6 @@ export function CustomerChat({
    * explicit retry does not.
    */
   async function runChatTurn(messageId: string, text: string, restoreComposer: boolean) {
-    const retry: RetryTarget = { kind: "send", text };
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
@@ -344,9 +335,9 @@ export function CustomerChat({
         body: JSON.stringify({ slug, conversation_id: conversationId, message: text }),
       });
       if (!res.ok || !res.body) throw new Error("chat request failed");
-      await consumeStream(res.body, messageId, retry, restoreComposer);
+      await consumeStream(res.body, messageId, text, restoreComposer);
     } catch {
-      failTurn(messageId, retry, restoreComposer);
+      failTurn(messageId, text, restoreComposer);
     }
   }
 
@@ -378,20 +369,16 @@ export function CustomerChat({
 
   // RF-13: the explicit retry, the only thing that replays a failure - there is
   // no automatic loop. It reinstates the same bubble in place (no second
-  // customer bubble) and re-runs whatever operation failed. It deliberately
-  // leaves the composer and the stored draft alone, so a newer draft the
-  // customer typed after the failure survives.
+  // customer bubble) and re-runs the failed send. It deliberately leaves the
+  // composer and the stored draft alone, so a newer draft the customer typed
+  // after the failure survives.
   async function retry(messageId: string) {
     if (busy || escalated) return;
-    const retryTarget = messages.find((m) => m.id === messageId)?.retry;
-    if (!retryTarget) return;
-    if (retryTarget.kind === "handoff") {
-      await askForPerson(messageId);
-      return;
-    }
+    const text = messages.find((m) => m.id === messageId)?.retry;
+    if (!text) return;
     setBusy(true);
     // Reinstate the bubble to streaming: drop the error state and the stale
-    // target, so a second failure stamps it again and a success leaves none.
+    // payload, so a second failure stamps it again and a success leaves none.
     updateMessageById(messageId, () => ({
       text: "",
       error: false,
@@ -399,58 +386,7 @@ export function CustomerChat({
       retry: undefined,
     }));
     try {
-      await runChatTurn(messageId, retryTarget.text, false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // RF-11: the deterministic handoff. It posts no message and runs no agent
-  // turn - the backend records the escalation and streams the same handoff
-  // reply the assistant's tool would. Busy-guarded like `send`, and hidden
-  // once `handoffSeen` so it cannot be fired twice. `reuseId` lets a failed
-  // handoff's Retry re-run it in that same bubble.
-  async function askForPerson(reuseId?: string) {
-    if (busy || !shouldShowAskForPerson({ escalated, handoffSeen })) return;
-    setBusy(true);
-    setShowStarters(false);
-    const assistantId = reuseId ?? nextMessageId();
-    if (reuseId) {
-      updateMessageById(reuseId, () => ({
-        text: "",
-        error: false,
-        streaming: true,
-        retry: undefined,
-      }));
-    } else {
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: "assistant", text: "", streaming: true },
-      ]);
-    }
-
-    try {
-      const res = await fetch(`${API_URL}/api/chat/handoff`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(handoffRequestBody(slug, conversationId)),
-      });
-      if (!res.ok || !res.body) throw new Error("handoff request failed");
-      await consumeStream(res.body, assistantId, { kind: "handoff" }, false);
-      // An already-open escalation streams no reply, so drop the empty
-      // placeholder rather than leave a blank assistant bubble.
-      setMessages((prev) => {
-        const placeholder = prev.find((m) => m.id === assistantId);
-        if (placeholder && placeholder.text === "" && !placeholder.error) {
-          return prev.filter((m) => m.id !== assistantId);
-        }
-        return prev;
-      });
-    } catch {
-      // A handoff failure has no customer payload, but Retry re-runs the
-      // handoff, so the failed bubble never promises "Try again?" without a
-      // working control.
-      failTurn(assistantId, { kind: "handoff" }, false);
+      await runChatTurn(messageId, text, false);
     } finally {
       setBusy(false);
     }
@@ -459,7 +395,7 @@ export function CustomerChat({
   async function consumeStream(
     body: ReadableStream<Uint8Array>,
     targetId: string,
-    retry: RetryTarget,
+    text: string,
     restoreComposer: boolean,
   ) {
     const reader = body.getReader();
@@ -479,7 +415,7 @@ export function CustomerChat({
         // reading rather than abort the in-progress stream.
         const event = parseChatStreamEvent(raw.slice("data: ".length));
         if (!event) continue;
-        handleStreamEvent(event, targetId, retry, restoreComposer);
+        handleStreamEvent(event, targetId, text, restoreComposer);
       }
     }
   }
@@ -487,7 +423,7 @@ export function CustomerChat({
   function handleStreamEvent(
     event: ChatStreamEvent,
     targetId: string,
-    retry: RetryTarget,
+    text: string,
     restoreComposer: boolean,
   ) {
     switch (event.type) {
@@ -534,8 +470,7 @@ export function CustomerChat({
       case "handoff":
         // A human was notified. Nothing about the chat changes.
         setHandoffSeen(true);
-        // RF-12: persist it so a refresh keeps the human-reply poll running and
-        // the "Ask for a person" control hidden.
+        // RF-12: persist it so a refresh keeps the human-reply poll running.
         writeSession(handoffKey(slug), "1");
         break;
       case "escalated":
@@ -548,15 +483,14 @@ export function CustomerChat({
         // The backend failed mid-stream and said so on the wire. Without
         // this the bubble would sit in "streaming" forever - show the same
         // retry affordance a network failure gets, carrying the exact payload.
-        failTurn(targetId, retry, restoreComposer);
+        failTurn(targetId, text, restoreComposer);
         break;
       case "done":
         updateMessageById(targetId, () => ({ streaming: false, retry: undefined }));
-        // RF-13: clear the composer and the stored draft only for a completed
-        // send whose payload is still the stored draft. If the customer typed a
-        // newer draft (retry left the composer alone), keep it; a handoff
-        // carries no payload and never clears.
-        if (retry.kind === "send" && readSession(draftKey(slug)) === retry.text) {
+        // RF-13: clear the composer and the stored draft only when the payload
+        // is still the stored draft. If the customer typed a newer draft
+        // (retry left the composer alone), keep it.
+        if (readSession(draftKey(slug)) === text) {
           setInput("");
           writeSession(draftKey(slug), "");
         }
@@ -628,20 +562,6 @@ export function CustomerChat({
           onSubmit={handleSubmit}
           className="flex shrink-0 flex-col gap-2 border-t border-border pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          {/* RF-11: the visible ask-for-a-person control. Ported from the
-              prototype's `.thr-pill-action` idle-call idiom (a centered pill),
-              kept in the composer so it is reachable at 360px and 1024px. */}
-          {shouldShowAskForPerson({ escalated, handoffSeen }) ? (
-            <div className="flex justify-center">
-              <Chip
-                label="Ask for a person"
-                data-testid="ask-for-person"
-                disabled={busy}
-                onClick={() => void askForPerson()}
-                className="disabled:opacity-50"
-              />
-            </div>
-          ) : null}
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <Input

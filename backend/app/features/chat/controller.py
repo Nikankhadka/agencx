@@ -154,9 +154,8 @@ async def stream_handoff_response(
     name_known: bool,
     email_known: bool,
 ) -> AsyncIterator[dict[str, object]]:
-    """RF-11: the customer tapped "Ask for a person". Deterministic - no graph
-    and no model, so the visible handoff does not depend on the model choosing
-    the escalation tool.
+    """The deterministic handoff stream: no graph and no model, so the handoff
+    does not depend on the model choosing the escalation tool.
 
     The row is written first and the reply is streamed after, so the one
     contact ask never gates the handoff (the order escalation.py's node uses).

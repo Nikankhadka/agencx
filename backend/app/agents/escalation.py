@@ -82,9 +82,9 @@ def normalize_email(value: str | None) -> str | None:
 
 _DEFAULT_REASON = "unspecified"
 
-# RF-11: the reason recorded when the customer asks for a person from the
-# visible control. Named here, not only in the endpoint, because the
-# deterministic endpoint and the assistant tool must describe the same handoff.
+# The reason recorded when the customer asks for a person. Named here, not only
+# in the endpoint, because the deterministic endpoint and the assistant tool
+# must describe the same handoff.
 HUMAN_REQUESTED_REASON = "human_requested"
 
 
@@ -100,7 +100,7 @@ async def record_escalation(
     """The one escalation-row writer, shared by every handoff path.
 
     The assistant's ``create_escalation`` tool, this module's escalation node,
-    and RF-11's customer-initiated endpoint all insert through here, so the
+    and the customer-initiated endpoint all insert through here, so the
     dedupe semantics cannot drift between them. 0011_escalations_dedupe.sql's
     partial unique index makes the insert a no-op whenever a still-open
     escalation already exists on this conversation - the "already open" case
