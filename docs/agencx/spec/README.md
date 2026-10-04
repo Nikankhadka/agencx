@@ -35,7 +35,8 @@ Per-ticket header pattern:
 | [active/28-knowledge-review-list-layout.md](active/28-knowledge-review-list-layout.md) | Knowledge review list layout | `Done - merged in 3823740` |
 | [active/23-sparse-storefront-layout.md](active/23-sparse-storefront-layout.md) | Sparse storefront layout | `Done - merged in b64736a` |
 | [active/26-business-page-actions.md](active/26-business-page-actions.md) | Business page actions | `Done - merged in c14ff4f` |
-| [active/27-home-brief-chip.md](active/27-home-brief-chip.md) | Home brief link target | `Active - in progress` |
+| [active/27-home-brief-chip.md](active/27-home-brief-chip.md) | Home brief link target | `Done - merged in 33a63b6` |
+| [active/25-media-replace-hardening.md](active/25-media-replace-hardening.md) | Media replace hardening | `Active - in progress` |
 
 ## Completed work
 

@@ -78,9 +78,14 @@ live in the ticket files, not here.
   services sheet, and pending offering candidates get a review card on the
   page. Ticket file
   [26-business-page-actions.md](spec/active/26-business-page-actions.md).
-- [ ] Ticket 27 (Home brief link target): in progress. The "Get your link"
-  chip points at `/business/page` instead of the hub. Ticket file
+- [x] Ticket 27 (Home brief link target): merged in `33a63b6`. The "Get your
+  link" chip points at `/business/page` instead of the hub. Ticket file
   [27-home-brief-chip.md](spec/active/27-home-brief-chip.md).
+- [ ] Ticket 25 (media replace hardening): in progress. Failed row writes
+  destroy the new upload, Cloudinary cover writes clear the stale local
+  fallback row, and deletes remove the row before the cloud object. Ticket
+  file
+  [25-media-replace-hardening.md](spec/active/25-media-replace-hardening.md).
 - [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -310,7 +315,8 @@ live in the ticket files, not here.
 | [spec/active/28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md) | `Done - merged in 3823740` | Knowledge review list layout |
 | [spec/active/23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md) | `Done - merged in b64736a` | Sparse storefront layout |
 | [spec/active/26-business-page-actions.md](spec/active/26-business-page-actions.md) | `Done - merged in c14ff4f` | Business page actions |
-| [spec/active/27-home-brief-chip.md](spec/active/27-home-brief-chip.md) | `Active - in progress` | Home brief link target |
+| [spec/active/27-home-brief-chip.md](spec/active/27-home-brief-chip.md) | `Done - merged in 33a63b6` | Home brief link target |
+| [spec/active/25-media-replace-hardening.md](spec/active/25-media-replace-hardening.md) | `Active - in progress` | Media replace hardening |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

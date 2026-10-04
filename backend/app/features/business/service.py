@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,8 @@ from app.onboarding.flow import read_services
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.voice import voice_from_config
+
+logger = logging.getLogger("app.features.business.service")
 
 # The four places a small business is already found. Fixed, because the
 # prototype's row is four tiles - an open-ended list is a different screen.
@@ -601,6 +604,15 @@ async def write_cover(
                 media=uploaded,
                 cloudinary=cloudinary,
             )
+            # 25: a local-dev fallback row must not linger once the cover lives
+            # in Cloudinary. Readers still consult tenant_assets, so leaving it
+            # would shadow the real photo with stale bytes.
+            async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+                await conn.execute(
+                    "delete from tenant_assets where tenant_id = $1 and kind = $2",
+                    tenant_id,
+                    COVER_KIND,
+                )
             return
         if get_settings().environment == "production":
             raise MediaUploadError("Cloudinary is not configured")
@@ -850,44 +862,58 @@ async def _replace_media(
     media: UploadedMedia,
     cloudinary: Cloudinary,
 ) -> None:
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        previous = await conn.fetchrow(
-            "select id, public_id, type, provider, url, poster_url from tenant_media "
-            "where tenant_id = $1 and role = $2 "
-            "and (($3::uuid is null and offering_id is null) or offering_id = $3) "
-            "for update",
-            tenant_id,
-            role,
-            offering_id,
-        )
-        if previous:
-            await conn.execute(
-                "update tenant_media set type=$4, provider=$5, url=$6, public_id=$7, "
-                "poster_url=$8, updated_at=now() where tenant_id=$1 and role=$2 "
-                "and (($3::uuid is null and offering_id is null) or offering_id=$3)",
+    previous: Any = None
+    try:
+        async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+            previous = await conn.fetchrow(
+                "select id, public_id, type, provider, url, poster_url from tenant_media "
+                "where tenant_id = $1 and role = $2 "
+                "and (($3::uuid is null and offering_id is null) or offering_id = $3) "
+                "for update",
                 tenant_id,
                 role,
                 offering_id,
-                media.type,
-                media.provider,
-                media.url,
-                media.public_id,
-                media.poster_url,
             )
-        else:
-            await conn.execute(
-                "insert into tenant_media (tenant_id, offering_id, role, type, provider, url, "
-                "public_id, poster_url) "
-                "values ($1,$2,$3,$4,$5,$6,$7,$8)",
-                tenant_id,
-                offering_id,
-                role,
-                media.type,
-                media.provider,
-                media.url,
-                media.public_id,
-                media.poster_url,
-            )
+            if previous:
+                await conn.execute(
+                    "update tenant_media set type=$4, provider=$5, url=$6, public_id=$7, "
+                    "poster_url=$8, updated_at=now() where tenant_id=$1 and role=$2 "
+                    "and (($3::uuid is null and offering_id is null) or offering_id=$3)",
+                    tenant_id,
+                    role,
+                    offering_id,
+                    media.type,
+                    media.provider,
+                    media.url,
+                    media.public_id,
+                    media.poster_url,
+                )
+            else:
+                await conn.execute(
+                    "insert into tenant_media (tenant_id, offering_id, role, type, provider, url, "
+                    "public_id, poster_url) "
+                    "values ($1,$2,$3,$4,$5,$6,$7,$8)",
+                    tenant_id,
+                    offering_id,
+                    role,
+                    media.type,
+                    media.provider,
+                    media.url,
+                    media.public_id,
+                    media.poster_url,
+                )
+    except Exception:
+        # 25: the upload already succeeded, so a failed row write must take the
+        # new asset down with it - otherwise the object lives on with nothing
+        # pointing at it. The old asset is untouched: it is still the row's.
+        if media.public_id and media.provider == "cloudinary":
+            try:
+                await cloudinary.delete(
+                    public_id=str(media.public_id), resource_type=str(media.type)
+                )
+            except MediaUploadError:
+                pass
+        raise
     if previous and previous["public_id"] and previous["provider"] == "cloudinary":
         try:
             await cloudinary.delete(
@@ -919,6 +945,10 @@ async def _replace_media(
 async def delete_media(
     *, tenant_id: UUID, offering_id: UUID | None, role: str, cloudinary: Cloudinary
 ) -> bool:
+    # 25: the row goes first, so a failed cloud destroy can never leave a media
+    # row pointing at an object that no longer exists. A cloud delete that then
+    # fails leaves an unreferenced object - logged, not fatal, and invisible to
+    # customers.
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         previous = await conn.fetchrow(
             "select id, public_id, type, provider, url from tenant_media "
@@ -929,13 +959,8 @@ async def delete_media(
             role,
             offering_id,
         )
-    if previous is None:
-        return False
-    if previous["public_id"] and previous["provider"] == "cloudinary":
-        await cloudinary.delete(
-            public_id=str(previous["public_id"]), resource_type=str(previous["type"])
-        )
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        if previous is None:
+            return False
         await conn.execute(
             "delete from tenant_media where tenant_id=$1 and id=$2 "
             "and public_id is not distinct from $3 and url=$4",
@@ -944,6 +969,16 @@ async def delete_media(
             previous["public_id"],
             previous["url"],
         )
+    if previous["public_id"] and previous["provider"] == "cloudinary":
+        try:
+            await cloudinary.delete(
+                public_id=str(previous["public_id"]), resource_type=str(previous["type"])
+            )
+        except MediaUploadError:
+            logger.warning(
+                "cloudinary delete failed for public_id=%s; the row is gone",
+                previous["public_id"],
+            )
     return True
 
 

@@ -14,7 +14,7 @@ import pytest_asyncio
 
 from app.features.business import api as business_api
 from app.features.business import service as business_service
-from app.features.business.media import UploadedMedia
+from app.features.business.media import MediaUploadError, UploadedMedia
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
 from app.services.context_package import clear_cache, get_package
@@ -348,6 +348,175 @@ async def test_cloudinary_cover_is_reported_and_legacy_cover_is_cleared_on_delet
         assert (
             await conn.fetchval(
                 "select count(*) from tenant_media where tenant_id=$1 and role='cover'", tenant_id
+            )
+            == 0
+        )
+
+
+async def test_replace_media_destroys_the_new_upload_when_the_db_write_fails(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 25: the upload happens before the row write, so a failed write must take
+    # the new asset down with it instead of leaving an orphan.
+    headers, tenant_id = await _signup(client)
+    deleted: list[tuple[str, str]] = []
+
+    class FakeCloudinary:
+        is_configured = True
+
+        async def delete(self, *, public_id: str, resource_type: str) -> None:
+            deleted.append((public_id, resource_type))
+
+    class BrokenTenantContext:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            raise RuntimeError("database write failed")
+
+        async def __aexit__(self, *_: Any) -> bool:
+            return False
+
+    fake: Any = FakeCloudinary()
+    monkeypatch.setattr(db, "tenant_context", BrokenTenantContext)
+    with pytest.raises(RuntimeError, match="database write failed"):
+        await business_service._replace_media(
+            tenant_id=tenant_id,
+            offering_id=None,
+            role="cover",
+            media=UploadedMedia(
+                type="image",
+                provider="cloudinary",
+                url="https://res.cloudinary.com/demo/image/upload/new.jpg",
+                public_id="tenants/test/new-cover",
+            ),
+            cloudinary=fake,
+        )
+    assert deleted == [("tenants/test/new-cover", "image")]
+
+
+async def test_cloudinary_cover_write_clears_the_stale_local_fallback_row(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 25: readers still consult tenant_assets, so a local-dev cover must not
+    # shadow the Cloudinary one once the real upload lands.
+    headers, tenant_id = await _signup(client)
+    local = await client.put(
+        "/api/business/cover",
+        files={"file": ("cover.png", PNG_1PX, "image/png")},
+        headers=headers,
+    )
+    assert local.status_code == 204, local.text
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_assets where tenant_id=$1 and kind='cover'",
+                tenant_id,
+            )
+            == 1
+        )
+
+    class FakeCloudinary:
+        is_configured = True
+
+        async def upload(self, **_: Any) -> UploadedMedia:
+            return UploadedMedia(
+                type="image",
+                provider="cloudinary",
+                url="https://res.cloudinary.com/demo/image/upload/cover.jpg",
+                public_id="tenants/test/cover",
+            )
+
+        async def delete(self, **_: Any) -> None:
+            return None
+
+    fake: Any = FakeCloudinary()
+    monkeypatch.setattr(business_api, "Cloudinary", lambda: fake)
+    monkeypatch.setattr(business_service, "Cloudinary", lambda: fake)
+
+    put = await client.put(
+        "/api/business/cover",
+        files={"file": ("cover.png", PNG_1PX, "image/png")},
+        headers=headers,
+    )
+    assert put.status_code == 204, put.text
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_assets where tenant_id=$1 and kind='cover'",
+                tenant_id,
+            )
+            == 0
+        )
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_media where tenant_id=$1 and role='cover'",
+                tenant_id,
+            )
+            == 1
+        )
+
+
+async def test_media_delete_survives_a_failing_cloud_destroy(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 25: the row is removed first, so a failed cloud destroy leaves an
+    # unreferenced object rather than a row pointing at nothing.
+    headers, tenant_id = await _signup(client)
+
+    class FailingDeleteCloudinary:
+        is_configured = True
+
+        async def upload(self, **_: Any) -> UploadedMedia:
+            return UploadedMedia(
+                type="image",
+                provider="cloudinary",
+                url="https://res.cloudinary.com/demo/image/upload/probe.jpg",
+                public_id="tenants/test/probe",
+            )
+
+        async def delete(self, **_: Any) -> None:
+            raise MediaUploadError("cloud destroy refused")
+
+    fake: Any = FailingDeleteCloudinary()
+    monkeypatch.setattr(business_api, "Cloudinary", lambda: fake)
+    monkeypatch.setattr(business_service, "Cloudinary", lambda: fake)
+
+    offering = await client.post(
+        "/api/business/offerings", json={"name": "Media probe"}, headers=headers
+    )
+    offering_id = offering.json()["id"]
+    uploaded = await client.put(
+        f"/api/business/offerings/{offering_id}/media/upload",
+        files={"file": ("probe.png", PNG_1PX, "image/png")},
+        headers=headers,
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    removed = await client.delete(f"/api/business/offerings/{offering_id}/media", headers=headers)
+    assert removed.status_code == 204, removed.text
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_media where tenant_id=$1 and role='offering'",
+                tenant_id,
+            )
+            == 0
+        )
+
+    cover = await client.put(
+        "/api/business/cover",
+        files={"file": ("cover.png", PNG_1PX, "image/png")},
+        headers=headers,
+    )
+    assert cover.status_code == 204, cover.text
+    cleared = await client.delete("/api/business/cover", headers=headers)
+    assert cleared.status_code == 204, cleared.text
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        assert (
+            await conn.fetchval(
+                "select count(*) from tenant_media where tenant_id=$1 and role='cover'",
+                tenant_id,
             )
             == 0
         )
