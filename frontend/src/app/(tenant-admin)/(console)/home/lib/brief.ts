@@ -129,7 +129,9 @@ export function buildBrief(
       kind: "share",
       headline: "Nobody has messaged you yet.",
       note: "Share your link and customers can ask anything you have written down.",
-      chips: [{ label: "Get your link", href: "/business" }],
+      // 27: the chip promises the link, so it lands where the link, Copy, and
+      // Share live - not on the hub one hop short of it.
+      chips: [{ label: "Get your link", href: "/business/page" }],
     });
   }
 

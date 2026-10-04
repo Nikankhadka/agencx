@@ -141,7 +141,8 @@ describe("buildBrief", () => {
     const items = buildBrief([], [], 0);
     expect(items).toHaveLength(1);
     expect(items[0]!.kind).toBe("share");
-    expect(items[0]!.chips[0]!.href).toBe("/business");
+    // 27: the chip lands on the page that owns the link, not the hub.
+    expect(items[0]!.chips[0]!.href).toBe("/business/page");
 
     expect(buildBrief([conversation()], [], 0).some((i) => i.kind === "share")).toBe(false);
   });
