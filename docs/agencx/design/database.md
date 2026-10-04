@@ -432,6 +432,7 @@ create table conversations (
   customer_email text,                                  -- 0033: captured at handoff (escalation-scoped); owner-only, never on the public surface
   channel       text not null default 'web' check (channel in ('web')),
   status        text not null default 'open' check (status in ('open', 'escalated', 'closed')),
+  resolved_at   timestamptz,                            -- 0038/D44: resolution marker; any customer reply clears it
   created_at    timestamptz not null default now(),
   unique (tenant_id, id)     -- composite-FK target
 );
@@ -576,6 +577,10 @@ applied in order by a plain runner (no heavy framework):
 0032_escalation_intent.sql  escalations.intent - descriptive information/offer/support family; never a gate (ticket 19)
 0033_conversations_customer_email.sql  conversations.customer_email captured at escalation; owner-only, never on the public surface (ticket 19)
 0034_offering_category_memberships.sql  many-to-many offering categories, ordered membership and one primary (D31)
+0035_conversations_owner_read_at.sql  conversations.owner_read_at - the owner's read marker for the chat queue (RF-18/D42)
+0036_offering_pricing_wording.sql  offerings.pricing_wording - display-only alternative to a fixed price (RF-4)
+0037_conversations_opening_name_asks.sql  conversations.opening_name_asks - persisted preferred-name ask counter (RF-10/D39)
+0038_conversations_resolved_at.sql  conversations.resolved_at - conversation-level resolution marker, cleared by any customer reply (D44/D45)
 ```
 
 Shipped Agencx migration: `0025_schema_cleanup.sql` (`M-2`,

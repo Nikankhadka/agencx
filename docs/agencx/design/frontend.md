@@ -525,20 +525,23 @@ remains a deep link that opens the thread in the split pane; it keeps its
 `ScreenTopbar` back control, which on desktop deselects to the placeholder.
 The list is owned by a route-persistent `chats/layout.tsx`, so it stays mounted
 while the route changes under it. Ported from the prototype's `chats` and
-`renderThreadScreen` screens: the **Needs you / All / Unread / Human handled**
-filter row (RF-14),
-where **Needs you** is an open escalation or a conversation a human has taken
-over, and the tabs carry their whole-dataset counts; `chat-row` with name,
+`renderThreadScreen` screens: the **Action needed / Unread / All / Resolved**
+filter row (RF-14/D43), where **Action needed** (internal key `needs_you`) is
+an open escalation or a taken-over conversation whose last word came from the
+customer, and the tabs carry their whole-dataset counts; `chat-row` with name,
 relative time, a handler label or status dot (amber = the assistant asked for
-you, red = it is handling this, "You" = a staff member is replying) and a
-one-line preview that shows the assistant's own summary of what the customer
-wants; and in the thread, the "Handling" / "You're replying" status with the
-take-over and hand-back pills and their symmetrical `thr-pill` stamps. RF-16
-adds resolution as a third explicit action: an open escalation shows an inline
-"Resolve issue" shelf from either state, takes its own confirmation and optional
-customer-facing message, and writes the owner-only "You resolved this issue"
-`thr-pill`. Replying and handing back stay separate and never resolve, and while
-taken over the confirmation says the row leaves Needs you only on handback.
+you, red = it is handling this, "You" = a staff member is replying), a
+"Waiting on customer" label for a taken-over row the business spoke last on,
+and a one-line preview that shows the assistant's own summary of what the
+customer wants; and in the thread, the "Handling" / "You're replying" /
+"Waiting on customer" / "Resolved" status with the take-over and hand-back
+pills and their symmetrical `thr-pill` stamps. D44 makes resolution one
+conversation-level action: any unresolved thread shows an inline "Resolve
+conversation" shelf, takes its own confirmation and optional customer-facing
+message, closes any open escalation, and writes the owner-only "You resolved
+this conversation" `thr-pill`. A resolved thread hides its controls until a
+customer reply clears the marker. Replying and handing back stay separate and
+never resolve.
 Built on `ChatBubble` with `perspective="operator"`, which mirrors which side is
 outbound - never on `Thread.tsx`. Chrome-free until E-1's tab bar re-homes both.
 

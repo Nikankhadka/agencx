@@ -120,6 +120,17 @@ split-pane Chats), RF-16 (explicit issue resolution), RF-17 (four-business
 walkthroughs), and RF-18 (owner read state); every Part 2 product-refinement
 ticket is delivered.
 
+**Post-delivery amendments (D43-D45).** The founder's 2026-10 chat-lifecycle
+review amended two delivered behaviors, recorded in
+[decisions.md](../../design/decisions.md): RF-11's visible "Ask for a person"
+control is removed (the deterministic endpoint and the assistant's own
+escalation path are unchanged), and RF-14's queue is now Action needed /
+Unread / All / Resolved, with "Waiting on customer" derived from whose turn it
+is (D43), one conversation-level Resolve that reopens on a customer reply
+(D44), and a seven-day lazy auto-resolve over customer silence (D45). The
+RF-16 escalation-scoped resolve and its hidden `/escalations` table remain for
+compatibility, but the thread's resolve action no longer drives them.
+
 ### Archive process for delivered RF tickets
 
 Effective now: when an RF ticket merges, its full ticket record moves out of
