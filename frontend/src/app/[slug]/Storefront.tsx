@@ -326,7 +326,7 @@ export function Storefront({
           composerRef={composerRef}
         />
       </CustomerChatPanel>
-      <Sheet open={selected !== null} onClose={() => setSelected(null)} title={selected?.name ?? "Offering details"}>
+      <Sheet open={selected !== null} onClose={() => setSelected(null)} variant="document" title={selected?.name ?? "Offering details"}>
         {selected ? (
           <div className="space-y-4 p-5">
             {selected.media?.type === "image" ? (

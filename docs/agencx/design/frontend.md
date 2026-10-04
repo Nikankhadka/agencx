@@ -305,7 +305,10 @@ through Tailwind's `w-(--width-panel)` / `pr-(--width-panel)` custom-property
 shorthand, not a `@theme` mapping, so the value needs no `make dev-reset`
 cache wipe. The RF-15 Chats split-view queue column is `--width-queue` (360px),
 the same pattern through `lg:w-(--width-queue)`, for the same reason and with
-the same no-cache-wipe property.
+the same no-cache-wipe property. The ticket-24 centered document sheet is
+`--width-doc` (768px), used through the same custom-property shorthand
+`lg:max-w-(--width-doc)`, because the knowledge review and the offering detail
+needed one desktop dialog width; form sheets cap at the existing `max-w-md`.
 
 ### 4.7 Enforcement
 

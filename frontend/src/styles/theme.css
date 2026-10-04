@@ -246,6 +246,7 @@
   --width-thread: 640px;         /* desktop content column; mobile is full width + --gutter */
   --width-panel: 384px;          /* RF-8 docked customer-chat panel at lg+ (see frontend.md 4.6) */
   --width-queue: 360px;          /* RF-15 Chats split-view queue column at lg+ (see frontend.md 4.6) */
+  --width-doc: 768px;            /* centered document sheets at lg+ (ticket 24; see frontend.md 4.6) */
 
   /* Bottom tab bar geometry, read off the prototype's #tabbar (D18, D21). The
      bar is 64px; the tab inside it is a 48px pill with an 8px inset, which is

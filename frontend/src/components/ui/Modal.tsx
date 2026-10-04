@@ -101,7 +101,7 @@ export function Modal({ open, onClose, title, children, layer = "base" }: ModalP
         aria-labelledby={titleId}
         tabIndex={-1}
         className={[
-          "w-full max-w-md rounded-card border border-hairline bg-surface p-6 shadow-3",
+          "flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-card border border-hairline bg-surface p-6 shadow-3",
           "transition-[opacity,transform] duration-(--duration-base) ease-out",
           open ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         ].join(" ")}
@@ -109,7 +109,7 @@ export function Modal({ open, onClose, title, children, layer = "base" }: ModalP
         <h2 id={titleId} className="text-title-3 font-semibold text-text">
           {title}
         </h2>
-        <div className="mt-4">{children}</div>
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

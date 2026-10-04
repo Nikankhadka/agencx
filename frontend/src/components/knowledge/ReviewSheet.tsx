@@ -112,7 +112,7 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
       : workspace?.documents[0]?.status === "draft"
         ? "Read this back"
         : "Edit what I know";
-  return <Sheet open={open} onClose={onClose} desktop title={title}><CategoryContext.Provider value={{ categories, createCategory }}>
+  return <Sheet open={open} onClose={onClose} variant="document" title={title}><CategoryContext.Provider value={{ categories, createCategory }}>
     {suggestionsOnly && suggestions && onSaveSuggestions ? (
       <SuggestionDocument
         key={suggestions.map((item) => item.candidate_id ?? item.name).join(",")}

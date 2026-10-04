@@ -8,24 +8,31 @@ export interface SheetProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  /** Knowledge review is a document on desktop, while every other sheet stays mobile-first. */
-  desktop?: boolean;
+  /**
+   * `form` (default) caps at `max-w-md` at `lg+`, where every sheet becomes a
+   * centered, height-capped dialog instead of a bottom pull-up. `document` is
+   * the wider `--width-doc` (768px) for the knowledge review and the offering
+   * detail. Below `lg` the variant changes nothing - both are bottom sheets.
+   */
+  variant?: "form" | "document";
 }
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Mobile bottom sheet (the "Sheet" half of the Modal/Sheet pair in
- * design.md's component wall). Slides up from the bottom behind a scrim that
- * animates its background colour (matching the drawer), with the same focus
- * management as Modal/Drawer: save active element on open, focus the first
- * focusable, restore on close, Escape/scrim close, Tab wraps.
+ * Overlay sheet (the "Sheet" half of the Modal/Sheet pair in design.md's
+ * component wall). Below `lg` it is a mobile bottom sheet that slides up from
+ * the bottom behind a scrim; at `lg+` the same panel becomes a centered,
+ * height-capped dialog (`variant` picks `max-w-md` for forms or `--width-doc`
+ * for document surfaces). Focus management matches Modal/Drawer: save active
+ * element on open, focus the first focusable, restore on close, Escape/scrim
+ * close, Tab wraps.
  *
  * Always rendered in the DOM (toggling `inert`), never conditionally
  * unmounted, so the slide transition has something to animate between.
  */
-export function Sheet({ open, onClose, title, children, desktop = false }: SheetProps) {
+export function Sheet({ open, onClose, title, children, variant = "form" }: SheetProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRestoreFocusTarget(panelRef);
@@ -77,7 +84,7 @@ export function Sheet({ open, onClose, title, children, desktop = false }: Sheet
       inert={!open}
       aria-hidden={!open}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-50 flex items-end justify-center lg:items-center lg:p-8"
     >
       <div
         aria-hidden="true"
@@ -95,22 +102,21 @@ export function Sheet({ open, onClose, title, children, desktop = false }: Sheet
         tabIndex={-1}
         className={[
           "absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sheet",
-          desktop ? "sm:inset-y-8 sm:mx-auto sm:max-w-[48rem] sm:rounded-card" : "",
+          "lg:static lg:max-h-full lg:w-full lg:rounded-card",
+          variant === "document" ? "lg:max-w-(--width-doc)" : "lg:max-w-md",
           "transition-transform duration-(--duration-push) ease-push",
           open
             ? "translate-y-0"
-            : desktop
-              ? // The desktop variant is inset from the top as well as the bottom
-                // (`sm:inset-y-8`) and capped at max-h-85%, so translating by its
-                // own height - the mobile behavior - stops its top short of the
-                // viewport (e.g. 712px on an 800px screen) and leaves its header
-                // peeking above the fold. A full viewport minus the 2rem top
-                // inset clears it at any panel height.
-                "translate-y-full sm:translate-y-[calc(100vh_-_2rem)]"
-              : "translate-y-full",
+            : // The lg dialog is inset from the top as well as the bottom (the
+              // root's `lg:p-8`) and capped at max-h-full, so translating by
+              // its own height - the mobile behavior - stops its top short of
+              // the viewport and leaves its header peeking above the fold. A
+              // full viewport minus the 2rem top inset clears it at any panel
+              // height.
+              "translate-y-full lg:translate-y-[calc(100vh_-_2rem)]",
         ].join(" ")}
       >
-        <div className="mx-auto mb-3 h-1 w-[42px] shrink-0 rounded-full bg-surface-container-high" />
+        <div className="mx-auto mb-3 h-1 w-[42px] shrink-0 rounded-full bg-surface-container-high lg:hidden" />
         <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 id={titleId} className="text-title-3 font-semibold text-text">
             {title}
