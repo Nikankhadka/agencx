@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- offering media is a tenant API response. */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { navTone } from "@/components/ui/TabBar";
 import { formatCents } from "@/lib/money";
@@ -199,6 +199,8 @@ export function Offerings({
   const searchUi = <SearchInput value={search} onChange={setSearch} />;
   const [activeId, setActiveId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const intersectingRef = useRef<Set<string>>(new Set());
+  const scrollLockRef = useRef(0);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -206,19 +208,39 @@ export function Offerings({
     const targets = sections
       .map((section) => root.querySelector(`#${CSS.escape(section.id)}`))
       .filter((el): el is Element => el !== null);
+    const intersecting = intersectingRef.current;
+    intersecting.clear();
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) setActiveId(entry.target.id);
+          if (entry.isIntersecting) intersecting.add(entry.target.id);
+          else intersecting.delete(entry.target.id);
         }
+        if (Date.now() < scrollLockRef.current) return;
+        const visible = sections.filter((section) => intersecting.has(section.id));
+        const current = visible[visible.length - 1];
+        if (current) setActiveId(current.id);
       },
-      { rootMargin: "-30% 0px -60% 0px" },
+      { rootMargin: "-140px 0px -60% 0px" },
     );
     targets.forEach((target) => observer.observe(target));
     return () => observer.disconnect();
   }, [isCompact, sections]);
 
-  const active = activeId ?? sections[0]?.id;
+  function goToSection(event: MouseEvent<HTMLAnchorElement>, id: string) {
+    event.preventDefault();
+    setActiveId(id);
+    scrollLockRef.current = Date.now() + 900;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(id)?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
+
+  const active = sections.some((section) => section.id === activeId)
+    ? activeId
+    : sections[0]?.id;
 
   if (isCompact) {
     const singleGroup = sections.length === 1;
@@ -267,7 +289,7 @@ export function Offerings({
 
   return (
     <div ref={rootRef} data-testid="browse-offerings" className="w-full border-t border-hairline">
-      <div className="mx-auto max-w-5xl px-gutter pt-6">{searchUi}</div>
+      <div className="mx-auto max-w-5xl px-gutter pt-6 pb-3 lg:pb-0">{searchUi}</div>
       {visible.length === 0 ? (
         <p
           data-testid="storefront-no-matches"
@@ -288,6 +310,7 @@ export function Offerings({
               <a
                 key={section.id}
                 href={`#${section.id}`}
+                onClick={(event) => goToSection(event, section.id)}
                 aria-current={isActive ? "true" : undefined}
                 className={`min-h-11 shrink-0 whitespace-nowrap rounded-chip px-4 py-3 text-chip font-medium transition-colors duration-(--duration-fast) ${
                   isActive
@@ -314,6 +337,7 @@ export function Offerings({
                     <li key={section.id}>
                       <a
                         href={`#${section.id}`}
+                        onClick={(event) => goToSection(event, section.id)}
                         aria-current={isActive ? "true" : undefined}
                         className={`block min-h-11 rounded-field px-3 py-3 text-body-sm transition-colors duration-(--duration-fast) ${navTone(isActive, "text-text-secondary")}`}
                       >
@@ -332,7 +356,7 @@ export function Offerings({
             <section
               key={section.id}
               id={section.id}
-              className="scroll-mt-32 border-b border-hairline px-gutter py-8 last:border-b-0 lg:px-0"
+              className="scroll-mt-36 border-b border-hairline px-gutter py-8 last:border-b-0 lg:scroll-mt-24 lg:px-0"
             >
               <h2 className="text-title-2 font-semibold text-text">{section.label}</h2>
               <div className="mt-3 grid min-w-0 sm:grid-cols-2 sm:gap-x-8">
