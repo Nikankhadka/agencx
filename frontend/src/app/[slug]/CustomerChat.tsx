@@ -646,6 +646,7 @@ export function CustomerChat({
             <div className="flex-1">
               <Input
                 label="Message"
+                hideLabel
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
