@@ -15,8 +15,10 @@ import {
 import type { KnowledgeRecord, KnowledgeSection, PendingOffering, ReviewOffering, ReviewWorkspace, SourceDetail } from "./types";
 import { sourceLabel } from "./types";
 import { CategoryPicker, type CategoryOption } from "@/components/business/CategoryPicker";
+import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 
 const PAGE_SIZE = 5;
+const COLLAPSED_MOBILE = 3;
 const SECTION_ORDER = ["business_overview", "hours", "location", "other"] as const;
 
 /** Shared press feedback for the sheet's text actions: underline on hover, dim on press. */
@@ -151,13 +153,18 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggesti
 }
 
 function ReviewDocument({ workspace, busy, priceConflict, onboarding, onSave, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: { workspace: ReviewWorkspace; busy: boolean; priceConflict: string | null; onboarding: boolean; onSave: ReviewSheetProps["onSave"]; onDiscard: () => void; onAddSource?: ReviewSheetProps["onAddSource"]; onReplaceSource?: ReviewSheetProps["onReplaceSource"]; onRemoveSource?: ReviewSheetProps["onRemoveSource"]; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
+  // Ticket 28: the collapsed cap is the mobile cap during SSR (useMediaQuery
+  // defaults false server-side) and the page size at lg+; the client corrects
+  // it after hydration.
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const collapsedLimit = desktop ? PAGE_SIZE : COLLAPSED_MOBILE;
   // W-11c: the sheet reviews every workspace document together. The state map
   // below is seeded once per workspace.id and never re-synced from the
   // workspace after mount - W-11b retention (a close/reopen or a
   // rebuilds-after-save keeps the owner's in-session edits).
   const [sectionsByDocument, setSectionsByDocument] = useState<Map<string, KnowledgeSection[]>>(() => new Map(workspace.documents.map((doc) => [doc.id, orderedSections(doc.sections)])));
   const [offerings, setOfferings] = useState(() => (workspace.offering_candidates ?? []).map(toWorkingOffering));
-  const [expanded, setExpanded] = useState(offerings.length <= PAGE_SIZE);
+  const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(0);
   const [editingSection, setEditingSection] = useState<{ docId: string; index: number } | null>(null);
   const [sources, setSources] = useState<Map<string, SourceDetail>>(new Map());
@@ -174,7 +181,10 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, onSave, on
   const replaceFileRef = useRef<HTMLInputElement>(null);
   const pages = offeringPageCount(offerings.length);
   const currentPage = Math.min(page, pages - 1);
-  const visible = expanded ? offeringPage(offerings, currentPage) : offerings.slice(0, PAGE_SIZE);
+  const allFit = offerings.length <= collapsedLimit;
+  const rowsEditable = expanded || allFit;
+  const showReviewAll = !expanded && !allFit;
+  const visible = expanded ? offeringPage(offerings, currentPage) : offerings.slice(0, collapsedLimit);
   const duplicateIds = duplicateOfferingIds(offerings);
   const unresolvedMatches = offerings.reduce((total, item) => total + item.possibleMatches.filter((id) => offerings.some((other) => other.candidate_id === id)).length, 0) / 2;
   // W-11c: the Sources panel and the per-document actions exist only when the
@@ -323,30 +333,30 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, onSave, on
       : `Here's what I found in ${sourceLabel(firstDocument)}. Review it before you use it.`
     : `From ${labels}. Your assistant answers from the reviewed facts below.`;
 
-  // RF-6: the two sections render in true DOM order matching their visual
-  // order - business mode leads with the document's own content, onboarding
-  // leads with the offerings it came to review. No CSS `order` reordering.
+  // Ticket 28 supersedes RF-6: offerings lead in both modes - they are what
+  // the review exists to check, and business information is context the owner
+  // reads afterward. DOM order matches visual order; no CSS `order`.
   const offeringsSection = (
-    <section className={onboarding ? "mt-5" : "mt-8"}><h3 className="text-row-label font-medium text-text">Offerings</h3><p className="mt-1 text-meta text-ink-a40">{offerings.length} retained {offerings.length === 1 ? "offering" : "offerings"}{unresolvedMatches ? `, ${unresolvedMatches} possible ${unresolvedMatches === 1 ? "match" : "matches"} left to decide` : ""}.</p>
+    <section className="mt-5"><h3 className="text-row-label font-medium text-text">Offerings</h3><p className="mt-1 text-meta text-ink-a40">{offerings.length} retained {offerings.length === 1 ? "offering" : "offerings"}{unresolvedMatches ? `, ${unresolvedMatches} possible ${unresolvedMatches === 1 ? "match" : "matches"} left to decide` : ""}.</p>
+      {offerings.length === 0 ? <p className="mt-3 rounded-field bg-surface-container p-3 text-prose text-text">No offerings yet.</p> : null}
+      <div className="mt-3 flex flex-col gap-3">{visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={workspace.documents} position={(expanded ? currentPage * PAGE_SIZE : 0) + index + 1} all={offerings} editing={rowsEditable} inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={keepBoth} onCombine={(left, right) => setCombine({ left, right, price: null })} />)}</div>
+      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={setPage} /> : null}
       <div className="mt-3 flex items-center justify-between">
-        {!expanded && offerings.length > PAGE_SIZE ? <button type="button" onClick={() => { setExpanded(true); setPage(0); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length}</button> : <span />}
+        {showReviewAll ? <button type="button" onClick={() => { setExpanded(true); setPage(0); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length} offerings</button> : <span />}
         <button type="button" onClick={addOffering} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Add offering</button>
       </div>
-      {offerings.length === 0 ? <p className="mt-3 rounded-field bg-surface-container p-3 text-prose text-text">No offerings yet.</p> : null}
-      <div className="mt-3 flex flex-col gap-3">{visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={workspace.documents} position={(expanded ? currentPage * PAGE_SIZE : 0) + index + 1} all={offerings} editing={expanded} inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={keepBoth} onCombine={(left, right) => setCombine({ left, right, price: null })} />)}</div>
-      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={setPage} /> : null}
       {duplicateIds.length ? <p role="alert" className="mt-2 text-meta text-danger">Two retained offerings have the same name. Go to the highlighted offering to correct it.</p> : null}
     </section>
   );
   const businessInformationSection = (
-    <section className={onboarding ? "mt-8" : "mt-5"}><h3 className="text-row-label font-medium text-text">Business information</h3>{workspace.documents.map((doc) => { const sections = sectionsFor(doc.id, doc); const label = sourceLabel(doc); return <div key={doc.id} className="mt-4">{workspace.documents.length > 1 ? <p className="text-meta text-ink-a40">From {label}</p> : null}{doc.extraction_status === "partial" || doc.extraction_status === "failed" ? <p role="status" className="mt-3 rounded-field bg-warning-subtle p-2 text-meta text-text">{doc.extraction_status === "failed" ? "I could not read the offerings from this source." : "I could not read all of this source."} Add anything missing, or check the original source.</p> : null}<KnowledgeDocument sections={sections} editingSection={editingSection?.docId === doc.id ? editingSection.index : null} onEdit={(index) => setEditingSection((current) => index === null || (current?.docId === doc.id && current.index === index) ? null : { docId: doc.id, index })} onChange={(index, update) => updateSections(doc.id, (previous) => previous.map((section, position) => position === index ? { ...section, ...update } : section))} onRemove={(index) => updateSections(doc.id, (previous) => previous.filter((_, position) => position !== index))} onAddOther={() => { updateSections(doc.id, (previous) => [...previous, { heading: "New information", body: "", kind: "other" }]); setEditingSection({ docId: doc.id, index: sections.length }); }} /><details className="mt-4 rounded-card border border-hairline p-3" onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open) void loadSource(doc.id); }}><summary className={`cursor-pointer ${TEXT_PRESS} text-action font-medium text-accent-active`}>View original source</summary>{sourceLoading === doc.id ? <p className="mt-3 text-meta text-ink-a40">Loading source…</p> : null}{sources.get(doc.id) ? <><p className="mt-3 text-meta text-ink-a40">{sources.get(doc.id)!.is_fallback ? "This legacy source only retains its saved reviewed text." : "Original extracted source. It does not answer customers."}</p><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-prose text-text">{sources.get(doc.id)!.text}</pre></> : null}</details></div>; })}</section>
+    <section className="mt-8"><h3 className="text-row-label font-medium text-text">Business information</h3>{workspace.documents.map((doc) => { const sections = sectionsFor(doc.id, doc); const label = sourceLabel(doc); return <div key={doc.id} className="mt-4">{workspace.documents.length > 1 ? <p className="text-meta text-ink-a40">From {label}</p> : null}{doc.extraction_status === "partial" || doc.extraction_status === "failed" ? <p role="status" className="mt-3 rounded-field bg-warning-subtle p-2 text-meta text-text">{doc.extraction_status === "failed" ? "I could not read the offerings from this source." : "I could not read all of this source."} Add anything missing, or check the original source.</p> : null}<KnowledgeDocument sections={sections} editingSection={editingSection?.docId === doc.id ? editingSection.index : null} onEdit={(index) => setEditingSection((current) => index === null || (current?.docId === doc.id && current.index === index) ? null : { docId: doc.id, index })} onChange={(index, update) => updateSections(doc.id, (previous) => previous.map((section, position) => position === index ? { ...section, ...update } : section))} onRemove={(index) => updateSections(doc.id, (previous) => previous.filter((_, position) => position !== index))} onAddOther={() => { updateSections(doc.id, (previous) => [...previous, { heading: "New information", body: "", kind: "other" }]); setEditingSection({ docId: doc.id, index: sections.length }); }} /><details className="mt-4 rounded-card border border-hairline p-3" onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open) void loadSource(doc.id); }}><summary className={`cursor-pointer ${TEXT_PRESS} text-action font-medium text-accent-active`}>View original source</summary>{sourceLoading === doc.id ? <p className="mt-3 text-meta text-ink-a40">Loading source…</p> : null}{sources.get(doc.id) ? <><p className="mt-3 text-meta text-ink-a40">{sources.get(doc.id)!.is_fallback ? "This legacy source only retains its saved reviewed text." : "Original extracted source. It does not answer customers."}</p><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-prose text-text">{sources.get(doc.id)!.text}</pre></> : null}</details></div>; })}</section>
   );
 
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <p className="text-meta text-ink-a40">{intro}</p>
       {sourcesMode ? <section className="mt-5"><h3 className="text-row-label font-medium text-text">Sources</h3><div className="mt-2 flex flex-col gap-2">{workspace.documents.map((doc) => { const label = sourceLabel(doc); const failed = doc.status === "failed"; const replacing = replacingSource === doc.id; return <div key={doc.id} className="flex items-center justify-between gap-3 rounded-card border border-hairline px-3 py-3"><div className="min-w-0"><p className="truncate text-prose text-text">{label}</p>{failed && workspace.errors?.[doc.id] ? <p className="mt-1 text-meta text-danger">{workspace.errors[doc.id]}</p> : null}</div><span className={`shrink-0 rounded-full px-2 py-1 text-meta ${failed ? "bg-danger-subtle text-danger" : "bg-surface-container text-text-secondary"}`}>{failed ? "Failed" : "Draft"}</span>{doc.status === "draft" || failed ? <div className="flex shrink-0 items-center gap-2"><button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => { setReplaceTarget(doc.id); replaceFileRef.current?.click(); }} aria-label={`Replace ${label}`} data-testid="review-replace-source" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{replacing ? "Replacing\u2026" : "Replace"}</button><button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => void handleRemoveSource(doc.id)} aria-label={`Remove ${label}`} data-testid="review-remove-source" className={`${TEXT_PRESS} text-action text-ink-a40 disabled:opacity-40`}>Remove</button></div> : null}</div>; })}</div><button type="button" disabled={busy || replacingSource !== null} onClick={() => addFileRef.current?.click()} data-testid="review-add-source" className={`mt-3 ${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{addingSources ? "Adding\u2026" : "Add source"}</button><input ref={addFileRef} type="file" multiple accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-add-input" onChange={(event) => void handleAddFiles(event)} /><input ref={replaceFileRef} type="file" accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-replace-input" onChange={(event) => void handleReplaceFile(event)} /></section> : null}
-      {onboarding ? <>{offeringsSection}{businessInformationSection}</> : <>{businessInformationSection}{offeringsSection}</>}
+      {offeringsSection}{businessInformationSection}
     </div>
     {combine ? <CombinePreview combine={combine} offerings={offerings} onPrice={(price) => setCombine({ ...combine, price })} onCancel={() => setCombine(null)} onConfirm={applyCombine} /> : null}
     {priceConflict ? <p role="alert" className="mt-3 rounded-card bg-warning-subtle p-3 text-meta text-text">{priceConflict}</p> : null}

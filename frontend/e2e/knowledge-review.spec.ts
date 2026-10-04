@@ -376,15 +376,23 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   const sheet = dialog(page);
   await expect(sheet).toBeVisible();
 
-  // Collapsed on load: no pagination rows, and the toolbar shows Review all.
+  // Collapsed on desktop: five read-only cards, no pagination rows, and both
+  // actions sit below the last visible card.
   await expect(sheet.getByText("Page 1 of 3")).toHaveCount(0);
   await expect(sheet.getByText("Showing 1-5 of 12 offerings")).toHaveCount(0);
-  const reviewAll = sheet.getByRole("button", { name: "Review all 12" });
+  for (const name of ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]) {
+    await expect(sheet.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(sheet.getByText("Item 6", { exact: true })).toHaveCount(0);
+
+  const reviewAll = sheet.getByRole("button", { name: "Review all 12 offerings" });
   const addOffering = sheet.getByRole("button", { name: "Add offering" });
   await expect(reviewAll).toBeVisible();
+  const lastCardBox = await sheet.getByText("Item 5", { exact: true }).boundingBox();
   const reviewAllBox = await reviewAll.boundingBox();
   const addBox = await addOffering.boundingBox();
-  expect(addBox!.x).toBeGreaterThan(reviewAllBox!.x);
+  expect(reviewAllBox!.y).toBeGreaterThan(lastCardBox!.y);
+  expect(addBox!.y).toBeGreaterThan(lastCardBox!.y);
 
   await reviewAll.click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();

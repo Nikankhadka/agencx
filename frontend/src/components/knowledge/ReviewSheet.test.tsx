@@ -144,29 +144,45 @@ describe("review toolbar", () => {
     );
   }
 
-  it("keeps Review all and Add offering at opposite ends of one row", () => {
+  it("puts Review all and Add offering below the last collapsed card", () => {
     const html = renderSheet(workspaceWith(7));
     expect(html).toContain('<div class="mt-3 flex items-center justify-between">');
-    expect(html).toContain("Review all 7");
-    expect(html).toContain("Add offering");
-    expect(html.indexOf("Review all 7")).toBeLessThan(html.indexOf("Add offering"));
-    // Collapsed: only the first page of rows renders, pagination stays hidden.
-    for (const name of ["Offering 1", "Offering 5"]) {
+    expect(html).toContain("Review all 7 offerings");
+    expect(html).toContain(">Add offering</button>");
+    // Collapsed on the mobile/SSR render: three cards, the rest hidden,
+    // pagination stays hidden.
+    for (const name of ["Offering 1", "Offering 2", "Offering 3"]) {
       expect(html).toContain(`>${name}</h4>`);
     }
-    expect(html).not.toContain(">Offering 6</h4>");
+    for (const name of ["Offering 4", "Offering 5", "Offering 6"]) {
+      expect(html).not.toContain(`>${name}</h4>`);
+    }
+    const lastCard = html.indexOf(">Offering 3</h4>");
+    expect(html.indexOf("Review all 7 offerings")).toBeGreaterThan(lastCard);
+    expect(html.indexOf(">Add offering</button>")).toBeGreaterThan(lastCard);
     expect(html).not.toContain("Page 1 of");
   });
 
-  it("right-aligns Add offering with an empty span when Review all is hidden", () => {
+  it("shows Review all when the catalog exceeds the mobile cap", () => {
     const html = renderSheet(workspaceWith(4));
+    expect(html).toContain("Review all 4 offerings");
+    expect(html).not.toContain(">Offering 4</h4>");
+  });
+
+  it("right-aligns Add offering with an empty span when Review all is hidden", () => {
+    const html = renderSheet(workspaceWith(2));
     expect(html).not.toContain("Review all");
-    expect(html).not.toContain("Edit offerings");
     // The press feedback lives on the button, not in an exact class string:
     // hover underline plus the label, with the empty span keeping it right.
     expect(html).toContain("hover:underline");
     expect(html).toContain(">Add offering</button>");
-    expect(html.indexOf("<span></span>")).toBeLessThan(html.indexOf(">Add offering</button>"));
+    // Inside the cap the rows are editable, so the cards render inputs rather
+    // than headings - anchor on the last article instead.
+    const lastCard = html.lastIndexOf("<article");
+    const span = html.indexOf("<span></span>");
+    expect(span).toBeGreaterThan(lastCard);
+    expect(span).toBeLessThan(html.indexOf(">Add offering</button>"));
+    expect(html.indexOf(">Add offering</button>")).toBeGreaterThan(lastCard);
   });
 
   it("inserts a new offering after the last owner row and pages to it", () => {
@@ -347,10 +363,10 @@ describe("review workspace clarity", () => {
   });
 
   it("renders the sections in DOM order matching the visual order", () => {
-    // Business mode leads with the document's own content; onboarding leads
-    // with the offerings the review exists to check.
+    // Ticket 28 reverses RF-6: offerings lead in both modes - they are what
+    // the review exists to check; business information is context read after.
     const business = renderClarity(workspace("draft"));
-    expect(business.indexOf("Business information")).toBeLessThan(business.indexOf("Offerings"));
+    expect(business.indexOf("Offerings")).toBeLessThan(business.indexOf("Business information"));
     const onboarding = renderClarity(workspace("draft"), true);
     expect(onboarding.indexOf("Offerings")).toBeLessThan(onboarding.indexOf("Business information"));
   });

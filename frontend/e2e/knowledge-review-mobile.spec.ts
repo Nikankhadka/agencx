@@ -63,7 +63,7 @@ test("five files settle into the review sheet at phone width", async ({ page, re
   await expectNoHorizontalOverflow(page);
 });
 
-test("the toolbar keeps Review all and Add offering at opposite ends", async ({
+test("the toolbar puts Review all and Add offering below the collapsed list", async ({
   page,
   request,
 }) => {
@@ -81,12 +81,21 @@ test("the toolbar keeps Review all and Add offering at opposite ends", async ({
   const sheet = dialog(page);
   await expect(sheet).toBeVisible();
 
-  const reviewAll = sheet.getByRole("button", { name: "Review all 12" });
+  // Collapsed on a phone: the first three cards render read-only, then both
+  // actions sit below them.
+  for (const name of ["Item 1", "Item 2", "Item 3"]) {
+    await expect(sheet.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(sheet.getByText("Item 4", { exact: true })).toHaveCount(0);
+
+  const reviewAll = sheet.getByRole("button", { name: "Review all 12 offerings" });
   const addOffering = sheet.getByRole("button", { name: "Add offering" });
   await expect(reviewAll).toBeVisible();
+  const lastCardBox = await sheet.getByText("Item 3", { exact: true }).boundingBox();
   const reviewAllBox = await reviewAll.boundingBox();
   const addBox = await addOffering.boundingBox();
-  expect(addBox!.x).toBeGreaterThan(reviewAllBox!.x);
+  expect(reviewAllBox!.y).toBeGreaterThan(lastCardBox!.y);
+  expect(addBox!.y).toBeGreaterThan(lastCardBox!.y);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -104,7 +113,7 @@ test("the pagination shows two rows after expanding", async ({ page, request }) 
 
   const sheet = dialog(page);
   await expect(sheet).toBeVisible();
-  await sheet.getByRole("button", { name: "Review all 12" }).click();
+  await sheet.getByRole("button", { name: "Review all 12 offerings" }).click();
 
   // Both rows of the pagination block are visible at once - Previous | Page
   // 1 of 3 | Next on the first row, the centered summary on the second.

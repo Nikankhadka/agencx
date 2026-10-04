@@ -31,7 +31,8 @@ Per-ticket header pattern:
 |---|---|---|
 | [active/08-deferred.md](active/08-deferred.md) | B-2, D-1, D-3 | `Deferred - Phase 2` |
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived; Part 2 spec completed and delivered) | `Active - todo` |
-| [active/24-desktop-overlay-standard.md](active/24-desktop-overlay-standard.md) | Desktop overlay standard | `Active - in progress` |
+| [active/24-desktop-overlay-standard.md](active/24-desktop-overlay-standard.md) | Desktop overlay standard | `Done - merged in c85e96f` |
+| [active/28-knowledge-review-list-layout.md](active/28-knowledge-review-list-layout.md) | Knowledge review list layout | `Active - in progress` |
 
 ## Completed work
 
