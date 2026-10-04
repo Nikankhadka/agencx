@@ -69,10 +69,14 @@ live in the ticket files, not here.
   `lg` and five at `lg+`, and "Review all N offerings" and "Add offering"
   moved below the cards. Ticket file
   [28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md).
-- [ ] Ticket 23 (sparse storefront layout): in progress. The no-offerings
-  assistant invitation aligns to the page's `max-w-5xl` column and sizes to
-  content instead of stretching to the viewport. Ticket file
+- [x] Ticket 23 (sparse storefront layout): merged in `b64736a`. The
+  no-offerings assistant invitation aligns to the page's `max-w-5xl` column
+  and sizes to content instead of stretching to the viewport. Ticket file
   [23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md).
+- [ ] Ticket 26 (business page actions): in progress. The empty-catalog
+  services overview gains an Edit action opening the existing services sheet,
+  and pending offering candidates get a review card on the page. Ticket file
+  [26-business-page-actions.md](spec/active/26-business-page-actions.md).
 - [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -300,7 +304,8 @@ live in the ticket files, not here.
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [spec/active/24-desktop-overlay-standard.md](spec/active/24-desktop-overlay-standard.md) | `Done - merged in c85e96f` | Desktop overlay standard |
 | [spec/active/28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md) | `Done - merged in 3823740` | Knowledge review list layout |
-| [spec/active/23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md) | `Active - in progress` | Sparse storefront layout |
+| [spec/active/23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md) | `Done - merged in b64736a` | Sparse storefront layout |
+| [spec/active/26-business-page-actions.md](spec/active/26-business-page-actions.md) | `Active - in progress` | Business page actions |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

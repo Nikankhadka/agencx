@@ -33,7 +33,8 @@ Per-ticket header pattern:
 | [active/12-refinement.md](active/12-refinement.md) | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived; Part 2 spec completed and delivered) | `Active - todo` |
 | [active/24-desktop-overlay-standard.md](active/24-desktop-overlay-standard.md) | Desktop overlay standard | `Done - merged in c85e96f` |
 | [active/28-knowledge-review-list-layout.md](active/28-knowledge-review-list-layout.md) | Knowledge review list layout | `Done - merged in 3823740` |
-| [active/23-sparse-storefront-layout.md](active/23-sparse-storefront-layout.md) | Sparse storefront layout | `Active - in progress` |
+| [active/23-sparse-storefront-layout.md](active/23-sparse-storefront-layout.md) | Sparse storefront layout | `Done - merged in b64736a` |
+| [active/26-business-page-actions.md](active/26-business-page-actions.md) | Business page actions | `Active - in progress` |
 
 ## Completed work
 

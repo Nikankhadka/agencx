@@ -3,14 +3,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ScreenTopbar } from "@/components/ui/ScreenTopbar";
 import { Container } from "@/components/ui/Container";
 import { Icon } from "@/components/ui/Icon";
 import { ServicesOverview } from "@/components/ui/ServicesOverview";
-import { apiFetch } from "@/lib/api";
-import type { BookingPage } from "@/lib/api-schemas";
+import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions";
+import { apiFetch, ApiError } from "@/lib/api";
+import type { BookingPage, BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
 import { CoverPhoto } from "./components/CoverPhoto";
 import { PlatformLinks } from "./components/PlatformLinks";
+import { ServicesSheet } from "../details/components/ServicesSheet";
 
 /**
  * E-5/E-6/M-4: the Business page - the business as a customer finds it, and the
@@ -33,6 +36,14 @@ import { PlatformLinks } from "./components/PlatformLinks";
 export default function BusinessPageScreen() {
   const [page, setPage] = useState<BookingPage | null>(null);
   const [copied, setCopied] = useState(false);
+  // 26: the services edit reuses the Business-details sheet and its save path.
+  // The profile is fetched beside the page so the empty-catalog overview only
+  // offers Edit once there is a saved list for the sheet to open on.
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
+  const [editingServices, setEditingServices] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const load = useCallback(() => {
     apiFetch<BookingPage>("/api/business/page")
@@ -41,6 +52,32 @@ export default function BusinessPageScreen() {
   }, []);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    apiFetch<BusinessProfile>("/api/business/profile")
+      .then(setProfile)
+      .catch(() => setProfile(null));
+  }, []);
+
+  async function saveServices(next: ProfileUpdate) {
+    setBusy(true);
+    setError(null);
+    try {
+      setProfile(
+        await apiFetch<BusinessProfile>("/api/business/profile", {
+          method: "PATCH",
+          body: JSON.stringify(next),
+        }),
+      );
+      setEditingServices(false);
+      // Refetch the page so its read-back of the overview is the saved text.
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "That didn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const slug = page?.slug;
   // The tenant's page is a path on this same origin (D22), so the base domain
@@ -111,6 +148,9 @@ export default function BusinessPageScreen() {
               {page.business_contact}
             </p>
           ) : null}
+          {/* 26: the same review card Home shows, whenever pending extracted
+              offerings exist. Self-fetching; renders null at zero. */}
+          <OfferingSuggestions variant="card" />
           {page?.offerings.length ? (
             <section
               data-testid="offerings-summary"
@@ -173,7 +213,19 @@ export default function BusinessPageScreen() {
             // 20: with nothing priced yet the storefront falls back to the
             // owner's own overview, so the preview has to fall back with it -
             // this screen is meant to be the page as a customer finds it.
-            <ServicesOverview services={page?.services ?? []} className="mt-5" />
+            // 26: owner-only Edit, offered only once the profile has loaded.
+            <ServicesOverview
+              services={page?.services ?? []}
+              className="mt-5"
+              onEdit={
+                profile
+                  ? () => {
+                      setError(null);
+                      setEditingServices(true);
+                    }
+                  : undefined
+              }
+            />
           )}
           {publicUrl ? (
             <a
@@ -245,6 +297,18 @@ export default function BusinessPageScreen() {
         </div>
         </Container>
       </div>
+      {profile ? (
+        <ServicesSheet
+          open={editingServices}
+          profile={profile}
+          busy={busy}
+          error={error}
+          onClose={() => setEditingServices(false)}
+          onSave={saveServices}
+          confirmRemove={confirm}
+        />
+      ) : null}
+      {confirmDialog}
     </main>
   );
 }
