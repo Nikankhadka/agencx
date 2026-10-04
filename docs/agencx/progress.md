@@ -64,11 +64,15 @@ live in the ticket files, not here.
   surfaces at the new `--width-doc` (768px) - and `Modal` scrolls its body;
   below `lg` sheets are unchanged. Ticket file
   [24-desktop-overlay-standard.md](spec/active/24-desktop-overlay-standard.md).
-- [ ] Ticket 28 (knowledge review list layout): offerings lead in both review
-  modes, the collapsed list caps at three below `lg` and five at `lg+`, and
-  "Review all N offerings" and "Add offering" move below the cards. Ticket
-  file
+- [x] Ticket 28 (knowledge review list layout): merged in `3823740`.
+  Offerings lead in both review modes, the collapsed list caps at three below
+  `lg` and five at `lg+`, and "Review all N offerings" and "Add offering"
+  moved below the cards. Ticket file
   [28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md).
+- [ ] Ticket 23 (sparse storefront layout): in progress. The no-offerings
+  assistant invitation aligns to the page's `max-w-5xl` column and sizes to
+  content instead of stretching to the viewport. Ticket file
+  [23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md).
 - [x] Required services, price-aware overview, knowledge Skip chip: `services`
   joins the required set and asks for a rough price with it, no beat renders
   "Skip for now" any more (`__skip__` and `SkipPayload` deleted), the
@@ -295,7 +299,8 @@ live in the ticket files, not here.
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [spec/active/24-desktop-overlay-standard.md](spec/active/24-desktop-overlay-standard.md) | `Done - merged in c85e96f` | Desktop overlay standard |
-| [spec/active/28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md) | `Active - in progress` | Knowledge review list layout |
+| [spec/active/28-knowledge-review-list-layout.md](spec/active/28-knowledge-review-list-layout.md) | `Done - merged in 3823740` | Knowledge review list layout |
+| [spec/active/23-sparse-storefront-layout.md](spec/active/23-sparse-storefront-layout.md) | `Active - in progress` | Sparse storefront layout |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 |
 
 Phase 1 is not called fully complete until the active refinement items

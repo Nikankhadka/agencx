@@ -89,12 +89,14 @@ function SheetImage({ src }: { src: string }) {
 /**
  * M-7 minimal business (v4 frames 5a/5b): no offerings is never an empty
  * state. The page shows the name, description, and facts, and the assistant's
- * invitation uses the remaining page - the sakura wash lives only behind the
- * assistant's card, never the hero.
+ * invitation follows. Ticket 23 supersedes the full-page stretch: the card
+ * sits in the same max-w-5xl column as the hero and the services overview and
+ * sizes to its content, and the sakura wash lives only behind the assistant's
+ * card, never the hero.
  */
 function AssistantInvite({ name, onChat }: { name: string; onChat: () => void }) {
   return (
-    <div className="flex flex-1 items-center px-gutter py-8">
+    <div className="mx-auto w-full max-w-5xl px-gutter py-8">
       <div className="w-full rounded-card bg-accent-a09 p-5">
         <div className="flex items-start gap-3">
           <BrandMark name={name} />
@@ -273,7 +275,7 @@ export function Storefront({
           <Offerings offerings={storefront.offerings} onSelect={setSelected} />
         </>
       ) : (
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-col">
           <div className="mx-auto w-full max-w-5xl md:px-gutter md:pt-6">
             <StorefrontHero
               slug={slug}

@@ -39,6 +39,10 @@ describe("Storefront minimal business", () => {
     expect(html).toContain("Reply");
     expect(html.toLowerCase()).not.toContain("nothing published");
     expect(html).toContain("Powered by Agencx");
+    // Ticket 23: the invitation follows the page column and sizes to its
+    // content instead of stretching to fill the viewport.
+    expect(html).toContain("mx-auto w-full max-w-5xl px-gutter py-8");
+    expect(html).not.toContain("flex flex-1 items-center");
   });
 
   it("shows no offering sections when there is nothing to offer", () => {
