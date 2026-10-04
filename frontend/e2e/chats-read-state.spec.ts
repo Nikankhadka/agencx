@@ -40,9 +40,9 @@ async function fulfillList(route: Route, rows: FixtureRow[]) {
   const filter = new URL(route.request().url()).searchParams.get("filter") ?? "all";
   const items =
     filter === "needs_you"
-      ? rows.filter((r) => r.needs_attention || r.status === "human")
-      : filter === "human"
-        ? rows.filter((r) => r.status === "human")
+      ? rows.filter((r) => r.needs_attention || (r.status === "human" && !r.waiting_on_customer))
+      : filter === "resolved"
+        ? rows.filter((r) => r.resolved_at != null)
         : filter === "unread"
           ? rows.filter((r) => r.unread)
           : rows;

@@ -22,7 +22,7 @@ async def list_conversations(
     status_filter: str | None,
     limit: int,
     offset: int,
-    queue_filter: Literal["all", "needs_you", "unread", "human"] = "all",
+    queue_filter: Literal["all", "needs_you", "unread", "resolved"] = "all",
     q: str | None = None,
     role: str = "tenant_admin",
 ) -> dict[str, Any]:
@@ -90,10 +90,33 @@ async def get_conversation_detail(
         "created_at": conversation["created_at"],
         # RF-16: the thread's resolve control posts to this escalation, so the
         # owner surface needs its id. Null once every escalation is resolved.
+        # Kept on the contract for compatibility; D44's conversation-level
+        # resolve no longer reads it.
         "pending_escalation_id": conversation["pending_escalation_id"],
+        # D44: derived state the thread's status line renders.
+        "resolved_at": conversation["resolved_at"],
         "total_cost_usd": float(rows["total_cost"]),
         "messages": messages,
     }
+
+
+async def resolve_conversation(
+    *,
+    tenant_id: str,
+    conversation_id: str,
+    message: str | None = None,
+    role: str = "tenant_admin",
+) -> None:
+    """D44: the owner's one conversation-level resolve, or 404 when the
+    conversation is not theirs. Already resolved is a no-op success."""
+    outcome = await service.resolve_conversation(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        message=message,
+        role=role,
+    )
+    if outcome == "not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="conversation not found")
 
 
 async def mark_read(*, tenant_id: str, conversation_id: str, role: str = "tenant_admin") -> None:

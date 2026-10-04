@@ -12,14 +12,15 @@ function row(overrides: Partial<ConversationSummary>): ConversationSummary {
     needs_attention: false,
     unread: false,
     handler: "assistant",
+    waiting_on_customer: false,
     ...overrides,
   };
 }
 
 describe("FILTERS", () => {
-  it("opens on Needs you and keeps the other three", () => {
-    expect(FILTERS.map((filter) => filter.id)).toEqual(["needs_you", "all", "unread", "human"]);
-    expect(FILTERS[0]!.label).toBe("Needs you");
+  it("opens on Action needed and keeps the other three", () => {
+    expect(FILTERS.map((filter) => filter.id)).toEqual(["needs_you", "unread", "all", "resolved"]);
+    expect(FILTERS[0]!.label).toBe("Action needed");
   });
 });
 
@@ -28,8 +29,8 @@ describe("queuePath", () => {
     expect(queuePath("needs_you", "", 0)).toBe(
       `/api/conversations?filter=needs_you&limit=${PAGE_SIZE}&offset=0`,
     );
-    expect(queuePath("human", "", 50)).toBe(
-      `/api/conversations?filter=human&limit=${PAGE_SIZE}&offset=50`,
+    expect(queuePath("resolved", "", 50)).toBe(
+      `/api/conversations?filter=resolved&limit=${PAGE_SIZE}&offset=50`,
     );
   });
 

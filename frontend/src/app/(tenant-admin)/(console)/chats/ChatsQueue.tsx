@@ -21,16 +21,17 @@ import { useConversationQueue, useDebounced } from "./lib/useConversationQueue";
  * The old screen filtered the first 50 rows it held, so a busy tenant's older
  * unresolved issues hid behind a page bound that looked like a complete
  * answer. Now the tab is a server query (`filter=`), the search is a server
- * query (`q=`), and "Load more" counts down against a server `total`. Needs
- * you opens the screen because that is what an owner means by "who is waiting
- * on me?"; All, Unread, and Human handled sit beside it.
+ * query (`q=`), and "Load more" counts down against a server `total`. Action
+ * needed opens the screen because that is what an owner means by "who is
+ * waiting on me?"; Unread, All, and Resolved sit beside it.
  *
  * Ported from agencx-prototype-v6.html's `chats` screen: the filter row,
  * `chat-row` with name / time / status / preview, and the search bar. The
  * amber attention indicator stays a compact exclamation badge; RF-18's unread
  * state bolds the name and carries a small accent dot, a separate axis. A
  * taken-over row names its handler ("You") where the assistant's brand dot
- * would otherwise sit.
+ * would otherwise sit, and a taken-over row the business spoke last on says
+ * "Waiting on customer" instead of carrying the badge (D43).
  *
  * RF-15: the queue is its own component so the route-persistent `layout.tsx`
  * can keep it mounted as the left pane of the desktop split view - selecting a
@@ -170,6 +171,14 @@ export default function ChatsQueue() {
                       className="grid size-5 place-items-center rounded-full bg-highlight text-text"
                     >
                       <Icon name="priority_high" size={14} />
+                    </span>
+                  ) : null}
+                  {row.waiting_on_customer ? (
+                    <span
+                      data-testid="row-waiting"
+                      className="text-footnote text-text-tertiary"
+                    >
+                      Waiting on customer
                     </span>
                   ) : null}
                   {row.handler === "human" ? (

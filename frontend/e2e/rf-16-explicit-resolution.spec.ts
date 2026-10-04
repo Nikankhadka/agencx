@@ -1,18 +1,22 @@
 /**
- * E2E for RF-16: explicit issue resolution in the conversation workspace.
+ * E2E for RF-16/D44: conversation-level resolution in the conversation
+ * workspace.
  *
  * Surface: tenant-admin (http://localhost:3000)
  *
- * An open issue is resolved from the thread - its own confirmation, an
+ * A conversation is resolved from the thread - its own confirmation, an
  * owner-only `thr-pill` stamp, and an optional customer-facing message.
  * Replying and handing back stay separate and never resolve. After resolving,
- * the issue leaves Needs you, the stamp survives a refresh, and the customer
- * transcript shows the message but never the stamp.
+ * the thread leaves Action needed, the stamp survives a refresh, and the
+ * customer transcript shows the message but never the stamp. A customer reply
+ * reopens the thread; the reopen transaction is pinned in
+ * backend/tests/test_conversations_api.py, and the UI side of it is simulated
+ * here by serving the detail with the marker cleared.
  *
  * Deliberately model-free: the conversation and its open escalation are created
  * through the live deterministic `POST /api/chat/handoff` endpoint, so an open
- * issue exists without a model deciding to escalate. Resolution is available
- * from Handling, before any takeover.
+ * escalation exists without a model deciding to escalate. Resolution is
+ * available from Handling, before any takeover.
  */
 
 import { expect, test, type APIRequestContext } from "@playwright/test";
@@ -37,7 +41,7 @@ async function openHandoffConversation(request: APIRequestContext): Promise<stri
   return conversationId!;
 }
 
-const RESOLUTION_STAMP = "You resolved this issue";
+const RESOLUTION_STAMP = "You resolved this conversation";
 
 test("the owner resolves an open issue from the thread", async ({ page, request }) => {
   const conversationId = await openHandoffConversation(request);
@@ -64,10 +68,11 @@ test("the owner resolves an open issue from the thread", async ({ page, request 
   await expect(thread.getByText(RESOLUTION_STAMP)).toBeVisible();
   await expect(thread.getByText(message)).toBeVisible();
 
-  // Both survive a refresh, and the issue left Needs you - the control is gone.
+  // Both survive a refresh, the thread reads Resolved, and the control is gone.
   await page.reload();
   await expect(thread.getByText(RESOLUTION_STAMP)).toBeVisible();
   await expect(thread.getByText(message)).toBeVisible();
+  await expect(page.getByTestId("thread-status")).toHaveText("Resolved");
   await expect(thread.getByTestId("resolve-issue")).toHaveCount(0);
 
   // The customer sees the message and never the owner-only stamp.
@@ -96,6 +101,9 @@ test("replying and handing back never resolve the issue", async ({ page, request
   await thread.getByRole("textbox").fill(reply);
   await page.keyboard.press("Enter");
   await expect(thread.getByText(reply)).toBeVisible();
+  // D43: the owner's own reply was the last word, so the ball is with the
+  // customer now.
+  await expect(page.getByTestId("thread-status")).toHaveText("Waiting on customer");
 
   // Hand back - the assistant resumes, and the issue is still open.
   await page.getByTestId("hand-back").click();
@@ -112,4 +120,31 @@ test("replying and handing back never resolve the issue", async ({ page, request
   await thread.getByTestId("resolve-submit").click();
   await page.getByTestId("confirm-accept").click();
   await expect(thread.getByTestId("resolve-issue")).toHaveCount(0);
+});
+
+test("a customer reply brings the resolve control back", async ({ page, request }) => {
+  const conversationId = await openHandoffConversation(request);
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  await page.goto(`/chats/${conversationId}`);
+
+  const thread = page.getByTestId("chats-thread-pane");
+  await thread.getByTestId("resolve-issue").click();
+  await thread.getByTestId("resolve-submit").click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(page.getByTestId("thread-status")).toHaveText("Resolved");
+
+  // The reopen itself is a backend transaction - chat.service clears the marker
+  // inside the customer's message transaction (pinned in
+  // test_conversations_api.py). Serving the detail with the marker cleared
+  // proves the UI returns to the live state when that happens.
+  await page.route(`**/api/conversations/${conversationId}`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.resolved_at = null;
+    await route.fulfill({ json: body });
+  });
+  await page.reload();
+
+  await expect(page.getByTestId("thread-status")).not.toHaveText("Resolved");
+  await expect(thread.getByTestId("resolve-issue")).toBeVisible();
 });

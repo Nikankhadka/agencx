@@ -19,18 +19,19 @@ import { invalidateConversationLists } from "../lib/useConversationQueue";
 
 /**
  * C-6 Chats thread: the owner reads a conversation, steps into it, hands it
- * back, and resolves an open issue.
+ * back, and resolves it.
  *
- * The two states this screen exists to make obvious are "my assistant is
- * handling this" and "I am replying". Both are named in the topbar rather than
- * implied by which controls are visible, because an owner who is unsure which
- * one is true will not type - and a message sent while the assistant is still
- * answering puts two voices in one thread.
+ * The states this screen exists to make obvious are "my assistant is handling
+ * this", "I am replying", and "the ball is with the customer". All are named
+ * in the topbar rather than implied by which controls are visible, because an
+ * owner who is unsure which one is true will not type - and a message sent
+ * while the assistant is still answering puts two voices in one thread.
  *
- * RF-16 adds resolution as a third, explicit action: an open escalation shows
- * the inline resolve shelf whether or not the owner has taken over. It takes
- * its own confirmation and writes the owner-only stamp; replying and handing
- * back stay separate and never resolve anything.
+ * D44 adds resolution as an explicit action: any unresolved thread shows the
+ * inline resolve shelf whether or not the owner has taken over. It takes its
+ * own confirmation, closes any open escalation, and writes the owner-only
+ * stamp; replying and handing back stay separate and never resolve anything.
+ * A customer reply reopens the thread.
  *
  * Ported from agencx-prototype-v6.html's `renderThreadScreen` / `alexTko` /
  * `alexHbk`: `thr-st` status, the take-over and hand-back pills, and the
@@ -121,10 +122,26 @@ function ChatThread({ id }: { id: string }) {
   // A conversation a tenant limit ended is not one to step into - the cap is
   // the point. The pill is simply absent rather than present-and-failing.
   const stopped = detail?.status === "escalated" || detail?.status === "closed";
-  // RF-16: resolution is available from the Handling state, not only after a
-  // takeover - the endpoint accepts an open or claimed escalation, and gating
-  // the control on takeover would couple two actions the ticket keeps separate.
-  const pendingEscalationId = detail?.pending_escalation_id ?? null;
+  // D44: resolution is a lifecycle marker, not a status - the ownership axis
+  // above is untouched. A resolved thread shows no controls until a customer
+  // reply clears the marker.
+  const resolved = detail?.resolved_at != null;
+  const settled = stopped || resolved;
+  // D43 on the thread: "waiting" means the owner's own reply was the last
+  // word. The assistant's pre-takeover handoff must not displace C-6's
+  // "You're replying" the moment an owner steps in - the queue row uses the
+  // broader business-spoke-last predicate, and this is the one place the two
+  // deliberately differ.
+  const lastRole = [...(detail?.messages ?? [])].reverse().find((m) => m.role !== "system")?.role;
+  const waitingOnCustomer = takenOver && lastRole === "human_agent";
+
+  function statusLine(): string {
+    if (resolved) return "Resolved";
+    if (stopped) return "Stopped";
+    if (waitingOnCustomer) return "Waiting on customer";
+    if (takenOver) return "You're replying";
+    return "Handling";
+  }
 
   async function handleTakeover() {
     if (takenOver) {
@@ -155,28 +172,26 @@ function ChatThread({ id }: { id: string }) {
     }
   }
 
-  // RF-16: resolution is its own explicit action. It takes its own
-  // confirmation, and neither replying nor handing back reaches it.
+  // D44: resolution is its own explicit action. It takes its own
+  // confirmation, and neither replying nor handing back reaches it. It is
+  // idempotent server-side, so a lost race resolves as a no-op rather than an
+  // error the owner has to understand.
   async function handleResolve() {
-    if (!pendingEscalationId) return;
     await confirm({
-      title: "Resolve this issue?",
-      // RF-16/F2: while taken over, the row stays in Needs you until handback
-      // (status is still human), so promising it leaves here would be false.
-      description: takenOver
-        ? "This marks the issue resolved. You are still replying, so hand back to clear it from Needs you. Replying or handing back will not resolve it."
-        : "This marks the issue resolved and removes it from Needs you. Replying or handing back will not resolve it.",
+      title: "Resolve this conversation?",
+      description:
+        "This marks the conversation resolved and removes it from Action needed. Any new customer reply reopens it.",
       confirmLabel: "Resolve",
-      onConfirm: () => resolveIssue(pendingEscalationId),
+      onConfirm: resolveConversation,
     });
   }
 
-  async function resolveIssue(escalationId: string) {
+  async function resolveConversation() {
     setWorking(true);
     setError(null);
     const message = resolveDraft.trim();
     try {
-      await apiFetch(`/api/escalations/${escalationId}/resolve`, {
+      await apiFetch(`/api/conversations/${id}/resolve`, {
         method: "POST",
         body: JSON.stringify({ message: message || null }),
       });
@@ -187,14 +202,7 @@ function ChatThread({ id }: { id: string }) {
       // immediately instead of waiting out the poll interval.
       setReloadToken((token) => token + 1);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Someone else already resolved it - resync rather than leave the
-        // shelf offering an action that can no longer succeed.
-        setError(err.detail);
-        setReloadToken((token) => token + 1);
-      } else {
-        setError(err instanceof ApiError ? err.detail : "That didn't go through.");
-      }
+      setError(err instanceof ApiError ? err.detail : "That didn't go through.");
     } finally {
       setWorking(false);
     }
@@ -256,7 +264,7 @@ function ChatThread({ id }: { id: string }) {
         data-testid="thread-status"
         className={`pb-2 text-footnote ${takenOver ? "text-text-secondary" : "text-accent-active"}`}
       >
-        {stopped ? "Stopped" : takenOver ? "You're replying" : "Handling"}
+        {statusLine()}
       </p>
       {detail?.customer_email ? (
         <p data-testid="thread-email" className="-mt-2 pb-2 text-footnote text-text-tertiary">
@@ -294,57 +302,55 @@ function ChatThread({ id }: { id: string }) {
         </p>
       ) : null}
 
-      {stopped ? null : (
+      {settled ? null : (
         <div className="shrink-0 border-t border-hairline pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-          {pendingEscalationId ? (
-            <div className="mb-3">
-              {resolveOpen ? (
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    data-testid="resolve-message"
-                    aria-label="Message to the customer (optional)"
-                    value={resolveDraft}
-                    onChange={(e) => setResolveDraft(e.target.value)}
-                    placeholder="Optional message to the customer…"
-                    rows={3}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm text-text placeholder:text-text-tertiary transition-colors duration-(--duration-fast) hover:border-border-strong"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      data-testid="resolve-submit"
-                      loading={working}
-                      onClick={() => void handleResolve()}
-                    >
-                      Resolve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      data-testid="resolve-cancel"
-                      disabled={working}
-                      onClick={() => {
-                        setResolveOpen(false);
-                        setResolveDraft("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+          <div className="mb-3">
+            {resolveOpen ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  data-testid="resolve-message"
+                  aria-label="Message to the customer (optional)"
+                  value={resolveDraft}
+                  onChange={(e) => setResolveDraft(e.target.value)}
+                  placeholder="Optional message to the customer…"
+                  rows={3}
+                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body-sm text-text placeholder:text-text-tertiary transition-colors duration-(--duration-fast) hover:border-border-strong"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    data-testid="resolve-submit"
+                    loading={working}
+                    onClick={() => void handleResolve()}
+                  >
+                    Resolve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    data-testid="resolve-cancel"
+                    disabled={working}
+                    onClick={() => {
+                      setResolveOpen(false);
+                      setResolveDraft("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
                 </div>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  data-testid="resolve-issue"
-                  disabled={working}
-                  onClick={() => setResolveOpen(true)}
-                >
-                  Resolve issue
-                </Button>
-              )}
-            </div>
-          ) : null}
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="resolve-issue"
+                disabled={working}
+                onClick={() => setResolveOpen(true)}
+              >
+                Resolve conversation
+              </Button>
+            )}
+          </div>
           <div className="mb-3 text-center">
             <button
               type="button"

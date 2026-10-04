@@ -18,6 +18,7 @@ from typing_extensions import TypedDict
 from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 from app.shared.config import get_settings
 from app.shared.limits import (
+    DEFAULT_AUTO_RESOLVE_DAYS,
     DEFAULT_DAILY_COST_USD,
     DEFAULT_MAX_STEPS,
     LimitTimeout,
@@ -35,6 +36,12 @@ def test_resolve_uses_platform_defaults_when_no_config() -> None:
     limits = TenantLimits.resolve(None, get_settings())
     assert limits.daily_cost_usd == DEFAULT_DAILY_COST_USD
     assert limits.max_steps == DEFAULT_MAX_STEPS
+    assert limits.auto_resolve_days == DEFAULT_AUTO_RESOLVE_DAYS
+
+
+def test_resolve_overrides_the_auto_resolve_window() -> None:
+    limits = TenantLimits.resolve({"limits": {"auto_resolve_days": 3}}, get_settings())
+    assert limits.auto_resolve_days == 3
 
 
 def test_resolve_overrides_only_the_subset_the_tenant_set() -> None:
@@ -82,6 +89,7 @@ def _limits(**kw: float) -> TenantLimits:
         "llm_timeout_s": 45.0,
         "tool_timeout_s": 15.0,
         "turn_budget_s": 10.0,
+        "auto_resolve_days": 7,
     }
     base.update(kw)
     return TenantLimits(**base)  # type: ignore[arg-type]

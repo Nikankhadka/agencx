@@ -792,6 +792,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversations/{conversation_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Conversation
+         * @description D44: the owner's one conversation-level resolve. Closes any open
+         *     escalation, writes the owner-only stamp, and takes the optional message.
+         *
+         *     Owner-only: staff can take over and reply, but closing a thread is the
+         *     owner's call. Idempotent - resolving an already-resolved thread is a 204
+         *     no-op. A customer reply reopens it (chat.service.resolve_conversation).
+         */
+        post: operations["resolve_conversation_api_conversations__conversation_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/conversations/{conversation_id}/read": {
         parameters: {
             query?: never;
@@ -1204,8 +1229,8 @@ export interface components {
             needs_you: number;
             /** Unread */
             unread: number;
-            /** Human */
-            human: number;
+            /** Resolved */
+            resolved: number;
         };
         /** ConversationDetail */
         ConversationDetail: {
@@ -1229,6 +1254,8 @@ export interface components {
             created_at: string;
             /** Pending Escalation Id */
             pending_escalation_id?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
             /** Total Cost Usd */
             total_cost_usd: number;
             /** Messages */
@@ -1283,6 +1310,13 @@ export interface components {
              * @default assistant
              */
             handler: string;
+            /**
+             * Waiting On Customer
+             * @default false
+             */
+            waiting_on_customer: boolean;
+            /** Resolved At */
+            resolved_at?: string | null;
         };
         /** CorrectionPayload */
         CorrectionPayload: {
@@ -2104,6 +2138,11 @@ export interface components {
             position: number;
             /** Is Primary */
             is_primary: boolean;
+        };
+        /** ResolveConversationRequest */
+        ResolveConversationRequest: {
+            /** Message */
+            message?: string | null;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -4264,7 +4303,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("open" | "human" | "escalated" | "closed") | null;
-                filter?: "all" | "needs_you" | "unread" | "human";
+                filter?: "all" | "needs_you" | "unread" | "resolved";
                 q?: string | null;
                 limit?: number;
                 offset?: number;
@@ -4354,6 +4393,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_conversation_api_conversations__conversation_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResolveConversationRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             204: {
