@@ -119,9 +119,7 @@ class TenantLimits:
             llm_timeout_s=_num(limits.get("llm_timeout_s"), DEFAULT_LLM_TIMEOUT_S),
             tool_timeout_s=_num(limits.get("tool_timeout_s"), DEFAULT_TOOL_TIMEOUT_S),
             turn_budget_s=_num(limits.get("turn_budget_s"), DEFAULT_TURN_BUDGET_S),
-            auto_resolve_days=int(
-                _num(limits.get("auto_resolve_days"), DEFAULT_AUTO_RESOLVE_DAYS)
-            ),
+            auto_resolve_days=int(_num(limits.get("auto_resolve_days"), DEFAULT_AUTO_RESOLVE_DAYS)),
         )
 
 

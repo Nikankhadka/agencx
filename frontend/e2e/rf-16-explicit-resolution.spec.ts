@@ -138,10 +138,16 @@ test("a customer reply brings the resolve control back", async ({ page, request 
   // test_conversations_api.py). Serving the detail with the marker cleared
   // proves the UI returns to the live state when that happens.
   await page.route(`**/api/conversations/${conversationId}`, async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    body.resolved_at = null;
-    await route.fulfill({ json: body });
+    try {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.resolved_at = null;
+      await route.fulfill({ json: body });
+    } catch {
+      // The reload aborts whatever poll was in flight; its response is
+      // disposed and there is nothing left to answer.
+      await route.abort().catch(() => {});
+    }
   });
   await page.reload();
 

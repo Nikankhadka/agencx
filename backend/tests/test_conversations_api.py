@@ -871,9 +871,7 @@ async def test_resolving_the_conversation_writes_the_stamp_and_clears_needs_you(
         superuser_conn, conversation_id
     )
     assert (
-        await superuser_conn.fetchval(
-            "select status from escalations where id = $1", escalation_id
-        )
+        await superuser_conn.fetchval("select status from escalations where id = $1", escalation_id)
         == "resolved"
     )
 
@@ -1138,9 +1136,7 @@ async def test_auto_resolve_closes_an_open_escalation_and_can_be_reopened(
         row["id"] for row in (await _list(client, token, filter="needs_you"))["items"]
     }
     assert (
-        await superuser_conn.fetchval(
-            "select status from escalations where id = $1", escalation_id
-        )
+        await superuser_conn.fetchval("select status from escalations where id = $1", escalation_id)
         == "resolved"
     )
 
