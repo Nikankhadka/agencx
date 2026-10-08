@@ -1,6 +1,6 @@
 # Slide 10 content - Evaluation (Sabbaba demo tenant)
 
-## Headline
+## Headline (round 1; rounds 2 and 3 in report.md)
 54 of 62 customer turns fully correct, 0 failures, 0 hard fails. Every price came from the catalog or the pricing engine.
 
 ## Three numbers
@@ -30,3 +30,11 @@ Interim pre-fix run: 29 PASS / 16 PARTIAL / 22 FAIL of 67 valid turns, 6 critica
 
 ## Appendix test plan (one line each)
 Groups A menu prices, B dietary, C shop info, D recommend, E order totals, F multi-turn, G handoff, H guards. 62 turns, 12 s apart, sequential, no retries; ground truth from the seed; labels PASS / PARTIAL / FAIL plus hard-fail list; founder blind re-grades about 20%.
+
+## Added after rounds 2 and 3 (sababa2, fresh wording)
+- Round 2: 44 turns, 38 PASS / 5 PARTIAL / 1 FAIL, 0 hard fails; five order totals exact
+- Round 3 multi-turn flows (partial, 27 valid turns): 24 PASS / 3 PARTIAL / 0 FAIL
+- All valid turns together: 116 PASS / 16 PARTIAL / 1 FAIL of 133
+- Honest gap: the assistant states unsourced negatives (parking, catering, discounts) as fact; the fix is listed in report.md C.2
+- Demo risk: the per-tenant daily token cap (about 90 turns per day) ends a chat with blank replies; raise the demo tenant's limit
+- Not yet run: the `sababa` hybrid (bigger data) multi-turn set
