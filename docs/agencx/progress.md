@@ -284,7 +284,7 @@ live in the ticket files, not here.
   cover live in the owner's Cloudinary under `demo/sabbaba/` (uploaded once by
   `scripts/seed_sabbaba_images.py`, recorded in `seeds/sabbaba/images.json`);
   items without a reliable photo show the letter tile. The seed stays offline.
-  Hosted re-seed of `sababa` only (never `seed_demo`) is pending sign-off.
+  Hosted `sababa` re-seeded 2026-10-08 (96 offerings, 94 rules, 109 embedded chunks; `sababa` only, never `seed_demo`).
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
