@@ -13,6 +13,7 @@ import json
 import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any
 
@@ -232,6 +233,79 @@ async def test_hybrid_package_also_carries_active_offerings(
         f"[catalog_id={package.offerings[0].id}] Coffee: Freshly brewed ($3.50)"
         in package.offerings_text()
     )
+
+
+@contextmanager
+def _catalog_inline_cap(tokens: int) -> Iterator[None]:
+    original = os.environ.get("CATALOG_INLINE_MAX_TOKENS")
+    os.environ["CATALOG_INLINE_MAX_TOKENS"] = str(tokens)
+    get_settings.cache_clear()
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop("CATALOG_INLINE_MAX_TOKENS", None)
+        else:
+            os.environ["CATALOG_INLINE_MAX_TOKENS"] = original
+        get_settings.cache_clear()
+
+
+async def test_small_catalog_stays_inline_on_the_fast_path(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(superuser_conn, offerings=(("Coffee", "Freshly brewed", 350),))
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        package = await build_package(conn, tenant_id)
+
+    assert package.catalog_inline is True
+    assert package.fast_path is True
+    assert "Coffee" in package.offerings_text()
+
+
+async def test_large_catalog_is_left_out_of_the_prompt_and_forces_the_hybrid_path(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    # The corpus alone would take the fast path; the catalog is what is too big,
+    # and a catalog that is not pasted must stay reachable through the search tools.
+    tenant_id = await _seed_tenant(superuser_conn, offerings=(("Coffee", "Freshly brewed", 350),))
+
+    with _catalog_inline_cap(1):
+        async with db.tenant_context(tenant_id, "customer") as conn:
+            package = await build_package(conn, tenant_id)
+
+    assert package.catalog_inline is False
+    assert package.fast_path is False
+    assert package.chunks == []
+    assert package.offerings_text() == ""
+    assert package.offerings[0].name == "Coffee"  # show_catalog still has every row
+    assert "Coffee" not in package.owner_material()
+
+
+async def test_large_catalog_turn_offers_retrieval_tools_and_omits_the_menu(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id = await _seed_tenant(
+        superuser_conn, offerings=(("Zanzibar Latte", "Spiced milk coffee", 650),)
+    )
+    conversation_id = await _conversation_for(superuser_conn, tenant_id)
+    provider = RecordingProvider()
+
+    with _catalog_inline_cap(1):
+        await build_graph().ainvoke(
+            _initial_state(tenant_id, conversation_id, "What time do you open?"),
+            context=GraphContext(
+                tenant_id=tenant_id,
+                provider=provider,
+                embedder=ZeroEmbedder(),
+                reranker=PassthroughReranker(),
+            ),
+        )
+
+    assert {"search_knowledge", "recommend_items"} <= set(provider.tool_calls_offered[0])
+    prompt = provider.tool_call_messages[0][0]["content"]
+    assert "Zanzibar Latte" not in prompt
+    assert "large menu and a library of notes that are NOT in this" in prompt
 
 
 async def test_offering_change_invalidates_the_cached_package(

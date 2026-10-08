@@ -44,8 +44,9 @@ from uuid import UUID
 from app.onboarding.flow import read_services
 from app.retrieval.types import RetrievedChunk
 from app.services.knowledge_version import knowledge_version
-from app.services.retrieval import corpus_chars, fits_fast_path, whole_corpus
+from app.services.retrieval import corpus_chars, estimate_tokens, fits_fast_path, whole_corpus
 from app.shared import db
+from app.shared.config import get_settings
 from app.shared.voice import CustomerVoice, voice_from_config
 
 if TYPE_CHECKING:
@@ -124,6 +125,10 @@ class ContextPackage:
     # is the authoritative source for what is currently offered.
     chunks: list[RetrievedChunk] = field(default_factory=list)
     fast_path: bool = False
+    # False when the catalog is too large to paste (settings.catalog_inline_max_tokens):
+    # the prompt then omits it and the model reaches items through the retrieval
+    # tools. ``offerings`` stays complete either way - it feeds show_catalog.
+    catalog_inline: bool = True
     assembled_at: float = 0.0
 
     def profile_text(self) -> str:
@@ -136,8 +141,13 @@ class ContextPackage:
         return _profile_text(self.profile)
 
     def offerings_text(self) -> str:
-        """The current catalog as deterministic prompt material, or ``''``."""
-        return format_offerings(self.offerings)
+        """The current catalog as deterministic prompt material, or ``''``.
+
+        Empty when the catalog is too large to paste (``catalog_inline`` False),
+        so every consumer - agent prompt, draft prompt, judge provenance - gets
+        the same bounded view.
+        """
+        return format_offerings(self.offerings) if self.catalog_inline else ""
 
     def owner_material(self) -> str:
         """All non-chunk tenant material that the answering model received."""
@@ -198,11 +208,17 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     # The prompt material the corpus shares its budget with is known only now,
     # so the fast-path decision is made with the real overhead rather than a
     # guess (O-4's overhead_chars).
+    catalog_chars = len(format_offerings(offerings))
+    catalog_inline = estimate_tokens(catalog_chars) <= get_settings().catalog_inline_max_tokens
     overhead = (
-        _CONTRACT_OVERHEAD_CHARS + len(_profile_text(profile)) + len(format_offerings(offerings))
+        _CONTRACT_OVERHEAD_CHARS
+        + len(_profile_text(profile))
+        + (catalog_chars if catalog_inline else 0)
     )
     total_chars = await corpus_chars(conn, tenant_id)
-    fast_path = fits_fast_path(corpus_chars=total_chars, overhead_chars=overhead)
+    # A catalog that is not in the prompt must stay reachable, and the fast path
+    # offers no search tools - so a large catalog forces the hybrid path.
+    fast_path = catalog_inline and fits_fast_path(corpus_chars=total_chars, overhead_chars=overhead)
 
     package = ContextPackage(
         tenant_id=tenant_id,
@@ -213,6 +229,7 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
         offerings=offerings,
         chunks=await whole_corpus(conn, tenant_id) if fast_path else [],
         fast_path=fast_path,
+        catalog_inline=catalog_inline,
         assembled_at=time.monotonic(),
     )
 
@@ -223,6 +240,7 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
             "chunks": len(package.chunks),
             "corpus_chars": total_chars,
             "offerings": len(package.offerings),
+            "catalog_inline": package.catalog_inline,
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
         },
     )

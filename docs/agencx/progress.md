@@ -293,6 +293,12 @@ live in the ticket files, not here.
 - [ ] Provider-backed `make eval` has no valid baseline: deterministic
   gates pass, LLM legs fail on free-tier quota (Groq 200k TPD 429, four
   attempts). Needs a paid tier or a smaller eval slice.
+- [x] Catalog retrieval gate: a catalog whose formatted text exceeds
+  `catalog_inline_max_tokens` (default 1500) is no longer pasted into the
+  prompt. The package forces the hybrid path, the prompt says the menu is not
+  inline, and items are reached through `recommend_items` / `search_knowledge`;
+  inspection counts the items a turn fetched as provenance. A measured token
+  count, never a branch on business type. No migration.
 - [x] Category management and multi-category offerings: controlled category
   objects, explicit owner confirmation, ordered many-to-many membership with
   one primary, multi-shelf storefront and chat rendering, and generic food,

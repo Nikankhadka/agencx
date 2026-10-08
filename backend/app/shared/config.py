@@ -156,6 +156,14 @@ class Settings(BaseSettings):
     # count, never a branch on business size - see app/services/retrieval.py.
     corpus_fast_path_max_tokens: int = 7500
 
+    # The catalog is data that grows with the tenant, so it gets the same
+    # treatment as the corpus: a catalog whose formatted text fits this many
+    # tokens is pasted into the prompt whole; a larger one is left out and
+    # reached through recommend_items / search_knowledge, so the prompt stays
+    # bounded however many items a tenant lists. Measured, never a branch on
+    # business type - see app/services/context_package.py.
+    catalog_inline_max_tokens: int = 1500
+
     # Observability (T-030): Langfuse tracing is opt-in - empty keys mean the
     # tracer no-ops, so the free-first stack runs with zero external tracing.
     langfuse_public_key: str = ""

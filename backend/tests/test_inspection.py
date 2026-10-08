@@ -421,3 +421,25 @@ async def test_order_status_is_never_inspected_by_the_llm(
 
     assert provider.verdict_calls == 0
     assert final_state["inspection_decision"] == "ok"
+
+
+# --- provenance for a catalog too large to paste ---------------------------------
+
+
+@pytest.mark.parametrize("pasted", [True, False])
+def test_provenance_includes_fetched_items_only_when_the_catalog_is_not_pasted(
+    pasted: bool,
+) -> None:
+    from app.agents.inspection import _provenance_text
+
+    state = {
+        "retrieved_chunks": [{"content": "Falafel is fried."}],
+        "selections": [{"name": "Falafel Plate", "description": "Vegan. Contains sesame."}],
+        "engine_quote": None,
+        "offerings_text": "Current confirmed offerings:\n- Falafel Plate" if pasted else "",
+    }
+    text = _provenance_text(state)  # type: ignore[arg-type]
+
+    assert "Falafel is fried." in text
+    assert ("Items fetched for this turn" in text) is (not pasted)
+    assert ("Vegan. Contains sesame." in text) is (not pasted)

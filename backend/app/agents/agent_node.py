@@ -100,6 +100,22 @@ _TOOL_GUIDANCE = (
     "number or any other personal detail."
 )
 
+# The catalog is not in the prompt for a tenant with a large one. The model has
+# to be told where it is, or it answers "I don't have that" about items the
+# business sells. Whole-menu requests still go through show_catalog.
+_LARGE_CATALOG_GUIDANCE = (
+    "This business has a large menu and a library of notes that are NOT in this "
+    "prompt - only the hours and contact facts above are. Unless the message is only "
+    "a greeting or thanks, you must call a tool before you answer; you do not know "
+    "the answer until you have. For a specific item, its price, ingredients, dietary "
+    "labels or allergens, call recommend_items with the item name or what the "
+    "customer wants. For anything else - ordering, delivery, policies, ratings, "
+    "popularity, allergen and dietary lists - call search_knowledge. When a question "
+    "needs both, call both in the same step. Answer only from what the tools return. "
+    "For the whole menu, call show_catalog. Never say the business does or does not "
+    "offer something, or that you lack information, until you have searched."
+)
+
 # RF-10/D39: the opening phase (before the first escalation or handoff) is where
 # the assistant asks for a preferred first name. The ask is a display name for
 # the conversation, not a contact detail, so it belongs here, before any
@@ -436,6 +452,10 @@ def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
             "never show an id to the customer or mention that ids exist.\n"
             + spotlight.wrap(offerings)
         )
+    elif package.offerings:
+        # Too large to paste (catalog_inline_max_tokens): say so, or the model
+        # reads the missing list as "the business offers nothing".
+        parts.append(_LARGE_CATALOG_GUIDANCE)
     parts.append(_TOOL_GUIDANCE)
     parts.append(_STYLE_GUIDANCE)
     # Unconditional: a figure can appear in any answer, on any path, whether or
@@ -493,10 +513,11 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
     and offering them would buy a round trip for material already in the prompt.
 
     ``recommend_items`` joins ``search_knowledge`` under that rule. It searches
-    only catalog projections, while the authoritative active offering rows are
-    already included in the prompt for enumeration and pricing. Offering it on
-    the fast path would add an embedding round trip for a question the package
-    can already answer.
+    only catalog projections; on the fast path the authoritative active offering
+    rows are already in the prompt for enumeration and pricing, so offering it
+    there would add an embedding round trip for a question the package can
+    already answer. A catalog too large to paste forces the hybrid path, where
+    this tool is how its items are reached.
     """
     tools = [
         ToolSpec(

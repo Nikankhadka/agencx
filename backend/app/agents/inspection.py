@@ -185,6 +185,14 @@ def _provenance_text(state: AgentState) -> str:
     offerings_text = state.get("offerings_text")
     if offerings_text:
         base = f"{base}\n\n{offerings_text}"
+    elif state["selections"] and state["retrieved_chunks"]:
+        # A catalog too large to paste is not in offerings_text; the items the
+        # turn fetched (recommend_items) are its provenance. Without them a
+        # draft that names a fetched item next to a knowledge fact fails.
+        items = "\n".join(
+            f"- {s.get('name', '')}: {s.get('description') or ''}" for s in state["selections"]
+        )
+        base = f"{base}\n\nItems fetched for this turn:\n{items}"
     return base
 
 
