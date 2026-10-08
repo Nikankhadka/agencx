@@ -1,0 +1,38 @@
+[
+ {
+  "slug": "bytefix",
+  "offerings": 19,
+  "catalog_tokens": 934,
+  "limit": 1500,
+  "catalog_inline": true,
+  "fast_path": true,
+  "route": "fast_path"
+ },
+ {
+  "slug": "lumident",
+  "offerings": 8,
+  "catalog_tokens": 442,
+  "limit": 1500,
+  "catalog_inline": true,
+  "fast_path": true,
+  "route": "fast_path"
+ },
+ {
+  "slug": "sababa",
+  "offerings": 96,
+  "catalog_tokens": 10183,
+  "limit": 1500,
+  "catalog_inline": false,
+  "fast_path": false,
+  "route": "hybrid_retrieval"
+ },
+ {
+  "slug": "wellspring",
+  "offerings": 9,
+  "catalog_tokens": 505,
+  "limit": 1500,
+  "catalog_inline": true,
+  "fast_path": true,
+  "route": "fast_path"
+ }
+]

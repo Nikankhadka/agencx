@@ -1,0 +1,33 @@
+[0;32m>>> Migrating[0m
+docker compose run --rm backend python -m app.shared.migrate
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-c3e99099a925 Creating 
+ Container agencx-backend-run-c3e99099a925 Created 
+no pending migrations
+docker compose run --rm backend python -m seeds.seed_tenant1_phoneshop
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-6f0e726f2430 Creating 
+ Container agencx-backend-run-6f0e726f2430 Created 
+seeded core data for tenant 998ad1c8-c030-4dd0-a699-d8484cce559c (slug=bytefix)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 9707.79it/s]
+ingested knowledge documents and catalog items
+done: tenant_id=998ad1c8-c030-4dd0-a699-d8484cce559c

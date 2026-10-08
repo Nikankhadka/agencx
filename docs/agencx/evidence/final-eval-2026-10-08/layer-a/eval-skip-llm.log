@@ -1,0 +1,53 @@
+docker compose run --rm backend python -m evals.run_gate --skip-llm
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-2ecf4085483d Creating 
+ Container agencx-backend-run-2ecf4085483d Created 
+
+=== running evals.money_guardrail_eval --gate ===
+money guardrail matrix: 21/21
+note: A figure quoted verbatim from a poisoned chunk passes this gate by design - it is indistinguishable from the owner's own price list. Injection defence is O-3's review step, the spotlight fence, and inspection.
+
+=== running evals.leakage_eval --gate ===
+seeded leakage pair: A=d88d523a-eeff-4641-b372-fcfcc1e9cc8a (leakpair-a), B=aeb344e5-aa08-4501-867b-f93f41d2c00f (leakpair-b)
+=== A probes B ===
+pass_count: 12/12
+pass_rate:  1.000
+=== B probes A ===
+pass_count: 12/12
+pass_rate:  1.000
+
+=== running evals.retrieval_eval --gate ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 10134.12it/s]
+Loading weights:   0%|          | 0/105 [00:00<?, ?it/s]Loading weights: 100%|██████████| 105/105 [00:00<00:00, 4887.92it/s]
+metric                  value
+------------------------------------
+recall_at_3             1.000
+recall_at_5             1.000
+mrr                     0.911
+ndcg_at_5               0.934
+positive_cases          45.000
+negative_cases          5.000
+negative_avg_top_score  0.000
+
+====================================================
+gate                        status  detail
+----------------------------------------------------
+money_guardrail_eval        PASS    passed
+leakage_eval                PASS    passed
+retrieval_eval              PASS    passed
+generation_eval             PASS    skipped (--skip-llm)
+trajectory_eval             PASS    skipped (--skip-llm)
+injection_eval              PASS    skipped (--skip-llm)
+====================================================
+GATE PASSED
+exit=0

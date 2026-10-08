@@ -1,0 +1,246 @@
+docker compose run --rm --no-deps frontend npm run lint && docker compose run --rm --no-deps frontend npm run check:tokens
+ Container agencx-frontend-run-145768f662af Creating 
+ Container agencx-frontend-run-145768f662af Created 
+
+> frontend@0.1.0 lint
+> eslint
+
+npm notice
+npm notice New major version of npm available! 11.17.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+ Container agencx-frontend-run-01e4f6cb1d25 Creating 
+ Container agencx-frontend-run-01e4f6cb1d25 Created 
+
+> frontend@0.1.0 check:tokens
+> node scripts/check-tokens.mjs
+
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+docker compose run --rm --no-deps backend ruff check .
+ Container agencx-backend-run-d687cb565a3a Creating 
+ Container agencx-backend-run-d687cb565a3a Created 
+All checks passed!
+docker compose run --rm --no-deps backend lint-imports
+ Container agencx-backend-run-5b4899cee29c Creating 
+ Container agencx-backend-run-5b4899cee29c Created 
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 119 files, 306 dependencies.
+-------------------------------------
+
+Pricing never reaches a model KEPT
+The deterministic services layer never asks a model KEPT
+The provider seam is a leaf KEPT
+
+Contracts: 3 kept, 0 broken.
+docker compose run --rm --no-deps frontend npm run typecheck
+ Container agencx-frontend-run-dc9897096326 Creating 
+ Container agencx-frontend-run-dc9897096326 Created 
+
+> frontend@0.1.0 typecheck
+> tsc --noEmit
+
+npm notice
+npm notice New major version of npm available! 11.17.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+docker compose run --rm --no-deps backend mypy
+ Container agencx-backend-run-e36629a98c6f Creating 
+ Container agencx-backend-run-e36629a98c6f Created 
+Success: no issues found in 230 source files
+docker compose run --rm --no-deps frontend npm run test
+ Container agencx-frontend-run-6fbb12e535aa Creating 
+ Container agencx-frontend-run-6fbb12e535aa Created 
+
+> frontend@0.1.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/app[39m
+
+ [32m✓[39m src/components/ui/StructuredResponse.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/components/knowledge/ReviewSheet.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m src/instrumentation-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/instrumentation.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/Storefront.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/Offerings.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ProfileFieldSheet.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/components/ui/PriceSummaryCard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/components/ui/CatalogCard.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/components/OfferingMediaField.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/components/MediaField.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/styles/theme.test.ts [2m([22m[2m65 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/money.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ContactSheet.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/home/lib/brief.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/components/ui/ListRow.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/knowledge/offerings.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/ui/ConfirmDialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/components/business/CategoryPicker.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/page/components/CoverPhoto.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/CustomerChatPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/components/ui/ServicesOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/chat-events.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/chat-restore.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/onboarding.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/components/ui/Badge.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/chats/lib/queue.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/reserved-slugs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/app/privacy/privacy.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/abn.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/format.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/security-headers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/useMediaQuery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/slug.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/components/ui/ChatCards.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/offering-search.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/greeting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/components/ui/PhonePill.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/tenant.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/components/ui/TabBar.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/auth-cookie.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/owner.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m42 passed[39m[22m[90m (42)[39m
+[2m      Tests [22m [1m[32m363 passed[39m[22m[90m (363)[39m
+[2m   Start at [22m 06:01:17
+[2m   Duration [22m 1.53s[2m (transform 864ms, setup 0ms, import 2.06s, tests 403ms, environment 2ms)[22m
+
+npm notice
+npm notice New major version of npm available! 11.17.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+docker compose run --rm backend pytest
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-61e6c1899e89 Creating 
+ Container agencx-backend-run-61e6c1899e89 Created 
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /app
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.14.1, langsmith-0.10.2, hypothesis-6.156.6, timeout-2.4.0, asyncio-1.4.0
+timeout: 60.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 1315 items
+
+tests/test_agent_contract.py .........................                   [  1%]
+tests/test_agent_graph.py .......................                        [  3%]
+tests/test_agent_identity.py ......................................      [  6%]
+tests/test_agent_tools.py ........                                       [  7%]
+tests/test_auth_api.py .......................                           [  8%]
+tests/test_business_api.py ............................................. [ 12%]
+.............                                                            [ 13%]
+tests/test_business_context.py .........                                 [ 13%]
+tests/test_chat_api.py .......................................           [ 16%]
+tests/test_chunker.py .............                                      [ 17%]
+tests/test_cloudinary_media.py ...                                       [ 18%]
+tests/test_context_package.py .....................                      [ 19%]
+tests/test_conversation.py ..                                            [ 19%]
+tests/test_conversations_api.py ........................................ [ 22%]
+...                                                                      [ 23%]
+tests/test_cost.py ...........                                           [ 24%]
+tests/test_dashboards_api.py ...........                                 [ 24%]
+tests/test_escalation_agent.py ...........                               [ 25%]
+tests/test_escalation_summary.py .....                                   [ 26%]
+tests/test_escalations_api.py ............                               [ 26%]
+tests/test_fuse.py .....                                                 [ 27%]
+tests/test_generation_eval_metrics.py ...............                    [ 28%]
+tests/test_generation_eval_run.py ..                                     [ 28%]
+tests/test_google_embedder.py ........                                   [ 29%]
+tests/test_handoff_api.py .........                                      [ 29%]
+tests/test_health.py ...........                                         [ 30%]
+tests/test_injection_eval.py ........                                    [ 31%]
+tests/test_inspection.py ............                                    [ 32%]
+tests/test_intent.py ..................................                  [ 34%]
+tests/test_judge_calibration_metrics.py .................                [ 36%]
+tests/test_judge_calibration_run.py ..                                   [ 36%]
+tests/test_knowledge_agent.py ..                                         [ 36%]
+tests/test_knowledge_api.py ..................................           [ 39%]
+tests/test_knowledge_records.py ..........................               [ 41%]
+tests/test_knowledge_version.py ......                                   [ 41%]
+tests/test_leakage.py .......                                            [ 42%]
+tests/test_limits.py ..............                                      [ 43%]
+tests/test_limits_api.py .......                                         [ 43%]
+tests/test_llm_dependency.py ...........                                 [ 44%]
+tests/test_llm_extract_wire.py .                                         [ 44%]
+tests/test_llm_failover.py ...................                           [ 46%]
+tests/test_llm_provider_retry.py ..............                          [ 47%]
+tests/test_llm_tool_calling.py ..............                            [ 48%]
+tests/test_llm_zai.py ....                                               [ 48%]
+tests/test_migrate_render.py .........                                   [ 49%]
+tests/test_migrations.py ..............                                  [ 50%]
+tests/test_money_guardrail.py ..........................                 [ 52%]
+tests/test_money_prompt.py .....                                         [ 52%]
+tests/test_offering_candidates.py ...                                    [ 52%]
+tests/test_offering_categories.py ..                                     [ 52%]
+tests/test_offering_extraction.py .......................                [ 54%]
+tests/test_onboarding_agent.py ......................................... [ 57%]
+........................................................................ [ 63%]
+.................                                                        [ 64%]
+tests/test_onboarding_api.py ........................................... [ 67%]
+.....                                                                    [ 68%]
+tests/test_onboarding_knowledge_batch.py ................                [ 69%]
+tests/test_opening_name_ask.py ....                                      [ 69%]
+tests/test_operator_export_offboard_db.py ..........                     [ 70%]
+tests/test_order_status_agent.py ....                                    [ 70%]
+tests/test_platform_api.py ..........                                    [ 71%]
+tests/test_pricing_api.py ................                               [ 72%]
+tests/test_pricing_engine.py .........................                   [ 74%]
+tests/test_public_api.py .......                                         [ 75%]
+tests/test_quoting_agent.py ...................                          [ 76%]
+tests/test_ratelimit.py ...............................                  [ 79%]
+tests/test_recommendation_agent.py .....                                 [ 79%]
+tests/test_request_context.py ...                                        [ 79%]
+tests/test_rerank_normalization.py ......                                [ 80%]
+tests/test_retention_db.py .......                                       [ 80%]
+tests/test_retrieval.py .....                                            [ 80%]
+tests/test_retrieval_eval_metrics.py ..........                          [ 81%]
+tests/test_rls.py ............                                           [ 82%]
+tests/test_run_gate.py ............                                      [ 83%]
+tests/test_schema_audit.py ......                                        [ 84%]
+tests/test_seed_demo.py ..............                                   [ 85%]
+tests/test_seed_sababa.py ........                                       [ 85%]
+tests/test_seed_sababa_data.py ..............                            [ 86%]
+tests/test_seed_tenant1.py ....                                          [ 87%]
+tests/test_sentry.py .........                                           [ 87%]
+tests/test_shared_text.py .......................                        [ 89%]
+tests/test_spotlight.py .....                                            [ 89%]
+tests/test_startup_config.py ......                                      [ 90%]
+tests/test_storage_delete_prefix.py ....                                 [ 90%]
+tests/test_tracing.py ......                                             [ 91%]
+tests/test_trajectory_dataset.py .......                                 [ 91%]
+tests/test_trajectory_eval.py ..................                         [ 93%]
+tests/test_url_ingestion.py ............................................ [ 96%]
+...............                                                          [ 97%]
+tests/test_validation_gate.py .................................          [100%]
+
+============================ 1315 passed in 41.51s =============================
+exit=0
