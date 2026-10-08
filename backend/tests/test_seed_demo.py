@@ -30,11 +30,13 @@ from app.features.escalations.service import RESOLUTION_STAMP
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
-from seeds import seed_demo, seed_general_clinic, seed_sababa
+from seeds import seed_demo, seed_general_clinic, seed_sababa, seed_sababa2
 from seeds.seed_general_clinic import SLUG as WELLSPRING_SLUG
 from seeds.seed_general_clinic import WELLSPRING_PROFILE
 from seeds.seed_sababa import SABABA_PROFILE
 from seeds.seed_sababa import SLUG as SABABA_SLUG
+from seeds.seed_sababa2 import SABABA2_PROFILE
+from seeds.seed_sababa2 import SLUG as SABABA2_SLUG
 from seeds.seed_tenant1_phoneshop import BYTEFIX_PROFILE
 from seeds.seed_tenant1_phoneshop import SLUG as BYTEFIX_SLUG
 from tests.conftest import _app_dsn_for
@@ -67,6 +69,29 @@ def _supabase_jwt_secret_env() -> Iterator[None]:
         os.environ.pop("SUPABASE_JWT_SECRET", None)
     else:
         os.environ["SUPABASE_JWT_SECRET"] = original
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _fast_path_budget_env() -> Iterator[None]:
+    """Pin the context budget the demo world is sized for.
+
+    CI runs this suite in the test image without ``backend/.env`` (see ci.yml),
+    so pydantic would use the Groq-safe 7500/1500 defaults - and the sababa2
+    seed deliberately refuses to finish when its tenant would fall to hybrid.
+    The values match .env.example.
+    """
+    keys = ("CORPUS_FAST_PATH_MAX_TOKENS", "CATALOG_INLINE_MAX_TOKENS")
+    originals = {key: os.environ.get(key) for key in keys}
+    os.environ["CORPUS_FAST_PATH_MAX_TOKENS"] = "11500"
+    os.environ["CATALOG_INLINE_MAX_TOKENS"] = "5500"
+    get_settings.cache_clear()
+    yield
+    for key, original in originals.items():
+        if original is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = original
     get_settings.cache_clear()
 
 
@@ -143,6 +168,7 @@ async def test_all_tenants_exist_with_data(
     bytefix_id = seeded["bytefix_id"]
     lumident_id = seeded["lumident_id"]
     sababa_id = seeded["sababa_id"]
+    sababa2_id = seeded["sababa2_id"]
     wellspring_id = seeded["wellspring_id"]
 
     lumident_catalog_n = len(seed_demo.LUMIDENT_CATALOG)
@@ -162,6 +188,13 @@ async def test_all_tenants_exist_with_data(
             len(seed_sababa.CATALOG_ITEMS),
             len(seed_sababa.PRICING_RULES),
             SABABA_PROFILE,
+        ),
+        (
+            sababa2_id,
+            SABABA2_SLUG,
+            len(seed_sababa2.CATALOG_ITEMS),
+            len(seed_sababa2.PRICING_RULES),
+            SABABA2_PROFILE,
         ),
         (
             wellspring_id,
@@ -219,8 +252,10 @@ async def test_tenants_differ_only_in_data(
 ) -> None:
     """Domain-agnostic proof stays data-side: bytefix is phone repair,
     lumident is dental, sababa is a restaurant, wellspring is a general
-    clinic, but all run identical code - differ only in config + docs."""
-    keys = ("bytefix_id", "lumident_id", "sababa_id", "wellspring_id")
+    clinic, but all run identical code - differ only in config + docs.
+    sababa2 is the deliberate same-vertical clone of sababa (the fast-path
+    demo tenant), so its offering names are asserted equal, not disjoint."""
+    keys = ("bytefix_id", "lumident_id", "sababa_id", "wellspring_id", "sababa2_id")
     configs = {
         key: await superuser_conn.fetchval(
             "select config from tenant_config where tenant_id = $1", seeded[key]
@@ -228,7 +263,7 @@ async def test_tenants_differ_only_in_data(
         for key in keys
     }
     # Distinct greetings + starter questions - the data-side difference.
-    assert len(set(configs.values())) == 4
+    assert len(set(configs.values())) == 5
     names: dict[str, set[str]] = {
         key: {
             r["name"]
@@ -238,10 +273,14 @@ async def test_tenants_differ_only_in_data(
         }
         for key in keys
     }
-    # No offering name is shared by any pair - four disjoint verticals.
-    for i, left in enumerate(keys):
-        for right in keys[i + 1 :]:
+    # No offering name is shared by any pair of the four distinct verticals.
+    verticals = ("bytefix_id", "lumident_id", "sababa_id", "wellspring_id")
+    for i, left in enumerate(verticals):
+        for right in verticals[i + 1 :]:
             assert names[left].isdisjoint(names[right]), (left, right)
+    # sababa2 keeps the source's full menu, so the name sets match exactly;
+    # only the catalog copy and knowledge prose were summarized.
+    assert names["sababa2_id"] == names["sababa_id"]
 
 
 # --- membership -----------------------------------------------------------------
@@ -270,6 +309,13 @@ async def test_membership_rows(
     assert sababa_owner_row is not None
     assert sababa_owner_row["tenant_id"] == seeded["sababa_id"]
     assert sababa_owner_row["role"] == "owner"
+
+    sababa2_owner_row = await superuser_conn.fetchrow(
+        "select tenant_id, role from users where id = $1", seeded["sababa2_owner"]
+    )
+    assert sababa2_owner_row is not None
+    assert sababa2_owner_row["tenant_id"] == seeded["sababa2_id"]
+    assert sababa2_owner_row["role"] == "owner"
 
     wellspring_owner_row = await superuser_conn.fetchrow(
         "select tenant_id, role from users where id = $1", seeded["wellspring_owner"]
@@ -321,6 +367,16 @@ async def test_conversation_counts_and_statuses(
         )
     }
     assert sababa_statuses == {"closed": 3, "open": 1, "escalated": 1}
+
+    # Sabbaba 2 reuses the source seed's conversation specs (step 3d).
+    sababa2_statuses = {
+        r["status"]: r["n"]
+        for r in await superuser_conn.fetch(
+            "select status, count(*) as n from conversations where tenant_id = $1 group by status",
+            seeded["sababa2_id"],
+        )
+    }
+    assert sababa2_statuses == {"closed": 3, "open": 1, "escalated": 1}
 
     wellspring_count = await superuser_conn.fetchval(
         "select count(*) from conversations where tenant_id = $1", seeded["wellspring_id"]
@@ -476,8 +532,15 @@ async def test_platform_tenants_table_shows_nonzero_for_all(
     resp = await client.get("/api/platform/tenants", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200, resp.text
     tenants = {t["slug"]: t for t in resp.json()}
-    assert set(tenants) >= {BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG}
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG):
+    expected = {
+        BYTEFIX_SLUG,
+        seed_demo.LUMIDENT_SLUG,
+        SABABA_SLUG,
+        SABABA2_SLUG,
+        WELLSPRING_SLUG,
+    }
+    assert set(tenants) >= expected
+    for slug in expected:
         assert tenants[slug]["conversation_count"] > 0, slug
         assert tenants[slug]["cost_usd"] > 0, slug
 
@@ -518,7 +581,13 @@ async def test_seed_is_idempotent(app_pool: None, superuser_conn: asyncpg.Connec
     # a platform admin exactly once (global count not asserted - session-shared
     # wren_test accumulates other tests' admin rows, and the real seed only
     # manages the founder's row by design).
-    for slug in (BYTEFIX_SLUG, seed_demo.LUMIDENT_SLUG, SABABA_SLUG, WELLSPRING_SLUG):
+    for slug in (
+        BYTEFIX_SLUG,
+        seed_demo.LUMIDENT_SLUG,
+        SABABA_SLUG,
+        SABABA2_SLUG,
+        WELLSPRING_SLUG,
+    ):
         assert (
             await superuser_conn.fetchval("select count(*) from tenants where slug = $1", slug) == 1
         )

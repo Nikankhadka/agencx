@@ -1,4 +1,4 @@
-"""Demo world seed: all four tenants, auth users, membership, and realistic
+"""Demo world seed: all five tenants, auth users, membership, and realistic
 conversations/escalations/costs - the data the demo surfaces show.
 
 Run with ``make dev && make seed`` (or ``./scripts/dev.sh --seed``). It is
@@ -8,11 +8,11 @@ known state.
 Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
 
 1. Bytefix (Tenant 1) via ``seed_tenant1_phoneshop.seed`` - its existing
-   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs). All four
+   wipe+recreate (config, 15 items, 12 rules, 20 orders, 3 docs). All five
    tenants are seeded already-onboarded (profile + business_name + persona
    + completed onboarding record), so the demo world lands in the console,
    not the interview.
-2. Four GoTrue auth users (find-or-create by email), via an injected
+2. Five GoTrue auth users (find-or-create by email), via an injected
    ``create_auth_user`` callable so tests run GoTrue-free with deterministic
    UUIDs. The default calls the GoTrue Admin API (POST /auth/v1/admin/users
    with a service_role bearer, email_confirm=true).
@@ -24,10 +24,14 @@ Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
    4, slug ``wellspring``), each via its own standalone seed module so the
    same module seeds staging without touching the other tenants. Sabbaba
    brings its own conversations with it.
+3d. Sabbaba 2 (Tenant 5, slug ``sababa2``) via ``seed_sababa2``: Sabbaba's
+   business and full menu with summarized catalog copy, sized so the whole
+   prompt takes the fast path. The seed fails loudly if it would not.
 4. Membership rows: ``users`` (role='owner') for each tenant's owner;
    ``platform_admins`` for the founder. Tenant wipe cascades users;
    platform_admins is delete-then-insert by user_id for idempotency.
-5. Conversations for bytefix, lumident and wellspring (Sabbaba seeds its own),
+5. Conversations for bytefix, lumident and wellspring (Sabbaba and Sabbaba 2
+   seed their own),
    with explicit ``created_at`` (``now()`` is constant within one transaction
    and ``tenant_context`` is one transaction, so every insert sets created_at
    explicitly - spread over the past 7 days, messages 5-30s apart so
@@ -39,9 +43,11 @@ Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
    claimed, resolved with a trailing human_agent message) respecting the
    0011 partial unique index.
 
-Domain-agnosticism is data-side only: bytefix, lumident, sababa and
+Domain-agnosticism is data-side only: bytefix, lumident, sababa, sababa2 and
 wellspring run identical code and differ only in tenant_config + uploaded
-knowledge - no vertical branches anywhere (the hard rule).
+knowledge - no vertical branches anywhere (the hard rule). Sabbaba 2 is the
+deliberate same-vertical clone: its data proves the fast-path budget, not a
+new vertical.
 """
 
 from __future__ import annotations
@@ -57,7 +63,13 @@ import httpx
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
-from seeds import _helpers, seed_general_clinic, seed_sababa, seed_tenant1_phoneshop
+from seeds import (
+    _helpers,
+    seed_general_clinic,
+    seed_sababa,
+    seed_sababa2,
+    seed_tenant1_phoneshop,
+)
 from seeds.supabase_keys import mint_key
 
 # Demo identities (password ``wren-demo`` for all; 6+ chars satisfies GoTrue's
@@ -66,6 +78,7 @@ from seeds.supabase_keys import mint_key
 BYTEFIX_OWNER_EMAIL = "owner@bytefix.dev"
 LUMIDENT_OWNER_EMAIL = "owner@lumident.dev"
 SABABA_OWNER_EMAIL = "owner@sababa.dev"
+SABABA2_OWNER_EMAIL = "owner@sababa2.dev"
 WELLSPRING_OWNER_EMAIL = "owner@wellspring.dev"
 FOUNDER_EMAIL = "founder@wren.dev"
 DEMO_PASSWORD = "wren-demo"
@@ -377,6 +390,8 @@ async def _seed_membership(
     lumident_owner: UUID,
     sababa_id: UUID,
     sababa_owner: UUID,
+    sababa2_id: UUID,
+    sababa2_owner: UUID,
     wellspring_id: UUID,
     wellspring_owner: UUID,
     founder: UUID,
@@ -389,7 +404,13 @@ async def _seed_membership(
     # writes to the users table.
     user_tenants: dict[UUID, UUID] = {}
     async with db.tenant_context(None, "platform_admin") as conn:
-        for user_id in (bytefix_owner, lumident_owner, sababa_owner, wellspring_owner):
+        for user_id in (
+            bytefix_owner,
+            lumident_owner,
+            sababa_owner,
+            sababa2_owner,
+            wellspring_owner,
+        ):
             tenant_id = await conn.fetchval("select tenant_id from users where id = $1", user_id)
             if tenant_id is not None:
                 user_tenants[user_id] = tenant_id
@@ -414,6 +435,12 @@ async def _seed_membership(
             "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",
             sababa_owner,
             sababa_id,
+        )
+    async with db.tenant_context(sababa2_id, "tenant_admin") as conn:
+        await conn.execute(
+            "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",
+            sababa2_owner,
+            sababa2_id,
         )
     async with db.tenant_context(wellspring_id, "tenant_admin") as conn:
         await conn.execute(
@@ -816,11 +843,13 @@ async def seed(
         bytefix_owner = await user_factory(BYTEFIX_OWNER_EMAIL, DEMO_PASSWORD)
         lumident_owner = await user_factory(LUMIDENT_OWNER_EMAIL, DEMO_PASSWORD)
         sababa_owner = await user_factory(SABABA_OWNER_EMAIL, DEMO_PASSWORD)
+        sababa2_owner = await user_factory(SABABA2_OWNER_EMAIL, DEMO_PASSWORD)
         wellspring_owner = await user_factory(WELLSPRING_OWNER_EMAIL, DEMO_PASSWORD)
         founder = await user_factory(FOUNDER_EMAIL, DEMO_PASSWORD)
         print(
             f"auth users: owner@bytefix={bytefix_owner} "
             f"owner@lumident={lumident_owner} owner@sababa={sababa_owner} "
+            f"owner@sababa2={sababa2_owner} "
             f"owner@wellspring={wellspring_owner} founder={founder}"
         )
 
@@ -840,6 +869,11 @@ async def seed(
         wellspring_id = await seed_general_clinic.seed(embedder=resolved_embedder)
         print(f"seeded wellspring (tenant_id={wellspring_id})")
 
+        # 3d. Sabbaba 2 (Tenant 5) - the fast-path clone; its seed asserts the
+        # assembled prompt takes the whole-corpus fast path or fails loudly.
+        sababa2_id = await seed_sababa2.seed(embedder=resolved_embedder)
+        print(f"seeded sababa2 (tenant_id={sababa2_id})")
+
         # 4. Membership rows.
         await _seed_membership(
             bytefix_id,
@@ -848,14 +882,16 @@ async def seed(
             lumident_owner,
             sababa_id,
             sababa_owner,
+            sababa2_id,
+            sababa2_owner,
             wellspring_id,
             wellspring_owner,
             founder,
         )
-        print("seeded membership (4 owners + 1 platform admin)")
+        print("seeded membership (5 owners + 1 platform admin)")
 
         # 5. Conversations for the inline tenants, tool calls, costs,
-        # escalations. Sabbaba brought its own in step 3b.
+        # escalations. Sabbaba and Sabbaba 2 brought their own above.
         now = datetime.now(UTC)
         async with db.tenant_context(bytefix_id, "tenant_admin") as conn:
             await _helpers.seed_conversations(conn, bytefix_id, _bytefix_conversations(now))
@@ -873,19 +909,22 @@ async def seed(
             f"  tenant console: http://localhost:3000/login  {BYTEFIX_OWNER_EMAIL}\n"
             f"  tenant console: http://localhost:3000/login  {LUMIDENT_OWNER_EMAIL}\n"
             f"  tenant console: http://localhost:3000/login  {SABABA_OWNER_EMAIL}\n"
+            f"  tenant console: http://localhost:3000/login  {SABABA2_OWNER_EMAIL}\n"
             f"  tenant console: http://localhost:3000/login  {WELLSPRING_OWNER_EMAIL}\n"
             f"  platform:       http://localhost:3000/admin  {FOUNDER_EMAIL}\n"
             f"  customer pages: http://localhost:3000/bytefix, /lumident, /sababa, "
-            f"/wellspring"
+            f"/sababa2, /wellspring"
         )
         return {
             "bytefix_id": bytefix_id,
             "lumident_id": lumident_id,
             "sababa_id": sababa_id,
+            "sababa2_id": sababa2_id,
             "wellspring_id": wellspring_id,
             "bytefix_owner": bytefix_owner,
             "lumident_owner": lumident_owner,
             "sababa_owner": sababa_owner,
+            "sababa2_owner": sababa2_owner,
             "wellspring_owner": wellspring_owner,
             "founder": founder,
         }

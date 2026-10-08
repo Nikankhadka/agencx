@@ -162,7 +162,7 @@ migrate: ## Apply forward-only DB migrations
 	$(BE) python -m app.shared.migrate
 
 .PHONY: seed
-seed: migrate ## Seed the full demo world (four tenants, auth users, conversations)
+seed: migrate ## Seed the full demo world (five tenants, auth users, conversations)
 	@printf "\033[0;32m>>> Seeding\033[0m\n"
 	$(BE) python -m seeds.seed_demo
 
@@ -170,6 +170,11 @@ seed: migrate ## Seed the full demo world (four tenants, auth users, conversatio
 seed-sababa: migrate ## Seed Sabbaba (slug sababa) only - safe to run against staging
 	@printf "\033[0;32m>>> Seeding sababa\033[0m\n"
 	$(BE) python -m seeds.seed_sababa
+
+.PHONY: seed-sababa2
+seed-sababa2: migrate ## Seed Sabbaba 2 (slug sababa2), the fast-path clone - safe to run against staging
+	@printf "\033[0;32m>>> Seeding sababa2\033[0m\n"
+	$(BE) python -m seeds.seed_sababa2
 
 .PHONY: seed-tenant1
 seed-tenant1: migrate ## Seed Tenant 1 (Bytefix phone repair) only - no auth users

@@ -42,6 +42,7 @@ All verified. Everything runs in containers (F-3): the host needs only Docker. R
 | Apply migrations | `make migrate` | `docker compose run --rm backend python -m app.shared.migrate` |
 | Seed demo world | `make seed` | `docker compose run --rm backend python -m seeds.seed_demo` |
 | Seed tenant 1 | `make seed-tenant1` | `docker compose run --rm backend python -m seeds.seed_tenant1_phoneshop` |
+| Seed sababa2 (fast-path clone) | `make seed-sababa2` | `docker compose run --rm backend python -m seeds.seed_sababa2` |
 | Seed tenant 2 | `make seed-tenant2` | `docker compose run --rm backend python -m seeds.seed_tenant2_dental --api-base http://backend:8000` (NEEDS `make dev`) |
 | Build frontend | `make build` | `docker compose run --rm --no-deps frontend npm run build` |
 | Lint (frontend) | `make lint-frontend` | `docker compose run --rm --no-deps frontend npm run lint && npm run check:tokens` |

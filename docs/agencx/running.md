@@ -26,7 +26,7 @@ seed. Both detach - the stack keeps running until `make stop`.
 make install    # deps into their container volumes (uv sync + npm ci)
 make services   # Postgres + pgvector, GoTrue, auth-proxy
 make migrate    # forward-only migrations
-make seed       # demo world: four tenants, five logins, conversations
+make seed       # demo world: five tenants, six logins, conversations
 make dev        # backend :8000 + frontend :3000 as containers
 ```
 
@@ -45,6 +45,7 @@ stack cannot be a make prerequisite.
 | `make migrate` | db (started for you) |
 | `make seed` | db + GoTrue + migrations (all started for you) |
 | `make seed-tenant1` | db + migrations (started for you); no auth users, so no GoTrue |
+| `make seed-sababa2` | db + migrations (started for you); no auth users, so no GoTrue |
 | `make seed-tenant2` | **the stack running** (`make dev`) - it drives the public API over the compose network |
 | `make test-e2e` | the seeded stack running (`make dev && make seed`) |
 | `make eval` / `make eval-skip-llm` | a seeded db (`make seed-tenant1` is enough) |
@@ -57,8 +58,9 @@ stack cannot be a make prerequisite.
 | Customer chat | `http://localhost:3000/bytefix` | none |
 | | `http://localhost:3000/lumident` | none |
 | | `http://localhost:3000/sababa` | none |
+| | `http://localhost:3000/sababa2` | none |
 | | `http://localhost:3000/wellspring` | none |
-| Tenant console | `http://localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev`, `owner@sababa.dev`, `owner@wellspring.dev` |
+| Tenant console | `http://localhost:3000/login` | `owner@bytefix.dev`, `owner@lumident.dev`, `owner@sababa.dev`, `owner@sababa2.dev`, `owner@wellspring.dev` |
 | Platform | `http://localhost:3000/admin` | `founder@wren.dev` / `wren-demo` |
 | Backend API | `http://localhost:8000` | |
 | GoTrue (via auth-proxy) | `http://localhost:54321` | |

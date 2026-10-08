@@ -189,7 +189,13 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
       backend python -m seeds.seed_sababa
     ```
 
-    This wipe-and-recreates only the `sababa` slug. Do not run the full
+    The full-menu fast-path clone Sabbaba 2 (slug `sababa2`) re-seeds the same
+    way with `backend python -m seeds.seed_sababa2`. It needs the raised
+    `CORPUS_FAST_PATH_MAX_TOKENS`/`CATALOG_INLINE_MAX_TOKENS` set (Step 4) and
+    fails loudly at the end if the tenant would not take the whole-corpus fast
+    path, rather than silently seeding a slow tenant.
+
+    These wipe-and-recreate only their own slug. Do not run the full
     `seeds.seed_demo` against the hosted database: it wipes and recreates
     every demo tenant, which would destroy the live `bytefix` rows.
 5. **Auth dashboard configuration (D23, `design/decisions.md`) - blocking, not
@@ -339,6 +345,8 @@ LLM_FAILOVER_PROVIDER=openai_compat
 LLM_FAILOVER_BASE_URL=https://openrouter.ai/api/v1
 LLM_FAILOVER_API_KEY=<OpenRouter key, optional>
 LLM_FAILOVER_MODEL=google/gemma-4-26b-a4b-it:free
+CORPUS_FAST_PATH_MAX_TOKENS=11500
+CATALOG_INLINE_MAX_TOKENS=5500
 EMBEDDER=google
 EMBEDDING_DIM=384
 RERANKER=cohere
@@ -356,6 +364,15 @@ look like a missing variable, so check them by name after any project rebuild:
 `COHERE_API_KEY` (a 401 from the reranker on every grounded answer, while
 `RERANKER=cohere` is set and looks fine), `SUPABASE_SERVICE_ROLE_KEY`, and
 `WREN_APP_DB_PASSWORD` (below).
+
+`CORPUS_FAST_PATH_MAX_TOKENS` / `CATALOG_INLINE_MAX_TOKENS` set how large a
+tenant's corpus plus catalog may be before it drops to hybrid retrieval. The
+7500/1500 defaults fit Groq's free-tier 8K tokens-per-minute cap so every
+fallback leg can serve a fast-path turn; the 11500/5500 values carry the
+`sababa2` demo tenant's summarized full menu on the fast path instead. Only the
+Gemini primary (1M-token context) or a paid leg can serve prompts over 8K
+tokens - free Groq 429s them, so such turns skip to the OpenRouter failover.
+Set both back to 7500/1500 to restore the Groq-safe boundary.
 
 `WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
 database role's password. (`wren_*` names are standing names kept from the

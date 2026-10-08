@@ -285,6 +285,17 @@ live in the ticket files, not here.
   `scripts/seed_sabbaba_images.py`, recorded in `seeds/sabbaba/images.json`);
   items without a reliable photo show the letter tile. The seed stays offline.
   Hosted `sababa` re-seeded 2026-10-08 (96 offerings, 94 rules, 109 embedded chunks; `sababa` only, never `seed_demo`).
+- [x] Sabbaba 2 fast-path demo tenant: a fifth demo tenant (`sababa2`) clones
+  Sabbaba's full 96-item menu, photos, orders and console conversations with
+  the catalog copy summarized to one line per item and the knowledge prose
+  condensed, so the whole prompt takes the 2-call fast path instead of hybrid
+  retrieval (measured 9,825/11,500 tokens, 1,675 margin, 13 corpus chunks).
+  `CORPUS_FAST_PATH_MAX_TOKENS=11500` and `CATALOG_INLINE_MAX_TOKENS=5500` in
+  `.env.example` size it for the Gemini primary/paid legs - over Groq's free
+  8K TPM, so such turns skip to the OpenRouter failover (documented in
+  `deploy.md` and `architecture.md`). The seed fails loudly if the tenant
+  would not take the fast path. Standalone `make seed-sababa2`; wired into
+  `make seed` with login `owner@sababa2.dev`.
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced

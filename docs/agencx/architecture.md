@@ -219,6 +219,14 @@ where Groq is unavailable; GitHub Models (8k input/request cap) and the Gemini
 Z.ai GLM as an option; CI pins the OpenRouter gemma model so the eval gates run
 deterministically.
 
+The fast-path budgets are sized against the smallest leg that may serve a turn:
+the 7500/1500 defaults fit Groq's free-tier 8K tokens-per-minute cap, so any
+fast-path prompt can be served on any leg. The `sababa2` demo tenant carries a
+summarized 96-item menu and needs 11500/5500; prompts over 8K tokens can only be
+served by the primary (1M-token context) or a paid leg, so free Groq 429s them
+to the OpenRouter failover. Setting the two values back to the defaults restores
+the every-leg-serves boundary.
+
 ### The latency budget (product promise, PRD section 9)
 
 | Phase | Budget |
