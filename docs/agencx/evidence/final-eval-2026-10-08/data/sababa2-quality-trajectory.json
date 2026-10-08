@@ -1,0 +1,207 @@
+{
+ "trajectory": {
+  "metrics": {
+   "cases": 11.0,
+   "tool_correctness": 0.6363636363636364,
+   "step_efficiency": 1.0,
+   "total_cost_usd": 0.0,
+   "avg_cost_usd": 0.0
+  },
+  "cases": [
+   {
+    "case_id": "s2-know-hours",
+    "category": "knowledge",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 3,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "Sabbaba 2 is open from 6:00 am to 8:00 pm every day [5]. \n\nWould you like to take a look at the breakfast menu or the main menu?"
+   },
+   {
+    "case_id": "s2-know-price",
+    "category": "knowledge",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 3,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "A falafel plate is $17.90."
+   },
+   {
+    "case_id": "s2-know-delivery",
+    "category": "knowledge",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 3,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "Deliveries are handled through Uber Eats and DoorDash, or you can order directly through the Hey You app. Would you like to see what is on the menu?"
+   },
+   {
+    "case_id": "s2-know-halal",
+    "category": "knowledge",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 3,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "Halal status is not stated on the shop's listings [5]. \n\nWould you like to have someone from the team follow up with you about this?"
+   },
+   {
+    "case_id": "s2-know-unknown",
+    "category": "knowledge",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 3,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "There is no mention of a car park out the front in the shop details. The restaurant is located in the Eastgate Bondi Junction shopping centre on Spring Street [5]."
+   },
+   {
+    "case_id": "s2-quote-two-plates",
+    "category": "quoting",
+    "correct": false,
+    "failures": [
+     "routed to 'structured', expected one of ['quoting']",
+     "expected selection not made: {'item_name': 'Falafel Plate', 'quantity': 2}",
+     "expected selection not made: {'item_name': 'Housemade Lemonade', 'quantity': 1}",
+     "terminal quote_exists=False, expected True"
+    ],
+    "steps": [
+     "agent",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "structured",
+    "draft": "Here is the current price summary."
+   },
+   {
+    "case_id": "s2-quote-super-babyccino",
+    "category": "quoting",
+    "correct": false,
+    "failures": [
+     "routed to 'structured', expected one of ['quoting']",
+     "expected selection not made: {'item_name': 'Super Plate', 'quantity': 1}",
+     "expected selection not made: {'item_name': 'Babyccino', 'quantity': 3}",
+     "terminal quote_exists=False, expected True"
+    ],
+    "steps": [
+     "agent",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "structured",
+    "draft": "Here is the current price summary."
+   },
+   {
+    "case_id": "s2-quote-coffee-chips",
+    "category": "quoting",
+    "correct": false,
+    "failures": [
+     "routed to 'knowledge', expected one of ['quoting']",
+     "expected selection not made: {'item_name': 'Large Coffee', 'quantity': 1}",
+     "expected selection not made: {'item_name': 'Hot Chips', 'quantity': 1}",
+     "terminal quote_exists=False, expected True"
+    ],
+    "steps": [
+     "agent",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "knowledge",
+    "draft": "A large coffee is $7.50 and hot chips are $6.00 [4, 7]."
+   },
+   {
+    "case_id": "s2-quote-wraps",
+    "category": "quoting",
+    "correct": false,
+    "failures": [
+     "routed to 'structured', expected one of ['quoting']",
+     "expected selection not made: {'item_name': 'Chicken Wrap', 'quantity': 4}",
+     "terminal quote_exists=False, expected True"
+    ],
+    "steps": [
+     "agent",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "structured",
+    "draft": "Here is the current price summary."
+   },
+   {
+    "case_id": "s2-esc-human",
+    "category": "escalation",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "draft",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "escalation",
+    "draft": "I\u2019ve forwarded your query to the business. They can reply to you here. Can I get your name and email so the business can follow up?"
+   },
+   {
+    "case_id": "s2-esc-complaint",
+    "category": "escalation",
+    "correct": true,
+    "failures": [],
+    "steps": [
+     "agent",
+     "draft",
+     "price_gate",
+     "inspection"
+    ],
+    "steps_expected_min": 4,
+    "efficiency": 1.0,
+    "reasoning_grade": null,
+    "route": "escalation",
+    "draft": "I\u2019ve forwarded your query to the business. They can reply to you here. Can I get your name and email so the business can follow up?"
+   }
+  ]
+ }
+}

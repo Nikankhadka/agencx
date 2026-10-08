@@ -1,0 +1,232 @@
+{
+ "rag": [
+  {
+   "case_id": "A1",
+   "group": "menu_prices",
+   "question": "How much is the Falafel Plate?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.9736520919686208
+  },
+  {
+   "case_id": "A2",
+   "group": "menu_prices",
+   "question": "What does a flat white cost?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.9459007542129347
+  },
+  {
+   "case_id": "A3",
+   "group": "menu_prices",
+   "question": "How much is the baklava and a brownie?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.9413463067327573
+  },
+  {
+   "case_id": "A4",
+   "group": "menu_prices",
+   "question": "What is the most expensive plate?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.8763368840321304
+  },
+  {
+   "case_id": "R-A1",
+   "group": "prices",
+   "question": "wats the pris of the falaffel plat",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.7093320113403755
+  },
+  {
+   "case_id": "R-A2",
+   "group": "prices",
+   "question": "how much is the hummus and a hot chocolate",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.8610500745706801
+  },
+  {
+   "case_id": "R-A3",
+   "group": "prices",
+   "question": "price of the salmon bagel?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.9050417423480336
+  },
+  {
+   "case_id": "C1",
+   "group": "info",
+   "question": "What time do you open?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.8091871762971731
+  },
+  {
+   "case_id": "C2",
+   "group": "info",
+   "question": "Where are you located?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.5403424767804792
+  },
+  {
+   "case_id": "C3",
+   "group": "info",
+   "question": "What is your phone number?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.7832201961930586
+  },
+  {
+   "case_id": "C4",
+   "group": "info",
+   "question": "Can I order through you?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 3,
+   "relevancy": 0.797180543594601
+  },
+  {
+   "case_id": "C5",
+   "group": "info",
+   "question": "Are you open on public holidays?",
+   "faithfulness": 0.5,
+   "unsupported": [
+    "Someone from the business can follow up with the user about public holiday hours"
+   ],
+   "claims": 2,
+   "relevancy": 0.7544678371993306
+  },
+  {
+   "case_id": "B1",
+   "group": "dietary",
+   "question": "I am vegan - what can I eat here?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 17,
+   "relevancy": 0.8277299012988905
+  },
+  {
+   "case_id": "B2",
+   "group": "dietary",
+   "question": "What gluten free options do you have?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 5,
+   "relevancy": 0.8338918949795772
+  },
+  {
+   "case_id": "B3",
+   "group": "dietary",
+   "question": "Which pita pockets are vegetarian?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 8,
+   "relevancy": 0.9134913984781177
+  },
+  {
+   "case_id": "B4",
+   "group": "dietary",
+   "question": "Is your food halal?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.8385178295152036
+  },
+  {
+   "case_id": "B5",
+   "group": "dietary",
+   "question": "My son has a milk allergy, is the falafel plate dairy free?",
+   "faithfulness": 0.6666666666666666,
+   "unsupported": [
+    "The falafel plate contains no animal products",
+    "The falafel plate contains no milk"
+   ],
+   "claims": 6,
+   "relevancy": 0.8475381678257321
+  },
+  {
+   "case_id": "D1",
+   "group": "recommend",
+   "question": "What is most popular?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 4,
+   "relevancy": 0.5960518378348906
+  },
+  {
+   "case_id": "D2",
+   "group": "recommend",
+   "question": "I have $15, what can I get for lunch?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 2,
+   "relevancy": 0.6880691415503977
+  },
+  {
+   "case_id": "D3",
+   "group": "recommend",
+   "question": "I have never been here, what should I try?",
+   "faithfulness": 0.75,
+   "unsupported": [
+    "The Falafel Plate is a popular choice"
+   ],
+   "claims": 4,
+   "relevancy": 0.5856028221994017
+  },
+  {
+   "case_id": "R-C1",
+   "group": "unsourced_negative",
+   "question": "is there parking nearby?",
+   "faithfulness": 0.6666666666666666,
+   "unsupported": [
+    "Shopping centre parking is typically available nearby."
+   ],
+   "claims": 3,
+   "relevancy": 0.8065550480312451
+  },
+  {
+   "case_id": "R-C2",
+   "group": "unsourced_negative",
+   "question": "do you have wifi?",
+   "faithfulness": 0.0,
+   "unsupported": [
+    "The detail is not mentioned in the business information",
+    "Someone from the team can follow up with the user about that"
+   ],
+   "claims": 2,
+   "relevancy": 0.5883370960770536
+  },
+  {
+   "case_id": "R-C3",
+   "group": "unsourced_negative",
+   "question": "do you sell gift cards?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.8741864254531548
+  },
+  {
+   "case_id": "R-C4",
+   "group": "unsourced_negative",
+   "question": "do you do a student discount?",
+   "faithfulness": 1.0,
+   "unsupported": [],
+   "claims": 1,
+   "relevancy": 0.9312804736032385
+  }
+ ]
+}
