@@ -1356,6 +1356,11 @@ server total the client either guesses by page size (wrong whenever the last
 page is partial) or keeps offering a load that returns nothing. The count is
 already computed for the tab badges, so returning it costs one query.
 
+**Amended by D43.** The needs-you predicate narrowed: a taken-over thread only
+qualifies while the customer's message is the latest word, so a thread the
+business spoke last on carries "Waiting on customer" instead. The filter list
+swapped `human` for `resolved`, and the count set follows.
+
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.
 
@@ -1417,6 +1422,13 @@ thread renders centered; `human_agent` is the existing role the customer
 transcript already carries for a human reply. Reusing them keeps the two
 surfaces reading one transcript rather than two.
 
+**Superseded by D44.** Resolution moved from the escalation to the
+conversation: one Resolve action closes any open escalation, marks
+`conversations.resolved_at`, and reopens on a customer reply. The
+`system`-stamp and optional `human_agent` message idiom carries over; the
+hidden `/escalations` table keeps its escalation-scoped endpoint for
+compatibility, but that endpoint does not set the conversation marker.
+
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.
 
@@ -1463,6 +1475,90 @@ table. WhatsApp-style double ticks imply per-message delivery and read receipts,
 which this product has no channel for and no reason to claim; the founder ruled
 them out. The marker only ever moves forward (`greatest(owner_read_at, now())`),
 so the read endpoint is idempotent and a race cannot un-read a thread.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D43: "Action needed" is a derived turn state, and Waiting on customer is its other side
+
+**Decision.** The queue's action bucket (internal key `needs_you`, UI label
+"Action needed") is an open escalation, or a taken-over conversation
+(`conversations.status = 'human'`) whose last non-system message is from the
+customer. A taken-over conversation whose last non-system message is from the
+assistant or a `human_agent` is **Waiting on customer**: it leaves Action
+needed, carries a "Waiting on customer" label on its row, and returns when the
+customer replies. The thread status line shows the same state once the owner's
+own reply was the last word; right after a takeover the assistant's prior
+message does not displace "You're replying" (C-6). The queue tabs are Action
+needed / Unread / All / Resolved; the old "Human handled" tab is gone because
+ownership is a mode, not a lifecycle bucket, and `human` leaves the filter and
+count contract with it.
+
+**Why.** The shipped predicate counted every taken-over thread as needing the
+owner, so an owner who replied kept seeing the row until handback - the queue
+said "needs you" about a thread where the ball was with the customer. Whose
+turn it is, is derivable from the transcript the row already summarizes; the
+last non-system message is the turn, and system rows are stamps, never
+replies. "Waiting on customer" makes the other side of that explicit without
+inventing a tab for something with no action in it. Dropping "Human handled"
+follows the same logic: it filtered by mode rather than by anything to do,
+and its slot is better spent on Resolved, where auto-resolved work lands.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D44: Conversation-level resolution is a marker, and a customer reply clears it
+
+**Decision.** One Resolve action on the conversation workspace
+(`POST /api/conversations/{id}/resolve`, owner-only) marks
+`conversations.resolved_at` (migration `0038`), closes any open or claimed
+escalation on the conversation, writes the owner-only `system` stamp "You
+resolved this conversation", and accepts one optional customer-facing
+`human_agent` message. Resolution is idempotent, shows as "Resolved" in the
+thread, removes the row from Action needed, and hides the thread's controls.
+Any customer message clears `resolved_at` inside the same transaction that
+persists it (`chat.service.resolve_conversation`), so the thread reopens and
+returns to Action needed through the ordinary predicate. Resolution is a
+marker, not a `conversations.status` value: status stays the ownership axis
+(open/human/escalated). The escalation-scoped resolve endpoint and the hidden
+`/escalations` table stay for compatibility; they do not set the marker.
+
+**Why.** RF-16's escalation-scoped resolve left the conversation open: an
+owner who resolved while taken over stayed in Needs you until handback (its
+own confirmation had to warn about that), and the escalation row was the only
+thing being closed. A conversation is the unit an owner actually finishes
+with, so the action belongs there; closing the escalation in the same
+transaction is a consequence, not a second step. A marker rather than a status
+keeps D20/D38's ownership axis intact and avoids a fourth status value that
+every branch on `status` would have to learn. Reopening on any customer reply
+is what makes resolution safe to use without fear: the customer can always
+come back, and the marker never blocks a message.
+
+**Boundary:** no monetary amount is produced or altered, and nothing branches
+on a tenant's vertical.
+
+## D45: Auto-resolve is a throttled lazy sweep over customer silence
+
+**Decision.** A conversation whose last non-system message came from the
+business (assistant or `human_agent`) and is older than the tenant's
+`config.limits.auto_resolve_days` (default 7, resolved through
+`TenantLimits`) is resolved by the same marker as D44, with the owner-only
+stamp "Resolved automatically after N days" and its open escalation closed.
+The sweep runs lazily at the top of the owner's list and detail reads,
+throttled to once per tenant per 60 seconds (`maybe_auto_resolve`,
+`clear_auto_resolve_cache` as the test hook); no scheduler, cron, or
+background worker exists or is added. A customer reply reopens through D44's
+transaction.
+
+**Why.** An owner's queue should not fill with threads the customer abandoned;
+"customer silence" is the only signal that is safe to act on automatically,
+because the customer is the one who can always undo it. Owner silence is not a
+signal - auto-resolving because the owner was busy would hide exactly the work
+the queue exists to surface. The read that would show a stale row is already
+happening every few seconds from the console and Home, so the sweep rides an
+existing request path instead of adding an unattended mutating process, which
+D36 already rejected. The per-tenant window follows the limits precedent so a
+fast-moving business can tighten it without a deploy.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.

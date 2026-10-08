@@ -44,6 +44,10 @@ DEFAULT_TOOL_TIMEOUT_S = 15.0
 # waiting through, and blowing it means an honest handoff rather than a longer
 # wait. Per-tenant overridable like every other limit.
 DEFAULT_TURN_BUDGET_S = 10.0
+# D45: how many days of customer silence resolve a conversation the business
+# spoke last on. Per-tenant overridable like every other limit; the lazy sweep
+# in features/conversations reads it.
+DEFAULT_AUTO_RESOLVE_DAYS = 7
 
 # How long a summed-usage reading stays cached per tenant. Short enough that a
 # tenant crossing its cap is stopped within seconds, long enough that a burst
@@ -97,6 +101,7 @@ class TenantLimits:
     llm_timeout_s: float
     tool_timeout_s: float
     turn_budget_s: float
+    auto_resolve_days: int
 
     @classmethod
     def resolve(cls, config: dict[str, Any] | None, settings: Settings) -> TenantLimits:
@@ -114,6 +119,7 @@ class TenantLimits:
             llm_timeout_s=_num(limits.get("llm_timeout_s"), DEFAULT_LLM_TIMEOUT_S),
             tool_timeout_s=_num(limits.get("tool_timeout_s"), DEFAULT_TOOL_TIMEOUT_S),
             turn_budget_s=_num(limits.get("turn_budget_s"), DEFAULT_TURN_BUDGET_S),
+            auto_resolve_days=int(_num(limits.get("auto_resolve_days"), DEFAULT_AUTO_RESOLVE_DAYS)),
         )
 
 

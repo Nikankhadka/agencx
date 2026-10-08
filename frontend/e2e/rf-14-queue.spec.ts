@@ -1,5 +1,5 @@
 /**
- * E2E for RF-14/D38: the Chats queue filters, searches, and pages on the
+ * E2E for RF-14/D38/D43: the Chats queue filters, searches, and pages on the
  * server over the complete tenant dataset.
  *
  * Surface: tenant-admin (http://localhost:3000)
@@ -35,6 +35,7 @@ function row(id: string, overrides: Partial<Row> = {}): Row {
     last_message: "A message",
     last_activity_at: "2026-01-01T00:00:00Z",
     handler: "assistant",
+    waiting_on_customer: false,
     ...overrides,
   };
 }
@@ -44,7 +45,7 @@ function uuid(n: number): string {
 }
 
 test.describe("RF-14 Chats queue", () => {
-  test("opens on Needs you and requests filter=needs_you", async ({ page, request }) => {
+  test("opens on Action needed and requests filter=needs_you", async ({ page, request }) => {
     const urls = await mockQueue(page, [
       row(uuid(1), { needs_attention: true, pending_summary: "Wants a price" }),
       row(uuid(2)),
@@ -63,14 +64,15 @@ test.describe("RF-14 Chats queue", () => {
       row(uuid(2), { unread: true }),
       row(uuid(3), { status: "human", handler: "human" }),
       row(uuid(4)),
+      row(uuid(5), { resolved_at: "2026-01-02T00:00:00Z" }),
     ]);
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
     await expect(page.getByTestId("chats-filter-count-needs_you")).toHaveText("2");
-    await expect(page.getByTestId("chats-filter-count-all")).toHaveText("4");
+    await expect(page.getByTestId("chats-filter-count-all")).toHaveText("5");
     await expect(page.getByTestId("chats-filter-count-unread")).toHaveText("1");
-    await expect(page.getByTestId("chats-filter-count-human")).toHaveText("1");
+    await expect(page.getByTestId("chats-filter-count-resolved")).toHaveText("1");
   });
 
   test("switching tabs sends the right filter and shows only its rows", async ({
@@ -82,22 +84,25 @@ test.describe("RF-14 Chats queue", () => {
       row(uuid(2), { unread: true }),
       row(uuid(3), { status: "human", handler: "human" }),
       row(uuid(4)),
+      row(uuid(5), { resolved_at: "2026-01-02T00:00:00Z" }),
     ]);
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
     await page.getByTestId("chats-filter-all").click();
-    await expect(page.getByTestId("chat-row")).toHaveCount(4);
+    await expect(page.getByTestId("chat-row")).toHaveCount(5);
 
-    await page.getByTestId("chats-filter-human").click();
+    await page.getByTestId("chats-filter-resolved").click();
     await expect(page.getByTestId("chat-row")).toHaveCount(1);
-    await expect(page.getByTestId("chat-row").first()).toContainText("Customer 00000000-0000-4000-8000-000000000003");
+    await expect(page.getByTestId("chat-row").first()).toContainText(
+      "Customer 00000000-0000-4000-8000-000000000005",
+    );
 
     await page.getByTestId("chats-filter-unread").click();
     await expect(page.getByTestId("chat-row")).toHaveCount(1);
 
     expect(urls.some((search) => search.includes("filter=all"))).toBe(true);
-    expect(urls.some((search) => search.includes("filter=human"))).toBe(true);
+    expect(urls.some((search) => search.includes("filter=resolved"))).toBe(true);
     expect(urls.some((search) => search.includes("filter=unread"))).toBe(true);
   });
 
@@ -148,10 +153,35 @@ test.describe("RF-14 Chats queue", () => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
-    await page.getByTestId("chats-filter-human").click();
     const handler = page.getByTestId("row-handler");
     await expect(handler).toHaveCount(1);
     await expect(handler).toHaveText("You");
+  });
+
+  test("a waiting row says Waiting on customer and stays out of Action needed", async ({
+    page,
+    request,
+  }) => {
+    await mockQueue(page, [
+      row(uuid(1), {
+        status: "human",
+        handler: "human",
+        waiting_on_customer: true,
+        customer_ref: "Waiting on them",
+      }),
+      row(uuid(2), { status: "human", handler: "human", customer_ref: "Needs you" }),
+    ]);
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/chats");
+
+    // Action needed holds the customer-waiting thread, not the waiting one.
+    await expect(page.getByTestId("chat-row")).toHaveCount(1);
+    await expect(page.getByTestId("chat-row").first()).toContainText("Needs you");
+
+    await page.getByTestId("chats-filter-all").click();
+    const waitingRow = page.getByTestId("chat-row").filter({ hasText: "Waiting on them" });
+    await expect(waitingRow.getByTestId("row-waiting")).toHaveText("Waiting on customer");
+    await expect(waitingRow.getByTestId("row-attention")).toHaveCount(0);
   });
 
   test("an escalated-and-taken-over row shows both the handler and the badge", async ({
@@ -178,12 +208,12 @@ test.describe("RF-14 Chats queue", () => {
   });
 
   test("a filtered tab pages against the filter-scoped total", async ({ page, request }) => {
-    // 60 human-handled rows among 80 total: the Human handled total is 60, so
-    // the second page appends 10 and Load more stops there rather than against
-    // the 80-row dataset.
+    // 60 resolved rows among 80 total: the Resolved total is 60, so the second
+    // page appends 10 and Load more stops there rather than against the 80-row
+    // dataset.
     const rows = [
       ...Array.from({ length: 60 }, (_, index) =>
-        row(uuid(index + 1), { status: "human", handler: "human" }),
+        row(uuid(index + 1), { resolved_at: "2026-01-02T00:00:00Z" }),
       ),
       ...Array.from({ length: 20 }, (_, index) => row(uuid(100 + index))),
     ];
@@ -191,7 +221,7 @@ test.describe("RF-14 Chats queue", () => {
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/chats");
 
-    await page.getByTestId("chats-filter-human").click();
+    await page.getByTestId("chats-filter-resolved").click();
     await expect(page.getByTestId("chat-row")).toHaveCount(50);
     await expect(page.getByTestId("chats-load-more")).toBeVisible();
 

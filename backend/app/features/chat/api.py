@@ -42,11 +42,10 @@ class ChatRequest(BaseModel):
 
 
 class HandoffRequest(BaseModel):
-    """RF-11: the visible "Ask for a person" control's body. No message - the
-    control is not a customer turn. ``conversation_id`` is optional so a
-    customer can ask for a person before typing anything; the endpoint creates
-    the conversation in that case and returns its id in the ``conversation``
-    event."""
+    """The deterministic handoff body. No message - this is not a customer turn.
+    ``conversation_id`` is optional so a handoff can be recorded before the
+    customer types anything; the endpoint creates the conversation in that case
+    and returns its id in the ``conversation`` event."""
 
     slug: str
     conversation_id: UUID | None = None
@@ -166,12 +165,12 @@ async def chat(
 
 @router.post("/handoff")
 async def handoff(request: Request, body: HandoffRequest) -> StreamingResponse:
-    """RF-11: the visible "Ask for a person" control, for the customer surface.
+    """The deterministic handoff endpoint for the customer surface.
 
-    Deterministic: records the same escalation row the assistant's
-    ``create_escalation`` tool would, then streams the same handoff reply, with
-    the one contact ask when name/email are still missing. No agent turn runs,
-    so the visible handoff never depends on the model choosing the tool.
+    Records the same escalation row the assistant's ``create_escalation`` tool
+    would, then streams the same handoff reply, with the one contact ask when
+    name/email are still missing. No agent turn runs, so the handoff never
+    depends on the model choosing the tool.
 
     Branches (all resolve before the stream starts, so a failure is still a
     Problem Details response rather than a half-open event stream):

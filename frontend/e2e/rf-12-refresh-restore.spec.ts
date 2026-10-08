@@ -4,7 +4,7 @@
  * Surface: customer (http://localhost:3000/{slug}), seeded by `make seed`
  * (bytefix). Every network call is stubbed through `page.route`: a live
  * provider cannot emit a specific card on demand, and the point under test is
- * the client's restore behaviour, not the model's decision. Follows RF-10/RF-11
+ * the client's restore behaviour, not the model's decision. Follows RF-10
  * patterns exactly, including the `**` + query string on the transcript glob.
  *
  * Covers: cards restore from `metadata.response`; an unsent draft restores (and
@@ -184,7 +184,9 @@ test.describe("RF-12 same-tab refresh restore", () => {
 
   test("a handoff restores and the human-reply poll resumes", async ({ page }) => {
     const HANDOFF = "I've forwarded your query to the business. They can reply to you here.";
-    await page.route("**/api/chat/handoff", (route) =>
+    // The handoff now comes from the assistant's own turn: the customer asks
+    // for a person in words, and the stream carries the handoff signal.
+    await page.route("**/api/chat", (route) =>
       route.fulfill({
         status: 200,
         headers: { "content-type": "text/event-stream" },
@@ -222,18 +224,17 @@ test.describe("RF-12 same-tab refresh restore", () => {
     });
 
     await openChat(page);
-    const control = page.getByRole("button", { name: "Ask for a person" });
-    await control.click();
+    await ask(page, "can I talk to a person?");
     await expect(page.getByText(/forwarded your query to the business/)).toBeVisible();
 
     await page.reload();
     await openChat(page);
     const panel = page.getByRole("complementary", { name: CHAT_BUTTON });
 
-    // handoffSeen restored: the control stays hidden. The human reply is not in
-    // the restored transcript - it arrives on a later poll tick (the wait is
-    // deliberately generous; POLL_INTERVAL_MS is 5s).
-    await expect(panel.getByRole("button", { name: "Ask for a person" })).toHaveCount(0);
+    // handoffSeen restored: the poll resumes and the composer stays live. The
+    // human reply is not in the restored transcript - it arrives on a later
+    // poll tick (the wait is deliberately generous; POLL_INTERVAL_MS is 5s).
+    await expect(panel.getByLabel("Message")).toBeVisible();
     await expect(panel.getByText("A team member will call you shortly.")).toBeVisible({
       timeout: 12_000,
     });

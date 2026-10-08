@@ -18,7 +18,11 @@ import jwt
 import pytest
 import pytest_asyncio
 
-from app.features.escalations.service import RESOLUTION_STAMP
+from app.features.chat import service as chat_service
+from app.features.conversations.service import (
+    CONVERSATION_RESOLVED_STAMP,
+    clear_auto_resolve_cache,
+)
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
@@ -219,17 +223,24 @@ async def test_list_conversations_returns_the_items_total_and_counts(
     assert set(body) == {"items", "total", "counts"}
     assert isinstance(body["items"], list)
     assert body["total"] == 1
-    assert set(body["counts"]) == {"all", "needs_you", "unread", "human"}
+    assert set(body["counts"]) == {"all", "needs_you", "unread", "resolved"}
 
 
-async def test_needs_you_is_an_open_escalation_or_a_taken_over_thread(
+async def test_needs_you_is_an_open_escalation_or_a_customer_waiting_on_the_owner(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
+    """D43: a taken-over thread only needs the owner when the customer spoke
+    last; one the business spoke last carries the waiting label instead."""
     token, tenant_id = await _signup_tenant_admin(client)
     await _seed_conversation(superuser_conn, tenant_id, customer_ref="plain")
     human_id = await _seed_conversation(
         superuser_conn, tenant_id, status="human", customer_ref="human"
     )
+    await _seed_message(superuser_conn, tenant_id, human_id, role="customer")
+    waiting_id = await _seed_conversation(
+        superuser_conn, tenant_id, status="human", customer_ref="waiting"
+    )
+    await _seed_message(superuser_conn, tenant_id, waiting_id, role="assistant")
     escalated_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="escalated")
     await _seed_escalation(superuser_conn, tenant_id, escalated_id, summary="wants a price")
     resolved_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="resolved")
@@ -242,17 +253,26 @@ async def test_needs_you_is_an_open_escalation_or_a_taken_over_thread(
     assert body["total"] == 2
     assert body["counts"]["needs_you"] == 2
 
+    # The waiting thread carries the label, not the action-needed predicate.
+    all_rows = {row["id"]: row for row in (await _list(client, token))["items"]}
+    assert all_rows[str(waiting_id)]["waiting_on_customer"] is True
+    assert all_rows[str(human_id)]["waiting_on_customer"] is False
 
-async def test_human_filter_returns_only_taken_over_threads(
+
+async def test_resolved_filter_returns_only_resolved_threads(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)
-    human_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
-    await _seed_conversation(superuser_conn, tenant_id, status="open")
+    resolved_id = await _seed_conversation(superuser_conn, tenant_id)
+    await superuser_conn.execute(
+        "update conversations set resolved_at = now() where id = $1", resolved_id
+    )
+    await _seed_conversation(superuser_conn, tenant_id)
 
-    body = await _list(client, token, filter="human")
-    assert {row["id"] for row in body["items"]} == {str(human_id)}
+    body = await _list(client, token, filter="resolved")
+    assert {row["id"] for row in body["items"]} == {str(resolved_id)}
     assert body["total"] == 1
+    assert body["counts"]["resolved"] == 1
 
 
 async def test_unread_filter_reuses_the_rf18_predicate(
@@ -306,7 +326,7 @@ async def test_counts_cover_the_whole_dataset_and_match_the_active_filter(
     escalated_id = await _seed_conversation(superuser_conn, tenant_id)
     await _seed_message(superuser_conn, tenant_id, escalated_id)
     await _seed_escalation(superuser_conn, tenant_id, escalated_id)
-    # Needs you via human status; read, so not unread.
+    # Needs you via a customer reply on a taken-over thread; read, so not unread.
     human_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
     await _seed_message(
         superuser_conn,
@@ -328,10 +348,16 @@ async def test_counts_cover_the_whole_dataset_and_match_the_active_filter(
     await superuser_conn.execute(
         "update conversations set owner_read_at = now() where id = $1", read_open_id
     )
+    # Resolved: in all and resolved only, never needs you or unread.
+    resolved_id = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_message(superuser_conn, tenant_id, resolved_id, role="assistant")
+    await superuser_conn.execute(
+        "update conversations set resolved_at = now() where id = $1", resolved_id
+    )
 
     body = await _list(client, token)
-    assert body["counts"] == {"all": 4, "needs_you": 2, "unread": 2, "human": 1}
-    for label in ("all", "needs_you", "unread", "human"):
+    assert body["counts"] == {"all": 5, "needs_you": 2, "unread": 2, "resolved": 1}
+    for label in ("all", "needs_you", "unread", "resolved"):
         page = await _list(client, token, filter=label)
         assert page["total"] == page["counts"][label], label
 
@@ -358,7 +384,7 @@ async def test_the_queue_and_its_counts_never_show_another_tenant(
     body = await _list(client, token)
     assert {row["id"] for row in body["items"]} == {str(mine_id)}
     assert body["total"] == 1
-    assert body["counts"] == {"all": 1, "needs_you": 1, "unread": 1, "human": 0}
+    assert body["counts"] == {"all": 1, "needs_you": 1, "unread": 1, "resolved": 0}
 
     other_body = await _list(client, other_token)
     assert {row["id"] for row in other_body["items"]} == {
@@ -796,7 +822,7 @@ async def test_takeover_is_scoped_to_its_own_tenant(
     assert await _status_of(superuser_conn, other_conversation) == "open"
 
 
-# --- RF-16: explicit resolution from the thread ----------------------------
+# --- D44: one conversation-level resolve -----------------------------------
 
 
 async def test_get_conversation_detail_exposes_the_pending_escalation_id(
@@ -824,12 +850,11 @@ async def test_get_conversation_detail_exposes_the_pending_escalation_id(
     assert after.json()["pending_escalation_id"] is None
 
 
-async def test_resolving_from_handling_writes_the_stamp_and_leaves_needs_you(
+async def test_resolving_the_conversation_writes_the_stamp_and_clears_needs_you(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """RF-16's OPEN item, decided: resolution is available from the Handling
-    state, not only after a takeover. The conversation is open and no one has
-    taken it over, yet resolve accepts it (the endpoint allows open/claimed)."""
+    """D44: resolve is available from the Handling state, not only after a
+    takeover, and it closes the open escalation in the same action."""
     token, tenant_id = await _signup_tenant_admin(client)
     conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="handling")
     escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
@@ -839,26 +864,33 @@ async def test_resolving_from_handling_writes_the_stamp_and_leaves_needs_you(
     assert str(conversation_id) in {row["id"] for row in before["items"]}
 
     response = await client.post(
-        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+        f"/api/conversations/{conversation_id}/resolve", json={}, headers=_auth(token)
     )
-    assert response.status_code == 200
-    assert ("system", RESOLUTION_STAMP) in await _roles_and_text(superuser_conn, conversation_id)
+    assert response.status_code == 204
+    assert ("system", CONVERSATION_RESOLVED_STAMP) in await _roles_and_text(
+        superuser_conn, conversation_id
+    )
+    assert (
+        await superuser_conn.fetchval("select status from escalations where id = $1", escalation_id)
+        == "resolved"
+    )
 
     after = await _list(client, token, filter="needs_you")
     assert str(conversation_id) not in {row["id"] for row in after["items"]}
+    resolved = await _list(client, token, filter="resolved")
+    assert str(conversation_id) in {row["id"] for row in resolved["items"]}
 
 
-async def test_resolving_while_taken_over_stays_in_needs_you_until_handback(
+async def test_resolving_while_taken_over_clears_the_row_immediately(
     client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """RF-16/F2: a taken-over thread is in Needs you by its ``human`` status, so
-    resolving the issue does not clear the row - handback does. The resolve
-    confirmation has to say that, and this pins the behavior it describes."""
+    """D44 supersedes RF-16/F2: resolution is conversation-level, so it clears
+    the taken-over row rather than waiting for a handback. The ownership status
+    is untouched - resolution is a marker, not a status."""
     token, tenant_id = await _signup_tenant_admin(client)
     conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="taken-over")
-    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+    await _seed_escalation(superuser_conn, tenant_id, conversation_id)
 
-    # Take over first: status becomes human, so the row is in Needs you.
     taken_over = await client.post(
         f"/api/conversations/{conversation_id}/takeover", headers=_auth(token)
     )
@@ -866,22 +898,13 @@ async def test_resolving_while_taken_over_stays_in_needs_you_until_handback(
     assert await _status_of(superuser_conn, conversation_id) == "human"
 
     response = await client.post(
-        f"/api/escalations/{escalation_id}/resolve", json={}, headers=_auth(token)
+        f"/api/conversations/{conversation_id}/resolve", json={}, headers=_auth(token)
     )
-    assert response.status_code == 200
-    assert ("system", RESOLUTION_STAMP) in await _roles_and_text(superuser_conn, conversation_id)
+    assert response.status_code == 204
 
-    # The escalation is resolved, but the human status still holds the row.
     still = await _list(client, token, filter="needs_you")
-    assert str(conversation_id) in {row["id"] for row in still["items"]}
-
-    # Handback clears the human status, and with no open escalation it leaves.
-    handed_back = await client.post(
-        f"/api/conversations/{conversation_id}/handback", headers=_auth(token)
-    )
-    assert handed_back.status_code == 204
-    after = await _list(client, token, filter="needs_you")
-    assert str(conversation_id) not in {row["id"] for row in after["items"]}
+    assert str(conversation_id) not in {row["id"] for row in still["items"]}
+    assert await _status_of(superuser_conn, conversation_id) == "human"
 
 
 async def test_owner_detail_transcript_reads_the_stamp_before_the_message(
@@ -889,21 +912,239 @@ async def test_owner_detail_transcript_reads_the_stamp_before_the_message(
 ) -> None:
     token, tenant_id = await _signup_tenant_admin(client)
     conversation_id = await _seed_conversation(superuser_conn, tenant_id, customer_ref="thread")
-    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+    await _seed_escalation(superuser_conn, tenant_id, conversation_id)
 
     response = await client.post(
-        f"/api/escalations/{escalation_id}/resolve",
+        f"/api/conversations/{conversation_id}/resolve",
         json={"message": "All sorted - thanks for waiting."},
         headers=_auth(token),
     )
-    assert response.status_code == 200
+    assert response.status_code == 204
 
     detail = await client.get(f"/api/conversations/{conversation_id}", headers=_auth(token))
     transcript = [(m["role"], m["content"]) for m in detail.json()["messages"]]
     assert transcript == [
-        ("system", RESOLUTION_STAMP),
+        ("system", CONVERSATION_RESOLVED_STAMP),
         ("human_agent", "All sorted - thanks for waiting."),
     ]
+
+
+async def test_resolve_is_idempotent_and_writes_one_stamp(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    first = await client.post(
+        f"/api/conversations/{conversation_id}/resolve", json={}, headers=_auth(token)
+    )
+    second = await client.post(
+        f"/api/conversations/{conversation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert first.status_code == 204
+    assert second.status_code == 204
+    stamps = [
+        row
+        for row in await _roles_and_text(superuser_conn, conversation_id)
+        if row == ("system", CONVERSATION_RESOLVED_STAMP)
+    ]
+    assert len(stamps) == 1
+
+
+async def test_a_customer_reply_reopens_a_resolved_conversation(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """D44: the reopen runs inside the customer's own message transaction, so
+    the row returns to Action needed on the next read."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_message(superuser_conn, tenant_id, conversation_id, role="assistant")
+
+    resolved = await client.post(
+        f"/api/conversations/{conversation_id}/resolve", json={}, headers=_auth(token)
+    )
+    assert resolved.status_code == 204
+    assert str(conversation_id) not in {
+        row["id"] for row in (await _list(client, token, filter="needs_you"))["items"]
+    }
+
+    await chat_service.resolve_conversation(
+        tenant_id=tenant_id, conversation_id=conversation_id, message="still there?"
+    )
+
+    detail = await client.get(f"/api/conversations/{conversation_id}", headers=_auth(token))
+    assert detail.json()["resolved_at"] is None
+    assert str(conversation_id) in {
+        row["id"] for row in (await _list(client, token, filter="needs_you"))["items"]
+    }
+
+
+async def test_resolve_is_scoped_to_its_own_tenant(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    _, other_tenant_id = await _signup_tenant_admin(client)
+    other_conversation = await _seed_conversation(superuser_conn, other_tenant_id)
+
+    response = await client.post(
+        f"/api/conversations/{other_conversation}/resolve", json={}, headers=_auth(token)
+    )
+    assert response.status_code == 404
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", other_conversation
+        )
+        is None
+    )
+
+    missing = await client.post(
+        f"/api/conversations/{uuid.uuid4()}/resolve", json={}, headers=_auth(token)
+    )
+    assert missing.status_code == 404
+
+
+async def test_resolve_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.post(f"/api/conversations/{uuid.uuid4()}/resolve", json={})
+    assert response.status_code == 401
+
+
+async def test_resolve_is_owner_only(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    _, tenant_id = await _signup_tenant_admin(client)
+    staff_user_id = uuid.uuid4()
+    await superuser_conn.execute(
+        "insert into users (id, tenant_id, role) values ($1, $2, 'staff')",
+        staff_user_id,
+        tenant_id,
+    )
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+
+    response = await client.post(
+        f"/api/conversations/{conversation_id}/resolve",
+        json={},
+        headers=_auth(_make_token(staff_user_id)),
+    )
+    assert response.status_code == 403
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", conversation_id
+        )
+        is None
+    )
+
+
+# --- D45: the lazy auto-resolve sweep --------------------------------------
+
+
+async def test_auto_resolve_clears_a_conversation_the_business_spoke_last_on(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """D45: seven days of customer silence resolve the thread, and the sweep is
+    lazy - the next owner read is what clears it. The cache is cleared between
+    phases because the TTL deliberately suppresses a second sweep."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    stale_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        stale_id,
+        role="assistant",
+        created_at=datetime.now(UTC) - timedelta(days=8),
+    )
+    fresh_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_message(superuser_conn, tenant_id, fresh_id, role="assistant")
+    customer_last_id = await _seed_conversation(superuser_conn, tenant_id, status="human")
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        customer_last_id,
+        role="customer",
+        created_at=datetime.now(UTC) - timedelta(days=8),
+    )
+
+    clear_auto_resolve_cache()
+    body = await _list(client, token, filter="resolved")
+    assert {row["id"] for row in body["items"]} == {str(stale_id)}
+
+    detail = await client.get(f"/api/conversations/{stale_id}", headers=_auth(token))
+    assert detail.json()["resolved_at"] is not None
+    # The auto stamp is in the owner's transcript.
+    assert ("system", "Resolved automatically after 7 days") in await _roles_and_text(
+        superuser_conn, stale_id
+    )
+    # An active thread and a customer-waiting thread are untouched.
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", fresh_id
+        )
+        is None
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", customer_last_id
+        )
+        is None
+    )
+
+
+async def test_auto_resolve_honours_the_tenant_window(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """The window is per-tenant config (config.limits.auto_resolve_days), so a
+    tenant on 3 days clears a thread that would still be fresh on the default."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    await superuser_conn.execute(
+        "update tenant_config set config = jsonb_set("
+        "  config, '{limits}', coalesce(config->'limits', '{}'::jsonb) || "
+        "  '{\"auto_resolve_days\": 3}'::jsonb) "
+        "where tenant_id = $1",
+        tenant_id,
+    )
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        conversation_id,
+        role="assistant",
+        created_at=datetime.now(UTC) - timedelta(days=4),
+    )
+
+    clear_auto_resolve_cache()
+    body = await _list(client, token, filter="resolved")
+    assert {row["id"] for row in body["items"]} == {str(conversation_id)}
+
+
+async def test_auto_resolve_closes_an_open_escalation_and_can_be_reopened(
+    client: httpx.AsyncClient, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """D45 applies with an open escalation too: seven days of customer silence
+    is disengagement. A later customer reply reopens through D44's marker."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    conversation_id = await _seed_conversation(superuser_conn, tenant_id)
+    escalation_id = await _seed_escalation(superuser_conn, tenant_id, conversation_id)
+    await _seed_message(
+        superuser_conn,
+        tenant_id,
+        conversation_id,
+        role="assistant",
+        created_at=datetime.now(UTC) - timedelta(days=8),
+    )
+
+    clear_auto_resolve_cache()
+    assert str(conversation_id) not in {
+        row["id"] for row in (await _list(client, token, filter="needs_you"))["items"]
+    }
+    assert (
+        await superuser_conn.fetchval("select status from escalations where id = $1", escalation_id)
+        == "resolved"
+    )
+
+    await chat_service.resolve_conversation(
+        tenant_id=tenant_id, conversation_id=conversation_id, message="back again"
+    )
+    detail = await client.get(f"/api/conversations/{conversation_id}", headers=_auth(token))
+    assert detail.json()["resolved_at"] is None
 
 
 async def _seed_transcript(

@@ -1,23 +1,25 @@
 import type { ConversationSummary } from "@/lib/api-schemas";
 
 /**
- * RF-14/D38: the browser-free half of the Chats queue. Nothing here touches
- * React, fetch, or the DOM, so vitest (node, no jsdom) can pin the URL shape
- * and the waiting-time rule directly; the hook and the rendering are covered
- * by E2E.
+ * RF-14/D38/D43: the browser-free half of the Chats queue. Nothing here
+ * touches React, fetch, or the DOM, so vitest (node, no jsdom) can pin the URL
+ * shape and the waiting-time rule directly; the hook and the rendering are
+ * covered by E2E.
  *
  * The filter is a server query over the whole tenant dataset - the client no
- * longer filters the rows it happens to hold. `needs_you` is the D38
- * definition (an open escalation or a taken-over thread) and is the default
- * tab; All, Unread, and Human handled are retained alongside it.
+ * longer filters the rows it happens to hold. `needs_you` is the D43
+ * definition (an open escalation, or a taken-over thread whose last word came
+ * from the customer) and is the default tab, "Action needed"; Unread, All,
+ * and Resolved sit beside it. The internal key stays `needs_you` so the API
+ * contract does not churn with a label change.
  */
-export type QueueFilter = "needs_you" | "all" | "unread" | "human";
+export type QueueFilter = "needs_you" | "unread" | "all" | "resolved";
 
 export const FILTERS: { id: QueueFilter; label: string }[] = [
-  { id: "needs_you", label: "Needs you" },
-  { id: "all", label: "All" },
+  { id: "needs_you", label: "Action needed" },
   { id: "unread", label: "Unread" },
-  { id: "human", label: "Human handled" },
+  { id: "all", label: "All" },
+  { id: "resolved", label: "Resolved" },
 ];
 
 /** RF-14 page size - one page is 50 rows, matching the backend default. */

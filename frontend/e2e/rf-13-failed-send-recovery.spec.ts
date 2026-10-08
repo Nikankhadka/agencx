@@ -180,39 +180,4 @@ test.describe("RF-13 failed-send recovery", () => {
     await expect(composer).toHaveValue("actually, never mind");
     expect(await storedDraft(page)).toBe("actually, never mind");
   });
-
-  test("a handoff failure carries a working inline retry", async ({ page }) => {
-    let posts = 0;
-    await page.route("**/api/chat/handoff", async (route) => {
-      posts += 1;
-      if (posts === 1) {
-        await route.abort("failed");
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-        body: sse(
-          { type: "conversation", conversation_id: CONVERSATION_ID },
-          { type: "refusal", text: "I've forwarded your query to the business." },
-          { type: "handoff" },
-          { type: "done" },
-        ),
-      });
-    });
-
-    await openChat(page);
-    await page.getByRole("button", { name: "Ask for a person" }).click();
-
-    // The failed handoff bubble must not promise "Try again?" without a control.
-    const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible();
-    await expect(page.getByText(/Something went wrong/)).toBeVisible();
-
-    await retry.click();
-
-    await expect(page.getByText(/forwarded your query to the business/)).toBeVisible();
-    await expect(retry).toHaveCount(0);
-    expect(posts).toBe(2);
-  });
 });

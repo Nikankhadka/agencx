@@ -4,6 +4,7 @@ import { useId, type InputHTMLAttributes } from "react";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
+  hideLabel?: boolean;
   help?: string;
   error?: string;
 }
@@ -12,7 +13,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
  * docs/agencx/design/frontend.md section 6: label above, help/error text below;
  * default, focus, error (danger border + text), disabled states.
  */
-export function Input({ label, help, error, id, className = "", ...rest }: InputProps) {
+export function Input({ label, hideLabel = false, help, error, id, className = "", ...rest }: InputProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const messageId = `${inputId}-message`;
@@ -20,7 +21,10 @@ export function Input({ label, help, error, id, className = "", ...rest }: Input
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={inputId} className="text-body-sm font-medium text-text">
+      <label
+        htmlFor={inputId}
+        className={hideLabel ? "sr-only" : "text-body-sm font-medium text-text"}
+      >
         {label}
       </label>
       <input

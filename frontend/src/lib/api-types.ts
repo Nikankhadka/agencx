@@ -687,12 +687,12 @@ export interface paths {
         put?: never;
         /**
          * Handoff
-         * @description RF-11: the visible "Ask for a person" control, for the customer surface.
+         * @description The deterministic handoff endpoint for the customer surface.
          *
-         *     Deterministic: records the same escalation row the assistant's
-         *     ``create_escalation`` tool would, then streams the same handoff reply, with
-         *     the one contact ask when name/email are still missing. No agent turn runs,
-         *     so the visible handoff never depends on the model choosing the tool.
+         *     Records the same escalation row the assistant's ``create_escalation`` tool
+         *     would, then streams the same handoff reply, with the one contact ask when
+         *     name/email are still missing. No agent turn runs, so the handoff never
+         *     depends on the model choosing the tool.
          *
          *     Branches (all resolve before the stream starts, so a failure is still a
          *     Problem Details response rather than a half-open event stream):
@@ -787,6 +787,31 @@ export interface paths {
          *     404 for an unknown one, 409 when it holds a quote (see service.py).
          */
         delete: operations["delete_conversation_api_conversations__conversation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations/{conversation_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Conversation
+         * @description D44: the owner's one conversation-level resolve. Closes any open
+         *     escalation, writes the owner-only stamp, and takes the optional message.
+         *
+         *     Owner-only: staff can take over and reply, but closing a thread is the
+         *     owner's call. Idempotent - resolving an already-resolved thread is a 204
+         *     no-op. A customer reply reopens it (chat.service.resolve_conversation).
+         */
+        post: operations["resolve_conversation_api_conversations__conversation_id__resolve_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1204,8 +1229,8 @@ export interface components {
             needs_you: number;
             /** Unread */
             unread: number;
-            /** Human */
-            human: number;
+            /** Resolved */
+            resolved: number;
         };
         /** ConversationDetail */
         ConversationDetail: {
@@ -1229,6 +1254,8 @@ export interface components {
             created_at: string;
             /** Pending Escalation Id */
             pending_escalation_id?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
             /** Total Cost Usd */
             total_cost_usd: number;
             /** Messages */
@@ -1283,6 +1310,13 @@ export interface components {
              * @default assistant
              */
             handler: string;
+            /**
+             * Waiting On Customer
+             * @default false
+             */
+            waiting_on_customer: boolean;
+            /** Resolved At */
+            resolved_at?: string | null;
         };
         /** CorrectionPayload */
         CorrectionPayload: {
@@ -1418,11 +1452,10 @@ export interface components {
         };
         /**
          * HandoffRequest
-         * @description RF-11: the visible "Ask for a person" control's body. No message - the
-         *     control is not a customer turn. ``conversation_id`` is optional so a
-         *     customer can ask for a person before typing anything; the endpoint creates
-         *     the conversation in that case and returns its id in the ``conversation``
-         *     event.
+         * @description The deterministic handoff body. No message - this is not a customer turn.
+         *     ``conversation_id`` is optional so a handoff can be recorded before the
+         *     customer types anything; the endpoint creates the conversation in that case
+         *     and returns its id in the ``conversation`` event.
          */
         HandoffRequest: {
             /** Slug */
@@ -2105,6 +2138,11 @@ export interface components {
             position: number;
             /** Is Primary */
             is_primary: boolean;
+        };
+        /** ResolveConversationRequest */
+        ResolveConversationRequest: {
+            /** Message */
+            message?: string | null;
         };
         /** ResolveRequest */
         ResolveRequest: {
@@ -4265,7 +4303,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: ("open" | "human" | "escalated" | "closed") | null;
-                filter?: "all" | "needs_you" | "unread" | "human";
+                filter?: "all" | "needs_you" | "unread" | "resolved";
                 q?: string | null;
                 limit?: number;
                 offset?: number;
@@ -4355,6 +4393,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_conversation_api_conversations__conversation_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResolveConversationRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             204: {

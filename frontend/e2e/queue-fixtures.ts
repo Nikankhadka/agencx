@@ -23,6 +23,8 @@ export type FixtureRow = Record<string, unknown> & {
   needs_attention?: boolean;
   unread?: boolean;
   status?: string;
+  waiting_on_customer?: boolean;
+  resolved_at?: string | null;
 };
 
 export const QUEUE_LIST_URL = /\/api\/conversations(\?.*)?$/;
@@ -31,7 +33,7 @@ export interface QueueCounts {
   all: number;
   needs_you: number;
   unread: number;
-  human: number;
+  resolved: number;
 }
 
 export interface QueueEnvelope {
@@ -40,19 +42,29 @@ export interface QueueEnvelope {
   counts: QueueCounts;
 }
 
-/** Counts over a set of rows, mirroring the backend's D38 predicates. */
+/**
+ * Counts over a set of rows, mirroring the backend's D38/D43/D44 predicates:
+ * an open escalation, or a taken-over thread whose last word came from the
+ * customer (a waiting row is the other side of that). A resolved row counts
+ * nowhere else. Fixture rows must set `waiting_on_customer` explicitly on
+ * taken-over rows; the default treats them as the owner's turn.
+ */
+function needsYou(row: FixtureRow): boolean {
+  return Boolean(row.needs_attention || (row.status === "human" && !row.waiting_on_customer));
+}
+
 export function countsFor(rows: FixtureRow[]): QueueCounts {
   return {
     all: rows.length,
-    needs_you: rows.filter((row) => row.needs_attention || row.status === "human").length,
+    needs_you: rows.filter(needsYou).length,
     unread: rows.filter((row) => row.unread).length,
-    human: rows.filter((row) => row.status === "human").length,
+    resolved: rows.filter((row) => row.resolved_at != null).length,
   };
 }
 
 function applyFilter(rows: FixtureRow[], filter: string): FixtureRow[] {
-  if (filter === "needs_you") return rows.filter((row) => row.needs_attention || row.status === "human");
-  if (filter === "human") return rows.filter((row) => row.status === "human");
+  if (filter === "needs_you") return rows.filter(needsYou);
+  if (filter === "resolved") return rows.filter((row) => row.resolved_at != null);
   if (filter === "unread") return rows.filter((row) => row.unread);
   return rows;
 }

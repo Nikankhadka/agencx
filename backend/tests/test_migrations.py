@@ -79,8 +79,9 @@ async def test_all_migrations_recorded(superuser_conn: asyncpg.Connection[Any]) 
     # conversations.owner_read_at, the owner's read marker for the chat queue;
     # 0036 adds RF-4's offerings.pricing_wording, the display-only alternative
     # to a fixed price; 0037 adds RF-10's conversations.opening_name_asks, the
-    # persisted opening-phase preferred-name ask counter.
-    assert len(on_disk) == 37, "expected migrations 0001-0037"
+    # persisted opening-phase preferred-name ask counter; 0038 adds D44's
+    # conversations.resolved_at, the conversation-level resolution marker.
+    assert len(on_disk) == 38, "expected migrations 0001-0038"
     applied = await superuser_conn.fetch("select version from schema_migrations order by version")
     assert [r["version"] for r in applied] == on_disk
 
@@ -402,6 +403,49 @@ async def test_conversations_opening_name_asks_column(
             "select opening_name_asks from conversations where id = $1", conversation_id
         )
         == 1
+    )
+    await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
+
+
+async def test_conversations_resolved_at_column(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Pin 0038: the resolution marker is nullable (most rows are unresolved),
+    and a customer reply clears it rather than moving the ownership status."""
+    column = await superuser_conn.fetchrow(
+        """
+        select data_type, is_nullable
+          from information_schema.columns
+         where table_name = 'conversations' and column_name = 'resolved_at'
+        """
+    )
+    assert column is not None, "conversations.resolved_at missing"
+    assert column["data_type"] == "timestamp with time zone"
+    assert column["is_nullable"] == "YES"
+    tenant_id = await superuser_conn.fetchval(
+        """
+        insert into tenants (slug, name) values ('t002-resolved-at', 'T002')
+        on conflict (slug) do update set name = excluded.name
+        returning id
+        """
+    )
+    conversation_id = await superuser_conn.fetchval(
+        "insert into conversations (tenant_id) values ($1) returning id", tenant_id
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", conversation_id
+        )
+        is None
+    )
+    await superuser_conn.execute(
+        "update conversations set resolved_at = now() where id = $1", conversation_id
+    )
+    assert (
+        await superuser_conn.fetchval(
+            "select resolved_at from conversations where id = $1", conversation_id
+        )
+        is not None
     )
     await superuser_conn.execute("delete from tenants where id = $1", tenant_id)
 

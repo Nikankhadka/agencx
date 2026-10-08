@@ -11,21 +11,51 @@ rather than silently built here).
 
 from __future__ import annotations
 
+import json
+import logging
+import time
 from typing import Any, Literal
 
-from app.shared import db
+from app.shared import config, db
+from app.shared.limits import TenantLimits
 
-# RF-14 / D38: the queue is answered by the server over the whole tenant
-# dataset. The filter is derived from state the row already carries - an open
-# escalation, the human-takeover status, and the RF-18 read marker - so no new
-# column is needed. Every count is the same predicate run as a query.
+logger = logging.getLogger("app.features.conversations.service")
+
+# RF-14 / D38 as amended by D43: the queue is answered by the server over the
+# whole tenant dataset. The filter is derived from state the row already
+# carries - an open escalation, the human-takeover status, whose turn it is,
+# and the RF-18 read marker - so no new column is needed. Every count is the
+# same predicate run as a query.
 #
 # An "open" escalation is any row that is not resolved, matching the
 # pending_summary/needs_attention subqueries below and the D38 definition.
+#
+# The last non-system message decides whose turn it is. A system row is a
+# stamp (takeover, handback, resolution), never a reply, so it can never hand
+# the turn to anyone.
+_LAST_ROLE_SQL = (
+    "(select m.role from messages m"
+    " where m.tenant_id = $1 and m.conversation_id = c.id and m.role <> 'system'"
+    " order by m.created_at desc, m.id desc limit 1)"
+)
+
+# D43: a taken-over thread whose last word came from the customer needs the
+# owner; one whose last word came from the owner or the assistant does not.
+# An open escalation always needs the owner, takeover or not. A resolved
+# conversation never does, until a customer reply clears resolved_at.
 _NEEDS_YOU_SQL = (
-    "(c.status = 'human' or exists ("
+    "(c.resolved_at is null and ("
+    f" (c.status = 'human' and {_LAST_ROLE_SQL} = 'customer')"
+    " or exists ("
     " select 1 from escalations e"
-    " where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved'))"
+    " where e.tenant_id = $1 and e.conversation_id = c.id and e.status <> 'resolved')))"
+)
+
+# D43: the owner spoke last on a taken-over thread, so the ball is with the
+# customer. A label, not a tab - there is nothing to act on.
+_WAITING_ON_CUSTOMER_SQL = (
+    "(c.resolved_at is null and c.status = 'human'"
+    f" and coalesce({_LAST_ROLE_SQL} in ('assistant', 'human_agent'), false))"
 )
 
 # RF-18's unread definition, kept in exactly one place: a customer message
@@ -41,8 +71,8 @@ _UNREAD_SQL = (
 _FILTER_SQL: dict[str, str] = {
     "all": "true",
     "needs_you": _NEEDS_YOU_SQL,
-    "human": "c.status = 'human'",
     "unread": _UNREAD_SQL,
+    "resolved": "c.resolved_at is not null",
 }
 
 # Search matches the whole tenant dataset: customer name, the conversation
@@ -102,7 +132,9 @@ def _items_sql(*, filter_sql: str) -> str:
         "  (select m.created_at from messages m "
         "   where m.tenant_id = $1 and m.conversation_id = c.id "
         "   order by m.created_at desc, m.id desc limit 1) as last_activity_at, "
-        "  case when c.status = 'human' then 'human' else 'assistant' end as handler "
+        "  case when c.status = 'human' then 'human' else 'assistant' end as handler, "
+        f"  {_WAITING_ON_CUSTOMER_SQL} as waiting_on_customer, "
+        "  c.resolved_at "
         "from conversations c "
         f"where {_where_sql(filter_sql=filter_sql)} "
         # Ordered by the stamp the row actually shows. Nulls last puts a
@@ -129,7 +161,7 @@ def _counts_sql() -> str:
         'select count(*) as "all", '
         f"  count(*) filter (where {_NEEDS_YOU_SQL}) as needs_you, "
         f"  count(*) filter (where {_UNREAD_SQL}) as unread, "
-        "  count(*) filter (where c.status = 'human') as human "
+        "  count(*) filter (where c.resolved_at is not null) as resolved "
         f"from conversations c where {where}"
     )
 
@@ -140,12 +172,14 @@ async def list_conversations(
     status_filter: str | None,
     limit: int,
     offset: int,
-    queue_filter: Literal["all", "needs_you", "unread", "human"] = "all",
+    queue_filter: Literal["all", "needs_you", "unread", "resolved"] = "all",
     q: str | None = None,
     role: str = "tenant_admin",
 ) -> dict[str, Any]:
     """One queue page plus the server total and the per-tab counts, all read
-    inside a single tenant context."""
+    inside a single tenant context. The throttled auto-resolve sweep runs
+    first, so the page and its counts describe the same world (D45)."""
+    await maybe_auto_resolve(tenant_id=tenant_id, role=role)
     search = (q or "").strip()
     filter_sql = _FILTER_SQL[queue_filter]
     async with db.tenant_context(tenant_id, role) as conn:
@@ -169,7 +203,7 @@ async def list_conversations(
             "all": int(counts["all"]),
             "needs_you": int(counts["needs_you"]),
             "unread": int(counts["unread"]),
-            "human": int(counts["human"]),
+            "resolved": int(counts["resolved"]),
         },
     }
 
@@ -178,16 +212,20 @@ async def get_conversation(
     *, tenant_id: str, conversation_id: str, role: str = "tenant_admin"
 ) -> dict[str, Any] | None:
     """The conversation shell + messages + tool calls + per-message cost; None
-    when the conversation does not belong to this tenant."""
+    when the conversation does not belong to this tenant. The throttled
+    auto-resolve sweep runs first (D45), so an ignored thread is resolved by
+    the time its own detail page reads it."""
+    await maybe_auto_resolve(tenant_id=tenant_id, role=role)
     async with db.tenant_context(tenant_id, role) as conn:
         conversation = await conn.fetchrow(
-            "select id, customer_ref, customer_email, channel, status, created_at, "
+            "select c.id, c.customer_ref, c.customer_email, c.channel, c.status, c.created_at, "
             "  (select e.id from escalations e "
-            "   where e.tenant_id = $1 and e.conversation_id = conversations.id "
+            "   where e.tenant_id = $1 and e.conversation_id = c.id "
             "     and e.status <> 'resolved' "
-            "   order by e.created_at desc, e.id desc limit 1) as pending_escalation_id "
-            "from conversations "
-            "where tenant_id = $1 and id = $2",
+            "   order by e.created_at desc, e.id desc limit 1) as pending_escalation_id, "
+            "  c.resolved_at "
+            "from conversations c "
+            "where c.tenant_id = $1 and c.id = $2",
             tenant_id,
             conversation_id,
         )
@@ -293,3 +331,156 @@ async def delete_conversation(
             tenant_id,
         )
     return "has_quotes" if exists else "not_found"
+
+
+# D44/D45: the two resolution stamps, owner-only like the takeover/handback
+# stamps in features/chat. Written as ``system`` messages so the owner's thread
+# reads that it was closed on purpose; the public transcript filters ``system``
+# out, so a customer never reads them.
+CONVERSATION_RESOLVED_STAMP = "You resolved this conversation"
+AUTO_RESOLVED_STAMP = "Resolved automatically after {days} days"
+
+
+async def resolve_conversation(
+    *,
+    tenant_id: str,
+    conversation_id: str,
+    message: str | None = None,
+    stamp: str = CONVERSATION_RESOLVED_STAMP,
+    role: str = "tenant_admin",
+) -> Literal["resolved", "already_resolved", "not_found"]:
+    """D44: mark a conversation resolved, close any open escalation, and write
+    the owner-only stamp (plus the optional customer-facing message).
+
+    Resolution is a marker, not a status: the ownership axis (open/human/
+    escalated) is untouched, and a later customer message clears the marker
+    (chat.service.resolve_conversation). The UPDATE is guarded on
+    ``resolved_at is null`` so a repeat call cannot write a second stamp;
+    "already_resolved" is a no-op the caller treats as success. "not_found"
+    means the conversation is not this tenant's.
+    """
+    async with db.tenant_context(tenant_id, role) as conn:
+        updated = await conn.fetchval(
+            "update conversations set resolved_at = now() "
+            "where id = $1 and tenant_id = $2 and resolved_at is null "
+            "returning id",
+            conversation_id,
+            tenant_id,
+        )
+        if updated is None:
+            exists = await conn.fetchval(
+                "select 1 from conversations where id = $1 and tenant_id = $2",
+                conversation_id,
+                tenant_id,
+            )
+            return "already_resolved" if exists is not None else "not_found"
+
+        await conn.execute(
+            "update escalations set status = 'resolved', resolved_at = now() "
+            "where tenant_id = $1 and conversation_id = $2 and status in ('open', 'claimed')",
+            tenant_id,
+            conversation_id,
+        )
+        await conn.execute(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'system', $3)",
+            tenant_id,
+            conversation_id,
+            stamp,
+        )
+        if message is not None:
+            # Same ordering rule as the escalation resolve: Postgres ``now()``
+            # is transaction-stable, so the message gets an explicit +1
+            # microsecond to read after the stamp.
+            await conn.execute(
+                "insert into messages (tenant_id, conversation_id, role, content, created_at) "
+                "values ($1, $2, 'human_agent', $3, now() + interval '1 microsecond')",
+                tenant_id,
+                conversation_id,
+                message,
+            )
+    return "resolved"
+
+
+# D45: how long a tenant's sweep result stays trusted. The console and Home
+# poll every few seconds; without this every read would re-run the sweep query.
+_AUTO_RESOLVE_TTL_S = 60.0
+_auto_resolve_checked: dict[str, float] = {}
+
+
+def clear_auto_resolve_cache() -> None:
+    """Test hook - force the next read to sweep instead of trusting the TTL."""
+    _auto_resolve_checked.clear()
+
+
+async def maybe_auto_resolve(*, tenant_id: str, role: str = "tenant_admin") -> int:
+    """Run the sweep at most once per TTL per tenant; never fail a read over
+    it."""
+    now = time.monotonic()
+    last = _auto_resolve_checked.get(tenant_id)
+    if last is not None and now - last < _AUTO_RESOLVE_TTL_S:
+        return 0
+    _auto_resolve_checked[tenant_id] = now
+    try:
+        return await sweep_auto_resolve(tenant_id=tenant_id, role=role)
+    except Exception:
+        logger.exception("auto-resolve sweep failed for tenant %s", tenant_id)
+        return 0
+
+
+async def sweep_auto_resolve(*, tenant_id: str, role: str = "tenant_admin") -> int:
+    """D45: resolve conversations whose last word came from the business more
+    than the tenant's configured window ago.
+
+    Lazy, not scheduled: the queue and Home already poll, so the read that
+    would show a stale row is the read that clears it. No unattended mutating
+    process exists anywhere in this codebase (D36), and this adds none. A
+    customer reply reopens the thread through chat.service.resolve_conversation,
+    so the marker is safe to write without asking anyone. Applies to an open
+    escalation too: seven days of customer silence is disengagement, and the
+    resolved escalation stays readable in the thread.
+    """
+    async with db.tenant_context(tenant_id, role) as conn:
+        config_row = await conn.fetchrow(
+            "select config from tenant_config where tenant_id = $1", tenant_id
+        )
+        limits = TenantLimits.resolve(
+            json.loads(config_row["config"]) if config_row and config_row["config"] else {},
+            config.get_settings(),
+        )
+        days = limits.auto_resolve_days
+        rows = await conn.fetch(
+            "select c.id from conversations c "
+            "where c.tenant_id = $1 and c.resolved_at is null "
+            f"  and {_LAST_ROLE_SQL} in ('assistant', 'human_agent') "
+            "  and (select m.created_at from messages m "
+            "       where m.tenant_id = $1 and m.conversation_id = c.id "
+            "         and m.role <> 'system' "
+            "       order by m.created_at desc, m.id desc limit 1) "
+            "      < now() - make_interval(days => $2)",
+            tenant_id,
+            days,
+        )
+        ids = [row["id"] for row in rows]
+        if not ids:
+            return 0
+        await conn.execute(
+            "update conversations set resolved_at = now() "
+            "where tenant_id = $1 and id = any($2::uuid[]) and resolved_at is null",
+            tenant_id,
+            ids,
+        )
+        await conn.execute(
+            "update escalations set status = 'resolved', resolved_at = now() "
+            "where tenant_id = $1 and conversation_id = any($2::uuid[]) "
+            "  and status in ('open', 'claimed')",
+            tenant_id,
+            ids,
+        )
+        stamp = AUTO_RESOLVED_STAMP.format(days=days)
+        await conn.executemany(
+            "insert into messages (tenant_id, conversation_id, role, content) "
+            "values ($1, $2, 'system', $3)",
+            [(tenant_id, conversation_id, stamp) for conversation_id in ids],
+        )
+    return len(ids)

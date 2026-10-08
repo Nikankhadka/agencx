@@ -41,13 +41,19 @@ class ConversationSummary(BaseModel):
     # RF-14/D38: who is replying, derived from conversations.status. "human"
     # once a staff member has taken the thread over, otherwise the assistant.
     handler: str = "assistant"
+    # D43: a taken-over thread whose last word came from the business. The row
+    # shows "Waiting on customer" instead of the action-needed badge.
+    waiting_on_customer: bool = False
+    # D44/D45: set when the thread was resolved (owner or auto). A customer
+    # reply clears it and the row returns to Action needed.
+    resolved_at: datetime | None = None
 
 
 class ConversationCounts(BaseModel):
     all: int
     needs_you: int
     unread: int
-    human: int
+    resolved: int
 
 
 class ConversationListResponse(BaseModel):
@@ -87,8 +93,12 @@ class ConversationDetail(BaseModel):
     created_at: datetime
     # RF-16: the open escalation this thread can resolve, if any. Owner-only -
     # it rides the tenant-admin detail and no public surface. Null when every
-    # escalation on the conversation is resolved.
+    # escalation on the conversation is resolved. Kept on the contract for
+    # compatibility; the resolve action is conversation-level (D44) and no
+    # longer reads it.
     pending_escalation_id: UUID | None = None
+    # D44: set when the owner (or the auto sweep) resolved the thread.
+    resolved_at: datetime | None = None
     total_cost_usd: float
     messages: list[MessageDetail]
 
@@ -99,7 +109,7 @@ async def list_conversations(
     status_filter: Annotated[
         Literal["open", "human", "escalated", "closed"] | None, Query(alias="status")
     ] = None,
-    filter: Annotated[Literal["all", "needs_you", "unread", "human"], Query()] = "all",
+    filter: Annotated[Literal["all", "needs_you", "unread", "resolved"], Query()] = "all",
     q: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -146,6 +156,40 @@ async def delete_conversation(
     await controller.delete_conversation(
         tenant_id=str(admin.tenant_id),
         conversation_id=str(conversation_id),
+        role=admin.role,
+    )
+
+
+class ResolveConversationRequest(BaseModel):
+    # D44: the optional customer-facing message that rides the resolution. A
+    # blank string means "no message", never an empty bubble.
+    message: str | None = None
+
+    @field_validator("message")
+    @classmethod
+    def _blank_means_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+@router.post("/{conversation_id}/resolve", status_code=status.HTTP_204_NO_CONTENT)
+async def resolve_conversation(
+    conversation_id: UUID,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    body: ResolveConversationRequest | None = None,
+) -> None:
+    """D44: the owner's one conversation-level resolve. Closes any open
+    escalation, writes the owner-only stamp, and takes the optional message.
+
+    Owner-only: staff can take over and reply, but closing a thread is the
+    owner's call. Idempotent - resolving an already-resolved thread is a 204
+    no-op. A customer reply reopens it (chat.service.resolve_conversation).
+    """
+    await controller.resolve_conversation(
+        tenant_id=str(admin.tenant_id),
+        conversation_id=str(conversation_id),
+        message=body.message if body else None,
         role=admin.role,
     )
 

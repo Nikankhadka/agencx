@@ -266,6 +266,17 @@ live in the ticket files, not here.
   touches the production-sharing preview; the spec is a permanent regression
   spec with `RF17_CAPTURE` opt-in, viewport-only. Record in the archived
   [12-refinement-rf-17-four-business-walkthrough.md](../archive/phase1-complete/12-refinement-rf-17-four-business-walkthrough.md).
+- [x] Chat lifecycle: handoff removal, Waiting, Resolve, and auto-resolve
+  (D43-D45). The customer-side "Ask for a person" control and its client-only
+  helpers are removed (the deterministic endpoint and the assistant's own
+  escalation path stay); Action needed narrows to an open escalation or a
+  taken-over thread whose last word came from the customer, with "Waiting on
+  customer" for the other side; one owner-only conversation-level resolve
+  (`POST /api/conversations/{id}/resolve`, migration `0038`) closes any open
+  escalation and reopens on a customer reply; and a throttled lazy sweep
+  auto-resolves after seven days of customer silence
+  (`config.limits.auto_resolve_days`). Queue tabs are Action needed / Unread /
+  All / Resolved. Record in [decisions.md](design/decisions.md) D43-D45.
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
