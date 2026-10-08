@@ -68,7 +68,8 @@ def test_prices_read_off_the_document() -> None:
     assert PRICES["Babyccino"] == 100
     assert PRICES["Lamb Shish (side)"] == 2190
     rule_codes = {code: cents for code, _, cents, _ in PRICING_RULES}
-    assert rule_codes["super-plate"] == 3700  # seed_demo's Sabbaba conversation quotes this code
+    # The Sabbaba seed's first conversation quotes the Super Plate by this code.
+    assert rule_codes["super-plate"] == 3700
 
 
 def test_the_seasonal_salads_list_is_not_an_offering() -> None:

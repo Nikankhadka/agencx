@@ -310,10 +310,17 @@ async def test_conversation_counts_and_statuses(
     )
     assert lumident_count == 2
 
-    sababa_count = await superuser_conn.fetchval(
-        "select count(*) from conversations where tenant_id = $1", seeded["sababa_id"]
-    )
-    assert sababa_count == 2
+    # Sabbaba's conversations live in its own seed module (`seed_sababa`) and
+    # arrive through step 3b: 3 closed (2 knowledge answers, 1 resolved
+    # complaint), 1 open, 1 escalated catering request.
+    sababa_statuses = {
+        r["status"]: r["n"]
+        for r in await superuser_conn.fetch(
+            "select status, count(*) as n from conversations where tenant_id = $1 group by status",
+            seeded["sababa_id"],
+        )
+    }
+    assert sababa_statuses == {"closed": 3, "open": 1, "escalated": 1}
 
     wellspring_count = await superuser_conn.fetchval(
         "select count(*) from conversations where tenant_id = $1", seeded["wellspring_id"]

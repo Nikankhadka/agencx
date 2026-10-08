@@ -612,11 +612,20 @@ this.
   the injection eval.
 - `seed_demo.py` - the demo world: both anchor tenants (each pre-onboarded like
   tenant 1), GoTrue auth users, membership (`users` owners + the founder's
-  `platform_admins` row), and conversations/tool calls/cost logs/escalations.
-- `_helpers.py` - shared pool/wipe/tenant-core/commerce/knowledge helpers the
-  direct-DB seeds use (F-3). `insert_tenant_core`'s `profile` argument writes
-  the pre-onboarded end-state from the same onboarding dataclasses the confirm
-  path uses.
+  `platform_admins` row), and conversations/tool calls/cost logs/escalations
+  for the tenants it seeds inline (bytefix, lumident, wellspring).
+- `seed_sababa.py` - Tenant 3 (slug `sababa`, the Agencx anchor): a fully
+  pre-onboarded restaurant profile, the 96-item menu + photos + orders,
+  knowledge documents through the real ingestion path, and its own console
+  conversations (open, escalated with contact captured, closed with a resolved
+  escalation). Standalone-safe: re-seeding it touches no other tenant, and the
+  Chats surface is never empty after one.
+- `_helpers.py` - shared pool/wipe/tenant-core/commerce/conversation/knowledge
+  helpers the direct-DB seeds use (F-3). `insert_tenant_core`'s `profile`
+  argument writes the pre-onboarded end-state from the same onboarding
+  dataclasses the confirm path uses; `seed_conversations` writes the
+  conversations/messages/tool calls/cost logs/escalations shape every demo
+  tenant shares.
 
 Agencx adds the Sababa anchor seed in O-3/O-4 work (menu + catering-rate + FAQ
 documents through the real upload + ingestion path), aligned with the reference

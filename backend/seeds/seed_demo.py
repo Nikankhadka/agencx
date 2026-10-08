@@ -22,17 +22,18 @@ Structure (mirrors seeds/seed_tenant1_phoneshop.py's pattern):
    pricing rules, ~6 appointment orders, 2 knowledge docs.
 3b. Sabbaba (Tenant 3, slug ``sababa``) and Wellspring Medical Centre (Tenant
    4, slug ``wellspring``), each via its own standalone seed module so the
-   same module seeds staging without touching the other tenants.
+   same module seeds staging without touching the other tenants. Sabbaba
+   brings its own conversations with it.
 4. Membership rows: ``users`` (role='owner') for each tenant's owner;
    ``platform_admins`` for the founder. Tenant wipe cascades users;
    platform_admins is delete-then-insert by user_id for idempotency.
-5. Conversations with explicit ``created_at`` (``now()`` is constant within
-   one transaction and ``tenant_context`` is one transaction, so every
-   insert sets created_at explicitly - spread over the past 7 days, messages
-   5-30s apart so list/transcript ordering and the cost attribution lateral
-   join all behave). 5 for bytefix (2 closed, 1 open, 2 escalated), 2 for
-   lumident, 2 for sababa, 2 for wellspring. Tool calls on 3 assistant
-   messages, inspection verdicts in
+5. Conversations for bytefix, lumident and wellspring (Sabbaba seeds its own),
+   with explicit ``created_at`` (``now()`` is constant within one transaction
+   and ``tenant_context`` is one transaction, so every insert sets created_at
+   explicitly - spread over the past 7 days, messages 5-30s apart so
+   list/transcript ordering and the cost attribution lateral join all behave).
+   5 for bytefix (2 closed, 1 open, 2 escalated), 2 for lumident and 2 for
+   wellspring. Tool calls on 3 assistant messages, inspection verdicts in
    messages.metadata (the shape TraceTree.tsx renders), cost_logs placed just
    after each assistant message's created_at, and 3 escalations (open,
    claimed, resolved with a trailing human_agent message) respecting the
@@ -46,23 +47,18 @@ knowledge - no vertical branches anywhere (the hard rule).
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
 
-from app.features.escalations.service import RESOLUTION_STAMP
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
 from seeds import _helpers, seed_general_clinic, seed_sababa, seed_tenant1_phoneshop
 from seeds.supabase_keys import mint_key
-
-if TYPE_CHECKING:
-    from app.shared.db import AppConnection
 
 # Demo identities (password ``wren-demo`` for all; 6+ chars satisfies GoTrue's
 # default minimum). Kept here as the single source of truth for the demo
@@ -434,15 +430,15 @@ async def _seed_membership(
 
 
 # --- Conversations, messages, tool calls, costs, escalations -------------------
-
-
-def _demo_model() -> str:
-    return get_settings().llm_model or "demo-model"
+#
+# The insert machinery lives in _helpers.seed_conversations (shared with the
+# standalone tenant seeds); each tenant's specs are built here - except
+# Sabbaba's, which its own seed module owns and seeds.
 
 
 # Each conversation is seeded with explicit created_at timestamps so ordering
 # and the cost lateral join (which brackets by created_at) are deterministic.
-# A _SeedConv is inserted inside one tenant_context transaction.
+# A spec is inserted inside one tenant_context transaction.
 def _bytefix_conversations(now: datetime) -> list[dict[str, Any]]:
     return [
         {
@@ -716,82 +712,6 @@ def _lumident_conversations(now: datetime) -> list[dict[str, Any]]:
     ]
 
 
-def _sababa_conversations(now: datetime) -> list[dict[str, Any]]:
-    return [
-        {
-            "customer_ref": "diner.a",
-            "status": "closed",
-            "created_at": now - timedelta(days=3, hours=3),
-            "messages": [
-                (
-                    "customer",
-                    "How much is the Super Plate?",
-                    None,
-                    None,
-                    0,
-                ),
-                (
-                    "assistant",
-                    "The Super Plate is $37, with a choice of two proteins, four "
-                    "seasonal salads and two dips. Want me to quote one with a "
-                    "soft drink alongside?",
-                    "draft",
-                    {
-                        "inspection": {
-                            "grounding": {
-                                "passed": True,
-                                "reason": "Price matches the catalog and pricing engine.",
-                            }
-                        }
-                    },
-                    11,
-                ),
-            ],
-            "tool_calls": [
-                {
-                    "on_message_index": 1,
-                    "tool_name": "get_quote_inputs",
-                    "arguments": {"rule_codes": ["super-plate"]},
-                    "result": {
-                        "line_items": [
-                            {"code": "super-plate", "quantity": 1},
-                        ]
-                    },
-                    "success": True,
-                    "latency_ms": 29,
-                }
-            ],
-            "escalation": None,
-        },
-        {
-            "customer_ref": "diner.b",
-            "status": "open",
-            "created_at": now - timedelta(days=1, hours=5),
-            "messages": [
-                ("customer", "When are you open?", None, None, 0),
-                (
-                    "assistant",
-                    "We are open every day from 6:00 am to 8:00 pm. Public "
-                    "holiday hours are not listed, so check with us before "
-                    "coming on a public holiday [1].",
-                    "draft",
-                    {
-                        "inspection": {
-                            "grounding": {
-                                "passed": True,
-                                "reason": "Matches the FAQ's hours entry.",
-                            }
-                        }
-                    },
-                    12,
-                ),
-            ],
-            "tool_calls": [],
-            "escalation": None,
-        },
-    ]
-
-
 def _wellspring_conversations(now: datetime) -> list[dict[str, Any]]:
     return [
         {
@@ -871,122 +791,6 @@ def _wellspring_conversations(now: datetime) -> list[dict[str, Any]]:
     ]
 
 
-async def _seed_conversations(
-    conn: AppConnection,
-    tenant_id: UUID,
-    specs: list[dict[str, Any]],
-) -> None:
-    model = _demo_model()
-    for spec in specs:
-        conv_id = uuid4()
-        created_at = spec["created_at"]
-        assert isinstance(created_at, datetime)
-        await conn.execute(
-            "insert into conversations (id, tenant_id, customer_ref, channel, status, created_at) "
-            "values ($1, $2, $3, 'web', $4, $5)",
-            conv_id,
-            tenant_id,
-            spec["customer_ref"],
-            spec["status"],
-            created_at,
-        )
-
-        messages: list[tuple[str, str, str | None, dict[str, Any] | None, int]] = spec["messages"]
-        message_ids: list[UUID] = []
-        msg_time = created_at
-        escalation: dict[str, Any] | None = spec.get("escalation")
-        # RF-16 consistency: a real resolution writes the owner-only stamp
-        # before the optional human_agent reply (escalations/service.py). Seed
-        # the same pair so the demo world matches shipped behavior instead of
-        # carrying a bare human_agent message with no stamp.
-        stamp_before_human = escalation is not None and escalation["status"] == "resolved"
-        for role, content, agent_node, metadata, offset in messages:
-            msg_time = created_at + timedelta(seconds=offset)
-            if stamp_before_human and role == "human_agent":
-                await conn.execute(
-                    "insert into messages (id, tenant_id, conversation_id, role, content, "
-                    "created_at) values ($1, $2, $3, 'system', $4, $5)",
-                    uuid4(),
-                    tenant_id,
-                    conv_id,
-                    RESOLUTION_STAMP,
-                    msg_time - timedelta(seconds=1),
-                )
-            msg_id = uuid4()
-            message_ids.append(msg_id)
-            await conn.execute(
-                "insert into messages (id, tenant_id, conversation_id, role, content, "
-                "agent_node, created_at, metadata) "
-                "values ($1, $2, $3, $4, $5, $6, $7, $8)",
-                msg_id,
-                tenant_id,
-                conv_id,
-                role,
-                content,
-                agent_node,
-                msg_time,
-                json.dumps(metadata) if metadata is not None else "{}",
-            )
-            # A cost_log for every assistant turn, placed just after the
-            # message's created_at so the lateral-join window in
-            # conversations.py attributes it to this message.
-            if role == "assistant":
-                cost_time = msg_time + timedelta(seconds=2)
-                await conn.execute(
-                    "insert into cost_logs (tenant_id, conversation_id, model, "
-                    "input_tokens, output_tokens, cost_usd, created_at) "
-                    "values ($1, $2, $3, $4, $5, $6, $7)",
-                    tenant_id,
-                    conv_id,
-                    model,
-                    1200,
-                    180,
-                    0.0021,
-                    cost_time,
-                )
-
-        for tc in spec.get("tool_calls", []):
-            target_msg = message_ids[tc["on_message_index"]]
-            tc_id = uuid4()
-            await conn.execute(
-                "insert into tool_calls (id, tenant_id, message_id, tool_name, arguments, "
-                "result, success, latency_ms, created_at) "
-                "values ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                tc_id,
-                tenant_id,
-                target_msg,
-                tc["tool_name"],
-                json.dumps(tc["arguments"]),
-                json.dumps(tc["result"]),
-                tc["success"],
-                tc["latency_ms"],
-                # Place the tool call a hair before the assistant message it
-                # belongs to (the assistant turn follows the tool result).
-                created_at + timedelta(seconds=tc["on_message_index"]) - timedelta(seconds=1),
-            )
-
-        if escalation is not None:
-            esc_id = uuid4()
-            esc_created = created_at + timedelta(seconds=16)
-            status = escalation["status"]
-            resolved_at = None
-            if status == "resolved":
-                # Resolved escalation: resolved_at set, and the trailing
-                # human_agent message (last in the spec) is the resolution reply.
-                resolved_at = msg_time + timedelta(seconds=30)
-            await conn.execute(
-                "insert into escalations (id, tenant_id, conversation_id, reason, status, "
-                "created_at, resolved_at) values ($1, $2, $3, $4, $5, $6, $7)",
-                esc_id,
-                tenant_id,
-                conv_id,
-                escalation["reason"],
-                status,
-                esc_created,
-                resolved_at,
-            )
-
-
 # --- The top-level seed ---------------------------------------------------------
 
 
@@ -1050,18 +854,17 @@ async def seed(
         )
         print("seeded membership (4 owners + 1 platform admin)")
 
-        # 5. Conversations, tool calls, costs, escalations.
+        # 5. Conversations for the inline tenants, tool calls, costs,
+        # escalations. Sabbaba brought its own in step 3b.
         now = datetime.now(UTC)
         async with db.tenant_context(bytefix_id, "tenant_admin") as conn:
-            await _seed_conversations(conn, bytefix_id, _bytefix_conversations(now))
+            await _helpers.seed_conversations(conn, bytefix_id, _bytefix_conversations(now))
         async with db.tenant_context(lumident_id, "tenant_admin") as conn:
-            await _seed_conversations(conn, lumident_id, _lumident_conversations(now))
-        async with db.tenant_context(sababa_id, "tenant_admin") as conn:
-            await _seed_conversations(conn, sababa_id, _sababa_conversations(now))
+            await _helpers.seed_conversations(conn, lumident_id, _lumident_conversations(now))
         async with db.tenant_context(wellspring_id, "tenant_admin") as conn:
-            await _seed_conversations(conn, wellspring_id, _wellspring_conversations(now))
+            await _helpers.seed_conversations(conn, wellspring_id, _wellspring_conversations(now))
         print(
-            "seeded conversations (5 bytefix + 2 lumident + 2 sababa + 2 wellspring), "
+            "seeded conversations (5 bytefix + 2 lumident + 2 wellspring), "
             "tool calls, costs, escalations"
         )
 

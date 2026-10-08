@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
 import pytest
 import pytest_asyncio
 
+from app.features.escalations.service import RESOLUTION_STAMP
 from app.shared import db
 from seeds.sabbaba.knowledge import KNOWLEDGE_DOCS
 from seeds.seed_sababa import (
@@ -26,6 +28,7 @@ from seeds.seed_sababa import (
     SABABA_PROFILE,
     SLUG,
     TENANT_NAME,
+    sabbaba_conversations,
     seed,
 )
 from tests.conftest import _app_dsn_for
@@ -160,7 +163,7 @@ async def test_priced_offerings_and_pricing_rules_pair_one_to_one(app_pool: None
     assert {r["unit"] for r in rules} == {"each"}
     assert len(rules) == len(priced)  # exactly one rule per priced offering
     assert {r["label"]: r["unit_amount_cents"] for r in rules} == priced
-    # seed_demo's Sabbaba conversation quotes the Super Plate by this code.
+    # The Sabbaba seed's first conversation quotes the Super Plate by this code.
     assert {r["code"]: r["unit_amount_cents"] for r in rules}["super-plate"] == 3700
 
 
@@ -197,3 +200,74 @@ async def test_seed_writes_the_cover_and_one_photo_per_listed_offering(app_pool:
     assert {row["name"]: row["url"] for row in photos} == {
         name: media["url"] for name, media in MEDIA["offerings"].items()
     }
+
+
+async def test_seed_writes_conversations_across_states(app_pool: None) -> None:
+    """A standalone re-seed leaves the Chats console with history: knowledge
+    answers, a live queue row, and a resolved complaint with a contact."""
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        conversations = await conn.fetch(
+            "select customer_ref, customer_email, status from conversations where tenant_id = $1",
+            tenant_id,
+        )
+        message_count = await conn.fetchval(
+            "select count(*) from messages where tenant_id = $1", tenant_id
+        )
+        tool_names = {
+            row["tool_name"]
+            for row in await conn.fetch(
+                "select tool_name from tool_calls where tenant_id = $1", tenant_id
+            )
+        }
+        cost_count = await conn.fetchval(
+            "select count(*) from cost_logs where tenant_id = $1", tenant_id
+        )
+        escalations = await conn.fetch(
+            "select status, summary, intent, resolved_at from escalations where tenant_id = $1",
+            tenant_id,
+        )
+
+    specs = sabbaba_conversations(datetime.now(UTC))
+    assert len(conversations) == len(specs) == 5
+    assert {row["status"] for row in conversations} == {"closed", "open", "escalated"}
+
+    # Every spec message plus the resolved escalation's owner-only stamp.
+    stamps = sum(1 for spec in specs if (spec["escalation"] or {}).get("status") == "resolved")
+    assert message_count == sum(len(spec["messages"]) for spec in specs) + stamps
+    # One cost row per assistant turn.
+    assert cost_count == sum(1 for spec in specs for m in spec["messages"] if m[0] == "assistant")
+    assert tool_names == {"search_knowledge", "create_escalation", "set_customer_contact"}
+
+    by_status = {row["status"]: row for row in escalations}
+    assert set(by_status) == {"open", "resolved"}
+    assert by_status["open"]["resolved_at"] is None
+    assert by_status["open"]["summary"] == "Lunch for 25 delivered on Friday, wants confirmation"
+    assert by_status["open"]["intent"] == "offer"
+    assert by_status["resolved"]["resolved_at"] is not None
+
+    escalated = next(row for row in conversations if row["status"] == "escalated")
+    assert escalated["customer_ref"] == "Maya T"
+    assert escalated["customer_email"] == "maya.t@example.com"
+
+
+async def test_resolved_escalation_stamps_before_the_human_reply(app_pool: None) -> None:
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        conv_id = await conn.fetchval(
+            "select conversation_id from escalations where tenant_id = $1 and status = 'resolved'",
+            tenant_id,
+        )
+        assert conv_id is not None
+        transcript = await conn.fetch(
+            "select role, content from messages where conversation_id = $1 order by created_at, id",
+            conv_id,
+        )
+
+    roles_and_text = [(row["role"], row["content"]) for row in transcript]
+    assert ("system", RESOLUTION_STAMP) in roles_and_text
+    stamp_index = roles_and_text.index(("system", RESOLUTION_STAMP))
+    human_index = next(i for i, (role, _) in enumerate(roles_and_text) if role == "human_agent")
+    assert stamp_index < human_index
