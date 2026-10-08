@@ -225,8 +225,35 @@ async def seed(embedder: Embedder | None = None) -> UUID:
         return tenant_id
 
 
+async def link_owner(tenant_id: UUID) -> None:
+    """Attach owner@sababa2.dev to the tenant so the console login lands on it.
+
+    Without a ``users`` row the login falls into signup and onboards a stray
+    tenant, which is what a standalone re-seed (the wipe cascades the old
+    membership) used to cause. ``seed_demo`` does the same for the whole demo
+    world; imported here, not at module level, because it imports this module.
+    """
+    from seeds.seed_demo import DEMO_PASSWORD, SABABA2_OWNER_EMAIL, _make_gotrue_create_auth_user
+
+    owner_id = await _make_gotrue_create_auth_user()(SABABA2_OWNER_EMAIL, DEMO_PASSWORD)
+    async with _helpers.seed_pool():
+        async with db.tenant_context(None, "platform_admin") as conn:
+            old = await conn.fetchval("select tenant_id from users where id = $1", owner_id)
+        if old is not None:
+            async with db.tenant_context(old, "tenant_admin") as conn:
+                await conn.execute("delete from users where id = $1", owner_id)
+        async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+            await conn.execute(
+                "insert into users (id, tenant_id, role) values ($1, $2, 'owner')",
+                owner_id,
+                tenant_id,
+            )
+    print(f"linked {SABABA2_OWNER_EMAIL} (password {DEMO_PASSWORD}) as owner of {SLUG}")
+
+
 def main() -> None:
     tenant_id = asyncio.run(seed())
+    asyncio.run(link_owner(tenant_id))
     print(f"done: tenant_id={tenant_id}")
 
 

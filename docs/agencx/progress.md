@@ -305,6 +305,11 @@ live in the ticket files, not here.
   default step cap is 12 (a redraft-then-escalate walk is 9 supersteps); a turn
   that runs over its time budget hands off without locking the conversation.
   Known residual: allergen caveat wording is model judgement, not a guarantee.
+- [x] Sababa2 seed links its owner (branch `feat/sababa2-seed-owner-link`,
+  2026-10-08): standalone `make seed-sababa2` now find-or-creates
+  `owner@sababa2.dev` and attaches it to the tenant, so the console login lands
+  on the pre-onboarded tenant with no interview. The profile and
+  `onboarding.completed` were already seeded by `insert_tenant_core`.
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced
