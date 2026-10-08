@@ -47,7 +47,7 @@ TENANT_NAME = "Sabbaba"
 # (via _helpers.insert_tenant_core's profile arg). Owner name and headcount
 # are demo placeholders; hours and services follow the menu document.
 SABABA_PROFILE = {
-    "owner_display_name": "Noa",
+    "owner_display_name": "Aniket",
     "business_name": TENANT_NAME,
     "business_type": "Middle Eastern restaurant",
     "headcount": "8",
