@@ -129,9 +129,9 @@ const BUSINESSES: BusinessCase[] = [
     ownerEmail: "owner@sababa.dev",
     greetingAdd: "I can walk you through the menu",
     starters: [
-      "How much is the Super Plate?",
-      "What comes in the Sabbaba Pita Pocket?",
-      "When are you open?",
+      "Which dishes are vegan or gluten free?",
+      "What are your most popular items?",
+      "What time do you open?",
     ],
     uniqueOffering: "Super Plate",
     ownRefs: ["diner.a", "diner.b"],

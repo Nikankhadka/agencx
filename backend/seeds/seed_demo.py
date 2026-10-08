@@ -771,9 +771,9 @@ def _sababa_conversations(now: datetime) -> list[dict[str, Any]]:
                 ("customer", "When are you open?", None, None, 0),
                 (
                     "assistant",
-                    "We are open Monday to Sunday, roughly 11am to 8pm most days. "
-                    "Holiday hours can differ, so check with us before coming on "
-                    "a public holiday [1].",
+                    "We are open every day from 6:00 am to 8:00 pm. Public "
+                    "holiday hours are not listed, so check with us before "
+                    "coming on a public holiday [1].",
                     "draft",
                     {
                         "inspection": {

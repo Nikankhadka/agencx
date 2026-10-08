@@ -1,0 +1,184 @@
+{
+  "cover": {
+    "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421134/demo/sabbaba/cover.jpg",
+    "public_id": "demo/sabbaba/cover"
+  },
+  "offerings": {
+    "Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421098/demo/sabbaba/pita-pocket.jpg",
+      "public_id": "demo/sabbaba/pita-pocket"
+    },
+    "Sabbaba Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421099/demo/sabbaba/sabbaba-pita-pocket.jpg",
+      "public_id": "demo/sabbaba/sabbaba-pita-pocket"
+    },
+    "Larnaca Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421099/demo/sabbaba/larnaca-pita-pocket.jpg",
+      "public_id": "demo/sabbaba/larnaca-pita-pocket"
+    },
+    "Tunisian Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421100/demo/sabbaba/tunisian-pita-pocket.jpg",
+      "public_id": "demo/sabbaba/tunisian-pita-pocket"
+    },
+    "Algerian Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421101/demo/sabbaba/algerian-pita-pocket.jpg",
+      "public_id": "demo/sabbaba/algerian-pita-pocket"
+    },
+    "Cancun Pita Pocket": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421102/demo/sabbaba/cancun-pita-pocket.jpg",
+      "public_id": "demo/sabbaba/cancun-pita-pocket"
+    },
+    "Plate": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421103/demo/sabbaba/plate.jpg",
+      "public_id": "demo/sabbaba/plate"
+    },
+    "Super Plate": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421103/demo/sabbaba/super-plate.jpg",
+      "public_id": "demo/sabbaba/super-plate"
+    },
+    "Bowl": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421104/demo/sabbaba/bowl.jpg",
+      "public_id": "demo/sabbaba/bowl"
+    },
+    "Cauliflower and Avocado Salad": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421105/demo/sabbaba/cauliflower-and-avocado-salad.jpg",
+      "public_id": "demo/sabbaba/cauliflower-and-avocado-salad"
+    },
+    "Lentil, Quinoa and Haloumi Salad": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421106/demo/sabbaba/lentil-quinoa-and-haloumi-salad.jpg",
+      "public_id": "demo/sabbaba/lentil-quinoa-and-haloumi-salad"
+    },
+    "Hot Chips": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421107/demo/sabbaba/hot-chips.jpg",
+      "public_id": "demo/sabbaba/hot-chips"
+    },
+    "Sweet Potato Chips": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421108/demo/sabbaba/sweet-potato-chips.jpg",
+      "public_id": "demo/sabbaba/sweet-potato-chips"
+    },
+    "Falafel, 6 pieces": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421109/demo/sabbaba/falafel-6-pieces.jpg",
+      "public_id": "demo/sabbaba/falafel-6-pieces"
+    },
+    "Vine Leaves": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421110/demo/sabbaba/vine-leaves.jpg",
+      "public_id": "demo/sabbaba/vine-leaves"
+    },
+    "Haloumi Chips with Tzatziki": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421111/demo/sabbaba/haloumi-chips-with-tzatziki.jpg",
+      "public_id": "demo/sabbaba/haloumi-chips-with-tzatziki"
+    },
+    "Chicken Shawarma (side)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421112/demo/sabbaba/chicken-shawarma-side.jpg",
+      "public_id": "demo/sabbaba/chicken-shawarma-side"
+    },
+    "Chicken Shish (side)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421112/demo/sabbaba/chicken-shish-side.jpg",
+      "public_id": "demo/sabbaba/chicken-shish-side"
+    },
+    "Lamb Shish (side)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421113/demo/sabbaba/lamb-shish-side.jpg",
+      "public_id": "demo/sabbaba/lamb-shish-side"
+    },
+    "Lamb Kofta (side)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421114/demo/sabbaba/lamb-kofta-side.jpg",
+      "public_id": "demo/sabbaba/lamb-kofta-side"
+    },
+    "Beef Shawarma (side)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421114/demo/sabbaba/beef-shawarma-side.jpg",
+      "public_id": "demo/sabbaba/beef-shawarma-side"
+    },
+    "Chips and Dips Share Pack": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421115/demo/sabbaba/chips-and-dips-share-pack.jpg",
+      "public_id": "demo/sabbaba/chips-and-dips-share-pack"
+    },
+    "Hummus": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421116/demo/sabbaba/hummus.jpg",
+      "public_id": "demo/sabbaba/hummus"
+    },
+    "Tahini": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421116/demo/sabbaba/tahini.jpg",
+      "public_id": "demo/sabbaba/tahini"
+    },
+    "Red Chilli": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421117/demo/sabbaba/red-chilli.jpg",
+      "public_id": "demo/sabbaba/red-chilli"
+    },
+    "Green Chilli": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421118/demo/sabbaba/green-chilli.jpg",
+      "public_id": "demo/sabbaba/green-chilli"
+    },
+    "Jalapenos": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421118/demo/sabbaba/jalapenos.jpg",
+      "public_id": "demo/sabbaba/jalapenos"
+    },
+    "Grilled Haloumi, Chicken and Avocado Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421119/demo/sabbaba/grilled-haloumi-chicken-and-avocado-bagel.jpg",
+      "public_id": "demo/sabbaba/grilled-haloumi-chicken-and-avocado-bagel"
+    },
+    "Grilled Chicken and Avocado Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421120/demo/sabbaba/grilled-chicken-and-avocado-bagel.jpg",
+      "public_id": "demo/sabbaba/grilled-chicken-and-avocado-bagel"
+    },
+    "Salmon and Cream Cheese Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421120/demo/sabbaba/salmon-and-cream-cheese-bagel.jpg",
+      "public_id": "demo/sabbaba/salmon-and-cream-cheese-bagel"
+    },
+    "Ham, Cheese and Tomato Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421121/demo/sabbaba/ham-cheese-and-tomato-bagel.jpg",
+      "public_id": "demo/sabbaba/ham-cheese-and-tomato-bagel"
+    },
+    "Haloumi and Egg Triangle": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421122/demo/sabbaba/haloumi-and-egg-triangle.jpg",
+      "public_id": "demo/sabbaba/haloumi-and-egg-triangle"
+    },
+    "Tuna, Cheese and Tender Greens Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421122/demo/sabbaba/tuna-cheese-and-tender-greens-bagel.jpg",
+      "public_id": "demo/sabbaba/tuna-cheese-and-tender-greens-bagel"
+    },
+    "Salami, Cheese and Tomato Bagel": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421123/demo/sabbaba/salami-cheese-and-tomato-bagel.jpg",
+      "public_id": "demo/sabbaba/salami-cheese-and-tomato-bagel"
+    },
+    "Soft Drink Can": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421124/demo/sabbaba/soft-drink-can.jpg",
+      "public_id": "demo/sabbaba/soft-drink-can"
+    },
+    "Water": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421125/demo/sabbaba/water.jpg",
+      "public_id": "demo/sabbaba/water"
+    },
+    "Sparkling Water": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421125/demo/sabbaba/sparkling-water.jpg",
+      "public_id": "demo/sabbaba/sparkling-water"
+    },
+    "Baklava": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421126/demo/sabbaba/baklava.jpg",
+      "public_id": "demo/sabbaba/baklava"
+    },
+    "Chocolate Brownie": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421127/demo/sabbaba/chocolate-brownie.jpg",
+      "public_id": "demo/sabbaba/chocolate-brownie"
+    },
+    "Muffin": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421129/demo/sabbaba/muffin.jpg",
+      "public_id": "demo/sabbaba/muffin"
+    },
+    "Banana Bread": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421130/demo/sabbaba/banana-bread.jpg",
+      "public_id": "demo/sabbaba/banana-bread"
+    },
+    "Cinnamon Scroll": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421131/demo/sabbaba/cinnamon-scroll.jpg",
+      "public_id": "demo/sabbaba/cinnamon-scroll"
+    },
+    "FNG Bar (Fig, Nut, Grain)": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421131/demo/sabbaba/fng-bar-fig-nut-grain.jpg",
+      "public_id": "demo/sabbaba/fng-bar-fig-nut-grain"
+    },
+    "Pistachio Bar": {
+      "url": "https://res.cloudinary.com/ditkrat3z/image/upload/v1791421132/demo/sabbaba/pistachio-bar.jpg",
+      "public_id": "demo/sabbaba/pistachio-bar"
+    }
+  }
+}

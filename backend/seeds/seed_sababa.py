@@ -1,12 +1,11 @@
-"""Tenant 3 seed: Sabbaba, a Middle Eastern restaurant (Bondi Junction).
+"""Tenant 3 seed: Sabbaba, a Middle Eastern restaurant (Spring St, Bondi Junction).
 
-Curated from ``backend/tests/fixtures/sabbaba_profile.txt`` (the W-6
-extraction fixture): only flat menu figures become prices. The Plate and
-base Pita Pocket share a "$20-$30" range in the source, so they seed with
-``price_cents=None`` rather than a number picked out of the range - the
-same rule ``test_offering_extraction.py`` pins on the extraction path.
-Review-quoted figures ("around $18", "another said the $18 plate") never
-become data here.
+The menu and knowledge text come from the source menu document (8 October 2026),
+held as data in ``seeds/sabbaba/`` (``menu.py`` and ``knowledge.py``). Photos are
+Cloudinary URLs from ``seeds/sabbaba/images.json``. Prices are the document's own
+integer cents; an item the document marks "price not confirmed" seeds with
+``price_cents=None`` and no pricing rule, and every priced item gets exactly one
+``each`` rule.
 
 Idempotent: re-running wipes and recreates tenant 'sababa' from scratch.
 Standalone staging use (non-destructive to the other tenants)::
@@ -24,12 +23,21 @@ Usage: ``uv run python -m seeds.seed_sababa``
 from __future__ import annotations
 
 import asyncio
+import json
+import re
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from app.llm.embedder import Embedder, get_embedder
 from app.shared import db
 from app.shared.config import get_settings
 from seeds import _helpers
+from seeds.sabbaba.knowledge import KNOWLEDGE_DOCS
+from seeds.sabbaba.menu import MENU
+
+# Cloudinary photo manifest written by scripts/seed_sabbaba_images.py. Items
+# without a photo are simply absent (the storefront shows a letter tile).
+MEDIA = json.loads((Path(__file__).parent / "sabbaba" / "images.json").read_text())
 
 SLUG = "sababa"
 TENANT_NAME = "Sabbaba"
@@ -37,21 +45,24 @@ TENANT_NAME = "Sabbaba"
 # Pre-onboarded profile - the demo world lands in the console, not the
 # interview, so the seed writes the same end-state a real confirm produces
 # (via _helpers.insert_tenant_core's profile arg). Owner name and headcount
-# are demo placeholders; everything else follows the fixture.
+# are demo placeholders; hours and services follow the menu document.
 SABABA_PROFILE = {
     "owner_display_name": "Noa",
     "business_name": TENANT_NAME,
     "business_type": "Middle Eastern restaurant",
     "headcount": "8",
-    "hours": "Monday to Sunday 11am to 8pm",
+    "hours": "Monday to Sunday 6:00 am to 8:00 pm",
     "services": [
         "Pita pockets",
-        "Bowls",
         "Plates",
-        "Salads and dips",
+        "Bowls",
+        "Salads",
         "Sides",
-        "Falafel",
-        "Soft drinks",
+        "Dips and extras",
+        "Breakfast",
+        "Coffee and hot drinks",
+        "Cold drinks",
+        "Sweets",
     ],
     "contact": "owner@sababa.dev",
     "abn": "none",
@@ -62,121 +73,37 @@ SABABA_PROFILE = {
     "customer_voice_custom_style": "",
 }
 
-# --- offerings: flat menu figures only; ranged items carry no price --------
+# --- offerings: one per menu item, in document order -------------------------
 
 CATALOG_ITEMS: list[tuple[str, str, int | None, list[str]]] = [
-    ("Bowl", "Salads and dips with pita on the side", 2700, ["Plates & Bowls"]),
-    (
-        "Super Plate",
-        "Choice of two proteins, four seasonal salads and two dips",
-        3700,
-        ["Plates & Bowls"],
-    ),
-    (
-        "Plate",
-        "Salads and dips with one pita, priced $20-$30 depending on build",
-        None,
-        ["Plates & Bowls"],
-    ),
-    (
-        "Pita Pocket",
-        "Salads and dips wrapped in pita, priced $20-$30 depending on build",
-        None,
-        ["Pitas"],
-    ),
-    (
-        "Sabbaba Pita Pocket",
-        "House pita with the full four-salad, four-dip combo",
-        2000,
-        ["Pitas"],
-    ),
-    (
-        "Larnaca Pita",
-        "Olives, green chilli and shredded halloumi",
-        1990,
-        ["Pitas"],
-    ),
-    ("Algerian Pita", "Chickpeas and eggplant", 1990, ["Pitas"]),
-    ("Tunisian Pita", "Marrakech salad and sweet potato", 2000, ["Pitas"]),
-    (
-        "Cancun Pita",
-        "Salsa, sour cream, guacamole, jalapenos, corn chips and cheese",
-        2190,
-        ["Pitas"],
-    ),
-    ("Hot Chips", "Famous lightly seasoned chips", 1000, ["Sides"]),
-    ("Six Falafel", "Six falafel pieces", 1090, ["Sides"]),
-    ("Soft Drink Can", "A can of soft drink", 450, ["Drinks"]),
+    (name, description, price_cents, [category])
+    for category, items in MENU.items()
+    for name, description, price_cents in items
 ]
 
-# --- pricing_rules: one per flat-priced offering ----------------------------
+# --- pricing_rules: one per priced offering; unpriced items get none ---------
+
+
+def _rule_code(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
 
 PRICING_RULES: list[tuple[str, str, int, str]] = [
-    ("bowl", "Bowl with pita on the side", 2700, "each"),
-    ("super-plate", "Super Plate", 3700, "each"),
-    ("pita-sabbaba", "Sabbaba Pita Pocket", 2000, "each"),
-    ("pita-larnaca", "Larnaca Pita", 1990, "each"),
-    ("pita-algerian", "Algerian Pita", 1990, "each"),
-    ("pita-tunisian", "Tunisian Pita", 2000, "each"),
-    ("pita-cancun", "Cancun Pita", 2190, "each"),
-    ("hot-chips", "Hot Chips", 1000, "each"),
-    ("six-falafel", "Six Falafel", 1090, "each"),
-    ("soft-drink-can", "Soft Drink Can", 450, "each"),
+    (_rule_code(name), name, price_cents, "each")
+    for name, _, price_cents, _ in CATALOG_ITEMS
+    if price_cents is not None
 ]
 
 ORDER_STATUSES = ["pending", "in_progress", "ready_for_pickup", "completed", "cancelled"]
 
-MENU_MD = """# Menu
-
-## Plates and Bowls
-
-The Bowl is $27 and comes with pita on the side instead of wrapped in.
-The Super Plate is $37, with a choice of two proteins, four seasonal
-salads and two dips. The Plate and the base Pita Pocket both run $20-$30
-and come with one pita - the exact price depends on the build, so ask at
-the counter for a quote on yours.
-
-## Pita Pockets
-
-The house Sabbaba Pita Pocket is $20 with the full four-salad, four-dip
-combo. The Larnaca pocket is $19.90 with olives, green chilli and
-shredded halloumi. The Algerian pocket is $19.90, built on chickpeas and
-eggplant. The Tunisian pocket is $20 with Marrakech salad and sweet
-potato. The Cancun pocket is $21.90 with salsa, sour cream, guacamole,
-jalapenos, corn chips and cheese.
-
-## Sides and Drinks
-
-Hot Chips are $10, described as famous and lightly seasoned. Six Falafel
-is $10.90. Salads are also sold individually, mostly $10-14 - ask what is
-fresh today. A can of soft drink is $4.50.
-"""
-
-FAQ_MD = """# Frequently Asked Questions
-
-## Where are you?
-
-77 Spring Street, Bondi Junction NSW 2022, in the Eastgate Bondi Junction
-shopping centre. If your map shows a slightly different Spring Street
-number, it is the same storefront - ask us and we will point you in.
-
-## When are you open?
-
-Expect roughly 11am to 8pm most days. Holiday hours can differ, so check
-with us before coming on a public holiday.
-
-## Is the food vegan-friendly?
-
-Yes. Falafel, salads and dips are the core of the menu and the
-plant-based options are clearly defined - ask the counter what is fresh
-today.
-
-## Do you deliver?
-
-Ordering is through our listed delivery partners. If delivery shows as
-unavailable, that usually reflects the browsing location rather than us -
-try again from an address near Bondi Junction or call us.
-"""
+# Demo console orders: item names are real menu offerings.
+ORDER_ITEMS: list[list[str]] = [
+    ["Sabbaba Pita Pocket"],
+    ["Falafel Plate", "Hot Chips"],
+    ["Chicken Shish Bowl"],
+    ["Larnaca Pita Pocket", "Housemade Lemonade"],
+    ["Super Plate"],
+]
 
 
 async def _seed_core(tenant_id: UUID) -> None:
@@ -192,13 +119,13 @@ async def _seed_core(tenant_id: UUID) -> None:
             "customer": {
                 "greeting": (
                     "Hi! Welcome to Sabbaba. I can walk you through the menu, "
-                    "price up a plate or pita, or answer questions about the "
-                    "restaurant - what can I get for you?"
+                    "help with dietary and allergen questions, or tell you about "
+                    "the shop - what would you like to know?"
                 ),
                 "starter_questions": [
-                    "How much is the Super Plate?",
-                    "What comes in the Sabbaba Pita Pocket?",
-                    "When are you open?",
+                    "Which dishes are vegan or gluten free?",
+                    "What are your most popular items?",
+                    "What time do you open?",
                 ],
             }
         },
@@ -208,6 +135,7 @@ async def _seed_core(tenant_id: UUID) -> None:
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         await _helpers.insert_offerings(conn, tenant_id, CATALOG_ITEMS)
+        await _helpers.insert_media(conn, tenant_id, MEDIA["cover"], MEDIA["offerings"])
         await _helpers.insert_pricing_rules(conn, tenant_id, PRICING_RULES)
         await _helpers.insert_orders(
             conn,
@@ -218,9 +146,9 @@ async def _seed_core(tenant_id: UUID) -> None:
                     "order",
                     f"customer-{i + 1}",
                     ORDER_STATUSES[i % len(ORDER_STATUSES)],
-                    {"items": ["pita"]},
+                    {"items": items},
                 )
-                for i in range(5)
+                for i, items in enumerate(ORDER_ITEMS)
             ],
         )
 
@@ -230,10 +158,7 @@ async def _seed_knowledge(tenant_id: UUID, embedder: Embedder) -> None:
         await _helpers.ingest_documents(
             conn,
             tenant_id,
-            [
-                ("menu.md", "price_list", MENU_MD),
-                ("faq.md", "faq", FAQ_MD),
-            ],
+            KNOWLEDGE_DOCS,
             embedder,
         )
 

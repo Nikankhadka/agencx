@@ -277,6 +277,14 @@ live in the ticket files, not here.
   auto-resolves after seven days of customer silence
   (`config.limits.auto_resolve_days`). Queue tabs are Action needed / Unread /
   All / Resolved. Record in [decisions.md](design/decisions.md) D43-D45.
+- [x] Sabbaba demo showcase: the `sababa` seed is rebuilt from the source menu
+  document (96 items in 10 categories, 94 priced with one `each` rule each, the
+  rest unpriced; hours, allergen, ratings and per-category price docs as
+  knowledge) and seeded directly, with no onboarding. 44 item photos plus a
+  cover live in the owner's Cloudinary under `demo/sabbaba/` (uploaded once by
+  `scripts/seed_sabbaba_images.py`, recorded in `seeds/sabbaba/images.json`);
+  items without a reliable photo show the letter tile. The seed stays offline.
+  Hosted re-seed of `sababa` only (never `seed_demo`) is pending sign-off.
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced

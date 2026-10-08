@@ -17,8 +17,11 @@ import pytest
 import pytest_asyncio
 
 from app.shared import db
+from seeds.sabbaba.knowledge import KNOWLEDGE_DOCS
 from seeds.seed_sababa import (
     CATALOG_ITEMS,
+    MEDIA,
+    ORDER_ITEMS,
     PRICING_RULES,
     SABABA_PROFILE,
     SLUG,
@@ -60,12 +63,12 @@ async def test_seed_creates_tenant_with_expected_counts(app_pool: None) -> None:
         orders_count = await conn.fetchval(
             "select count(*) from orders where tenant_id = $1", tenant_id
         )
-        assert orders_count == 5
+        assert orders_count == len(ORDER_ITEMS) == 5
 
         ready_docs = await conn.fetchval(
             "select count(*) from documents where tenant_id = $1 and status = 'ready'", tenant_id
         )
-        assert ready_docs == 3  # menu.md, faq.md, + synthetic catalog doc
+        assert ready_docs == len(KNOWLEDGE_DOCS) + 1  # knowledge docs + synthetic catalog doc
 
         chunk_count = await conn.fetchval(
             "select count(*) from knowledge_chunks where tenant_id = $1", tenant_id
@@ -122,9 +125,9 @@ async def test_seed_takes_the_lean_tool_default(
     assert json.loads(row["enabled_tools"]) == lean
 
 
-async def test_ranged_items_carry_no_price(app_pool: None) -> None:
-    """The money rule, seed-side: Plate and base Pita Pocket share a $20-$30
-    range in the source, so neither gets a number picked out of it."""
+async def test_seeded_offerings_carry_the_documents_prices(app_pool: None) -> None:
+    """The money rule, seed-side: prices are the document's integer cents, and
+    the two items it marks "price not confirmed" seed with no price at all."""
     tenant_id = await seed(embedder=ZeroEmbedder())
 
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
@@ -132,8 +135,65 @@ async def test_ranged_items_carry_no_price(app_pool: None) -> None:
             "select name, price_cents from offerings where tenant_id = $1", tenant_id
         )
     by_name = {r["name"]: r["price_cents"] for r in rows}
-    assert by_name["Plate"] is None
-    assert by_name["Pita Pocket"] is None
+    assert by_name["Plate"] == 3000
     assert by_name["Bowl"] == 2700
+    assert by_name["Pita Pocket"] == 2000
     assert by_name["Super Plate"] == 3700
-    assert by_name["Six Falafel"] == 1090
+    assert by_name["Falafel, 6 pieces"] == 890
+    assert by_name["Sabbaba Pita Pocket"] == 1490
+    assert by_name["Chunky Egg and Tender Greens Bagel"] is None
+    assert by_name["Caramel Cookie"] is None
+
+
+async def test_priced_offerings_and_pricing_rules_pair_one_to_one(app_pool: None) -> None:
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        offerings = await conn.fetch(
+            "select name, price_cents from offerings where tenant_id = $1", tenant_id
+        )
+        rules = await conn.fetch(
+            "select code, label, unit_amount_cents, unit from pricing_rules where tenant_id = $1",
+            tenant_id,
+        )
+    priced = {r["name"]: r["price_cents"] for r in offerings if r["price_cents"] is not None}
+    assert {r["unit"] for r in rules} == {"each"}
+    assert len(rules) == len(priced)  # exactly one rule per priced offering
+    assert {r["label"]: r["unit_amount_cents"] for r in rules} == priced
+    # seed_demo's Sabbaba conversation quotes the Super Plate by this code.
+    assert {r["code"]: r["unit_amount_cents"] for r in rules}["super-plate"] == 3700
+
+
+async def test_seed_writes_the_greeting_and_starter_questions(app_pool: None) -> None:
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        config = json.loads(
+            await conn.fetchval("select config from tenant_config where tenant_id = $1", tenant_id)
+        )
+    customer = config["customer"]
+    assert "I can walk you through the menu" in customer["greeting"]
+    assert customer["starter_questions"] == [
+        "Which dishes are vegan or gluten free?",
+        "What are your most popular items?",
+        "What time do you open?",
+    ]
+    assert config["profile"]["hours"] == "Monday to Sunday 6:00 am to 8:00 pm"
+
+
+async def test_seed_writes_the_cover_and_one_photo_per_listed_offering(app_pool: None) -> None:
+    tenant_id = await seed(embedder=ZeroEmbedder())
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        covers = await conn.fetchval(
+            "select count(*) from tenant_media where tenant_id = $1 and role = 'cover'", tenant_id
+        )
+        photos = await conn.fetch(
+            "select o.name, m.url from tenant_media m join offerings o on o.id = m.offering_id "
+            "where m.tenant_id = $1 and m.role = 'offering'",
+            tenant_id,
+        )
+    assert covers == 1
+    assert {row["name"]: row["url"] for row in photos} == {
+        name: media["url"] for name, media in MEDIA["offerings"].items()
+    }

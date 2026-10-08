@@ -159,6 +159,39 @@ async def insert_offerings(
             )
 
 
+async def insert_media(
+    conn: AppConnection,
+    tenant_id: UUID,
+    cover: dict[str, str] | None,
+    offering_media: dict[str, dict[str, str]],
+) -> None:
+    """Cloudinary photo rows from a committed manifest (``{url, public_id}``).
+
+    ``offering_media`` is keyed by offering name; the seed makes no Cloudinary
+    call, it only records URLs a one-off upload script already produced.
+    """
+    if cover:
+        await conn.execute(
+            "insert into tenant_media (tenant_id, role, type, provider, url, public_id) "
+            "values ($1, 'cover', 'image', 'cloudinary', $2, $3)",
+            tenant_id,
+            cover["url"],
+            cover["public_id"],
+        )
+    rows = await conn.fetch("select id, name from offerings where tenant_id = $1", tenant_id)
+    ids = {row["name"]: row["id"] for row in rows}
+    for name, media in offering_media.items():
+        await conn.execute(
+            "insert into tenant_media "
+            "(tenant_id, offering_id, role, type, provider, url, public_id) "
+            "values ($1, $2, 'offering', 'image', 'cloudinary', $3, $4)",
+            tenant_id,
+            ids[name],
+            media["url"],
+            media["public_id"],
+        )
+
+
 async def insert_pricing_rules(
     conn: AppConnection, tenant_id: UUID, rules: list[tuple[str, str, int, str]]
 ) -> None:
