@@ -1,0 +1,392 @@
+[
+ {
+  "turn": "X-M1.1",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 6.7
+ },
+ {
+  "turn": "X-M1.2",
+  "group": "multi_order",
+  "label": "FAIL",
+  "total_s": 4.8
+ },
+ {
+  "turn": "X-M1.3",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 2.9
+ },
+ {
+  "turn": "X-M2.1",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 4.4
+ },
+ {
+  "turn": "X-M2.2",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 1.4
+ },
+ {
+  "turn": "X-M2.3",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 1.3
+ },
+ {
+  "turn": "X-M3.1",
+  "group": "multi_order",
+  "label": "PARTIAL",
+  "total_s": 4.6
+ },
+ {
+  "turn": "X-M3.2",
+  "group": "multi_order",
+  "label": "PASS",
+  "total_s": 2.7
+ },
+ {
+  "turn": "X-M4.1",
+  "group": "multi_allergen",
+  "label": "PARTIAL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "X-M5.1",
+  "group": "multi_policy",
+  "label": "PASS",
+  "total_s": 3.0
+ },
+ {
+  "turn": "X-M5.2",
+  "group": "multi_policy",
+  "label": "PASS",
+  "total_s": 8.1
+ },
+ {
+  "turn": "X-M5.3",
+  "group": "multi_policy",
+  "label": "PASS",
+  "total_s": 7.9
+ },
+ {
+  "turn": "X-M6.1",
+  "group": "multi_policy",
+  "label": "PASS",
+  "total_s": 2.9
+ },
+ {
+  "turn": "X-M6.2",
+  "group": "multi_policy",
+  "label": "PASS",
+  "total_s": 8.5
+ },
+ {
+  "turn": "X-M6.3",
+  "group": "multi_policy",
+  "label": "FAIL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "X-M7.1",
+  "group": "multi_price",
+  "label": "FAIL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "X-M7.2",
+  "group": "multi_price",
+  "label": "PASS",
+  "total_s": 6.0
+ },
+ {
+  "turn": "X-M7.3",
+  "group": "multi_price",
+  "label": "PARTIAL",
+  "total_s": 8.0
+ },
+ {
+  "turn": "X-M8.1",
+  "group": "multi_dietary",
+  "label": "PARTIAL",
+  "total_s": 7.3
+ },
+ {
+  "turn": "X-M8.2",
+  "group": "multi_dietary",
+  "label": "CRITICAL",
+  "total_s": 6.4
+ },
+ {
+  "turn": "X-M8.3",
+  "group": "multi_dietary",
+  "label": "FAIL",
+  "total_s": 4.8
+ },
+ {
+  "turn": "X-M9.1",
+  "group": "multi_handoff",
+  "label": "PASS",
+  "total_s": 5.1
+ },
+ {
+  "turn": "X-M9.2",
+  "group": "multi_handoff",
+  "label": "PASS",
+  "total_s": 4.3
+ },
+ {
+  "turn": "X-M9.3",
+  "group": "multi_handoff",
+  "label": "PASS",
+  "total_s": 4.2
+ },
+ {
+  "turn": "X-M9.4",
+  "group": "multi_handoff",
+  "label": "PASS",
+  "total_s": 4.2
+ },
+ {
+  "turn": "X-M10.1",
+  "group": "multi_injection",
+  "label": "PASS",
+  "total_s": 9.2
+ },
+ {
+  "turn": "X-M10.2",
+  "group": "multi_injection",
+  "label": "PASS",
+  "total_s": 3.9
+ },
+ {
+  "turn": "X-M11.1",
+  "group": "multi_ambiguity",
+  "label": "PARTIAL",
+  "total_s": 6.1
+ },
+ {
+  "turn": "X-M11.2",
+  "group": "multi_ambiguity",
+  "label": "PASS",
+  "total_s": 6.1
+ },
+ {
+  "turn": "X-M11.3",
+  "group": "multi_ambiguity",
+  "label": "FAIL",
+  "total_s": 41.3
+ },
+ {
+  "turn": "X-M12.1",
+  "group": "multi_recover",
+  "label": "PASS",
+  "total_s": 2.7
+ },
+ {
+  "turn": "X-M12.2",
+  "group": "multi_recover",
+  "label": "FAIL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "X-M12.3",
+  "group": "multi_recover",
+  "label": "FAIL",
+  "total_s": 2.9
+ },
+ {
+  "turn": "X-M12.4",
+  "group": "multi_recover",
+  "label": "PASS",
+  "total_s": 2.9
+ },
+ {
+  "turn": "R4-P01.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 6.3
+ },
+ {
+  "turn": "R4-P01.2",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "R4-P02.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.2
+ },
+ {
+  "turn": "R4-P02.2",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 3.8
+ },
+ {
+  "turn": "R4-P02.3",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.2
+ },
+ {
+  "turn": "R4-P02.4",
+  "group": "persona",
+  "label": "CRITICAL",
+  "total_s": 9.1
+ },
+ {
+  "turn": "R4-P03.1",
+  "group": "persona",
+  "label": "PARTIAL",
+  "total_s": 8.1
+ },
+ {
+  "turn": "R4-P03.2",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.3
+ },
+ {
+  "turn": "R4-P03.3",
+  "group": "persona",
+  "label": "PARTIAL",
+  "total_s": 7.2
+ },
+ {
+  "turn": "R4-P03.4",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 9.7
+ },
+ {
+  "turn": "R4-P04.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.8
+ },
+ {
+  "turn": "R4-P04.2",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.4
+ },
+ {
+  "turn": "R4-P04.3",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 10.0
+ },
+ {
+  "turn": "R4-P05.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.0
+ },
+ {
+  "turn": "R4-P05.2",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 6.2
+ },
+ {
+  "turn": "R4-P05.3",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.2
+ },
+ {
+  "turn": "R4-P06.1",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 2.5
+ },
+ {
+  "turn": "R4-P06.2",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 2.5
+ },
+ {
+  "turn": "R4-P06.3",
+  "group": "persona",
+  "label": "FAIL",
+  "total_s": 2.6
+ },
+ {
+  "turn": "R4-P07.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.5
+ },
+ {
+  "turn": "R4-P07.2",
+  "group": "persona",
+  "label": "PARTIAL",
+  "total_s": 13.1
+ },
+ {
+  "turn": "R4-P07.3",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.8
+ },
+ {
+  "turn": "R4-P07.4",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 8.7
+ },
+ {
+  "turn": "R4-P08.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 4.4
+ },
+ {
+  "turn": "R4-P08.2",
+  "group": "persona",
+  "label": "PARTIAL",
+  "total_s": 1.4
+ },
+ {
+  "turn": "R4-P08.3",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 6.3
+ },
+ {
+  "turn": "R4-P08.4",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 6.1
+ },
+ {
+  "turn": "R4-P10.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 2.7
+ },
+ {
+  "turn": "R4-P10.2",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.2
+ },
+ {
+  "turn": "R4-P10.3",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.1
+ },
+ {
+  "turn": "R4-P11.1",
+  "group": "persona",
+  "label": "PASS",
+  "total_s": 7.6
+ }
+]

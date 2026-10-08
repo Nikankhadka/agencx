@@ -38,3 +38,12 @@ Groups A menu prices, B dietary, C shop info, D recommend, E order totals, F mul
 - Honest gap: the assistant states unsourced negatives (parking, catering, discounts) as fact; the fix is listed in report.md C.2
 - Demo risk: the per-tenant daily token cap (about 90 turns per day) ends a chat with blank replies; raise the demo tenant's limit
 - Not yet run: the `sababa` hybrid (bigger data) multi-turn set
+
+## Added: `sababa` hybrid (big corpus), fresh run, report.md Part D
+- 65 valid turns (5 more blocked by the tenant daily cap): 41 PASS / 9 PARTIAL / 13 FAIL / 2 CRITICAL
+- Money held: every engine total correct, no model-authored amount
+- Handoff flow 4 of 4, injection 2 of 2, honest "not published" on holidays, halal, catering, discounts
+- Latency: first token p50 6.4 s, p95 10.0 s, 16 of 65 within 4 s; the 10 s turn budget fired 6 times on simple questions
+- Two critical dietary errors, quoted in full in D.3: "Everything on the menu is vegan!" and a haloumi salad offered to a child with a dairy reaction
+- Other gaps: "I do not have the price" right after quoting it (2), catalog card instead of an answer (5), a visible "oh wait" self-correction
+- Coverage: later turns of the allergen flow and one persona were not run; groups are small, so read them as indications
