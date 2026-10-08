@@ -53,7 +53,7 @@ Checked on every measured turn: wrong or invented money, another business's data
 
 ## 5. Provider quota event (a finding, not a code bug)
 
-- `gemini-3.5-flash-lite` allows 500 requests/day per project per model. The cap was hit mid-run; Groq also returned 429.
+- `gemini-3.5-flash-lite` allows 500 requests/day per project per model. The cap was hit mid-run. Confirmed from the API error body (quotaId `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, quotaValue 500, retryDelay about 51000 s at 09:45 UTC, so the reset is about 00:00 UTC). The Groq fallback also failed: 429 earlier in the run, and 413 Payload Too Large on the fast-path prompt in the later probe (its token-per-minute size limit; OpenRouter is the intended third leg).
 - Starting at turn 28 (E4.1) and through the end of the run, 11 turns returned provider-failure handoffs: E4.1, G4.1, G4.2, G4.3, H1.1, H2.1, H3.1, H4.1, H4.2, H5.1, H6.1.
 - A re-run after a 4 minute cool-down failed the same way, so no further retries were made (pacing rule: never retry in a loop). Quota reset is about 23:50 UTC (about 14h48m after the failed re-run).
 - Backend log also shows "Task exception was never retrieved" from `extract()` under 429. Out of scope, reported.
