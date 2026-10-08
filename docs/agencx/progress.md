@@ -292,10 +292,26 @@ live in the ticket files, not here.
   Automated gates and responsive owner/storefront visual checks are green;
   evidence is recorded in the archived
   [21-category-management.md](../archive/phase1-complete/21-category-management.md).
-- [ ] Ops: add the GitHub `VERCEL_TOKEN` secret; configure Brevo SMTP on
-  the hosted project (built-in mailer is member-only); automate hosted
-  migrations (`deploy.yml` runs no migrate step). Procedure is in
-  [deploy.md](deploy.md).
+- [ ] Ops: configure Brevo SMTP on the hosted project (built-in mailer is
+  member-only); automate hosted migrations (`deploy.yml` runs no migrate step).
+  Procedure is in [deploy.md](deploy.md).
+- [x] Ops: the `VERCEL_TOKEN` repo secret is set, so `registry-cleanup.yml` runs.
+  Without it the daily prune failed on purpose from 2026-09-30, the container
+  registry filled to the 50-image cap on both repositories, and every
+  `development` deployment from `c14ff4f` onward went to ERROR at the image-push
+  step (`denied` on `vcr.vercel.com/.../frontend`). Fixed on 2026-10-08:
+  `make vcr-prune-apply` brought both repositories back to 5 and 4 images, the
+  secret was added, and a manual `workflow_dispatch` prune passed. The
+  development preview for `f3ad4b8` then built READY. Validate with
+  `make vcr-prune` and a green `Container registry cleanup` run.
+- [x] Ops: hosted migration drift caught and closed. The hosted ledger held 34
+  migrations while `staging` code expected 36, so `offerings.pricing_wording`
+  (0036) was missing: `/api/public/tenant/bytefix/storefront` returned 500 and
+  `/bytefix` served the Next error shell with a 200 (the exact silent failure
+  `deploy.md` Step 1 warns about, and the smoke test's name assertion catches).
+  On 2026-10-08 a dump was taken with `make db-dump` and 0035-0038 were applied
+  with the Step 1 runner; the ledger now matches the repo at 38 and both routes
+  answer 200. Automation of the hosted migrate step is still open above.
 
 ## Spec status
 
