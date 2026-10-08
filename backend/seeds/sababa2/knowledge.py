@@ -3,7 +3,7 @@
 Same 13 documents, same filenames and document types as the source seed, so
 citations and the ingestion pipeline see the identical shape. The prose is
 tightened (the source's repeated price-basis block lives once in the About
-doc; the ratings doc drops its bulky per-item paragraph) and the price lists
+doc; the ratings doc keeps only the five most-liked items) and the price lists
 and dietary-label lists are built from ``seeds.sabbaba.menu.MENU`` - the
 same source the offerings come from - so the facts cannot drift.
 
@@ -95,6 +95,11 @@ Google: 3.8 out of 5 from 190 ratings.
 Uber Eats main menu listing: 4.6 out of 5 from more than 3,000 ratings.
 
 Uber Eats breakfast listing: 4.7 out of 5 from more than 2,000 ratings.
+
+Most-liked items on Uber Eats (share of customers who liked the item): Plate
+90 percent from 996 ratings, Sabbaba Pita Pocket 89 percent from 556, Six
+Falafel 89 percent from 447, Pita Pocket 88 percent from 1,068, Super Plate 84
+percent from 535.
 
 These ratings are a snapshot taken on 8 October 2026 and may have changed.
 """

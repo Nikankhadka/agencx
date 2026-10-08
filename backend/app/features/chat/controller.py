@@ -48,7 +48,7 @@ from app.shared.limits import (
     TenantLimits,
     TimeLimitedProvider,
 )
-from app.shared.text import strip_citation_markers
+from app.shared.text import strip_citation_markers, strip_spotlight_envelopes
 
 logger = logging.getLogger("app.features.chat.controller")
 
@@ -63,11 +63,16 @@ def _ms_since(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 1)
 
 
+def _sanitize_prose(text: str) -> str:
+    return strip_spotlight_envelopes(strip_citation_markers(text))
+
+
 def _strip_buffered_prose(buffer: list[dict[str, object]]) -> list[dict[str, object]]:
     """The approved draft as the customer will see it.
 
     The customer surface never shows citation syntax (see
-    ``app.shared.text.strip_citation_markers``), but the strip cannot run per
+    ``app.shared.text.strip_citation_markers``, and never a spotlight envelope,
+    ``strip_spotlight_envelopes``), but the strip cannot run per
     token event: streaming deltas split a marker like ``[1, <uuid>]`` across
     events, so only the joined run is a complete string. This is that join,
     done at the one point where the whole draft and the buffered events exist
@@ -84,11 +89,11 @@ def _strip_buffered_prose(buffer: list[dict[str, object]]) -> list[dict[str, obj
             pending.append(str(event["text"]))
             continue
         if pending:
-            rebuilt.append({"type": "token", "text": strip_citation_markers("".join(pending))})
+            rebuilt.append({"type": "token", "text": _sanitize_prose("".join(pending))})
             pending = []
         rebuilt.append(event)
     if pending:
-        rebuilt.append({"type": "token", "text": strip_citation_markers("".join(pending))})
+        rebuilt.append({"type": "token", "text": _sanitize_prose("".join(pending))})
     return rebuilt
 
 
@@ -122,10 +127,10 @@ async def stream_escalated_response(*, conversation_id: UUID) -> AsyncIterator[d
     stays complete for whoever picks it up on Surface 2.
 
     Since C-5 only ``record_limit_escalation`` writes the ``escalated`` status
-    this path keys off, so only budget/step-cap/turn-budget/provider-error
-    stops reach it. An agent or guardrail handoff leaves the conversation open
-    and streams a non-terminal ``handoff`` event instead - the composer stays
-    live and the next message gets a full turn."""
+    this path keys off, so only daily-budget and step-cap stops reach it. An
+    agent or guardrail handoff leaves the conversation open and streams a
+    non-terminal ``handoff`` event instead - the composer stays live and the
+    next message gets a full turn."""
     yield {"type": "conversation", "conversation_id": str(conversation_id)}
     yield {"type": "escalated"}
     yield {"type": "done"}
@@ -417,6 +422,9 @@ async def stream_chat_response(
             conversation_id=conversation_id,
             reason=TURN_BUDGET_ESCALATION_REASON,
             message=BUDGET_UNAVAILABLE_MESSAGE,
+            # A slow reply is latency, not a limit the tenant chose to enforce:
+            # the owner still gets the queue item, the customer can ask again.
+            terminal=False,
         )
         escalation_summary.schedule(
             tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
@@ -426,7 +434,7 @@ async def stream_chat_response(
                 tenant_id=tenant_id, conversation_id=conversation_id, usages=usages
             )
         yield {"type": "refusal", "text": BUDGET_UNAVAILABLE_MESSAGE}
-        yield {"type": "escalated"}
+        yield {"type": "handoff"}
         yield {"type": "done"}
         return
     except GraphRecursionError:

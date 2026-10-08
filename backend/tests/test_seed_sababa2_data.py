@@ -158,8 +158,12 @@ def test_ratings_are_condensed_to_the_snapshot() -> None:
     assert "8 October 2026" in RATINGS_MD
     assert "3.8 out of 5 from 190 ratings" in RATINGS_MD
     assert "Uber Eats breakfast listing: 4.7 out of 5" in RATINGS_MD
-    # The per-item "N percent liked" paragraph is the condensed-away part.
-    assert "percent" not in RATINGS_MD
+    # Only the five most-liked items survive; the rest of the per-item paragraph
+    # is the condensed-away part.
+    ratings = " ".join(RATINGS_MD.split())
+    assert "Plate 90 percent from 996 ratings" in ratings
+    assert ratings.count(" percent from ") == 5
+    assert "Garlic Aioli" not in RATINGS_MD
 
 
 def test_media_is_the_full_source_manifest() -> None:

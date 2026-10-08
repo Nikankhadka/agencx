@@ -136,13 +136,13 @@ async def record_limit_escalation(
 
     ``terminal`` decides whether the conversation is also closed to further
     turns, and C-5 left this the only place that can do it. A cap the tenant
-    actually hit - daily budget, step cap, turn budget - is a hard stop by
+    actually hit - daily budget, step cap - is a hard stop by
     design: the chat ends, the composer locks, and that is the behaviour being
     paid for.
 
-    A provider failure is not that. It is a transient upstream fault the
+    A provider failure or a slow turn is not that. It is a transient fault the
     customer had no part in, and ending their conversation over it is exactly
-    the dead end C-5 removed everywhere else - so that path passes
+    the dead end C-5 removed everywhere else - so those paths pass
     ``terminal=False`` and the customer can simply ask again."""
     async with db.tenant_context(tenant_id, "customer") as conn:
         await conn.execute(

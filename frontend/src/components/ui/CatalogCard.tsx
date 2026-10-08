@@ -16,6 +16,13 @@ export interface CatalogPayload {
   offerings: CatalogOffering[];
 }
 
+/**
+ * The card is a view of the catalog, not the catalog: a 96-item shop would
+ * otherwise fill the chat. Each category shows its first rows and a "+N more"
+ * line; the assistant can still name any item in its text.
+ */
+export const CATALOG_CARD_ROWS_PER_CATEGORY = 5;
+
 export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
   const groups: Array<[string, CatalogOffering[]]> = [];
   for (const offering of catalog.offerings) {
@@ -39,7 +46,7 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
               {heading}
             </h4>
             <ul>
-              {offerings.map((offering) => (
+              {offerings.slice(0, CATALOG_CARD_ROWS_PER_CATEGORY).map((offering) => (
                 <li key={offering.id} className="border-b border-hairline py-2 last:border-0">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-medium text-text">{offering.name}</span>
@@ -55,6 +62,11 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
                 </li>
               ))}
             </ul>
+            {offerings.length > CATALOG_CARD_ROWS_PER_CATEGORY ? (
+              <p className="pt-2 text-footnote text-text-secondary">
+                +{offerings.length - CATALOG_CARD_ROWS_PER_CATEGORY} more
+              </p>
+            ) : null}
           </section>
         ))}
       </div>

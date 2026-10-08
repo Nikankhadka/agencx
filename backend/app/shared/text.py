@@ -56,3 +56,24 @@ def strip_citation_markers(text: str) -> str:
         return text
     tidied = _SPACE_BEFORE_PUNCTUATION.sub(r"\1", without_markers)
     return _MULTI_SPACE.sub(" ", tidied).strip()
+
+
+# Spotlight envelopes (agents/spotlight.py) are escaped on the way in only, so a
+# model that echoes or hallucinates one ships it to the customer, often around
+# an empty ``[]`` (P07.4). The shape is matched loosely on purpose: a
+# hallucinated token is rarely the real 16 hex characters, and no customer text
+# legitimately contains ``<<data-...>>``.
+_SPOTLIGHT_ENVELOPE = re.compile(
+    r"[ \t]*<<[ \t]*/?data-[0-9a-f]*[ \t]*>>(?:[ \t]*\[[ \t]*\])?", re.IGNORECASE
+)
+
+
+def strip_spotlight_envelopes(text: str) -> str:
+    """Remove spotlight envelope tags (and the empty ``[]`` they wrap) from model prose.
+
+    Text with no envelope is returned byte-identical. Idempotent.
+    """
+    without = _SPOTLIGHT_ENVELOPE.sub("", text)
+    if without == text:
+        return text
+    return _MULTI_SPACE.sub(" ", _SPACE_BEFORE_PUNCTUATION.sub(r"\1", without)).strip()

@@ -192,6 +192,41 @@ def _clean_contact(value: str | None, *, limit: int) -> str:
     return " ".join(value.split())[:limit]
 
 
+_NAME_WORD = r"[^\W\d_]+(?:['\u2019-][^\W\d_]+)*"
+_NAME_LEAD_RE = re.compile(
+    r"^(?:my name is|my name's|i am|i'm|im|it's|its|this is|call me)\s+", re.IGNORECASE
+)
+_NAME_REPLY_RE = re.compile(rf"^{_NAME_WORD}(?: {_NAME_WORD}){{0,2}}$")
+# Words a customer says that are answers or requests, not names.
+_NOT_A_NAME = frozenset(
+    "yes no nope nah yeah ok okay sure skip none nothing hi hello hey thanks thank please "
+    "help menu hours price prices order orders what who how why when where".split()
+)
+
+
+def _name_from_reply(text: str) -> str:
+    """The display name in a customer's reply to the opening name ask, or "".
+
+    ponytail: a shape heuristic, not understanding. With a lead-in ("I'm Sam",
+    "call me Sam") one to three letters-only words are taken; bare, only a single
+    word is, so "opening hours" is never stored as a name. A single-word request
+    outside the stoplist ("brownies") would still be taken - the ceiling. Upgrade
+    path is a small extract() call. The model may still store a fuller name via
+    set_customer_contact, which replaces this one.
+    """
+    reply = " ".join(text.split()).strip(" .!")
+    lead = _NAME_LEAD_RE.match(reply)
+    candidate = reply[lead.end() :] if lead else reply
+    if not _NAME_REPLY_RE.match(candidate):
+        return ""
+    words = candidate.split()
+    if not lead and len(words) != 1:
+        return ""
+    if words[0].lower() in _NOT_A_NAME:
+        return ""
+    return candidate[:80]
+
+
 class _SearchKnowledgeArgs(BaseModel):
     query: str = Field(description="What to search the knowledge base for")
 
@@ -629,7 +664,7 @@ async def run(state: AgentState) -> dict[str, Any]:
         # so this is normally a version check, not an assembly.
         package = await get_package(conn, ctx.tenant_id)
         contact = await conn.fetchrow(
-            "select c.customer_ref, c.customer_email, "
+            "select c.customer_ref, c.customer_email, c.opening_name_asks, "
             "exists(select 1 from escalations e where e.tenant_id = c.tenant_id "
             "and e.conversation_id = c.id) as handed_off "
             "from conversations c where c.id = $1 and c.tenant_id = $2",
@@ -645,6 +680,19 @@ async def run(state: AgentState) -> dict[str, Any]:
         opening_phase = contact is not None and not bool(contact["handed_off"])
         name_known = bool(customer_name)
         email_known = bool(customer_email)
+        customer_turns = sum(1 for m in state["messages"] if m["role"] == "customer")
+        # The system injected the name ask, so the system owns capturing the reply:
+        # relying on the model to call set_customer_contact left the name unstored
+        # and the handoff asked for it a second time.
+        asked_before = contact is not None and contact["opening_name_asks"] > 0
+        if opening_phase and asked_before and not name_known:
+            last = state["messages"][-1]
+            replied = _name_from_reply(last["content"]) if last["role"] == "customer" else ""
+            if replied:
+                await _set_customer_contact_impl(
+                    conn, ctx.tenant_id, UUID(state["conversation_id"]), replied, None
+                )
+                customer_name, name_known = replied, True
         if name_known:
             # RF-10: re-announce a stored name at turn start so the chip can
             # render on a turn where nothing else changed. Name only, never email.
@@ -684,7 +732,9 @@ async def run(state: AgentState) -> dict[str, Any]:
         # lands between the earlier read and this write still wins the race. A
         # returned row means this turn owns the ask; no row means the cap (or a
         # name/handoff) got there first, so the prompt goes quiet.
-        if not name_known and opening_phase:
+        # A greeting is not the moment to ask: the first customer turn is answered,
+        # and the ask starts on the second.
+        if not name_known and opening_phase and customer_turns > 1:
             new_ask_count = await conn.fetchval(
                 "update conversations c set opening_name_asks = opening_name_asks + 1 "
                 "where c.id = $1 and c.tenant_id = $2 "

@@ -110,4 +110,34 @@ describe("CatalogCard", () => {
     expect(html).toContain("Screen care");
     expect(html.match(/Screen replacement/g) ?? []).toHaveLength(2);
   });
+
+  it("caps each category and says how many more there are", () => {
+    const offerings = Array.from({ length: 8 }, (_, i) => ({
+      id: `item-${i}`,
+      name: `Dish ${i}`,
+      description: "",
+      category: "Plates",
+      price_cents: 1000 + i,
+    }));
+
+    const html = renderToStaticMarkup(<CatalogCard catalog={{ offerings }} />);
+
+    expect(html).toContain("Dish 4");
+    expect(html).not.toContain("Dish 5");
+    expect(html).toContain("+3 more");
+  });
+
+  it("shows no overflow line when a category fits", () => {
+    const offerings = Array.from({ length: 5 }, (_, i) => ({
+      id: `item-${i}`,
+      name: `Dish ${i}`,
+      description: "",
+      category: "Plates",
+      price_cents: 1000,
+    }));
+
+    const html = renderToStaticMarkup(<CatalogCard catalog={{ offerings }} />);
+
+    expect(html).not.toContain("more");
+  });
 });

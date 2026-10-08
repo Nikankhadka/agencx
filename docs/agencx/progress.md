@@ -296,6 +296,15 @@ live in the ticket files, not here.
   `deploy.md` and `architecture.md`). The seed fails loudly if the tenant
   would not take the fast path. Standalone `make seed-sababa2`; wired into
   `make seed` with login `owner@sababa2.dev`.
+- [x] Pre-demo criticals (branch `fix/pre-demo-criticals`, 2026-10-08), from the
+  interim Sabbaba chat eval: the assistant no longer asks for a name on the
+  first turn and keeps the reply to its own ask as the customer's name; the
+  contract carries a source's caveat with its fact; `sababa2` keeps its five
+  most-liked items; the catalog card caps at five rows per category with a
+  "+N more" line; spotlight envelopes are stripped from model prose; the
+  default step cap is 12 (a redraft-then-escalate walk is 9 supersteps); a turn
+  that runs over its time budget hands off without locking the conversation.
+  Known residual: allergen caveat wording is model judgement, not a guarantee.
 - [ ] E2E flake: `chats-takeover` timed out on the RF-3 closeout full
   `make test-e2e` (169 passed, 1 failed) because its freshly created
   conversation arrived `escalated` (terminal) rather than `open`. Reproduced

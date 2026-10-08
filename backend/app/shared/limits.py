@@ -36,7 +36,9 @@ from app.shared.config import Settings
 # Platform defaults - a tenant's config.limits overrides any subset of these.
 DEFAULT_DAILY_COST_USD = 5.0
 DEFAULT_DAILY_TOKENS = 2_000_000
-DEFAULT_MAX_STEPS = 8
+# 12, not 8: a redraft-once-then-escalate walk is 9 supersteps, so 8 killed
+# turns that were behaving correctly.
+DEFAULT_MAX_STEPS = 12
 DEFAULT_LLM_TIMEOUT_S = 45.0
 DEFAULT_TOOL_TIMEOUT_S = 15.0
 # P-2: the hard cap on a whole turn (PRD section 9). Distinct from

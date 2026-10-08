@@ -87,6 +87,12 @@ def test_contract_states_the_identity_rules_us8_asks_for() -> None:
     assert "Create a handoff only when the customer asks for a person or accepts" in contract
 
 
+def test_contract_carries_a_sources_caveat_with_its_fact() -> None:
+    contract = customer_contract("Sabbaba")
+    assert "say the caveat with" in contract
+    assert "Never state a qualified fact as certain" in contract
+
+
 def test_contract_states_the_contact_channel_rule() -> None:
     """W-9 box 6 (slice 1.4): in-app forwarding is offered before a direct
     contact channel, and a confirmed email or phone is given only when the

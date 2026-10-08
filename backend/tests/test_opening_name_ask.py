@@ -18,7 +18,11 @@ from typing import Any
 import asyncpg
 import pytest
 
-from app.agents.agent_node import _OPENING_NAME_GUIDANCE, _OPENING_NAME_SUPPRESS
+from app.agents.agent_node import (
+    _OPENING_NAME_GUIDANCE,
+    _OPENING_NAME_SUPPRESS,
+    _name_from_reply,
+)
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ToolCall, ToolTurn
@@ -39,11 +43,24 @@ class NoopReranker(Reranker):
         return candidates[:top_k]
 
 
-def _initial_state(*, tenant_id: uuid.UUID, conversation_id: uuid.UUID) -> AgentState:
+def _initial_state(
+    *,
+    tenant_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    customer_turns: int = 2,
+    reply: str = "hi",
+) -> AgentState:
+    # Earlier turns alternate customer/assistant; the last customer message is `reply`.
+    history: list[dict[str, str]] = []
+    for _ in range(customer_turns - 1):
+        history += [
+            {"role": "customer", "content": "hi"},
+            {"role": "assistant", "content": "Hello."},
+        ]
     return {
         "conversation_id": str(conversation_id),
         "tenant_id": str(tenant_id),
-        "messages": [{"role": "customer", "content": "hi"}],
+        "messages": [*history, {"role": "customer", "content": reply}],
         "route": None,
         "route_confidence": None,
         "retrieved_chunks": [],
@@ -87,7 +104,12 @@ def _prose_provider(text: str = "Hi there.") -> ToolAwareFakeProvider:
 
 
 async def _run_turn(
-    *, tenant_id: uuid.UUID, conversation_id: uuid.UUID, provider: ToolAwareFakeProvider
+    *,
+    tenant_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    provider: ToolAwareFakeProvider,
+    customer_turns: int = 2,
+    reply: str = "hi",
 ) -> list[dict[str, Any]]:
     graph = build_graph()
     context = GraphContext(
@@ -99,7 +121,12 @@ async def _run_turn(
     return [
         event
         async for event in graph.astream(
-            _initial_state(tenant_id=tenant_id, conversation_id=conversation_id),
+            _initial_state(
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                customer_turns=customer_turns,
+                reply=reply,
+            ),
             context=context,
             stream_mode="custom",
         )
@@ -130,18 +157,36 @@ async def test_opening_asks_are_capped_at_two_then_suppressed(
     for forbidden in ("surname", "phone", "email"):
         assert forbidden in guidance
 
-    # Turn 1 and turn 2 each carry the ask instruction and bump the counter.
-    for expected in (1, 2):
+    # The first customer turn is a greeting, not an ask: nothing is appended and
+    # the counter does not move.
+    provider = _prose_provider()
+    await _run_turn(
+        tenant_id=tenant_id, conversation_id=conversation_id, provider=provider, customer_turns=1
+    )
+    prompt = _system_prompt_seen(provider)
+    assert _OPENING_NAME_GUIDANCE not in prompt
+    assert _OPENING_NAME_SUPPRESS not in prompt
+    assert await _ask_count(superuser_conn, conversation_id) == 0
+
+    # The second and third customer turns each carry the ask and bump the counter.
+    for turn, expected in ((2, 1), (3, 2)):
         provider = _prose_provider()
-        await _run_turn(tenant_id=tenant_id, conversation_id=conversation_id, provider=provider)
+        await _run_turn(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            provider=provider,
+            customer_turns=turn,
+        )
         prompt = _system_prompt_seen(provider)
         assert _OPENING_NAME_GUIDANCE in prompt
         assert _OPENING_NAME_SUPPRESS not in prompt
         assert await _ask_count(superuser_conn, conversation_id) == expected
 
-    # Turn 3 appends no ask: the suppression line instead, and the cap holds.
+    # Turn 4 appends no ask: the suppression line instead, and the cap holds.
     provider = _prose_provider()
-    await _run_turn(tenant_id=tenant_id, conversation_id=conversation_id, provider=provider)
+    await _run_turn(
+        tenant_id=tenant_id, conversation_id=conversation_id, provider=provider, customer_turns=4
+    )
     prompt = _system_prompt_seen(provider)
     assert _OPENING_NAME_GUIDANCE not in prompt
     assert _OPENING_NAME_SUPPRESS in prompt
@@ -221,3 +266,78 @@ async def test_set_customer_contact_emits_a_contact_event_without_email(
         )
         == "Sam"
     )
+
+
+async def test_the_reply_to_the_ask_is_stored_without_the_model_calling_a_tool(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    await superuser_conn.execute(
+        "update conversations set opening_name_asks = 1 where id = $1", conversation_id
+    )
+
+    provider = _prose_provider("Nice to meet you, nikantest.")
+    events = await _run_turn(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        provider=provider,
+        customer_turns=3,
+        reply="nikantest",
+    )
+
+    assert (
+        await superuser_conn.fetchval(
+            "select customer_ref from conversations where id = $1", conversation_id
+        )
+        == "nikantest"
+    )
+    assert {"type": "contact", "name": "nikantest"} in events
+    prompt = _system_prompt_seen(provider)
+    assert "never ask for their name again" in prompt
+    assert _OPENING_NAME_GUIDANCE not in prompt
+
+
+async def test_a_reply_that_is_a_request_is_not_stored_as_a_name(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(superuser_conn)
+    await superuser_conn.execute(
+        "update conversations set opening_name_asks = 1 where id = $1", conversation_id
+    )
+
+    await _run_turn(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        provider=_prose_provider(),
+        customer_turns=3,
+        reply="what are your opening hours",
+    )
+
+    assert (
+        await superuser_conn.fetchval(
+            "select customer_ref from conversations where id = $1", conversation_id
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        ("nikantest", "nikantest"),
+        ("Sam.", "Sam"),
+        ("I'm Sam", "Sam"),
+        ("my name is Mary Jane", "Mary Jane"),
+        ("call me O'Brien", "O'Brien"),
+        ("yes", ""),
+        ("no thanks", ""),
+        ("opening hours", ""),
+        ("menu", ""),
+        ("sam@example.com", ""),
+        ("room 12", ""),
+        ("what can you do?", ""),
+        ("", ""),
+    ],
+)
+def test_name_from_reply(reply: str, expected: str) -> None:
+    assert _name_from_reply(reply) == expected

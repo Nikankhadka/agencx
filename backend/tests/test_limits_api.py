@@ -298,18 +298,18 @@ async def test_turn_over_its_latency_budget_hands_off_gracefully(
     types = [event["type"] for event in events]
     # The customer gets an honest handoff and a terminal event, never a hung
     # stream and never a stack trace.
-    assert types[-3:] == ["refusal", "escalated", "done"]
+    assert types[-3:] == ["refusal", "handoff", "done"]
     assert "token" not in types
 
     row = await superuser_conn.fetchrow(
         "select reason from escalations where conversation_id = $1", conversation_id
     )
     assert row is not None and row["reason"] == TURN_BUDGET_ESCALATION_REASON
-    # A cap the tenant actually hit really does end the conversation.
+    # A slow turn must not lock the chat: the customer can ask again.
     status = await superuser_conn.fetchval(
         "select status from conversations where id = $1", conversation_id
     )
-    assert status == "escalated"
+    assert status == "open"
 
     message_row = await superuser_conn.fetchrow(
         "select content, metadata from messages where conversation_id = $1 and role = 'assistant'",

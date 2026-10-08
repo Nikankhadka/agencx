@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.shared.text import plain_dashes, strip_citation_markers
+from app.shared.text import plain_dashes, strip_citation_markers, strip_spotlight_envelopes
 
 UUID_A = "295feb16-a7f3-49e7-b771-e3b18fa0e76f"
 UUID_B = "2d3b5827-2d62-40b2-8b4a-210ad29cee99"
@@ -82,3 +82,20 @@ def test_is_idempotent() -> None:
 
 def test_removes_markers_split_by_nothing_but_spacing() -> None:
     assert strip_citation_markers(f"An answer [ 1 , {UUID_A} ].") == "An answer."
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("<<data-768f3a1c9b2e4d50>> [] <</data-768f3a1c9b2e4d50>>", ""),
+        ("Open 9 to 5. <<data-768f>> [] <</data-768f>>", "Open 9 to 5."),
+        (
+            "Try the plate <<data-0123456789abcdef>>today<</data-0123456789abcdef>>.",
+            "Try the platetoday.",
+        ),
+        ("A normal answer [GF] with << brackets", "A normal answer [GF] with << brackets"),
+    ],
+)
+def test_strip_spotlight_envelopes(text: str, expected: str) -> None:
+    assert strip_spotlight_envelopes(text) == expected
+    assert strip_spotlight_envelopes(strip_spotlight_envelopes(text)) == expected
