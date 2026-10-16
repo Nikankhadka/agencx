@@ -1,0 +1,20 @@
+# eval_runs rows at the time of the pre-slice-3 baseline (committed 2026-10-16 14:28 UTC)
+#
+# Captured with the local dev database up (make dev / docker compose up -d db):
+#   docker compose exec -T db psql -U postgres -d wren -c '\pset pager off' \
+#     -c "select t.slug, t.id as tenant_id, e.run_type, e.metrics::text, e.created_at, coalesce(nullif(e.git_sha,''),'(empty)') as git_sha from eval_runs e join tenants t on t.id = e.tenant_id order by e.created_at;"
+#
+# The three baseline rows are bytefix/generation, bytefix/trajectory and
+# injection-probe/injection. The two leakpair rows are from the profile/leakage
+# suite on 2026-10-16 10:27 and are not part of this baseline.
+
+Pager usage is off.
+      slug       |              tenant_id               |  run_type  |                                                                                                      metrics                                                                                                      |          created_at           | git_sha 
+-----------------+--------------------------------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------+---------
+ leakpair-a      | 244c6695-33f0-4c0a-975a-9553fb94849f | leakage    | {"total": 12, "failures": [], "pass_rate": 1.0, "pass_count": 12}                                                                                                                                                 | 2026-10-16 10:27:58.808348+00 | (empty)
+ leakpair-b      | 2b8cc939-bd30-4c49-8b90-7eb530083fa4 | leakage    | {"total": 12, "failures": [], "pass_rate": 1.0, "pass_count": 12}                                                                                                                                                 | 2026-10-16 10:27:58.834277+00 | (empty)
+ bytefix         | e9139d84-0e9f-4282-9af6-e0dc9bf4b56e | generation | {"cases": 45.0, "faithfulness": 0.7474747474747475, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.7356345066768284, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3207070707070707} | 2026-10-16 13:05:56.121846+00 | (empty)
+ bytefix         | e9139d84-0e9f-4282-9af6-e0dc9bf4b56e | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9715447154471545, "tool_correctness": 0.6341463414634146}                                                | 2026-10-16 13:19:44.951942+00 | (empty)
+ injection-probe | 464b8823-e113-4a0b-adef-db70db79d44d | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                             | 2026-10-16 13:32:12.292589+00 | (empty)
+(5 rows)
+

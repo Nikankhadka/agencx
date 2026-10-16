@@ -1,7 +1,10 @@
 # Slice 3 design note - the discarded agent call
 
 **Status:** recon and design only. No code. Written before implementing, as the
-order requires.
+order requires. (Implemented in `cbad1b0`, with the citations narrowing pinned by
+tests in the review-fix commit; measurement and after-eval follow as separate
+orders. Sections below are left as written, with post-implementation notes
+marked.)
 
 **Source logs are ephemeral.** The evidence below came from
 `/tmp/slice2-run1.log` and `/tmp/slice2-run2.log`. They were distilled into
@@ -125,6 +128,46 @@ Options, with call accounting:
   no-selections path (`:256+`) must be reproduced on the agent path.
 - **`author_node`** - changes from `draft` to `agent` in the persisted row and
   the Surface-2 trace.
+
+## Consequences of the selected design (post-implementation)
+
+**1. Citations narrow to the cited chunks - customer-visible. FLAGGED FOR
+FOUNDER REVIEW.** The implemented agent path emits the `citations` event from
+`_cited_chunks(prose, tool_chunks)`, i.e. only the chunks the prose actually
+marked, matching P-3. The draft node's knowledge branch emitted a chip for
+**every** retrieved chunk (`draft_node.py:229-233`). So on a grounded knowledge
+turn the answer now shows FEWER chips than before, and NONE when the prose
+carries no `[n]` marker - where the draft node would have shown all of them.
+This is deliberate (a chip should name what the answer used, not everything the
+model could read) but it is a customer-visible change on the Surface-1 answer.
+
+The scored eval **cannot see it**: `citation_faithfulness` is computed from the
+ANSWER TEXT's `[n]` markers against the chunks the eval retrieved
+(`generation_eval.py:244-259`, `:371`) - the SSE chips are never scored, and the
+chunks the eval scores against come from `final_state["retrieved_chunks"]`,
+which is the same list on both paths. The eval is therefore not evidence either
+way for the chip change; the tests are
+(`test_grounded_prose_citations_carry_only_the_chunks_it_cited` - two chunks,
+one marker, exactly one chip - and
+`test_grounded_prose_without_markers_emits_no_citations`), and the founder should
+ratify it as intended, since nothing in `run_gate` would ever catch it.
+
+**2. The money route is closed three ways, not one.** The guard in
+`_grounded_terminal_prose` (`_MONEY_TOOLS`) cannot fire today, and the reason is
+stronger than "route ordering": `_determine_route` checks `get_quote_inputs`
+before `recommend_items`/`search_knowledge`; `calculate_quote` SUCCESS sets
+`structured_response` and breaks the loop; and `calculate_quote` FAILURE also
+breaks the loop, via `deterministic_text` (`agent_node.py:1111-1115`), so both of
+its exits short-circuit into the structured/deterministic return before the tail
+is reached. The guard is kept as defence so a future reordering of
+`_determine_route` cannot ship prose that contains a figure.
+
+**3. The eval's own tenant may not exercise the new branch.** `bytefix` is a
+fast-path tenant: the corpus is already in the prompt, the retrieval tools are
+not offered, and its knowledge turns answer in one P-3 round with no tool call -
+which is the branch that already existed. So the after-eval is a
+no-collateral-regression check; the new path's evidence is the tests plus the
+latency structural metric on the hybrid tenant.
 
 ## Blocker (why no code landed)
 

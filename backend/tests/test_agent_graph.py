@@ -481,6 +481,36 @@ async def _seed_tenant_with_catalog_and_conversation(
     return tenant_id, conversation_id
 
 
+async def _seed_tenant_with_two_chunks_and_conversation(
+    conn: asyncpg.Connection[Any],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """A small corpus with TWO chunks: the whole corpus comes back from
+    search_knowledge on the fast path, so a one-marker answer can be told apart
+    from an all-chunks citation list."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(conn)
+    document_id: uuid.UUID = await conn.fetchval(
+        "insert into documents (tenant_id, filename, doc_type, status) "
+        "values ($1, 'faq.md', 'faq', 'ready') returning id",
+        tenant_id,
+    )
+    for index, (content, source) in enumerate(
+        [
+            ("We are open weekdays 9-5.", "faq.md"),
+            ("We are closed on public holidays.", "holidays.md"),
+        ]
+    ):
+        await conn.execute(
+            "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
+            "values ($1, $2, $3, $4, $5)",
+            tenant_id,
+            document_id,
+            content,
+            [0.0] * EMBEDDING_DIM,
+            json.dumps({"source": source, "chunk_index": index, "kind": "prose"}),
+        )
+    return tenant_id, conversation_id
+
+
 def _grounded_knowledge_provider(
     *, prose: str = "We are open weekdays 9-5 [1].", rounds: int = 1
 ) -> ToolAwareFakeProvider:
@@ -528,6 +558,24 @@ async def _final_state(
     graph = build_graph()
     initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
     return await graph.ainvoke(initial_state, context=_context_for(provider, tenant_id=tenant_id))
+
+
+async def _custom_events(
+    provider: ToolAwareFakeProvider, *, tenant_id: uuid.UUID, conversation_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """The turn's custom writer events (token, citations, tool_call, ...)."""
+    graph = build_graph()
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    events: list[dict[str, Any]] = []
+    async for event in graph.astream(
+        initial_state, context=_context_for(provider, tenant_id=tenant_id), stream_mode="custom"
+    ):
+        events.append(event)
+    return events
+
+
+def _citation_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [event for event in events if event.get("type") == "citations"]
 
 
 async def test_grounded_knowledge_turn_is_answered_by_the_agent(
@@ -648,16 +696,13 @@ async def test_grounded_prose_citations_name_the_tool_chunks(
     """Citations on the new path come from the chunks the tool handed the model,
     which is exactly what the prose was written from."""
     tenant_id, conversation_id = await _seed_tenant_with_chunk_and_conversation(superuser_conn)
-    provider = _grounded_knowledge_provider()
-    graph = build_graph()
-    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
-    events: list[dict[str, Any]] = []
-    async for event in graph.astream(
-        initial_state, context=_context_for(provider, tenant_id=tenant_id), stream_mode="custom"
-    ):
-        events.append(event)
+    events = await _custom_events(
+        _grounded_knowledge_provider(),
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
 
-    citation_events = [event for event in events if event.get("type") == "citations"]
+    citation_events = _citation_events(events)
     assert len(citation_events) == 1
     assert citation_events[0]["citations"] == [
         {
@@ -666,3 +711,57 @@ async def test_grounded_prose_citations_name_the_tool_chunks(
             "snippet": "We are open weekdays 9-5.",
         }
     ]
+
+
+async def test_grounded_prose_citations_carry_only_the_chunks_it_cited(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Reviewer finding 1: the citations event narrows to what the prose cited.
+
+    The draft node emitted a chip for EVERY retrieved chunk; the agent path
+    emits only the cited ones. Two chunks come back from the search and the
+    answer marks one, so a single chip is the discriminator - an all-chunks list
+    here would mean the narrowing never landed.
+    """
+    tenant_id, conversation_id = await _seed_tenant_with_two_chunks_and_conversation(superuser_conn)
+    events = await _custom_events(
+        _grounded_knowledge_provider(),
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    citation_events = _citation_events(events)
+    assert len(citation_events) == 1
+    assert len(citation_events[0]["citations"]) == 1
+    assert citation_events[0]["citations"][0]["index"] == 1
+
+    # The chip names the chunk at index 1 of what the model actually read, and
+    # the second chunk was retrieved all the same - it just was not cited.
+    final_state = await _final_state(
+        _grounded_knowledge_provider(), tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    assert len(final_state["retrieved_chunks"]) == 2
+    assert (
+        citation_events[0]["citations"][0]["snippet"]
+        == final_state["retrieved_chunks"][0]["content"]
+    )
+    assert (
+        citation_events[0]["citations"][0]["source"]
+        == final_state["retrieved_chunks"][0]["metadata"]["source"]
+    )
+
+
+async def test_grounded_prose_without_markers_emits_no_citations(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The other half of the narrowing: prose with no ``[n]`` marker produces no
+    citations event at all, where the draft node would have chipped every chunk
+    it had retrieved."""
+    tenant_id, conversation_id = await _seed_tenant_with_two_chunks_and_conversation(superuser_conn)
+    events = await _custom_events(
+        _grounded_knowledge_provider(prose="We are open weekdays 9-5."),
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+    )
+    assert _citation_events(events) == []
+    # The chunks were still retrieved and still ground the answer (no refusal).
+    assert any(event.get("type") == "token" for event in events)
