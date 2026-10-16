@@ -238,6 +238,37 @@ async def test_extract_does_not_resample_a_generic_400(_no_real_sleep: list[floa
     assert completions.calls == 1
 
 
+async def test_extract_resamples_a_non_json_completion(_no_real_sleep: list[float]) -> None:
+    """A completion that is not JSON at all raises a resample-class
+    ValidationError (never the TypeError the hand-built error used to raise) and
+    succeeds on the retry."""
+
+    class _Schema(BaseModel):
+        value: str
+
+    completions = _SequencedCompletions(
+        [_completion("not json at all"), _completion('{"value": "ok"}')]
+    )
+    result = await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
+    assert result.value == "ok"
+    assert completions.calls == 2  # one non-JSON, one resample
+
+
+async def test_extract_non_json_raises_validation_error_not_typeerror(
+    _no_real_sleep: list[float],
+) -> None:
+    """With every attempt non-JSON the raised class is a ValidationError, never
+    the TypeError the defect raised (which _with_retry cannot catch)."""
+
+    class _Schema(BaseModel):
+        value: str
+
+    completions = _SequencedCompletions([_completion("nope")] * 3)
+    with pytest.raises(ValidationError):
+        await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
+    assert completions.calls == 3  # _RETRY_ATTEMPTS, then raises
+
+
 # --- null-choices upstream error bodies ------------------------------------------
 
 

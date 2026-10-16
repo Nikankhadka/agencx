@@ -583,6 +583,11 @@ class OpenAISDKProvider(LLMProvider):
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as error:
+                # The client-side twin of Groq's server-side json_validate_failed:
+                # a non-JSON completion is a resample-class ValidationError, not
+                # an abort. pydantic v2 requires the 'error' context for a
+                # 'json_invalid' error - without it from_exception_data itself
+                # raises TypeError, and the resample in _with_retry never runs.
                 raise ValidationError.from_exception_data(
                     title=schema.__name__,
                     line_errors=[
@@ -590,6 +595,7 @@ class OpenAISDKProvider(LLMProvider):
                             "type": "json_invalid",
                             "loc": (0,),
                             "input": content[:200],
+                            "ctx": {"error": str(error)},
                         }
                     ],
                 ) from error

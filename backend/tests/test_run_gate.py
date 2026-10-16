@@ -56,6 +56,20 @@ def test_regression_drop_exactly_at_tolerance_passes() -> None:
     assert passed
 
 
+def test_each_run_type_maps_to_its_seeded_tenant_slug() -> None:
+    """The regression loop resolves the tenant per run type. Injection writes
+    under its own probe tenant; resolving bytefix for it (as the gate did for
+    every run type) meant the injection row was never found and the gate failed
+    with "no current metric produced" forever."""
+    from seeds.seed_injection_probe import SLUG as injection_slug
+    from seeds.seed_tenant1_phoneshop import SLUG as tenant1_slug
+
+    assert tenant1_slug != injection_slug
+    assert run_gate_module.slug_for_run_type("generation") == tenant1_slug
+    assert run_gate_module.slug_for_run_type("trajectory") == tenant1_slug
+    assert run_gate_module.slug_for_run_type("injection") == injection_slug
+
+
 def test_gate_report_passes_only_when_all_pass() -> None:
     report = GateReport()
     report.add("a", True, "ok")

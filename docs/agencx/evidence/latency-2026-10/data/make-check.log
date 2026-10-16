@@ -1,6 +1,6 @@
 docker compose run --rm --no-deps frontend npm run lint && docker compose run --rm --no-deps frontend npm run check:tokens
- Container agencx-frontend-run-e88b07493a18 Creating 
- Container agencx-frontend-run-e88b07493a18 Created 
+ Container agencx-frontend-run-ae7f0efe2c5d Creating 
+ Container agencx-frontend-run-ae7f0efe2c5d Created 
 
 > frontend@0.1.0 lint
 > eslint
@@ -10,20 +10,20 @@ npm notice New major version of npm available! 11.17.0 -> 12.2.0
 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
 npm notice To update run: npm install -g npm@12.2.0
 npm notice
- Container agencx-frontend-run-7d503bad8f2f Creating 
- Container agencx-frontend-run-7d503bad8f2f Created 
+ Container agencx-frontend-run-178e60e36aba Creating 
+ Container agencx-frontend-run-178e60e36aba Created 
 
 > frontend@0.1.0 check:tokens
 > node scripts/check-tokens.mjs
 
 check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
 docker compose run --rm --no-deps backend ruff check .
- Container agencx-backend-run-2304fd06f081 Creating 
- Container agencx-backend-run-2304fd06f081 Created 
+ Container agencx-backend-run-b2cf270a0835 Creating 
+ Container agencx-backend-run-b2cf270a0835 Created 
 All checks passed!
 docker compose run --rm --no-deps backend lint-imports
- Container agencx-backend-run-331d1b55fb73 Creating 
- Container agencx-backend-run-331d1b55fb73 Created 
+ Container agencx-backend-run-23e15ad66fd3 Creating 
+ Container agencx-backend-run-23e15ad66fd3 Created 
 
 ╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
 ╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
@@ -48,8 +48,8 @@ The provider seam is a leaf KEPT
 
 Contracts: 3 kept, 0 broken.
 docker compose run --rm --no-deps frontend npm run typecheck
- Container agencx-frontend-run-aaa0a78ede20 Creating 
- Container agencx-frontend-run-aaa0a78ede20 Created 
+ Container agencx-frontend-run-537f6124a89d Creating 
+ Container agencx-frontend-run-537f6124a89d Created 
 
 > frontend@0.1.0 typecheck
 > tsc --noEmit
@@ -60,12 +60,12 @@ npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
 npm notice To update run: npm install -g npm@12.2.0
 npm notice
 docker compose run --rm --no-deps backend mypy
- Container agencx-backend-run-36b3bb0ed51a Creating 
- Container agencx-backend-run-36b3bb0ed51a Created 
+ Container agencx-backend-run-777051e46575 Creating 
+ Container agencx-backend-run-777051e46575 Created 
 Success: no issues found in 245 source files
 docker compose run --rm --no-deps frontend npm run test
- Container agencx-frontend-run-e6f54bc5c49a Creating 
- Container agencx-frontend-run-e6f54bc5c49a Created 
+ Container agencx-frontend-run-f96535a7e384 Creating 
+ Container agencx-frontend-run-f96535a7e384 Created 
 
 > frontend@0.1.0 test
 > vitest run
@@ -73,53 +73,53 @@ docker compose run --rm --no-deps frontend npm run test
 
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/app[39m
 
- [32m✓[39m src/instrumentation.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 20[2mms[22m[39m
- [32m✓[39m src/instrumentation-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 29[2mms[22m[39m
- [32m✓[39m src/components/knowledge/ReviewSheet.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/Offerings.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/instrumentation-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/components/knowledge/ReviewSheet.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/components/ui/CatalogCard.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 26[2mms[22m[39m
  [32m✓[39m src/components/ui/StructuredResponse.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 15[2mms[22m[39m
- [32m✓[39m src/app/[slug]/Offerings.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/Storefront.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m src/instrumentation.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/components/MediaField.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 12[2mms[22m[39m
  [32m✓[39m src/components/ui/PriceSummaryCard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
- [32m✓[39m src/app/[slug]/Storefront.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m src/app/[slug]/CustomerChatPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
  [32m✓[39m src/lib/money.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32m✓[39m src/components/ui/CatalogCard.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 17[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/business/components/MediaField.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 14[2mms[22m[39m
- [32m✓[39m src/styles/theme.test.ts [2m([22m[2m65 tests[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ProfileFieldSheet.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/business/components/OfferingMediaField.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32m✓[39m src/components/ui/ListRow.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
- [32m✓[39m src/components/ui/ConfirmDialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m src/app/[slug]/CustomerChatPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 13[2mms[22m[39m
- [32m✓[39m src/components/knowledge/offerings.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/business/page/components/CoverPhoto.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ContactSheet.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m src/components/business/CategoryPicker.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32m✓[39m src/components/ui/ServicesOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m src/lib/slug.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 2[2mms[22m[39m
- [32m✓[39m src/lib/chat-restore.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/app/privacy/privacy.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/components/OfferingMediaField.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/components/ui/ConfirmDialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/ui/ServicesOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ProfileFieldSheet.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/components/ui/ListRow.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/components/knowledge/offerings.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/offering-search.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/chat-restore.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/components/ui/Badge.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/page/components/CoverPhoto.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/business/details/components/ContactSheet.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/chat-events.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/components/business/CategoryPicker.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/styles/theme.test.ts [2m([22m[2m65 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/lib/abn.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/reserved-slugs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
  [32m✓[39m src/app/(tenant-admin)/(console)/home/lib/brief.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/lib/onboarding.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m src/components/ui/Badge.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m src/lib/greeting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m src/lib/chat-events.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32m✓[39m src/app/(tenant-admin)/(console)/chats/lib/queue.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m src/lib/abn.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/lib/reserved-slugs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/lib/security-headers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m src/lib/useMediaQuery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
- [32m✓[39m src/lib/offering-search.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/components/ui/ChatCards.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 2[2mms[22m[39m
- [32m✓[39m src/lib/format.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m src/components/ui/PhonePill.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/app/privacy/privacy.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/onboarding.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/ui/PhonePill.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/format.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/app/(tenant-admin)/(console)/chats/lib/queue.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/security-headers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/greeting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/components/ui/ChatCards.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/slug.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 3[2mms[22m[39m
  [32m✓[39m src/components/ui/TabBar.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
- [32m✓[39m src/lib/owner.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/useMediaQuery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/auth-cookie.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 2[2mms[22m[39m
  [32m✓[39m src/lib/tenant.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 2[2mms[22m[39m
- [32m✓[39m src/lib/auth-cookie.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/owner.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m42 passed[39m[22m[90m (42)[39m
 [2m      Tests [22m [1m[32m365 passed[39m[22m[90m (365)[39m
-[2m   Start at [22m 11:57:13
-[2m   Duration [22m 1.40s[2m (transform 947ms, setup 0ms, import 1.89s, tests 375ms, environment 2ms)[22m
+[2m   Start at [22m 12:39:39
+[2m   Duration [22m 1.39s[2m (transform 956ms, setup 0ms, import 1.98s, tests 397ms, environment 2ms)[22m
 
 npm notice
 npm notice New major version of npm available! 11.17.0 -> 12.2.0
@@ -137,8 +137,8 @@ docker compose run --rm backend pytest
  Container agencx-auth-1 Healthy 
  Container agencx-db-1 Waiting 
  Container agencx-db-1 Healthy 
- Container agencx-backend-run-f321d471f1b7 Creating 
- Container agencx-backend-run-f321d471f1b7 Created 
+ Container agencx-backend-run-84ecb66f2616 Creating 
+ Container agencx-backend-run-84ecb66f2616 Created 
 ============================= test session starts ==============================
 platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
 rootdir: /app
@@ -149,7 +149,7 @@ timeout: 60.0s
 timeout method: signal
 timeout func_only: False
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
-collected 1400 items
+collected 1403 items
 
 tests/test_agent_contract.py ..........................                  [  1%]
 tests/test_agent_graph.py .......................                        [  3%]
@@ -163,10 +163,10 @@ tests/test_chat_api.py ..........................................        [ 16%]
 tests/test_chunker.py .............                                      [ 17%]
 tests/test_cloudinary_media.py ...                                       [ 17%]
 tests/test_context_package.py .....................                      [ 18%]
-tests/test_conversation.py ..                                            [ 19%]
+tests/test_conversation.py ..                                            [ 18%]
 tests/test_conversations_api.py ........................................ [ 21%]
 ...                                                                      [ 22%]
-tests/test_cost.py .............                                         [ 23%]
+tests/test_cost.py .............                                         [ 22%]
 tests/test_dashboards_api.py ...........                                 [ 23%]
 tests/test_escalation_agent.py ...........                               [ 24%]
 tests/test_escalation_summary.py .....                                   [ 24%]
@@ -184,7 +184,7 @@ tests/test_judge_calibration_metrics.py .................                [ 34%]
 tests/test_judge_calibration_run.py ..                                   [ 34%]
 tests/test_knowledge_agent.py ..                                         [ 34%]
 tests/test_knowledge_api.py ..................................           [ 37%]
-tests/test_knowledge_records.py ..........................               [ 39%]
+tests/test_knowledge_records.py ..........................               [ 38%]
 tests/test_knowledge_version.py ......                                   [ 39%]
 tests/test_latency_cap.py .......                                        [ 39%]
 tests/test_latency_report.py ......                                      [ 40%]
@@ -193,8 +193,8 @@ tests/test_limits.py ..............                                      [ 41%]
 tests/test_limits_api.py .......                                         [ 42%]
 tests/test_llm_dependency.py ...........                                 [ 43%]
 tests/test_llm_extract_wire.py ....                                      [ 43%]
-tests/test_llm_failover.py ......................                        [ 45%]
-tests/test_llm_provider_retry.py ................                        [ 46%]
+tests/test_llm_failover.py ......................                        [ 44%]
+tests/test_llm_provider_retry.py ..................                      [ 46%]
 tests/test_llm_tool_calling.py ..............                            [ 47%]
 tests/test_llm_zai.py ....                                               [ 47%]
 tests/test_migrate_render.py .........                                   [ 48%]
@@ -213,7 +213,7 @@ tests/test_onboarding_knowledge_batch.py ................                [ 67%]
 tests/test_opening_name_ask.py ...................                       [ 68%]
 tests/test_operator_export_offboard_db.py ..........                     [ 69%]
 tests/test_order_status_agent.py ....                                    [ 69%]
-tests/test_percentile.py .......                                         [ 70%]
+tests/test_percentile.py .......                                         [ 69%]
 tests/test_platform_api.py ..........                                    [ 70%]
 tests/test_pricing_api.py ................                               [ 71%]
 tests/test_pricing_engine.py .........................                   [ 73%]
@@ -227,7 +227,7 @@ tests/test_retention_db.py .......                                       [ 79%]
 tests/test_retrieval.py .....                                            [ 79%]
 tests/test_retrieval_eval_metrics.py ..........                          [ 80%]
 tests/test_rls.py ............                                           [ 81%]
-tests/test_run_gate.py ............                                      [ 82%]
+tests/test_run_gate.py .............                                     [ 82%]
 tests/test_schema_audit.py ......                                        [ 82%]
 tests/test_seed_demo.py ..............                                   [ 83%]
 tests/test_seed_sababa.py ..........                                     [ 84%]
@@ -248,4 +248,4 @@ tests/test_url_ingestion.py ............................................ [ 96%]
 ...............                                                          [ 97%]
 tests/test_validation_gate.py .................................          [100%]
 
-============================ 1400 passed in 39.12s =============================
+============================ 1403 passed in 39.24s =============================

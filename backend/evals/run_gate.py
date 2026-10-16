@@ -141,11 +141,29 @@ async def _last_two_metrics(
     return current, baseline
 
 
-async def _seeded_tenant_id() -> UUID | None:
+def slug_for_run_type(run_type: str) -> str:
+    """The seeded slug a regression run type writes its rows under.
+
+    generation and trajectory run against tenant 1 (bytefix); injection runs
+    against its own probe tenant (``seed_injection_probe``). Resolving bytefix
+    for injection - which this gate used to do for every run type - meant its
+    row was never found and the gate reported "no current metric produced"
+    forever.
+    """
+    if run_type == "injection":
+        from seeds.seed_injection_probe import SLUG
+
+        return SLUG
     from seeds.seed_tenant1_phoneshop import SLUG
 
+    return SLUG
+
+
+async def _seeded_tenant_id(run_type: str) -> UUID | None:
     async with db.tenant_context(None, "platform_admin") as conn:
-        tenant_id: UUID | None = await conn.fetchval("select id from tenants where slug = $1", SLUG)
+        tenant_id: UUID | None = await conn.fetchval(
+            "select id from tenants where slug = $1", slug_for_run_type(run_type)
+        )
     return tenant_id
 
 
@@ -172,17 +190,18 @@ async def run_gate(*, skip_llm: bool) -> GateReport:
             report.add(module, True, f"skipped ({reason})")
         return report
 
-    tenant_id = await _seeded_tenant_id()
-    if tenant_id is None:
-        report.add("regression-baseline", False, "seeded tenant not found")
-        return report
-
     for module, metric_key, run_type in _REGRESSION_GATES:
         # Run without --gate: we want the eval_runs row written, then judge it
         # in regression mode ourselves rather than on its absolute threshold.
         exit_code = _run_eval_subprocess(module)
         if exit_code != 0:
             report.add(module, False, f"eval errored (exit {exit_code})")
+            continue
+        # Each run type writes under its own seeded tenant (injection has a
+        # probe tenant of its own), so resolve the tenant per run type.
+        tenant_id = await _seeded_tenant_id(run_type)
+        if tenant_id is None:
+            report.add(module, False, f"seeded tenant for {run_type} not found")
             continue
         current, baseline = await _last_two_metrics(tenant_id, run_type, metric_key)
         passed, detail = regression_pass(current, baseline)
