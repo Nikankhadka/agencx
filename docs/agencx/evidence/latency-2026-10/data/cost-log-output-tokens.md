@@ -27,7 +27,10 @@ The corpus-wide max is 1803, p95 1315 (bytefix). Captured before the two
 slice-2 runs; after `make seed-tenant1` (which wipes bytefix) this exact output
 is not reproducible, so it is recorded here.
 
-## Slice-2 window (the 100 calls of the two slice-2 runs)
+## Slice-2 window (the last 100 calls at capture time)
+
+The two slice-2 runs account for 66 calls; the remaining ~34 in this window are
+later eval calls, so this is the last-100 window, not the runs alone.
 
 ```
 $ docker compose exec -T db psql -U postgres -d wren -c "
@@ -40,5 +43,5 @@ $ docker compose exec -T db psql -U postgres -d wren -c "
              2003 | 883 |   100
 ```
 
-The slice-2 runs' largest call emitted 2003 tokens, so a 4096 cap left about 2x
-headroom and it never bound.
+The last-100 window's largest call emitted 2003 tokens (below even the first
+2048 cap), so the 4096 guard keeps about 2x headroom over the observed max.

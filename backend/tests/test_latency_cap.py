@@ -149,7 +149,7 @@ def _tool_call_completion(arguments: str) -> SimpleNamespace:
 async def test_truncated_tool_call_args_raise_a_controlled_error() -> None:
     """A length-truncated tool-call payload surfaces as the failover-class
     UpstreamResponseError - never a raw JSON parse error, and never a silently
-    accepted half-built call."""
+    accepted unparseable tool call."""
     completions = _RecordingCompletions(_tool_call_completion('{"query": "half a quest'))
     provider = _provider(completions, max_tokens_draft=8)
     with pytest.raises(UpstreamResponseError) as excinfo:

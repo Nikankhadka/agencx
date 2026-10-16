@@ -50,7 +50,8 @@ validated and the founder says go.
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.
 5. Prompt caching, replacing the per-request spotlight nonce - needs the
-   founder's ruling; gate at no regression against injection's 0.967.
+   founder's ruling; gate at no regression against injection's 0.967 (the
+   founder's stated baseline - re-measure it before slice 5 gates on it).
 6. Paid-tier A/B across the matrix: latency, cost, and tool-call correctness
    per model.
 7. Streaming with inspection off the critical path - deferred; needs a
@@ -90,12 +91,23 @@ artifacts for the exact catalogue and error.
 
 ## Open decisions
 
-- Noise tolerance, revised and derived from four runs: the bands in
-  `data/noise-floor.md` came from two runs and understated cross-run variance.
-  The going-forward bands - from the four unchanged-mechanism runs
-  (noise-run1/2 plus slice2-run1/2, slice 2 counting as unchanged because its
-  cap never bound) - are bytefix 2950.8 ms, sababa2 2031.3 ms, sababa 2532.7 ms
-  on `total_ms`. A change counts as real only when it exceeds its band.
+- Noise tolerance, revised and derived from four runs. The rule, verbatim:
+
+  > band = max over the comparable run pairings (slice2-run{1,2} vs
+  > noise-run{1,2}) of max(|delta p50|, |delta p95|) on `total_ms`, over
+  > completed turns.
+
+  The four runs are the two slice-1 baselines (noise-run1/2) plus slice2-run1/2;
+  slice 2 counts as an unchanged-mechanism run because its output cap never
+  bound. The going-forward bands, with the pairing that drives each:
+
+  | tenant | band (ms) | driven by | completed turns (noise1/noise2/slice2run1/slice2run2) |
+  |---|---|---|---|
+  | bytefix | 2950.80 | p50 (3977.35 vs 6928.15) | 4/2/3/4 |
+  | sababa2 | 2031.33 | p95 (5579.67 vs 7611.00) | 4/3/3/4 |
+  | sababa | 2532.65 | p50 (6587.55 vs 9120.20) | 2/1/1/0 |
+
+  A change counts as real only when it exceeds its band.
 - Mechanism plausibility comes first: a slice that cannot mechanically affect a
   timing metric - for example an output cap that never binds - is judged inert
   regardless of whether the noise happened to move inside or outside the band.
