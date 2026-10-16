@@ -39,6 +39,7 @@ import httpx
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.voice import DEFAULT_VOICE_PRESET
+from seeds import _helpers
 
 INPUTS_DIR = Path(__file__).parent / "tenant2_inputs"
 INTERVIEW_SCRIPT = INPUTS_DIR / "interview-script.md"
@@ -201,6 +202,14 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
             await client.post(f"{api_base}/api/onboarding/confirm", headers=headers),
             "onboarding confirm",
         )
+
+        # Slice 1 (latency): the clinic is API-provisioned, so its own daily
+        # ceiling is written here, after confirm owns config.profile. Above the
+        # platform defaults so a day of matrix runs does not hit it.
+        async with _helpers.seed_pool():
+            await _helpers.set_tenant_limits(
+                tenant_id=UUID(signup["tenant_id"]), limits=_helpers.DEMO_DAILY_LIMITS
+            )
 
         report["documents"] = []
         for filename, doc_type in KNOWLEDGE_DOCS:

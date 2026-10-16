@@ -136,7 +136,10 @@ async def _seed_core(tenant_id: UUID) -> None:
                     "What are your most popular items?",
                     "What time do you open?",
                 ],
-            }
+            },
+            # Slice 1 (latency): this tenant's own daily ceiling, above the
+            # platform defaults so a day of matrix runs does not hit it.
+            "limits": _helpers.DEMO_DAILY_LIMITS,
         },
         business_name=TENANT_NAME,
         profile=SABABA2_PROFILE,

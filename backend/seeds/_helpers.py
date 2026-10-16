@@ -115,6 +115,34 @@ async def insert_tenant_core(
             )
 
 
+# Slice 1 (latency): the platform daily defaults (2M tokens, about 90 fast-path
+# customer turns a day) are below what a day of matrix runs needs, so the
+# tenants these seeds own carry an explicit, generous ceiling in their *own*
+# config. These are the tenant's values; the app's DEFAULT_* constants in
+# app/shared/limits.py are never touched.
+DEMO_DAILY_LIMITS: dict[str, float | int] = {
+    "daily_cost_usd": 50.0,
+    "daily_tokens": 50_000_000,
+}
+
+
+async def set_tenant_limits(*, tenant_id: UUID, limits: dict[str, float | int]) -> None:
+    """Idempotently write ``config.limits`` (a top-level key) for one tenant.
+
+    ``jsonb_set`` with the whole object, not a nested path: an empty config has
+    no intermediate keys, so ``{limits,daily_tokens}`` would be a silent no-op.
+    Needs a live pool - wrap in :func:`seed_pool` when the caller owns none.
+    """
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await conn.execute(
+            "update tenant_config "
+            "set config = jsonb_set(config, '{limits}', $2::jsonb, true), updated_at = now() "
+            "where tenant_id = $1",
+            tenant_id,
+            json.dumps(limits),
+        )
+
+
 async def insert_offerings(
     conn: AppConnection,
     tenant_id: UUID,

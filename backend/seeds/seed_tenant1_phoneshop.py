@@ -279,7 +279,10 @@ async def _seed_core(tenant_id: UUID) -> None:
                     "What's the status of my repair?",
                     "How long do repairs usually take?",
                 ],
-            }
+            },
+            # Slice 1 (latency): this tenant's own daily ceiling, above the
+            # platform defaults so a day of matrix runs does not hit it.
+            "limits": _helpers.DEMO_DAILY_LIMITS,
         },
         business_name=TENANT_NAME,
         profile=BYTEFIX_PROFILE,
