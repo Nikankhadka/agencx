@@ -6,6 +6,9 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 |---|---|
 | [report.md](report.md) | Slice 1 report: instrument, noise floor, matrix, A/B verdict |
 | [report-slice-2.md](report-slice-2.md) | Slice 2: the draft output cap, measured no-measurable-effect |
+| [design-slice-3.md](design-slice-3.md) | Slice 3 design (not implemented): the discarded agent call, its gate, the retry options |
+| [data/slice2-rounds.md](data/slice2-rounds.md) | Per-turn agent rounds / tool rounds from the slice-2 logs, with the extraction recipe |
+| `data/slice2-run{1,2}-lines.jsonl` | The filtered log lines behind `slice2-rounds.md` (source logs were `/tmp`) |
 | `data/slice2-run1.json`, `data/slice2-run2.json` | The two slice-2 measurement runs (commit `4f40ef3`) |
 | `data/openrouter-deepseek-v4-1-flash__bytefix.json` | The default smoke: one bytefix turn, prices fetched live |
 | [data/noise-run1.json](data/noise-run1.json), [data/noise-run2.json](data/noise-run2.json) | Two back-to-back runs of unchanged code, three tenants x five fixed turns |
@@ -14,7 +17,8 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | [data/matrix.md](data/matrix.md) | The comparison table and its provenance |
 | [data/sababa-budget-check.md](data/sababa-budget-check.md) | The pre-matrix daily-budget check for the unraised tenant (slice-1 and slice-2) |
 | [data/cost-log-output-tokens.md](data/cost-log-output-tokens.md) | Per-call output-token SQL behind the draft-cap value |
-| `data/eval-slice2.log` | The slice-2 `make eval` output (provider-blocked) |
+| `data/eval-slice2.log` | The slice-2 `make eval` output (free chain, provider-blocked) |
+| `data/eval-slice3-deepseek.log` | The slice-3 `make eval` pinned to deepseek (stalls in generation_eval) |
 | `data/opencode-*-__bytefix.json` | Zen probe skips: the exact catalogue and provider refusal |
 | [data/tenant-limits.md](data/tenant-limits.md) | The demo tenants' daily limits and the northgate ABN/GST gap |
 | `data/make-check.log` | The `make lint && make typecheck && make test` output |

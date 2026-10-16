@@ -50,10 +50,21 @@ validated and the founder says go.
    `docs/agencx/evidence/latency-2026-10/design-slice-3.md`) found the loop runs
    until a round returns no tool calls - that terminal round IS the completion
    signal - and multi-round tool use is the norm on the hybrid path (4 of 5
-   turns, 1 to 3 rounds). Breaking after the first tool round would change most
-   hybrid turns, so it is ruled out; the only call-saving design that preserves
-   multi-round makes the tool result carry the chunks (grounding-seam change)
-   and needs a scored eval. BLOCKED: the eval is provider-unavailable.
+   turns, 1 to 3 rounds; record `data/slice2-rounds.md`). Breaking after the
+   first tool round would change most hybrid turns, so it is ruled out; the
+   only call-saving design that preserves multi-round makes the
+   `search_knowledge` tool result carry the chunks (grounding-seam change) and
+   needs a scored eval.
+   **Gate:** slice 3 is judged on `llm_call_count` on completed turns per
+   tenant, with a band by the same documented rule over the four existing runs:
+   bytefix 1.90, sababa2 0.00, sababa 0.50 - so a one-call saving is
+   detectable. Timing is corroboration only (a one-call saving sits inside the
+   2031-2950 ms bands), and a rise in completed turns is a second signal.
+   Timeouts truncate recorded call counts (max observed 4), so the structural
+   claim rests on completed turns. The measurement must also report
+   `input_tokens` (a chunk-carrying tool result is re-sent each later round).
+   BLOCKED: the eval is provider-unavailable - no scored run is achievable, so
+   no behavior change may ship.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.
