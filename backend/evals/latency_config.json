@@ -40,34 +40,51 @@
       "provider_id_form": "bare id: the Zen /v1/models endpoint returns ids like 'space-bunny-free', never 'opencode/space-bunny-free'; the 'opencode/' prefix is OpenCode's own provider namespace, not part of the API id"
     }
   ],
+  "limits_only_tenants": [
+    {
+      "slug": "northgate",
+      "note": "Second-vertical dental tenant, limits-only, NOT a latency corpus tenant: its seed path is dead on the pre-existing ABN/GST onboarding-confirm gap, so it cannot serve a real turn yet."
+    }
+  ],
   "corpus": [
     {
       "slug": "bytefix",
       "vertical": "phone repair",
       "expected_path": "fast",
       "expected_llm_calls": 2,
-      "message": "How much is a screen replacement?"
+      "messages": [
+        "What repairs do you offer?",
+        "How long do repairs usually take?",
+        "Do you fix water-damaged phones?",
+        "Do you offer a warranty on your repairs?",
+        "Can you replace a charging port?"
+      ]
     },
     {
       "slug": "sababa2",
       "vertical": "restaurant",
       "expected_path": "fast",
       "expected_llm_calls": 2,
-      "message": "Which dishes are vegan or gluten free?"
+      "messages": [
+        "Which dishes are vegan or gluten free?",
+        "What are your most popular items?",
+        "What time do you open?",
+        "Do you have anything without nuts?",
+        "What is the Super Plate?"
+      ]
     },
     {
       "slug": "sababa",
       "vertical": "restaurant",
       "expected_path": "hybrid",
       "expected_llm_calls": 4,
-      "message": "What are your most popular items?"
-    },
-    {
-      "slug": "northgate",
-      "vertical": "dental",
-      "expected_path": "fast",
-      "expected_llm_calls": 2,
-      "message": "What are your opening hours?"
+      "messages": [
+        "Which dishes are vegan or gluten free?",
+        "What are your most popular items?",
+        "What time do you open?",
+        "Do you have anything without nuts?",
+        "What is the Super Plate?"
+      ]
     }
   ]
 }

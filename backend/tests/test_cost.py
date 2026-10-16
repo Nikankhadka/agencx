@@ -47,6 +47,15 @@ def test_compute_cost_usd_quantizes_to_six_decimal_places() -> None:
     assert cost == cost.quantize(Decimal("0.000001"))
 
 
+def test_price_key_prefers_the_configured_id_over_the_served_name() -> None:
+    served_only = TokenUsage(model="served-model", input_tokens=1, output_tokens=1)
+    assert served_only.price_key == "served-model"
+    split = TokenUsage(
+        model="served-model", input_tokens=1, output_tokens=1, price_model="configured-model"
+    )
+    assert split.price_key == "configured-model"
+
+
 def test_report_usage_with_no_active_sink_is_silently_dropped() -> None:
     # No collect_usage() context active - must not raise.
     report_usage("gpt-4o-mini", 10, 5)
@@ -152,6 +161,36 @@ async def test_record_costs_writes_rows_and_returns_matching_total(
         "text-embedding-3-small", 200, 0
     )
     assert total == expected_total
+
+
+async def test_record_costs_prices_by_the_configured_id_not_the_served_name(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, conversation_id = await _seed_tenant_and_conversation(superuser_conn)
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        total = await record_costs(
+            conn,
+            tenant_id,
+            conversation_id,
+            [
+                TokenUsage(
+                    model="gpt-4o-mini-2024-07-18",
+                    input_tokens=1_000_000,
+                    output_tokens=0,
+                    price_model="gpt-4o-mini",
+                )
+            ],
+        )
+
+    # Priced by the configured id, so a versioned served name does not zero it.
+    assert total == compute_cost_usd("gpt-4o-mini", 1_000_000, 0)
+    assert total > Decimal("0")
+    row = await superuser_conn.fetchrow(
+        "select model, cost_usd from cost_logs where conversation_id = $1", conversation_id
+    )
+    assert row is not None
+    assert row["model"] == "gpt-4o-mini-2024-07-18"  # served name kept for history
+    assert row["cost_usd"] == total
 
 
 async def test_record_costs_empty_list_writes_nothing(

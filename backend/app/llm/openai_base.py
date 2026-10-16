@@ -90,14 +90,18 @@ def _served_model(configured_model: str, response: Any) -> str:
 
 
 def _report(configured_model: str, response: Any) -> None:
-    """Forward a completion's token usage to the T-030 cost sink, if any,
-    tagged with the model the provider says served it."""
+    """Forward a completion's token usage to the T-030 cost sink, if any.
+
+    The record's ``model`` is the model the provider says served it (integrity);
+    ``price_model`` is the configured id, which is what ``PRICE_TABLE`` keys on,
+    so a versioned served name still prices correctly."""
     usage = getattr(response, "usage", None)
     if usage is not None:
         report_usage(
             _served_model(configured_model, response),
             usage.prompt_tokens or 0,
             usage.completion_tokens or 0,
+            price_model=configured_model,
         )
 
 

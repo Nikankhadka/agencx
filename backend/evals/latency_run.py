@@ -235,10 +235,11 @@ async def _run_model_tenant(
         str(m["id"]) for m in provider_models if isinstance(m, dict) and m.get("id")
     )
     entry = _find_model(provider_models, str(model["api_model"]))
+    messages = [str(m) for m in tenant.get("messages", [])] or [str(tenant.get("message", ""))]
     result: dict[str, Any] = {
         "model": {k: model.get(k) for k in ("label", "route", "base_url", "api_model", "tier")},
         "tenant": tenant["slug"],
-        "message": tenant["message"],
+        "messages": messages,
         "expected_path": tenant.get("expected_path"),
         "expected_llm_calls": tenant.get("expected_llm_calls"),
         "provider_models_fetched_at": fetched_at,
@@ -270,20 +271,24 @@ async def _run_model_tenant(
             )
             return result
 
-    conversation_id: str | None = None
-    for _ in range(turns):
+    # Each turn is its own conversation: the fixed message set is measured
+    # independently, so a growing transcript does not confound the run-to-run
+    # comparison. Turns cycle through the messages when fewer messages than
+    # turns are given.
+    for turn_index in range(turns):
+        message = messages[turn_index % len(messages)]
         handler.records.clear()
         conversation_id, event_types, error = await _drive_turn(
-            client, slug=str(tenant["slug"]), message=str(tenant["message"]),
-            conversation_id=conversation_id,
+            client, slug=str(tenant["slug"]), message=message, conversation_id=None
         )
         if error is not None:
-            result["turns"].append({"error": error})
+            result["turns"].append({"message": message, "error": error})
             break
         matches = [r for r in handler.records if r.get("conversation_id") == conversation_id]
         if not matches:
             result["turns"].append(
                 {
+                    "message": message,
                     "conversation_id": conversation_id,
                     "error": "no latency record emitted for this turn",
                     "event_types": event_types,
@@ -294,6 +299,7 @@ async def _run_model_tenant(
             usage_models = [str(m) for m in record.get("usage_models", [])]
             result["turns"].append(
                 {
+                    "message": message,
                     "conversation_id": record.get("conversation_id"),
                     "usage_models": usage_models,
                     # True only when every served model a call reported equals

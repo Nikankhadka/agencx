@@ -10,13 +10,14 @@ json_object mode is pinned in test_llm_zai.py).
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.llm.openai_base import OpenAISDKProvider
-from app.observability.cost import collect_usage
+from app.observability.cost import collect_usage, compute_cost_usd
 
 
 class _Schema(BaseModel):
@@ -87,3 +88,24 @@ async def test_reported_usage_falls_back_to_the_configured_model() -> None:
             system_prompt="extract the value", user_input="free text", schema=_Schema
         )
     assert [u.model for u in usages] == ["gemini-3.5-flash"]
+
+
+async def test_reported_usage_prices_by_the_configured_id_not_the_served_name() -> None:
+    # A provider that answers with a versioned served name must still price via
+    # the configured id, or cost_logs / the daily budget silently zero out.
+    completions = _RecordingCompletions(
+        [_completion('{"value": "ok"}', model="gpt-4o-mini-2024-07-18")]
+    )
+    provider = OpenAISDKProvider(
+        SimpleNamespace(chat=SimpleNamespace(completions=completions)), "gpt-4o-mini"
+    )
+    with collect_usage() as usages:
+        await provider.extract(
+            system_prompt="extract the value", user_input="free text", schema=_Schema
+        )
+    usage = usages[0]
+    assert usage.model == "gpt-4o-mini-2024-07-18"  # served, recorded for history
+    assert usage.price_key == "gpt-4o-mini"  # configured, used for pricing
+    assert compute_cost_usd(usage.price_key, input_tokens=1_000_000, output_tokens=0) == (
+        Decimal("0.150000")
+    )

@@ -1,16 +1,23 @@
 """Slice 1 (latency): the per-turn record.
 
-Pins the exact key set, the accumulation of the cross-module measures, and the
-single-log-line emission the runner taps.
+Pins the exact key set (one definition, ``turn_record.RECORD_KEYS``), the
+accumulation of the cross-module measures, the single-log-line emission the
+runner taps, and that the route vocabulary tracks the graph's own routes.
 """
 
 from __future__ import annotations
 
+import ast
+import inspect
 import logging
+import textwrap
 
 import pytest
 
+from app.agents import agent_node
 from app.observability.turn_record import (
+    _ROUTE_VOCABULARY,
+    RECORD_KEYS,
     TurnRecord,
     build_record,
     collect_turn_record,
@@ -19,24 +26,6 @@ from app.observability.turn_record import (
     record_retrieval,
     record_route,
 )
-
-# The exact keys the record must always carry (plan of record 13-latency).
-EXPECTED_KEYS = {
-    "total_ms",
-    "first_model_token_ms",
-    "first_prose_ms",
-    "buffer_hold_ms",
-    "embed_ms",
-    "search_ms",
-    "rerank_ms",
-    "path",
-    "llm_call_count",
-    "input_tokens",
-    "output_tokens",
-    "leg",
-    "failover_engaged",
-    "route",
-}
 
 
 def test_record_always_carries_exactly_the_required_keys() -> None:
@@ -52,7 +41,7 @@ def test_record_always_carries_exactly_the_required_keys() -> None:
         leg=None,
         failover_engaged=False,
     )
-    assert set(record) == EXPECTED_KEYS
+    assert set(record) == RECORD_KEYS
     assert record["path"] is None
     assert record["embed_ms"] is None
     assert record["leg"] is None
@@ -112,6 +101,33 @@ def test_emit_logs_one_line_keyed_to_the_turn(caplog: pytest.LogCaptureFixture) 
     assert payload["usage_models"] == ["deepseek/deepseek-v4.1-flash"]
     record = payload["record"]
     assert isinstance(record, dict)
-    assert set(record) == EXPECTED_KEYS
+    assert set(record) == RECORD_KEYS
     assert record["llm_call_count"] == 2
     assert record["buffer_hold_ms"] == 400.0
+
+
+def _routes_returned_by_the_decision_point() -> set[str]:
+    """Every string literal ``agent_node._determine_route`` returns, read from
+    its source so a new route cannot hide behind a branch the test does not
+    call directly."""
+    source = textwrap.dedent(inspect.getsource(agent_node._determine_route))
+    tree = ast.parse(source)
+    return {
+        node.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+
+
+def test_route_vocabulary_tracks_the_graphs_routes() -> None:
+    """``record.route`` is nulled for any value outside its vocabulary, so the
+    vocabulary must equal the routes the graph's decision point can return (plus
+    the ``structured`` card value). Adding a route to
+    ``agent_node._determine_route`` without updating ``_ROUTE_VOCABULARY`` fails
+    here instead of silently nulling the record's route."""
+    returned = _routes_returned_by_the_decision_point()
+    assert returned, "expected _determine_route to return route literals"
+    assert returned <= _ROUTE_VOCABULARY
+    assert _ROUTE_VOCABULARY == returned | {"structured"}

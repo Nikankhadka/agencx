@@ -24,11 +24,13 @@ import pytest
 import pytest_asyncio
 
 from app.agents.draft_node import REFUSAL_MESSAGE
+from app.features.chat import service as chat_service
 from app.features.escalations import service as escalations_service
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT, ToolCall, ToolTurn
 from app.main import app
 from app.observability.cost import report_usage
+from app.observability.turn_record import RECORD_KEYS
 from app.retrieval.dependency import get_reranker_dependency
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
@@ -1367,25 +1369,6 @@ async def test_chat_persists_a_formal_quote_payload_on_the_message_row(
 
 # --- Slice 1 (latency): one record per graph turn, on every exit path --------
 
-_LATENCY_RECORD_KEYS = frozenset(
-    {
-        "total_ms",
-        "first_model_token_ms",
-        "first_prose_ms",
-        "buffer_hold_ms",
-        "embed_ms",
-        "search_ms",
-        "rerank_ms",
-        "path",
-        "llm_call_count",
-        "input_tokens",
-        "output_tokens",
-        "leg",
-        "failover_engaged",
-        "route",
-    }
-)
-
 
 def _latency_payloads(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
@@ -1423,7 +1406,7 @@ async def test_latency_record_is_emitted_exactly_once_on_success(
     assert payload["conversation_id"] == conversation_id
     record = payload["record"]
     assert isinstance(record, dict)
-    assert set(record) == _LATENCY_RECORD_KEYS
+    assert set(record) == RECORD_KEYS
     assert record["first_prose_ms"] is not None
     assert record["total_ms"] >= record["first_prose_ms"]
 
@@ -1487,6 +1470,39 @@ async def test_latency_record_is_emitted_exactly_once_on_turn_budget_timeout(
     assert len(payloads) == 1, f"expected exactly one latency record, got {len(payloads)}"
     record = payloads[0]["record"]
     assert isinstance(record, dict)
-    assert set(record) == _LATENCY_RECORD_KEYS
+    assert set(record) == RECORD_KEYS
     # No prose was ever allowed out, so the prose measures are null, not absent.
     assert record["first_prose_ms"] is None
+
+
+async def test_latency_record_is_still_emitted_when_persistence_fails(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The emit lives in the handler's outermost ``finally``, so it survives a
+    failure in the success path - here, the assistant-row write. An emit placed
+    at the end of each exit path instead would record nothing on this turn."""
+    slug = f"chat-latency-persist-{uuid.uuid4().hex[:8]}"
+    await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+
+    async def _boom(**kwargs: Any) -> None:
+        raise RuntimeError("persist failed")
+
+    monkeypatch.setattr(chat_service, "persist_assistant_turn", _boom)
+
+    with caplog.at_level(logging.INFO, logger="app.latency"):
+        response = await client.post(
+            "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+        )
+    assert response.status_code == 200, response.text
+    types = [event["type"] for event in _parse_sse(response.text)]
+    # Persist runs outside the provider-fault handler, so the failure reaches the
+    # stream's error fallback rather than being turned into a handoff.
+    assert types[-1] == "error"
+
+    payloads = _latency_payloads(caplog)
+    assert len(payloads) == 1, f"expected exactly one latency record, got {len(payloads)}"
+    assert payloads[0]["conversation_id"] == _parse_sse(response.text)[0]["conversation_id"]

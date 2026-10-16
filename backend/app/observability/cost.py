@@ -11,6 +11,13 @@ correct regardless, and a hosted model just needs a price-table entry.
 Aggregation queries back the per-tenant/day budget (T-028) and the
 per-conversation cost shown in the Surface-2 trace (T-031/T-034).
 
+A usage record carries two model ids. ``model`` is what the provider's response
+named (the **served** model, e.g. a versioned ``gpt-4o-mini-2024-07-18``), kept
+for history and model identity. ``price_model`` is the id the app actually
+configured (the Azure deployment or the requested model), and it is what
+``PRICE_TABLE`` is keyed on - so a provider that answers with a versioned name
+still prices correctly instead of silently costing $0.
+
 The provider abstraction still returns only its parsed/text result - usage is
 a side channel via :func:`report_usage`, so no call site changed and a
 provider that can't report usage (a test fake) simply reports nothing.
@@ -30,14 +37,27 @@ from app.shared import db
 
 @dataclass(frozen=True)
 class TokenUsage:
+    # The served model, as the provider's response named it. Recorded to
+    # ``cost_logs.model`` for history and integrity.
     model: str
     input_tokens: int
     output_tokens: int
+    # The configured id (deployment/model the app asked for), which
+    # ``PRICE_TABLE`` keys on. ``None`` means "same as ``model``" - a provider
+    # whose response names the requested id exactly (or a caller that does not
+    # distinguish them, including every test fake).
+    price_model: str | None = None
+
+    @property
+    def price_key(self) -> str:
+        return self.price_model or self.model
 
 
 # Dollars per 1,000,000 tokens: (input, output). Unknown models cost $0 (the
 # free-first default) - add an entry to price a hosted model. Keys match the
-# model/deployment string the provider reports.
+# CONFIGURED deployment/model id the app asks for (``price_model``), not the
+# served name the provider's response may report - a versioned served name like
+# ``gpt-4o-mini-2024-07-18`` prices via the configured ``gpt-4o-mini``.
 PRICE_TABLE: dict[str, tuple[Decimal, Decimal]] = {
     # Reference paid models (Azure/OpenAI list prices) so a swap prices itself.
     "gpt-4o-mini": (Decimal("0.15"), Decimal("0.60")),
@@ -75,12 +95,28 @@ def collect_usage() -> Iterator[list[TokenUsage]]:
         _usage_sink.reset(token)
 
 
-def report_usage(model: str, input_tokens: int, output_tokens: int) -> None:
+def report_usage(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    price_model: str | None = None,
+) -> None:
     """Called by a provider after a completion. No active sink (e.g. an eval
-    or a test not collecting cost) -> silently dropped."""
+    or a test not collecting cost) -> silently dropped.
+
+    ``model`` is the served id; ``price_model`` is the configured id to price
+    by (defaults to ``model`` when the caller does not distinguish them)."""
     sink = _usage_sink.get()
     if sink is not None:
-        sink.append(TokenUsage(model=model, input_tokens=input_tokens, output_tokens=output_tokens))
+        sink.append(
+            TokenUsage(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                price_model=price_model,
+            )
+        )
 
 
 # --- persistence + aggregation --------------------------------------------------
@@ -97,7 +133,7 @@ async def record_costs(
     write). Empty usage list writes nothing."""
     total = Decimal("0")
     for usage in usages:
-        cost = compute_cost_usd(usage.model, usage.input_tokens, usage.output_tokens)
+        cost = compute_cost_usd(usage.price_key, usage.input_tokens, usage.output_tokens)
         total += cost
         await conn.execute(
             "insert into cost_logs "

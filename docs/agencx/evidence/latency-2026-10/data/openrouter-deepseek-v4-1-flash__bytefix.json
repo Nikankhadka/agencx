@@ -7,14 +7,21 @@
     "tier": "candidate"
   },
   "tenant": "bytefix",
-  "message": "How much is a screen replacement?",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
   "expected_path": "fast",
   "expected_llm_calls": 2,
-  "provider_models_fetched_at": "2026-10-16T04:48:29Z",
+  "provider_models_fetched_at": "2026-10-16T05:20:16Z",
   "provider_model_present": true,
   "provider_model_count": 465,
+  "provider_id_form": null,
   "provider_pricing": {
-    "prompt": "0.000000018",
+    "prompt": "0.000000036",
     "completion": "0.000000684",
     "input_cache_read": "0.0000000054"
   },
@@ -23,10 +30,11 @@
     "model": "BAAI/bge-small-en-v1.5"
   },
   "command": "make latency",
-  "generated_at": "2026-10-16T04:48:29Z",
+  "generated_at": "2026-10-16T05:20:16Z",
   "turns": [
     {
-      "conversation_id": "ae8d2887-cccb-46b1-94f7-c5036e71a552",
+      "message": "What repairs do you offer?",
+      "conversation_id": "a1c034c2-f8e1-424f-8cd9-121832eb84ee",
       "usage_models": [
         "deepseek/deepseek-v4.1-flash"
       ],
@@ -41,17 +49,17 @@
         "done"
       ],
       "record": {
-        "total_ms": 7295.1,
-        "first_model_token_ms": 3792.3,
-        "first_prose_ms": 7257.1,
-        "buffer_hold_ms": 3464.8,
+        "total_ms": 7441.7,
+        "first_model_token_ms": 4711.8,
+        "first_prose_ms": 7438.4,
+        "buffer_hold_ms": 2726.6,
         "embed_ms": null,
         "search_ms": null,
         "rerank_ms": null,
         "path": "fast",
         "llm_call_count": 2,
-        "input_tokens": 8875,
-        "output_tokens": 754,
+        "input_tokens": 8859,
+        "output_tokens": 1297,
         "leg": null,
         "failover_engaged": false,
         "route": "knowledge"

@@ -52,6 +52,27 @@ LATENCY_LOGGER_NAME = "app.latency"
 
 _logger = logging.getLogger(LATENCY_LOGGER_NAME)
 
+# The exact keys the per-turn record carries. One definition, referenced by
+# ``build_record`` (whose literal must match it), the runner, and the tests.
+RECORD_KEYS: frozenset[str] = frozenset(
+    {
+        "total_ms",
+        "first_model_token_ms",
+        "first_prose_ms",
+        "buffer_hold_ms",
+        "embed_ms",
+        "search_ms",
+        "rerank_ms",
+        "path",
+        "llm_call_count",
+        "input_tokens",
+        "output_tokens",
+        "leg",
+        "failover_engaged",
+        "route",
+    }
+)
+
 
 @dataclass
 class TurnRecord:
