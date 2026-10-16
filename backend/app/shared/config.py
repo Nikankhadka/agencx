@@ -87,10 +87,17 @@ class Settings(BaseSettings):
     # matters.
     llm_monthly_budget_usd: float = 10.0
 
-    # Output caps, 0 = uncapped (the default, and the behavior before these
-    # existed).
+    # Output caps, in tokens; 0 = uncapped.
     #
-    # DO NOT set these without checking whether the configured model is a
+    # Slice 2 (latency) caps the DRAFT/prose output at 2048 by default, chosen
+    # from the committed slice-1 evidence
+    # (`docs/agencx/evidence/latency-2026-10/`): over the corpus, per-call
+    # output was p95 1315 and max 1803 tokens (cost_logs), so 2048 bounds a
+    # runaway draft without truncating the observed answers. Extract stays 0
+    # (uncapped) - a truncated structured output is fatal, so the schemas must
+    # shrink before that cap is safe.
+    #
+    # DO NOT change these without checking whether the configured model is a
     # REASONING model. Reasoning models (the current default,
     # nvidia/nemotron-3-super-*, and any o1/R1-class model) spend their output
     # budget on hidden thinking tokens BEFORE emitting an answer, and those
@@ -102,7 +109,7 @@ class Settings(BaseSettings):
     # They are kept as knobs because on a NON-reasoning model, capping the
     # draft is a real latency win (the draft was 23s of a measured 37s turn,
     # scaling with emitted prose). Set them per-model, never blindly.
-    llm_max_tokens_draft: int = 0
+    llm_max_tokens_draft: int = 2048
     llm_max_tokens_extract: int = 0
 
     # T-041: tool calling mode. 'auto' (the default) uses native function calling
