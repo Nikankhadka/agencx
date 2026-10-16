@@ -44,7 +44,7 @@ Completed 4/5 (run 1), 3/5 (run 2); budget/escalation turns 1 and 2. Paths ['fas
 
 ## Tolerance rule
 
-Movement counts as real only when it exceeds the measured run-to-run spread. Concretely, for a metric and tenant below, the threshold is the larger of the two runs' p50 and p95 absolute deltas (the max column):
+Movement counts as real only when it exceeds the measured run-to-run spread. Concretely, for a metric and tenant below, the threshold is the larger of the two runs' p50 and p95 absolute deltas (the max column); `-` means a run had no completed sample to compare.
 
 | metric | bytefix | sababa | sababa2 |
 |---|---|---|---|
