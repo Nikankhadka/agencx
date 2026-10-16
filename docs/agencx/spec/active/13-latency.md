@@ -1,9 +1,10 @@
 # 13 - Latency instrument
 
 **Status:** In progress - slice 1 landed (instrument, noise floor, model
-matrix). Slices 2 through 7 not started.
+matrix); slice 2 (draft output cap) in progress.
 **Phase 1 area:** Performance (post-launch).
-**Branch:** `latency/slice-1-instrument` off `development`.
+**Branch:** `latency/stack` (all slices stack here; one merge to
+`development` at the end, on the founder's go).
 
 ## Objective
 
@@ -16,10 +17,14 @@ tenants' own daily limits, raised so a matrix day does not hit them (see
 
 ## Protocol
 
-Each slice gets its own branch off `development`. A slice is validated when its
-own test passes and its target metric beats the measured noise floor. A
-validated slice merges to `development`, then `staging`. Every slice is written
-up, pass or fail, in the evidence folder.
+All slices stack on one branch, `latency/stack`. Each slice carries its own
+commits, its own test, and one measurement run at that slice's commit against
+the frozen slice-1 baseline (`data/noise-run1.json`, `data/noise-run2.json`)
+and its tolerance bands (`data/noise-floor.md`). A slice whose metric does not
+exceed the bands is written up as no-measurable-effect - findings are recorded
+pass or fail either way, never dropped. Nothing is pushed. One merge to
+`development`, then `staging`, happens only when the cumulative result is
+validated and the founder says go.
 
 ## Slice backlog
 
@@ -30,7 +35,7 @@ up, pass or fail, in the evidence folder.
 2. Cap output tokens: `LLM_MAX_TOKENS_DRAFT` is 0 (uncapped); cap the draft
    prose first, and cap extract only after the schemas shrink - a reasoning
    model spends its cap on hidden thinking and dies with
-   `LengthFinishReasonError`.
+   `LengthFinishReasonError`. In progress.
 3. Kill the discarded agent call (`backend/app/agents/agent_node.py:1167`):
    the hybrid path makes a call whose result is thrown away, so
    `llm_call_count` 4 to 3; the grounding/money reason the call exists for must

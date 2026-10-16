@@ -1,7 +1,7 @@
 # Latency slice 1 - instrument and campaign
 
 **Status:** slice 1 done (instrument, noise floor, model matrix).
-**Branch:** `latency/slice-1-instrument`.
+**Branch:** `latency/stack`.
 
 ## Instrument
 

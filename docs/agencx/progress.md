@@ -47,7 +47,7 @@ live in the ticket files, not here.
 ## What is next
 
 - [ ] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
-  post-launch): slice 1, the instrument, landed on `latency/slice-1-instrument`
+  post-launch): slice 1, the instrument, landed on `latency/stack`
   (not merged) - `make latency` drives real turns through the chat surface with
   one model pinned and writes the 14-key per-turn record; the percentile rule,
   the model/corpus config and the smoke evidence are in
@@ -365,7 +365,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and four-model matrix, slices 1-7 (slice 1 landed on `latency/slice-1-instrument`) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 in progress) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items
