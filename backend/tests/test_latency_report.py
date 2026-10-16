@@ -41,13 +41,12 @@ def _turn(record: dict[str, Any], *, model_match: bool = True) -> dict[str, Any]
 
 def _budget_turn(*, calls: int = 1) -> dict[str, Any]:
     # A budget turn let no prose out and made fewer calls than a completed one.
-    return _turn(_record(total_ms=10000.0, first_prose_ms=None, buffer_hold_ms=None,
-                         llm_call_count=calls))
+    return _turn(
+        _record(total_ms=10000.0, first_prose_ms=None, buffer_hold_ms=None, llm_call_count=calls)
+    )
 
 
-def _artifact(
-    *turns: dict[str, Any], tenant: str = "t1", label: str = "m"
-) -> dict[str, Any]:
+def _artifact(*turns: dict[str, Any], tenant: str = "t1", label: str = "m") -> dict[str, Any]:
     return {
         "model": {"label": label, "api_model": label},
         "tenant": tenant,

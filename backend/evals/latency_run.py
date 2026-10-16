@@ -385,8 +385,13 @@ async def run(args: argparse.Namespace) -> int:
                     continue
                 for tenant in tenants:
                     result = await _run_model_tenant(
-                        client, http, model=model, tenant=tenant, turns=args.turns,
-                        command=command, handler=handler,
+                        client,
+                        http,
+                        model=model,
+                        tenant=tenant,
+                        turns=args.turns,
+                        command=command,
+                        handler=handler,
                     )
                     path = out_dir / f"{_slugify(str(model['label']))}__{tenant['slug']}.json"
                     _write(path, result)

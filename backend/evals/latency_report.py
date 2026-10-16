@@ -39,9 +39,7 @@ def _load(path: Path) -> dict[str, Any]:
 
 def _records(artifact: dict[str, Any]) -> list[dict[str, Any]]:
     return [
-        turn["record"]
-        for turn in artifact.get("turns", [])
-        if isinstance(turn.get("record"), dict)
+        turn["record"] for turn in artifact.get("turns", []) if isinstance(turn.get("record"), dict)
     ]
 
 
@@ -76,9 +74,7 @@ def _per_turn_metric(record: dict[str, Any], metric: str) -> float | None:
 def _metric_stats(artifact: dict[str, Any], metric: str) -> dict[str, float | None]:
     """p50/p95 over completed turns (prose reached the customer)."""
     completed = [r for r in _records(artifact) if r["first_prose_ms"] is not None]
-    values = [
-        v for v in (_per_turn_metric(r, metric) for r in completed) if v is not None
-    ]
+    values = [v for v in (_per_turn_metric(r, metric) for r in completed) if v is not None]
     return {"p50": _p(values, 50), "p95": _p(values, 95)}
 
 
@@ -109,9 +105,7 @@ def _summary(artifact: dict[str, Any]) -> dict[str, Any]:
         "paths": sorted({str(r["path"]) for r in records if r["path"]}),
         # The set over every turn, so an excluded turn's calls still show.
         "all_calls": sorted({int(r["llm_call_count"]) for r in records}),
-        "completed_routes": sorted(
-            {str(r["route"]) for r in completed if r["route"]}
-        ),
+        "completed_routes": sorted({str(r["route"]) for r in completed if r["route"]}),
         "expected_path": artifact.get("expected_path"),
         "expected_calls": artifact.get("expected_llm_calls"),
         "input_tokens": int(sum(float(r["input_tokens"]) for r in records)),
@@ -282,9 +276,7 @@ def main() -> None:
     (data / "noise-floor.md").write_text(_noise_markdown(run1, run2, generated))
 
     matrix = [_load(path) for path in sorted(data.glob("matrix-*.json"))]
-    summaries = sorted(
-        (_summary(art) for art in matrix), key=lambda s: (s["label"], s["tenant"])
-    )
+    summaries = sorted((_summary(art) for art in matrix), key=lambda s: (s["label"], s["tenant"]))
     (data / "matrix.md").write_text(_matrix_markdown(summaries, generated))
 
     for s in summaries:

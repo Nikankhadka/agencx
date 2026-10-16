@@ -216,9 +216,7 @@ async def test_extract_resamples_a_server_side_json_validate_failed(
     class _Schema(BaseModel):
         value: str
 
-    completions = _Completions(
-        [_json_validate_failed_error()], _completion('{"value": "parsed"}')
-    )
+    completions = _Completions([_json_validate_failed_error()], _completion('{"value": "parsed"}'))
     result = await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
     assert result.value == "parsed"
     assert completions.calls == 2  # one rejection, one resample

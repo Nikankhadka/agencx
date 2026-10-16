@@ -78,6 +78,7 @@ def _is_failover_error(error: BaseException) -> bool:
         isinstance(error, APIStatusError) and error.status_code >= 500
     )
 
+
 # How long the primary gets to produce a first token before the next leg starts
 # racing it. The product promise is <= 4s to first token (PRD section 9); this is
 # the trigger, not the promise - the race is what keeps the promise when a leg
