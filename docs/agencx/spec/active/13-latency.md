@@ -8,8 +8,10 @@
 
 Measure a real customer turn's latency with one command, on the app's own
 telemetry, so a later change is judged against a measured noise floor rather
-than a guess. This slice builds the instrument and changes no prompt, route, or
-budget.
+than a guess. This slice builds the instrument. It changes no prompt, route, or
+budget and leaves the platform `DEFAULT_*` limits untouched; the only settings
+it moves are the demo tenants' own daily limits, raised so a matrix day does not
+hit them (see `docs/agencx/evidence/latency-2026-10/data/tenant-limits.md`).
 
 ## Protocol
 
@@ -48,7 +50,11 @@ up, pass or fail, in the evidence folder.
 | Zen | `https://opencode.ai/inference/openai/v1` | `opencode/ling-3.1-flash-free` | `OPENCODE_ZEN_API_KEY` | probe |
 | Zen | `https://opencode.ai/inference/openai/v1` | `opencode/space-bunny-free` | `OPENCODE_ZEN_API_KEY` | probe, never a candidate |
 
-The committed config is `backend/evals/latency_config.json`.
+The committed config is `backend/evals/latency_config.json`. The Zen rows show
+OpenCode's provider-namespaced id for readability; the Zen endpoint expects the
+**bare** id (`space-bunny-free`, not `opencode/space-bunny-free`), which is what
+the config's `api_model` carries and what `/v1/models` returns - see any
+`data/opencode-*-__bytefix.json` skip artifact.
 
 ## Open decisions
 

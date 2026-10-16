@@ -16,9 +16,12 @@ retrieval, and SSE framing are all the real ones.
 **Model pinning.** ``docker compose run -e`` pins a *container*; the runner must
 pin the *process* it drives. It writes ``LLM_PROVIDER`` / ``LLM_BASE_URL`` /
 ``LLM_API_KEY`` / ``LLM_MODEL`` and empties both other tiers' model names, then
-clears the settings cache, so the app builds exactly one provider leg. A turn
-whose reported ``usage_models`` is anything but the pinned model is recorded as
-``model_match: false`` - a wrong number is surfaced, never averaged in.
+clears the settings cache, so the app builds exactly one provider leg. Each
+turn's ``usage_models`` carries the model the provider says it **served** (read
+from the response body, see ``app/llm/openai_base.py``), not the id that was
+requested; ``model_match`` is true only when every reported model equals the
+pinned ``api_model`` and at least one call reported usage, so a turn answered by
+a different model is ``model_match: false`` and is never averaged in.
 
 Usage::
 
@@ -128,6 +131,47 @@ def _find_model(models: list[dict[str, Any]], api_model: str) -> dict[str, Any] 
     return None
 
 
+def _embedder_config() -> dict[str, Any]:
+    """The effective embedder, recorded so a hybrid tenant's ``embed_ms`` can be
+    attributed to a concrete model rather than an ambient setting."""
+    settings = get_settings()
+    if settings.embedder == "local":
+        model = settings.local_embed_model
+    elif settings.embedder == "google":
+        model = settings.google_embed_model
+    else:
+        model = ""
+    return {"provider": settings.embedder, "model": model}
+
+
+async def _probe_provider(http: httpx.AsyncClient, model: dict[str, Any]) -> str | None:
+    """A minimal direct completion against the provider, for a probe-tier model.
+
+    The Zen free tier rejects any non-OpenCode client at the endpoint itself,
+    and the app's chat surface hides that: the controller turns a provider fault
+    into a graceful handoff, so the SSE carries no error text. Probing the
+    endpoint directly records the exact refusal. Returns ``None`` when the
+    provider answered, or the error body/exception text otherwise.
+    """
+    key = os.environ.get(str(model["key_env"]), "")
+    url = f"{str(model['base_url']).rstrip('/')}/chat/completions"
+    try:
+        resp = await http.post(
+            url,
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "model": model["api_model"],
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+            },
+        )
+    except httpx.HTTPError as exc:
+        return f"{type(exc).__name__}: {exc}"
+    if resp.status_code >= 400:
+        return f"HTTP {resp.status_code}: {resp.text[:500]}"
+    return None
+
+
 def _pin_model(model: dict[str, Any]) -> None:
     key = os.environ.get(str(model["key_env"]), "")
     if not key:
@@ -187,6 +231,9 @@ async def _run_model_tenant(
         http, str(model["models_url"]), os.environ.get(str(model["key_env"]), "")
     )
     fetched_at = _utc_now()
+    provider_ids = sorted(
+        str(m["id"]) for m in provider_models if isinstance(m, dict) and m.get("id")
+    )
     entry = _find_model(provider_models, str(model["api_model"]))
     result: dict[str, Any] = {
         "model": {k: model.get(k) for k in ("label", "route", "base_url", "api_model", "tier")},
@@ -196,16 +243,32 @@ async def _run_model_tenant(
         "expected_llm_calls": tenant.get("expected_llm_calls"),
         "provider_models_fetched_at": fetched_at,
         "provider_model_present": entry is not None,
+        "provider_model_count": len(provider_ids),
+        "provider_id_form": model.get("provider_id_form"),
         "provider_pricing": entry.get("pricing") if entry else None,
+        "embedder": _embedder_config(),
         "command": command,
         "generated_at": _utc_now(),
         "turns": [],
     }
     if entry is None:
+        # Record the exact catalogue so the absence is checkable from the
+        # artifact, not just asserted.
+        result["provider_model_ids"] = provider_ids
         result["skipped"] = (
-            f"{model['api_model']} absent from {model['models_url']} at {fetched_at}"
+            f"{model['api_model']} absent from {model['models_url']} at {fetched_at} "
+            f"(catalogue carried {len(provider_ids)} ids)"
         )
         return result
+    if model.get("tier") == "probe":
+        probe_error = await _probe_provider(http, model)
+        if probe_error is not None:
+            result["provider_model_ids"] = provider_ids
+            result["provider_probe_error"] = probe_error
+            result["skipped"] = (
+                f"provider refused a probe call to {model['api_model']}: {probe_error}"
+            )
+            return result
 
     conversation_id: str | None = None
     for _ in range(turns):
@@ -233,6 +296,11 @@ async def _run_model_tenant(
                 {
                     "conversation_id": record.get("conversation_id"),
                     "usage_models": usage_models,
+                    # True only when every served model a call reported equals
+                    # the pinned id AND at least one call reported usage.
+                    # ``usage_models`` now carries the served model (from the
+                    # provider response), so this is a real identity check, not
+                    # a comparison of the id we asked for against itself.
                     "model_match": bool(usage_models)
                     and set(usage_models) == {str(model["api_model"])},
                     "event_types": event_types,

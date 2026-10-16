@@ -25,7 +25,8 @@
       "api_model": "ling-3.1-flash-free",
       "key_env": "OPENCODE_ZEN_API_KEY",
       "models_url": "https://opencode.ai/inference/v1/models",
-      "tier": "probe"
+      "tier": "probe",
+      "provider_id_form": "bare id: the Zen /v1/models endpoint returns ids like 'space-bunny-free', never 'opencode/space-bunny-free'; the 'opencode/' prefix is OpenCode's own provider namespace, not part of the API id"
     },
     {
       "label": "opencode/space-bunny-free",
@@ -35,7 +36,8 @@
       "key_env": "OPENCODE_ZEN_API_KEY",
       "models_url": "https://opencode.ai/inference/v1/models",
       "tier": "probe",
-      "candidate": false
+      "candidate": false,
+      "provider_id_form": "bare id: the Zen /v1/models endpoint returns ids like 'space-bunny-free', never 'opencode/space-bunny-free'; the 'opencode/' prefix is OpenCode's own provider namespace, not part of the API id"
     }
   ],
   "corpus": [

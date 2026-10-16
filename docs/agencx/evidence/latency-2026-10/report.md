@@ -5,47 +5,52 @@
 ## What landed
 
 - `make latency` drives one real turn through `POST /api/chat` with one model
-  pinned per run, and writes one JSON record per turn.
+  pinned, and writes one JSON record per turn.
 - The record (`backend/app/observability/turn_record.py`) carries the 14
-  required keys. It is emitted as one structured line on the `app.latency`
-  logger; the runner taps it in-process, so a turn cannot be misattributed.
+  required keys, emitted once per graph turn in the handler's outermost
+  `finally` so `total_ms` spans the same range on success and failure.
+- `usage_models` carries the model the provider response names (the **served**
+  model, `backend/app/llm/openai_base.py`), not the id that was requested, so
+  `model_match` is a real identity check.
 - The percentile rule (linear interpolation between the two closest ranks) is
-  in `backend/app/observability/percentile.py`, unit-tested in
-  `backend/tests/test_percentile.py`.
-- Per-tenant daily limits are raised to 50,000,000 tokens and $50 for bytefix,
-  sababa2 and northgate, written by their seeds (`config.limits`). sababa is
-  unchanged, by design.
+  in `backend/app/observability/percentile.py`, unit-tested.
+- Per-tenant daily limits raised to 50,000,000 tokens and $50 for bytefix,
+  sababa2 and northgate; sababa stays at the defaults. See
+  `data/tenant-limits.md`.
 
 ## Smoke
 
 Command: `make latency`. Model `deepseek/deepseek-v4.1-flash` on OpenRouter,
-tenant bytefix.
+tenant bytefix. Artifact:
+`data/openrouter-deepseek-v4-1-flash__bytefix.json`.
 
 | measure | value |
 |---|---|
-| total_ms | 9761.8 |
-| first_model_token_ms | 4941.6 |
-| first_prose_ms | 9760.9 |
-| buffer_hold_ms | 4819.3 |
+| total_ms | 7295.1 |
+| first_model_token_ms | 3792.3 |
+| first_prose_ms | 7257.1 |
+| buffer_hold_ms | 3464.8 |
 | llm_call_count / path / route | 2 / fast / knowledge |
-| input_tokens / output_tokens | 8487 / 2119 |
+| input_tokens / output_tokens | 8875 / 754 |
 | leg / failover_engaged | null / false |
+| model_match | true |
 
-Artifact: `data/openrouter-deepseek-v4-1-flash__bytefix.json` (prices fetched
-live at 04:17:04Z).
+## Probe skips
 
-Three identical runs totalled 6.1s, 10.0s and 9.8s - the spread slice 2 must
-quantify before any before/after claim.
+Command: `make latency LATENCY_MODELS=opencode/ling-3.1-flash-free,opencode/space-bunny-free LATENCY_TENANTS=bytefix`.
+
+- `ling-3.1-flash-free` is absent from the Zen catalogue (46 ids, in the
+  artifact).
+- `space-bunny-free` is listed, but the endpoint answers `HTTP 403
+  FreeTierError` (non-OpenCode clients are refused).
+Artifacts: `data/opencode-*-__bytefix.json`.
 
 ## Findings
 
-- Pass: `make latency`, lint, typecheck and the full suite (1373 backend tests)
-  are green.
-- The two Zen probes cannot be exercised: the free tier rejects any non-OpenCode
-  client (`FreeTierError`), and `ling-3.1-flash-free` is absent from the live
-  catalogue. Recorded, not substituted.
-- `leg` is null because each run pins a single leg (no failover provider is
-  built); `usage_models` proves the pinned model answered.
-- Pre-existing: `make seed-tenant2` (northgate) fails confirm with
-  `incomplete - missing: ABN; GST registration`; northgate got its limits by an
-  idempotent update instead.
+- Pass: `make latency`, lint, typecheck and the suite are green
+  (`data/make-check.log`).
+- `leg` is null because a run pins one leg (no failover provider);
+  `usage_models` proves which model answered.
+- Pre-existing: `make seed-tenant2` (northgate) fails confirm on missing
+  ABN/GST; see `data/tenant-limits.md`.
+- Not started: the noise floor and the matrix (the next order).

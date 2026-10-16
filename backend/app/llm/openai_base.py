@@ -75,10 +75,30 @@ def _require_choices(completion: Any) -> None:
         )
 
 
-def _report(model: str, usage: Any) -> None:
-    """Forward a completion's token usage to the T-030 cost sink, if any."""
+def _served_model(configured_model: str, response: Any) -> str:
+    """The model the provider says served this call.
+
+    A gateway can answer with a different model than the one requested (or a
+    versioned name), and that difference is exactly what the latency record's
+    model-identity check must see - so the reported usage carries what the
+    response names, not what was asked for. Falls back to the configured id
+    when the response carries no ``model`` (some OpenAI-compatible endpoints,
+    and every test fake here, omit it).
+    """
+    served = getattr(response, "model", None)
+    return str(served) if served else configured_model
+
+
+def _report(configured_model: str, response: Any) -> None:
+    """Forward a completion's token usage to the T-030 cost sink, if any,
+    tagged with the model the provider says served it."""
+    usage = getattr(response, "usage", None)
     if usage is not None:
-        report_usage(model, usage.prompt_tokens or 0, usage.completion_tokens or 0)
+        report_usage(
+            _served_model(configured_model, response),
+            usage.prompt_tokens or 0,
+            usage.completion_tokens or 0,
+        )
 
 
 def _retry_after_seconds(error: RateLimitError, attempt: int) -> float:
@@ -309,7 +329,7 @@ class OpenAISDKProvider(LLMProvider):
             )
 
         completion = await _with_retry(_call)
-        _report(self._model, completion.usage)
+        _report(self._model, completion)
         _require_choices(completion)
         message = completion.choices[0].message
 
@@ -518,7 +538,7 @@ class OpenAISDKProvider(LLMProvider):
                 raise UpstreamResponseError(
                     "provider returned an unparseable completion body"
                 ) from error
-            _report(self._model, completion.usage)
+            _report(self._model, completion)
             _require_choices(completion)
             content = completion.choices[0].message.content
             if not content:
@@ -548,7 +568,7 @@ class OpenAISDKProvider(LLMProvider):
                 **self._cap(self._max_tokens_draft),
                 **self._extra_body_kwargs(),
             )
-            _report(self._model, completion.usage)
+            _report(self._model, completion)
             _require_choices(completion)
             content = completion.choices[0].message.content
             if content is None:
@@ -576,7 +596,7 @@ class OpenAISDKProvider(LLMProvider):
         async for chunk in stream:
             # The usage-only final chunk carries no choices.
             if getattr(chunk, "usage", None) is not None:
-                _report(self._model, chunk.usage)
+                _report(self._model, chunk)
             delta = chunk.choices[0].delta.content if chunk.choices else None
             if delta:
                 yield delta

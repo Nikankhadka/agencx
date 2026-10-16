@@ -10,7 +10,10 @@ A customer turn's latency is spread across the code that produces it:
 
 This module is the one place they meet. Components write the measures they own
 into a per-turn accumulator; the controller reads it back and emits exactly one
-record per turn as a single structured log line. The runner taps that line.
+record per graph turn as a single structured log line. The runner taps that
+line. A turn that never reaches the graph (a terminal limit stop, a
+human-handled reply, an escalated conversation) opens no sink and records
+nothing - which is correct, because no model work happened.
 
 It mirrors ``collect_usage`` (app/observability/cost.py) and ``collect_legs``
 (app/llm/failover.py), and for the same reason: the graph runs in child tasks
@@ -29,6 +32,12 @@ reported token usage. One caveat: in a failover race both legs can complete
 before the loser is cancelled, so a raced turn can report one more call than
 the graph asked for. The record's ``leg`` and ``usage_models`` make that
 visible rather than silent.
+
+``usage_models`` carries the model each call's provider response named (the
+**served** model, from the response body - see ``app/llm/openai_base.py``), not
+the id that was requested, so a gateway that answers with a different model is
+visible in the evidence. A provider whose response omits the model name reports
+the configured id.
 """
 
 from __future__ import annotations
@@ -79,6 +88,22 @@ def _add(total: float | None, value: float | None) -> float | None:
     return value if total is None else round(total + value, 1)
 
 
+# The route values the graph's decision point produces (``_determine_route`` in
+# app/agents/agent_node.py, plus the "structured" value for a card response).
+# A node's returned ``route`` is only accepted when it is one of these.
+_ROUTE_VOCABULARY = frozenset(
+    {
+        "conversation",
+        "knowledge",
+        "recommendation",
+        "quoting",
+        "order_status",
+        "escalation",
+        "structured",
+    }
+)
+
+
 _sink: ContextVar[TurnRecord | None] = ContextVar("_turn_record_sink", default=None)
 
 
@@ -116,10 +141,19 @@ def record_path(path: str) -> None:
 
 
 def record_route(route: str | None) -> None:
-    """The turn's route, written by the agent tracing wrapper."""
+    """The turn's decided route, written by the agent tracing wrapper.
+
+    First write wins, and only a value in ``_ROUTE_VOCABULARY`` is accepted.
+    The graph's decision point (the ``agent`` node, always the first traced
+    node) is the only node that returns a route today, so the first value is
+    the decided one - last-write-wins would let a later node's incidental value
+    clobber it. The vocabulary guard rejects anything a future node might
+    return that is not one of the graph's routes.
+    """
     record = _active()
-    if record is not None and route is not None:
-        record.route = route
+    if record is None or record.route is not None or route not in _ROUTE_VOCABULARY:
+        return
+    record.route = route
 
 
 def build_record(
@@ -176,8 +210,9 @@ def emit_turn_record(
     return the payload so an in-process caller can also read it directly.
 
     The line is on ``app.latency`` and keyed to the tenant and conversation;
-    ``usage_models`` names every model that reported usage, so a turn served by
-    an unexpected model is visible in the evidence rather than averaged in.
+    ``usage_models`` names the served model of every call that reported usage,
+    so a turn served by an unexpected model is visible in the evidence rather
+    than averaged in.
     """
     payload: dict[str, object] = {
         "record": build_record(

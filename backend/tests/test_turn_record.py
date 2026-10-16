@@ -67,7 +67,11 @@ def test_sink_collects_component_measures_and_totals_retrieval() -> None:
         # contributes nothing.
         record_retrieval(embed_ms=0.5, search_ms=None, rerank_ms=1.0)
         record_route("knowledge")
-        record_route(None)  # a null route never overwrites a real one
+        # First write wins, so a later node's route cannot clobber the decided
+        # one; a value outside the vocabulary is ignored.
+        record_route("quoting")
+        record_route("not-a-route")
+        record_route(None)
     assert record.path == "hybrid"
     assert record.embed_ms == 1.5
     assert record.search_ms == 2.0

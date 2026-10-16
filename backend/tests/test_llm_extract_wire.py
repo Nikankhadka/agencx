@@ -16,18 +16,22 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.llm.openai_base import OpenAISDKProvider
+from app.observability.cost import collect_usage
 
 
 class _Schema(BaseModel):
     value: str
 
 
-def _completion(content: str) -> SimpleNamespace:
+def _completion(content: str, *, model: str | None = None) -> SimpleNamespace:
     message = SimpleNamespace(content=content, parsed=None)
-    return SimpleNamespace(
-        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
-        choices=[SimpleNamespace(message=message)],
-    )
+    fields: dict[str, Any] = {
+        "usage": SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+        "choices": [SimpleNamespace(message=message)],
+    }
+    if model is not None:
+        fields["model"] = model
+    return SimpleNamespace(**fields)
 
 
 class _RecordingCompletions:
@@ -59,3 +63,27 @@ async def test_strict_extract_sends_json_schema_wire_format() -> None:
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["name"] == "_Schema"
     assert response_format["json_schema"]["schema"] == _Schema.model_json_schema()
+
+
+async def test_reported_usage_names_the_served_model() -> None:
+    # A gateway can answer with a different (or versioned) model than requested;
+    # the reported usage must carry what the response named, not what was asked
+    # for, or the latency record's model-identity check is a tautology.
+    completions = _RecordingCompletions(
+        [_completion('{"value": "ok"}', model="gemini-3.5-flash-001")]
+    )
+    with collect_usage() as usages:
+        await _strict_provider(completions).extract(
+            system_prompt="extract the value", user_input="free text", schema=_Schema
+        )
+    assert [u.model for u in usages] == ["gemini-3.5-flash-001"]
+
+
+async def test_reported_usage_falls_back_to_the_configured_model() -> None:
+    # The response carries no model name: report the configured id.
+    completions = _RecordingCompletions([_completion('{"value": "ok"}')])
+    with collect_usage() as usages:
+        await _strict_provider(completions).extract(
+            system_prompt="extract the value", user_input="free text", schema=_Schema
+        )
+    assert [u.model for u in usages] == ["gemini-3.5-flash"]

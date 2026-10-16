@@ -503,13 +503,60 @@ async def stream_chat_response(
         yield {"type": "handoff"}
         yield {"type": "done"}
         return
+    else:
+        # Success: the ``with`` block above completed without raising. This is
+        # an ``else`` clause, not the try body, so a failure here - a persist
+        # error - still propagates to the SSE fallback exactly as before,
+        # instead of being caught by the provider-fault handler below.
+        await service.persist_assistant_turn(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            full_text=full_text,
+            verdicts=verdicts,
+            tool_calls=tool_calls,
+            usages=usages,
+            author_node=author_node,
+            response=response_payload,
+            price_summary_ms=price_summary_ms,
+            intent=intent,
+            action=action,
+        )
+        if handoff_seen:
+            escalation_summary.schedule(
+                tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
+            )
+        logger.info(
+            "chat turn",
+            extra={
+                "total_ms": _ms_since(turn_started),
+                # None when the turn produced no prose at all (a deterministic
+                # order_status/escalation draft never emits token events).
+                "first_model_token_ms": first_model_token_ms,
+                "first_prose_ms": first_prose_ms,
+                # What the inspection buffer costs this turn: prose existed this
+                # much earlier than the customer was allowed to see it.
+                "buffer_hold_ms": (
+                    round(first_prose_ms - first_model_token_ms, 1)
+                    if first_model_token_ms is not None and first_prose_ms is not None
+                    else None
+                ),
+                "chars": len(full_text),
+                # P-2: which leg answered and whether the race was needed. The rest
+                # of the turn's latency story is on this line already; the provider
+                # half belongs next to it, not in a separate stream.
+                **legs.as_attributes(),
+            },
+        )
+        yield {"type": "done"}
     finally:
-        # Slice 1: exactly one record per turn, on every exit path (success,
-        # turn-budget, step cap, provider fault), from whatever the turn
-        # measured. A measure that did not apply is null, never absent - a
-        # deterministic turn records null prose timings, the fast path records
-        # null embed/search/rerank - so a missing number reads as a null, not
-        # as a gap the reader has to notice.
+        # Slice 1: exactly one record per turn, measured at the outermost exit
+        # (the generator is about to stop on every path), so the span is the
+        # same on success and on every failure - success now includes persist,
+        # and the failure paths already included their escalation writes.
+        # A measure that did not apply is null, never absent - a deterministic
+        # turn records null prose timings, the fast path records null
+        # embed/search/rerank - so a missing number reads as a null, not as a
+        # gap the reader has to notice.
         if turn_record is not None:
             usage_list = usages or []
             emit_turn_record(
@@ -531,44 +578,3 @@ async def stream_chat_response(
                 leg=legs.leg if legs is not None else None,
                 failover_engaged=legs.failover_engaged if legs is not None else False,
             )
-
-    await service.persist_assistant_turn(
-        tenant_id=tenant_id,
-        conversation_id=conversation_id,
-        full_text=full_text,
-        verdicts=verdicts,
-        tool_calls=tool_calls,
-        usages=usages,
-        author_node=author_node,
-        response=response_payload,
-        price_summary_ms=price_summary_ms,
-        intent=intent,
-        action=action,
-    )
-    if handoff_seen:
-        escalation_summary.schedule(
-            tenant_id=tenant_id, conversation_id=conversation_id, provider=provider
-        )
-    logger.info(
-        "chat turn",
-        extra={
-            "total_ms": _ms_since(turn_started),
-            # None when the turn produced no prose at all (a deterministic
-            # order_status/escalation draft never emits token events).
-            "first_model_token_ms": first_model_token_ms,
-            "first_prose_ms": first_prose_ms,
-            # What the inspection buffer costs this turn: prose existed this
-            # much earlier than the customer was allowed to see it.
-            "buffer_hold_ms": (
-                round(first_prose_ms - first_model_token_ms, 1)
-                if first_model_token_ms is not None and first_prose_ms is not None
-                else None
-            ),
-            "chars": len(full_text),
-            # P-2: which leg answered and whether the race was needed. The rest
-            # of the turn's latency story is on this line already; the provider
-            # half belongs next to it, not in a separate stream.
-            **legs.as_attributes(),
-        },
-    )
-    yield {"type": "done"}

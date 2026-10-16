@@ -9,7 +9,9 @@ the real local cross-encoder's actual judgment.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -1361,3 +1363,130 @@ async def test_chat_persists_a_formal_quote_payload_on_the_message_row(
     assert metadata["response"] == quote_events[0]
     assert metadata["response"]["type"] == "quote"
     assert metadata["response"]["quote"]["total_cents"] == 12000
+
+
+# --- Slice 1 (latency): one record per graph turn, on every exit path --------
+
+_LATENCY_RECORD_KEYS = frozenset(
+    {
+        "total_ms",
+        "first_model_token_ms",
+        "first_prose_ms",
+        "buffer_hold_ms",
+        "embed_ms",
+        "search_ms",
+        "rerank_ms",
+        "path",
+        "llm_call_count",
+        "input_tokens",
+        "output_tokens",
+        "leg",
+        "failover_engaged",
+        "route",
+    }
+)
+
+
+def _latency_payloads(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for record in caplog.records:
+        if record.name != "app.latency":
+            continue
+        payload = vars(record).get("latency_turn")
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
+
+
+async def test_latency_record_is_emitted_exactly_once_on_success(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The real handler emits exactly one ``app.latency`` record on a normal
+    turn, and ``total_ms`` measures the outermost span so it is at or after the
+    point the customer's prose appeared."""
+    slug = f"chat-latency-{uuid.uuid4().hex[:8]}"
+    await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+
+    with caplog.at_level(logging.INFO, logger="app.latency"):
+        response = await client.post(
+            "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+        )
+    assert response.status_code == 200
+    conversation_id = _parse_sse(response.text)[0]["conversation_id"]
+
+    payloads = _latency_payloads(caplog)
+    assert len(payloads) == 1, f"expected exactly one latency record, got {len(payloads)}"
+    payload = payloads[0]
+    assert payload["conversation_id"] == conversation_id
+    record = payload["record"]
+    assert isinstance(record, dict)
+    assert set(record) == _LATENCY_RECORD_KEYS
+    assert record["first_prose_ms"] is not None
+    assert record["total_ms"] >= record["first_prose_ms"]
+
+
+class SlowProvider(ToolAwareFakeProvider):
+    """Every model call sleeps far past the tenant's turn budget, so the turn
+    takes the TimeoutError path - deterministically, without a real clock wait
+    of ten seconds.
+
+    The explicit no-arg ``__init__`` matters: FastAPI reads a class dependency
+    override's ``__init__`` signature as its request parameters, and the
+    inherited one carries ``tool_call_sequence: list[ToolTurn] | None``, which
+    would demand a list field on the request body (a 422 before the turn runs).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[Any],
+        tools: list[Any],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        await asyncio.sleep(30)
+        raise AssertionError("unreachable: the turn budget fires first")
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        await asyncio.sleep(30)
+        raise AssertionError("unreachable: the turn budget fires first")
+
+
+async def test_latency_record_is_emitted_exactly_once_on_turn_budget_timeout(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A turn that blows its budget exits via the TimeoutError branch, and still
+    emits exactly one record - the same outer span, not a second or a missing
+    one."""
+    slug = f"chat-latency-timeout-{uuid.uuid4().hex[:8]}"
+    tenant_id = await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    await superuser_conn.execute(
+        "update tenant_config set config = jsonb_set(config, '{limits}', "
+        "'{\"turn_budget_s\": 0.05}'::jsonb, true) where tenant_id = $1",
+        tenant_id,
+    )
+    app.dependency_overrides[get_llm_provider] = SlowProvider
+
+    with caplog.at_level(logging.INFO, logger="app.latency"):
+        response = await client.post("/api/chat", json={"slug": slug, "message": "hello"})
+    assert response.status_code == 200, response.text
+    types = [event["type"] for event in _parse_sse(response.text)]
+    assert types[-1] == "done"
+    assert "handoff" in types  # the graceful turn-budget handoff
+
+    payloads = _latency_payloads(caplog)
+    assert len(payloads) == 1, f"expected exactly one latency record, got {len(payloads)}"
+    record = payloads[0]["record"]
+    assert isinstance(record, dict)
+    assert set(record) == _LATENCY_RECORD_KEYS
+    # No prose was ever allowed out, so the prose measures are null, not absent.
+    assert record["first_prose_ms"] is None
