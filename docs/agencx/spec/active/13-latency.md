@@ -1,7 +1,8 @@
 # 13 - Latency instrument
 
 **Status:** In progress - slice 1 landed (instrument, noise floor, model
-matrix); slice 2 (draft output cap) in progress.
+matrix). Slice 2 (draft output cap) measured: no-measurable-effect (the cap
+never bound). Slices 3 through 7 not started.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -35,7 +36,10 @@ validated and the founder says go.
 2. Cap output tokens: `LLM_MAX_TOKENS_DRAFT` is 0 (uncapped); cap the draft
    prose first, and cap extract only after the schemas shrink - a reasoning
    model spends its cap on hidden thinking and dies with
-   `LengthFinishReasonError`. In progress.
+   `LengthFinishReasonError`. Done: `llm_max_tokens_draft` ships at 2048;
+   measured no-measurable-effect (per-call output stayed under the cap, so it
+   never truncated) - see
+   `docs/agencx/evidence/latency-2026-10/report-slice-2.md`.
 3. Kill the discarded agent call (`backend/app/agents/agent_node.py:1167`):
    the hybrid path makes a call whose result is thrown away, so
    `llm_call_count` 4 to 3; the grounding/money reason the call exists for must

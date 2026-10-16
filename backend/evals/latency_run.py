@@ -63,6 +63,12 @@ def _utc_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _commit_sha() -> str:
+    """The measured commit, handed in by the Makefile: git is not reachable
+    inside the container, which mounts only ./backend."""
+    return os.environ.get("LATENCY_COMMIT", "")
+
+
 def _make_command(args: argparse.Namespace) -> str:
     """The `make latency` invocation that reproduces this run, for the evidence."""
     parts = ["make latency"]
@@ -249,6 +255,7 @@ async def _run_model_tenant(
         "provider_pricing": entry.get("pricing") if entry else None,
         "embedder": _embedder_config(),
         "command": command,
+        "commit": _commit_sha(),
         "generated_at": _utc_now(),
         "turns": [],
     }
@@ -369,6 +376,7 @@ async def run(args: argparse.Namespace) -> int:
                             "model": model,
                             "skipped": str(exc),
                             "command": command,
+                            "commit": _commit_sha(),
                             "generated_at": _utc_now(),
                         },
                     )

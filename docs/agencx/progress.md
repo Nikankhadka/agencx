@@ -47,12 +47,14 @@ live in the ticket files, not here.
 ## What is next
 
 - [ ] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
-  post-launch): slice 1, the instrument, landed on `latency/stack`
-  (not merged) - `make latency` drives real turns through the chat surface with
-  one model pinned and writes the 14-key per-turn record; the percentile rule,
-  the model/corpus config and the smoke evidence are in
-  [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Next: the noise
-  floor (slice 2) and the four-model matrix (slice 3).
+  post-launch): slices stack on `latency/stack` (not merged until the founder
+  says go). Slice 1, the instrument - `make latency` drives real turns with one
+  model pinned and writes the 14-key per-turn record; the noise floor and model
+  matrix are in
+  [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Slice 2, the
+  draft output cap (`llm_max_tokens_draft` 2048) - measured no-measurable-effect
+  ([report-slice-2.md](evidence/latency-2026-10/report-slice-2.md)). Next: slice
+  3, the discarded agent call.
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
   built), Sentry on both surfaces (T-024 and T-025, built, ADR D33),
@@ -365,7 +367,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 in progress) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, no-measurable-effect) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

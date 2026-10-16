@@ -295,11 +295,16 @@ eval-skip-llm: ## Deterministic eval gate only (skip LLM-judged) - NEEDS make se
 # tenant, one turn - and the corpus tenants must already be seeded. Widen with
 # LATENCY_MODELS / LATENCY_TENANTS (a comma list, or 'all') and LATENCY_TURNS.
 LATENCY_EVIDENCE := $(CURDIR)/docs/agencx/evidence/latency-2026-10
+# The commit the run is measured at. The runner only sees ./backend inside the
+# container, so git is not reachable there; the host computes the sha and hands
+# it in.
+LATENCY_COMMIT := $(shell git -C $(CURDIR) rev-parse --short HEAD 2>/dev/null)
 
 .PHONY: latency
-latency: ## Measure turn latency (slice 1); flags LATENCY_MODELS / LATENCY_TENANTS / LATENCY_TURNS
+latency: ## Measure turn latency; flags LATENCY_MODELS / LATENCY_TENANTS / LATENCY_TURNS
 	@mkdir -p $(LATENCY_EVIDENCE)/data
 	$(DC) run --rm \
+		-e LATENCY_COMMIT=$(LATENCY_COMMIT) \
 		-v $(LATENCY_EVIDENCE):/evidence \
 		backend python -m evals.latency_run \
 		$(if $(LATENCY_MODELS),--models $(LATENCY_MODELS)) \

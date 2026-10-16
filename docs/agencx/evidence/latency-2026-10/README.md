@@ -5,6 +5,8 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | File | What it holds |
 |---|---|
 | [report.md](report.md) | Slice 1 report: instrument, noise floor, matrix, A/B verdict |
+| [report-slice-2.md](report-slice-2.md) | Slice 2: the draft output cap, measured no-measurable-effect |
+| `data/slice2-run1.json`, `data/slice2-run2.json` | The two slice-2 measurement runs (commit `4f40ef3`) |
 | `data/openrouter-deepseek-v4-1-flash__bytefix.json` | The default smoke: one bytefix turn, prices fetched live |
 | [data/noise-run1.json](data/noise-run1.json), [data/noise-run2.json](data/noise-run2.json) | Two back-to-back runs of unchanged code, three tenants x five fixed turns |
 | [data/noise-floor.md](data/noise-floor.md) | p50/p95 per run and the cross-run tolerance rule |
