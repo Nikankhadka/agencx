@@ -83,7 +83,8 @@ live in the ticket files, not here.
   first and the embedding runs beside it, with dense awaited only once the
   embedding is in hand and sparse has landed (one connection, one operation at a
   time; the RLS context is on the caller's connection). Measured at `040a473`:
-  the documented band rule has no sample (sababa completed one turn in six runs),
+  the documented band rule has no sample (completed hybrid turns that ran
+  `retrieve()`: 1/0/0/0/0/0 across six runs),
   the fallback band for `search_ms` is 2.52 ms, and both runs' hybrid `search_ms`
   p50 fell (1.9-2.7 -> 1.25 / 1.15) - but `rerank_ms`, untouched by this slice,
   also steps over its own band once, and the overlap can only ever save the

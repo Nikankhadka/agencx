@@ -1,0 +1,9 @@
+# make format-check after the slice-4 correction edits (app/retrieval/service.py and
+# tests/test_retrieval_parallel.py), on top of 7b7f7a4 - clean. The five files that
+# were drifting on this branch were brought into line by e908498 ('13-latency: format
+# the lagging files'); nothing has drifted since.
+
+docker compose run --rm --no-deps backend ruff format --check .
+ Container agencx-backend-run-02ef616e9ce6 Creating 
+ Container agencx-backend-run-02ef616e9ce6 Created 
+248 files already formatted

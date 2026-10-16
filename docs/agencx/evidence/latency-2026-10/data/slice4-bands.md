@@ -14,11 +14,18 @@ three timings are non-null on exactly the same kind of turns across all six runs
 
 ## Result A - the documented rule (completed hybrid turns): NO BAND
 
-Completed hybrid turns - narration reaching the customer - are **one turn in six
-runs** (`noise-run1` turn 4, `embed_ms` 43.6 / `search_ms` 1.0 / `rerank_ms`
-162.0). Every one of the 15 pre-slice pairings therefore lacks a sample on one
-side, and the rule returns nothing. `sababa` completed 0, 1, 1, 0, 0, 1 turns in
-the six runs; the hybrid path is the one that blows the 10s turn budget.
+Completed hybrid turns **that ran `retrieve()`: 1/0/0/0/0/0** across
+`noise-run1/2` + `slice2-run1/2` + `slice3-run1/2` - a single turn (`noise-run1`
+turn 4, `embed_ms` 43.6 / `search_ms` 1.0 / `rerank_ms` 162.0). Every one of the
+15 pre-slice pairings therefore lacks a sample on one side, and the rule returns
+nothing.
+
+Note the sibling, so the counts are not misread as the raw completion numbers:
+`sababa` completed TWO hybrid turns in `noise-run1` (`noise-floor.md` records
+2/5), but only one of them ran `retrieve()`. The other completed through the
+tool's fast branch with all three retrieval timings null, so it is not a sample
+for any retrieval band. Completed turns that ran the pipeline are
+**1/0/0/0/0/0**; the hybrid path is the one that blows the 10s turn budget.
 
 ## Result B - fallback: every hybrid turn that ran `retrieve()`
 
@@ -45,17 +52,23 @@ Readings:
 
 - `search_ms` drops in **both** runs (p50 1.9-2.7 -> 1.15-1.25; deltas -0.6 to
   -1.55), the direction the mechanism predicts, and every p50 delta is inside the
-  2.52 band. One p95 delta (-3.52, vs slice2-run2) exceeds it, but that pairing is
-  itself outlier-driven (slice2-run2's max was 5.2).
-- `rerank_ms` - which slice 4 cannot touch - also "exceeds" its band in one
-  pairing (-285.5, slice4-run2 vs slice2-run1, band 247). A band that an
+  2.52 band. **Four** p95 deltas exceed it - -3.52 and -3.43 (slice4-run1), -3.35
+  and -3.26 (slice4-run2), all four against `slice2-run1/2` - and all four are
+  driven by those two runs' p95 outliers (4.72 / 4.81, from `search_ms` values of
+  5.1 and 5.2 where every other run sits at 0.8-3.5). Same reading either way: a
+  drop beyond an outlier-driven band is not a certified drop.
+- `rerank_ms` - which slice 4 cannot touch - also "exceeds" its band (band 247;
+  slice4-run2's p95 delta vs slice2-run1 is -285.5). A band that an
   untouched metric steps over cannot certify a causal claim in either direction,
   so the fallback bands are corroboration at best.
 - The ceiling is physical: the overlap can only remove the **sparse** query's own
-  duration from `search_ms`, measured separately (`slice4-retrieval-split.log`)
-  at median **0.38 ms**, max **0.88 ms** per query, against a warm `retrieve`
-  total of 506-1098 ms and `embed_ms` of 9.5-14.8 ms. The saving is
-  sub-millisecond by construction.
+  duration from `search_ms`. The split probe (`data/slice4-retrieval-split.log`,
+  script beside it) times the stages separately: sparse median **0.38 ms** / max
+  **0.88 ms**, dense 0.55-1.75 ms, embed 9.5-14.8 ms warm. Its `retrieve=` totals
+  (506-1098 ms warm, plus a cold row at 8.3 s) come from that separate process
+  with a different candidate pool and are NOT the per-turn record sums (133-604
+  ms, median 254, over the 26 retrieve-bearing hybrid turns) - the probe exists to
+  bound the ceiling, nothing else. The saving is sub-millisecond by construction.
 
 **Verdict for the slice-4 timing: no-measurable-effect.** The direction is
 consistent and the mechanism is proven structurally; the magnitude is below what

@@ -58,10 +58,12 @@ async def retrieve(
 
     The sparse query is started before the embedding and awaited once the
     embedding is in hand, before the dense query starts - see the module
-    docstring. Its filters are passed through unchanged, and the failure
-    semantics are the sequential ones: the awaited embedding raises first if it
-    fails, because that is the call that was in flight when the old code would
-    have raised.
+    docstring. Its filters are passed through unchanged, and a single failure
+    surfaces exactly as it did sequentially: the awaited embedding's error wins
+    if it fails, because that is the call that was in flight when the old code
+    would have raised. If BOTH searches would fail, the error that surfaces is
+    now the sparse one - it is awaited first - where the sequential shape called
+    dense first and raised dense's.
     """
     started = time.perf_counter()
     sparse_task = asyncio.create_task(
@@ -92,8 +94,9 @@ async def retrieve(
     # lives on this connection, so the caller's connection is the only one this
     # function may use. That is why dense does not start until the sparse query
     # has landed - the overlap is sparse beside the embedding, and dense gets
-    # the connection once it is free again. Its exception, if any, surfaces here
-    # exactly as it did when this await came first in the sequence.
+    # the connection once it is free again. A sparse failure surfaces here, at
+    # the await that used to be dense's, so a fail-on-both turn now reports
+    # sparse's error where it used to report dense's (the docstring says so).
     sparse_results = await sparse_task
     dense_results = await dense_search(
         conn,

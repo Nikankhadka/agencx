@@ -146,11 +146,14 @@ validated and the founder says go.
    only the sparse query's own duration can move, measured at median 0.38 ms
    against a 506-1098 ms warm `retrieve`. **No scored eval**: the change is
    output-preserving by construction (pinned by an equivalence test against a
-   spelled-out sequential reference) and both eval tenants are fast-path, where
+   spelled-out sequential reference, plus a tie fixture that pins the fusion
+   argument order - the equivalence test cannot see a swap, since fused scores
+   are order-independent) and both eval tenants are fast-path, where
    `get_business_context` returns the corpus before `retrieve` is called
-   (`services/retrieval.py:138-149`) - confirmed by 70 fast-path turns with null
-   retrieval timings and by slice 3's replay (0 of 116 cases used a retrieval
-   tool). The deterministic gate that does call `retrieve` passes with recall@5
+   (`services/retrieval.py:138-149`) - confirmed by the 80 fast-path turns of the
+   eight committed runs (2 tenants x 5 turns each, every one null) and by slice
+   3's replay (0 of 116 cases used a retrieval tool). The deterministic gate that
+   does call `retrieve` passes with recall@5
    1.000 / MRR 0.911 / nDCG@5 0.934, identical to the pre-change logs. Full
    write-up: `docs/agencx/evidence/latency-2026-10/report-slice-4.md` and
    `data/slice4-bands.md`.

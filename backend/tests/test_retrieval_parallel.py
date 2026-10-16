@@ -271,8 +271,13 @@ async def _sequential_retrieve(
 async def test_both_orders_return_the_same_chunks(
     pool: Any, superuser_conn: asyncpg.Connection[Any]
 ) -> None:
-    """Same inputs, same lists, same fusion, same rerank - so the same chunks in
-    the same order (ids and scores), whichever order the steps ran in.
+    """The overlapping order returns exactly what the spelled-out sequential
+    sequence returns for the same corpus: same chunk ids, same order, same fused
+    scores (and the same filters, see the test below).
+
+    Both implementations fuse `[dense, sparse]`, and fused scores are
+    order-INDEPENDENT, so this test cannot see a swapped fusion argument - only a
+    tie can, which `test_a_fused_tie_keeps_the_dense_list_first` pins separately.
 
     The corpus mixes all three fusion shapes: a chunk that is both the dense and
     the sparse winner, one only sparse finds, and one only dense finds."""
@@ -349,3 +354,52 @@ async def test_metadata_filters_reach_the_searches(
         )
 
     assert [chunk.content for chunk in results] == ["Screen repair for a cracked phone"]
+
+
+@pytest.mark.db
+async def test_a_fused_tie_keeps_the_dense_list_first(
+    pool: Any, superuser_conn: asyncpg.Connection[Any]
+) -> None:
+    """Pins the fusion argument order, `[dense, sparse]`.
+
+    Fused scores are order-independent, so the only way a swapped argument list
+    shows up is a TIE, where `reciprocal_rank_fusion`'s sort falls back to
+    insertion order - the first list's chunk first. This fixture puts the two
+    chunks in opposite rank orders in the two lists, so both earn
+    `1/(k+1) + 1/(k+2)` and the tie is real. Swapping the arguments, or fusing
+    `[sparse, dense]`, would return them reversed.
+    """
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        slug=f"parallel-tie-{uuid.uuid4().hex[:8]}",
+        contents=[
+            # dense rank 1 (the query vector itself), sparse rank 2 (one match)
+            ("Widget repair service", _basis_vector(0)),
+            # dense rank 2, sparse rank 1 (the query term repeated)
+            ("widget widget widget", _basis_vector(1)),
+        ],
+    )
+    rows = await superuser_conn.fetch(
+        "select id, content from knowledge_chunks where tenant_id = $1", tenant_id
+    )
+    dense_first = next(row["id"] for row in rows if row["content"] == "Widget repair service")
+    sparse_first = next(row["id"] for row in rows if row["content"] == "widget widget widget")
+    embedder = _FixedEmbedder()
+    reranker = _ScoreReranker()
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        dense = await dense_search(conn, tenant_id=tenant_id, query_embedding=_basis_vector(0))
+        sparse = await sparse_search(conn, tenant_id=tenant_id, query="widget")
+        results = await retrieve(
+            conn, tenant_id=tenant_id, query="widget", embedder=embedder, reranker=reranker
+        )
+
+    # The fixture's own precondition: opposite rank orders, or there is no tie to
+    # lose and the ordering assertion below would prove nothing.
+    assert [chunk.id for chunk in dense] == [dense_first, sparse_first]
+    assert [chunk.id for chunk in sparse] == [sparse_first, dense_first]
+    assert len(results) == 2
+    assert results[0].score == results[1].score
+    # The tie resolves to the dense list's chunk, which is the fused argument
+    # order this whole slice has to preserve.
+    assert [chunk.id for chunk in results] == [dense_first, sparse_first]

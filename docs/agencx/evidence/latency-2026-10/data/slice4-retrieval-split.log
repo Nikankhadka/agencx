@@ -1,3 +1,14 @@
+# Slice 4 stage split - produced by (the full container log follows this header):
+#
+#   docker compose run --rm -T \
+#     -v "$PWD/docs/agencx/evidence/latency-2026-10/data/slice4-retrieval-split.py:/app/var/retrieval_split_probe.py" \
+#     backend sh -c 'PYTHONPATH=/app python var/retrieval_split_probe.py'
+#
+# The script is committed beside this log (it was written in gitignored backend/var/ and
+# copied out). The FIRST query row is a cold start: its 8265 ms embed is the model load,
+# so its 9546 ms retrieve is not a warm number - the warm rows are the other four.
+# It reads the hybrid tenant's own fixed messages and prints each stage's own duration.
+
  Container agencx-db-1 Running 
  Container agencx-mailpit-1 Running 
  Container agencx-auth-1 Running 
