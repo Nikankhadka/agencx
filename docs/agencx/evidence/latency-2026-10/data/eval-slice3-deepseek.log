@@ -1,0 +1,44 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-e123d58470a7 Creating 
+ Container agencx-backend-run-e123d58470a7 Created 
+
+=== running evals.money_guardrail_eval --gate ===
+money guardrail matrix: 21/21
+note: A figure quoted verbatim from a poisoned chunk passes this gate by design - it is indistinguishable from the owner's own price list. Injection defence is O-3's review step, the spotlight fence, and inspection.
+
+=== running evals.leakage_eval --gate ===
+seeded leakage pair: A=244c6695-33f0-4c0a-975a-9553fb94849f (leakpair-a), B=2b8cc939-bd30-4c49-8b90-7eb530083fa4 (leakpair-b)
+=== A probes B ===
+pass_count: 12/12
+pass_rate:  1.000
+=== B probes A ===
+pass_count: 12/12
+pass_rate:  1.000
+
+=== running evals.retrieval_eval --gate ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 3491.54it/s]
+Loading weights:   0%|          | 0/105 [00:00<?, ?it/s]Loading weights: 100%|██████████| 105/105 [00:00<00:00, 4226.87it/s]
+metric                  value
+------------------------------------
+recall_at_3             1.000
+recall_at_5             1.000
+mrr                     0.911
+ndcg_at_5               0.934
+positive_cases          45.000
+negative_cases          5.000
+negative_avg_top_score  0.000
+
+=== running evals.generation_eval  ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 3301.60it/s]
+

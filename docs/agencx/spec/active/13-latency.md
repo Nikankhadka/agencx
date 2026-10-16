@@ -2,8 +2,9 @@
 
 **Status:** In progress - slice 1 landed (instrument, noise floor, model
 matrix). Slice 2 (draft output cap, 4096) measured: mechanism inert - the cap
-never bound, so no latency effect is attributable. Slices 3 through 7 not
-started.
+never bound, so no latency effect is attributable. Slice 3 (drop the discarded
+agent call) is recon'd and BLOCKED at the design gate: no scored eval is
+achievable (see `docs/agencx/evidence/latency-2026-10/design-slice-3.md`).
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -45,7 +46,14 @@ validated and the founder says go.
 3. Kill the discarded agent call (`backend/app/agents/agent_node.py:1167`):
    the hybrid path makes a call whose result is thrown away, so
    `llm_call_count` 4 to 3; the grounding/money reason the call exists for must
-   be preserved.
+   be preserved. Recon (see
+   `docs/agencx/evidence/latency-2026-10/design-slice-3.md`) found the loop runs
+   until a round returns no tool calls - that terminal round IS the completion
+   signal - and multi-round tool use is the norm on the hybrid path (4 of 5
+   turns, 1 to 3 rounds). Breaking after the first tool round would change most
+   hybrid turns, so it is ruled out; the only call-saving design that preserves
+   multi-round makes the tool result carry the chunks (grounding-seam change)
+   and needs a scored eval. BLOCKED: the eval is provider-unavailable.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.
