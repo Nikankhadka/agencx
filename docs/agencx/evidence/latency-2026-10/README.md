@@ -20,6 +20,8 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | `data/eval-slice2.log` | The slice-2 `make eval` output (free chain, provider-blocked) |
 | `data/eval-slice3-deepseek.log` | The slice-3 `make eval` pinned to deepseek (stalls in generation_eval) |
 | [data/eval-blocker-diagnosis.md](data/eval-blocker-diagnosis.md) | Eval-blocker root causes, the failover repro, the crawl numbers, and the baseline mechanism |
+| [data/eval-baseline.md](data/eval-baseline.md) | The pre-slice-3 scored-baseline procedure and its blocked outcome |
+| `data/eval-baseline-generation.log` | The aborted generation baseline run (pydantic error-construction TypeError) |
 | `data/eval-scored-smoke-after-fixes.log` | The 6-case scored smoke re-run after the two provider-seam fixes |
 | `data/opencode-*-__bytefix.json` | Zen probe skips: the exact catalogue and provider refusal |
 | [data/tenant-limits.md](data/tenant-limits.md) | The demo tenants' daily limits and the northgate ABN/GST gap |

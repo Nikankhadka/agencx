@@ -126,7 +126,8 @@ judge the two separately.
 (faithfulness 0.931, answer_relevancy 0.807, citation_faithfulness 0.542) and now
 printed `[i/N]` per case - `data/eval-scored-smoke-after-fixes.log`. State after
 it: two `generation` `eval_runs` rows for bytefix's current id, both 6-case; no
-`trajectory` or `injection` rows.
+`trajectory` or `injection` rows. (Both were later cascade-deleted by the
+baseline reseed - see `data/eval-baseline.md`.)
 
 ## Free-chain congestion (observed)
 
