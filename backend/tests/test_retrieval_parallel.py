@@ -403,3 +403,41 @@ async def test_a_fused_tie_keeps_the_dense_list_first(
     # The tie resolves to the dense list's chunk, which is the fused argument
     # order this whole slice has to preserve.
     assert [chunk.id for chunk in results] == [dense_first, sparse_first]
+
+
+async def test_when_both_searches_fail_the_sparse_error_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both searches failing surfaces SPARSE's error, not dense's.
+
+    This is the one behaviour the overlap changed, so it is pinned rather than
+    left to be discovered in production: sparse is awaited before dense starts,
+    where the sequential shape called dense first and raised dense's error.
+    Dense is not merely outvoted, it never runs - the awaited sparse failure ends
+    the call.
+    """
+    dense_called = False
+
+    async def failing_sparse(*args: Any, **kwargs: Any) -> list[RetrievedChunk]:
+        raise ValueError("sparse boom")
+
+    async def failing_dense(*args: Any, **kwargs: Any) -> list[RetrievedChunk]:
+        nonlocal dense_called
+        dense_called = True
+        raise RuntimeError("dense boom")
+
+    async def ok_embed(texts: list[str]) -> list[list[float]]:
+        return [_basis_vector(0) for _ in texts]
+
+    monkeypatch.setattr("app.retrieval.service.sparse_search", failing_sparse)
+    monkeypatch.setattr("app.retrieval.service.dense_search", failing_dense)
+
+    with pytest.raises(ValueError, match="sparse boom"):
+        await retrieve(
+            _NO_CONN,
+            tenant_id=uuid.uuid4(),
+            query="q",
+            embedder=_CallableEmbedder(ok_embed),
+            reranker=_ScoreReranker(),
+        )
+    assert dense_called is False, "dense must not run once the awaited sparse query failed"
