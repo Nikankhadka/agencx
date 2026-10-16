@@ -225,8 +225,9 @@ async def test_extract_resamples_a_server_side_json_validate_failed(
 
 
 async def test_extract_does_not_resample_a_generic_400(_no_real_sleep: list[float]) -> None:
-    """A 400 that is not ``json_validate_failed`` is a genuinely malformed
-    request, not a flaky model: it surfaces on the first attempt."""
+    """Narrowness guard for the fix's boundary (not fix coverage): a 400 that is
+    not ``json_validate_failed`` is a genuinely malformed request, not a flaky
+    model, so it surfaces on the first attempt."""
 
     class _Schema(BaseModel):
         value: str

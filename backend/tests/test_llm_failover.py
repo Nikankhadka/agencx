@@ -132,14 +132,28 @@ async def test_fast_5xx_fails_over_to_the_fallback() -> None:
 
 
 async def test_fast_generic_400_still_propagates() -> None:
-    """A 4xx that is not a structured-output rejection is not failover-class:
-    every leg would fail a malformed request the same way."""
+    """Narrowness guard for the fix's boundary (not fix coverage): a 4xx that is
+    not a structured-output rejection is not failover-class - every leg would
+    fail a malformed request the same way."""
     primary = _Fake(name="primary", failures=[_bad_request()])
     fallback = _Fake(name="fallback", failures=[])
     with pytest.raises(BadRequestError):
         await FailoverProvider(primary, fallback).chat([{"role": "user", "content": "q"}])
     assert primary.chat_calls == 1
     assert fallback.chat_calls == 0
+
+
+async def test_a_5xx_from_the_last_leg_surfaces() -> None:
+    """Failover must not swallow a 5xx: when the last leg returns one there is
+    no further leg, so it propagates rather than being counted as a pass. (The
+    eval-layer retry helpers do not catch a 5xx, which is the recorded residual
+    - see `data/eval-blocker-diagnosis.md`.)"""
+    primary = _Fake(name="primary", failures=[_rate_limit()])
+    fallback = _Fake(name="fallback", failures=[_server_error()])
+    with pytest.raises(InternalServerError):
+        await FailoverProvider(primary, fallback).chat([{"role": "user", "content": "q"}])
+    assert primary.chat_calls == 1
+    assert fallback.chat_calls == 1
 
 
 async def test_chat_fails_over_when_primary_retries_are_exhausted() -> None:

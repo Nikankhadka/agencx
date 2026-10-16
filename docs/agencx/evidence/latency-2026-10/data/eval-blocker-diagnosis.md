@@ -16,11 +16,11 @@ hang** because `generation_eval` prints nothing per case.
   APIConnectionError, UpstreamResponseError, ValidationError)`.
   `openai.InternalServerError` (503) and `openai.BadRequestError`
   (`json_validate_failed`) are neither. The `if done:` branch
-  (`failover.py:192-205`) caught only `_FAILOVER_ERRORS`, so a **fast** 503
+  (`failover.py:192-205` pre-fix) caught only `_FAILOVER_ERRORS`, so a **fast** 503
   propagated and killed the gate with a fallback configured but never tried. The
-  **slow** path (`_first_win`, `failover.py:236`) catches bare `Exception`, so
+  **slow** path (`_first_win`, `failover.py:236` pre-fix) catches bare `Exception`, so
   the same 503 after 4s would have failed over - the asymmetry was the bug.
-- `app/llm/openai_base.py:155-201` `_with_retry` catches only
+- `app/llm/openai_base.py:155-201` `_with_retry` (pre-fix) catches only
   `UpstreamResponseError | RateLimitError | ValidationError`, so a 503 was not
   retried either. Evidence: `data/eval-slice2.log:118` (generation) and `:216`
   (trajectory) crash on a 503; `:361` crashes on Groq
@@ -29,15 +29,24 @@ hang** because `generation_eval` prints nothing per case.
   instead of JSON, the server-side twin of the client-side `ValidationError` the
   code already resamples.
 
-### Fixes landed (this order)
+### Fixes landed (this order, commit `262d21d`)
 
-- `failover.py`: `_is_failover_error(error)` = in `_FAILOVER_ERRORS` **or** an
-  `APIStatusError` with `status_code >= 500`. The `if done:` branch now catches
-  broadly and re-raises unless the predicate agrees (`failover.py:196-206`).
-  Narrow by design - a generic 4xx still propagates.
-- `openai_base.py`: `_is_json_validate_failed(error)` (exactly
+- `failover.py`: `_is_failover_error()` (`failover.py:67`) = in
+  `_FAILOVER_ERRORS` **or** an `APIStatusError` with `status_code >= 500`. The
+  fast-path `if done:` branch (`failover.py:210-212`) now catches broadly and
+  re-raises unless the predicate agrees. Narrow by design - a generic 4xx still
+  propagates. The slow path (`_first_win`, `failover.py:244`) is unchanged.
+- `openai_base.py`: `_is_json_validate_failed()` (`openai_base.py:155`) (exactly
   `body.error.code == "json_validate_failed"`) is resampled in `_with_retry`
-  like the client-side `ValidationError`; a generic 400 still surfaces.
+  (`openai_base.py:172-234`) like the client-side `ValidationError`; a generic
+  400 still surfaces.
+
+**Residual (recorded, not fixed on purpose).** The eval-layer retry helpers -
+`trajectory_eval.py:444-474` (`_with_rate_limit_retry`) and
+`injection_eval.py:169-186` (`_with_retry`) - catch only `RateLimitError` and
+`ValidationError`. A 5xx from the LAST leg (there is no further leg to fail
+over to) or a repeated canary echo can still abort trajectory/injection. Left
+as-is so the baseline and the after-slice-3 run share identical behavior.
 
 ### Deterministic repro, before and after
 
@@ -123,9 +132,10 @@ it: two `generation` `eval_runs` rows for bytefix's current id, both 6-case; no
 
 Gemini `gemini-3.5-flash-lite` was up but congested: 5-19 s/call, and in a
 6-call burst one call received **0 bytes for 30 s**. The 503 is a recurring
-capacity spike, not a hard failure (a single call at 10:53 UTC returned 200). The
-free chain also carries both error-classification gaps above, so a scored run
-there can still die.
+capacity spike, not a hard failure (a single call at 10:53 UTC returned 200).
+Both classification gaps above are fixed as of `262d21d`, so the free chain is
+no longer fatal, but it is still congested - a scored run there would crawl
+under the un-raced fallback, so the baseline pins one paid leg instead.
 
 ## Caveats
 
