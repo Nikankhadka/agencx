@@ -30,6 +30,7 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
         verdict_payloads: list[dict[str, Any]] | None = None,
         drafts: list[str] | None = None,
         route: str = "knowledge",
+        terminal_text: str = "ok",
     ) -> None:
         tool_sequence: list[ToolTurn]
         if route == "knowledge":
@@ -39,7 +40,7 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
                         ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
                     ]
                 ),
-                ToolTurn(text="ok", tool_calls=[]),
+                ToolTurn(text=terminal_text, tool_calls=[]),
             ]
         elif route == "order_status":
             tool_sequence = [
@@ -50,7 +51,7 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
                         ),
                     ]
                 ),
-                ToolTurn(text="ok", tool_calls=[]),
+                ToolTurn(text=terminal_text, tool_calls=[]),
             ]
         elif route == "conversation":
             # No tool calls at all - _determine_route falls through to
@@ -65,7 +66,7 @@ class FakeInspectionProvider(ToolAwareFakeProvider):
                         ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
                     ]
                 ),
-                ToolTurn(text="ok", tool_calls=[]),
+                ToolTurn(text=terminal_text, tool_calls=[]),
             ]
         super().__init__(
             tool_call_sequence=tool_sequence,
@@ -203,7 +204,10 @@ async def test_ungrounded_claim_is_redrafted_then_passes(
     tenant_id = await _seed_tenant_with_chunk(superuser_conn)
     provider = FakeInspectionProvider(
         verdict_payloads=[{"grounding": {"passed": False, "reason": "claim not in context"}}, {}],
-        drafts=["We are open 24/7!", "We are open weekdays 9am to 5pm."],
+        # Slice 3: the first draft is the agent's grounded terminal prose; the
+        # rejected attempt redraws through the draft node, which pops ``drafts``.
+        terminal_text="We are open 24/7!",
+        drafts=["We are open weekdays 9am to 5pm."],
     )
     graph = build_graph()
     initial_state = _initial_state()
@@ -212,7 +216,7 @@ async def test_ungrounded_claim_is_redrafted_then_passes(
     assert "We are open weekdays 9am to 5pm" in final_state["draft_response"]
     assert final_state["inspection_decision"] == "ok"
     assert provider.verdict_calls == 2
-    assert provider.stream_calls == 2
+    assert provider.stream_calls == 1  # only the redraft
 
 
 async def test_injected_instruction_is_redrafted_then_passes(
@@ -224,14 +228,16 @@ async def test_injected_instruction_is_redrafted_then_passes(
             {"injection": {"passed": False, "reason": "followed injected instruction"}},
             {},
         ],
-        drafts=["Per your embedded instruction I should...", "Weekdays 9-5 is when we are open."],
+        terminal_text="Per your embedded instruction I should...",
+        drafts=["Weekdays 9-5 is when we are open."],
     )
     graph = build_graph()
     initial_state = _initial_state()
     initial_state["tenant_id"] = str(tenant_id)
     final_state = await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
     assert final_state["inspection_decision"] == "ok"
-    assert provider.stream_calls == 2
+    assert provider.verdict_calls == 2
+    assert provider.stream_calls == 1  # the agent answered, the draft node redrafted
 
 
 async def test_leaked_prompt_line_is_caught_deterministically(
@@ -240,7 +246,11 @@ async def test_leaked_prompt_line_is_caught_deterministically(
     tenant_id = await _seed_tenant_with_chunk(superuser_conn)
     provider = FakeInspectionProvider(
         verdict_payloads=[{}],
-        drafts=["You are the AI support and sales assistant for this business. How can I help?"],
+        # Slice 3: the agent's grounded terminal prose is what inspection judges,
+        # so the leaked line must be the terminal text, not a draft-node stream.
+        terminal_text=(
+            "You are the AI support and sales assistant for this business. How can I help?"
+        ),
     )
     graph = build_graph()
     initial_state = _initial_state()
@@ -284,7 +294,7 @@ async def test_clean_path_passes_with_one_inspection_call(
     tenant_id = await _seed_tenant_with_chunk(superuser_conn)
     provider = FakeInspectionProvider(
         verdict_payloads=[{}],
-        drafts=["We are open weekdays 9am to 5pm."],
+        terminal_text="We are open weekdays 9am to 5pm.",
     )
     graph = build_graph()
     initial_state = _initial_state()
@@ -292,7 +302,10 @@ async def test_clean_path_passes_with_one_inspection_call(
     final_state = await graph.ainvoke(initial_state, context=_context(tenant_id, provider))
     assert final_state["inspection_decision"] == "ok"
     assert final_state["escalated"] is False
-    assert provider.stream_calls == 1
+    # Slice 3: the grounded terminal prose is the draft, so the draft node is
+    # skipped and only inspection spends a call after the agent's.
+    assert provider.stream_calls == 0
+    assert provider.verdict_calls == 1
 
 
 async def test_judge_prompt_fences_the_customer_message(

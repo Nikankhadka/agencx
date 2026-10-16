@@ -120,15 +120,23 @@ async def test_knowledge_node_returns_provenance_and_draft_response(
         reranker=PassthroughReranker(),
     )
     final_state = await graph.ainvoke(_initial_state("What are your hours?"), context=context)
-    assert final_state["draft_response"] == "An answer [1]."
+    # Slice 3: the terminal round's prose IS the draft, because the tool result
+    # carried the chunks the model read - so the draft node is skipped and its
+    # stream_text is unused.
+    assert final_state["draft_response"] == "ok"
+    assert final_state["author_node"] == "agent"
     assert final_state["route"] == "knowledge"
     assert len(final_state["retrieved_chunks"]) == 1
     chunk = final_state["retrieved_chunks"][0]
     assert chunk["content"] == "We are open weekdays 9-5."
     assert chunk["metadata"]["source"] == "faq.md"
     assert "id" in chunk
+    # The tool message the model read now carries the chunks, not just a count -
+    # that is what grounds the prose.
+    tool_message = provider.tool_call_messages[1][3]
+    assert tool_message["role"] == "tool"
+    assert "We are open weekdays 9-5." in tool_message["content"]
     assert provider.tool_call_messages[1][2] == provider._turns[0].history_message
-    assert provider.tool_call_messages[1][3]["role"] == "tool"
 
 
 async def test_knowledge_node_refuses_with_empty_provenance_when_no_chunks(

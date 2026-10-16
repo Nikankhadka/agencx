@@ -660,9 +660,10 @@ async def test_hybrid_knowledge_answer_carries_the_confirmed_offerings(
     )
     conversation_id = await _conversation_for(superuser_conn, tenant_id)
     provider = ToolAwareFakeProvider(
-        tool_call_sequence=_search_knowledge_turns(
-            "hours", "We open weekdays 9-5 and also sell Coffee [1]."
-        ),
+        # Slice 3 skips the draft node only when the terminal prose is grounded,
+        # so an empty terminal round keeps this turn on the draft-node path and
+        # the prompt that W-5 is about still gets built.
+        tool_call_sequence=_search_knowledge_turns("hours", ""),
         extract_route="knowledge",
     )
     original = os.environ.get("CORPUS_FAST_PATH_MAX_TOKENS")

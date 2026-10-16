@@ -13,15 +13,17 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
+from app.agents.agent_node import _grounded_terminal_prose
 from app.agents.graph import build_graph
 from app.agents.state import AgentState, GraphContext
+from app.ingestion.chunker import chunk_catalog_item
 from app.llm.embedder import Embedder
 from app.llm.provider import ToolCall, ToolTurn
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
 from app.shared import db
 from tests.conftest import _app_dsn_for
-from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ToolAwareFakeProvider, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
@@ -424,3 +426,243 @@ async def test_a_failing_tool_does_not_take_the_turn_down_with_it(
     # Nothing about a dead tool is a handoff: the model is handed the error and
     # answers from what it already has.
     assert final_state["escalated"] is False
+
+
+# --- slice 3: a grounded tool turn is answered by the agent itself ---
+
+
+async def _seed_tenant_with_chunk_and_conversation(
+    conn: asyncpg.Connection[Any],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """A tenant whose corpus holds one chunk, so search_knowledge returns it."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(conn)
+    document_id: uuid.UUID = await conn.fetchval(
+        "insert into documents (tenant_id, filename, doc_type, status) "
+        "values ($1, 'faq.md', 'faq', 'ready') returning id",
+        tenant_id,
+    )
+    await conn.execute(
+        "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
+        "values ($1, $2, $3, $4, $5)",
+        tenant_id,
+        document_id,
+        "We are open weekdays 9-5.",
+        [0.0] * EMBEDDING_DIM,
+        json.dumps({"source": "faq.md", "chunk_index": 0, "kind": "prose"}),
+    )
+    return tenant_id, conversation_id
+
+
+async def _seed_tenant_with_catalog_and_conversation(
+    conn: asyncpg.Connection[Any],
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """A tenant whose catalog holds one active item, so recommend_items finds it."""
+    tenant_id, conversation_id = await _seed_tenant_with_conversation(conn)
+    document_id: uuid.UUID = await conn.fetchval(
+        "insert into documents (tenant_id, filename, doc_type, status) "
+        "values ($1, 'catalog', 'catalog', 'ready') returning id",
+        tenant_id,
+    )
+    item_id: uuid.UUID = await conn.fetchval(
+        "insert into offerings (tenant_id, name, description, price_cents) "
+        "values ($1, 'Item One', 'A durable widget', 4900) returning id",
+        tenant_id,
+    )
+    chunk = chunk_catalog_item(str(item_id), "Item One", "A durable widget", 4900)
+    await conn.execute(
+        "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
+        "values ($1, $2, $3, $4, $5)",
+        tenant_id,
+        document_id,
+        chunk.content,
+        [0.0] * EMBEDDING_DIM,
+        json.dumps(chunk.metadata),
+    )
+    return tenant_id, conversation_id
+
+
+def _grounded_knowledge_provider(
+    *, prose: str = "We are open weekdays 9-5 [1].", rounds: int = 1
+) -> ToolAwareFakeProvider:
+    """A knowledge turn: ``rounds`` retrieval rounds, then grounded prose."""
+    tool_rounds = [
+        ToolTurn(
+            tool_calls=[
+                ToolCall(id=f"call_s{i}", name="search_knowledge", args={"query": f"q{i}"}),
+            ]
+        )
+        for i in range(rounds)
+    ]
+    return ToolAwareFakeProvider(
+        tool_call_sequence=[*tool_rounds, ToolTurn(text=prose, tool_calls=[])],
+        stream_text="(the draft node must not run on this turn)",
+        extract_route="knowledge",
+    )
+
+
+def _context_for(provider: ToolAwareFakeProvider, *, tenant_id: uuid.UUID) -> GraphContext:
+    return GraphContext(
+        tenant_id=tenant_id,
+        provider=provider,
+        embedder=ZeroEmbedder(),
+        reranker=FakeReranker(),
+    )
+
+
+async def _node_order(
+    provider: ToolAwareFakeProvider, *, tenant_id: uuid.UUID, conversation_id: uuid.UUID
+) -> list[str]:
+    graph = build_graph()
+    order: list[str] = []
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    async for update in graph.astream(
+        initial_state, context=_context_for(provider, tenant_id=tenant_id), stream_mode="updates"
+    ):
+        order.extend(update.keys())
+    return order
+
+
+async def _final_state(
+    provider: ToolAwareFakeProvider, *, tenant_id: uuid.UUID, conversation_id: uuid.UUID
+) -> dict[str, Any]:
+    graph = build_graph()
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    return await graph.ainvoke(initial_state, context=_context_for(provider, tenant_id=tenant_id))
+
+
+async def test_grounded_knowledge_turn_is_answered_by_the_agent(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Slice 3: search_knowledge's result now carries the chunks, so the loop's
+    terminal prose is grounded, becomes the draft, and the draft node is skipped
+    - one model call fewer than before on this turn."""
+    tenant_id, conversation_id = await _seed_tenant_with_chunk_and_conversation(superuser_conn)
+
+    provider = _grounded_knowledge_provider()
+    order = await _node_order(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert order == ["agent", "price_gate", "inspection"]
+
+    provider = _grounded_knowledge_provider()
+    final_state = await _final_state(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert final_state["draft_response"] == "We are open weekdays 9-5 [1]."
+    assert final_state["author_node"] == "agent"
+    assert final_state["route"] == "knowledge"
+    assert len(final_state["retrieved_chunks"]) == 1
+    assert final_state["retrieved_chunks"][0]["content"] == "We are open weekdays 9-5."
+    assert final_state["retrieved_chunks"][0]["metadata"]["source"] == "faq.md"
+    # The draft node composed nothing - the agent's own prose shipped.
+    assert provider.draft_prompts == []
+    # Two model calls: the retrieval round and the grounded prose. The third the
+    # draft node used to spend here is the call slice 3 removed.
+    assert len(provider.tool_call_messages) == 2
+
+
+async def test_multi_round_grounded_turn_keeps_every_round(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The saving is the draft node's call, never a loop round: a turn that
+    searches twice still runs both rounds and the prose that closes them."""
+    tenant_id, conversation_id = await _seed_tenant_with_chunk_and_conversation(superuser_conn)
+    provider = _grounded_knowledge_provider(rounds=2)
+    order = await _node_order(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert order == ["agent", "price_gate", "inspection"]
+    assert len(provider.tool_call_messages) == 3
+    # Each round was fed the results of the rounds before it - neither round was
+    # collapsed and neither result was dropped.
+    assert not any(m["role"] == "tool" for m in provider.tool_call_messages[0])
+    assert len([m for m in provider.tool_call_messages[1] if m["role"] == "tool"]) == 1
+    assert len([m for m in provider.tool_call_messages[2] if m["role"] == "tool"]) == 2
+
+
+async def test_money_tool_turn_still_runs_the_draft_node(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """C-2: after a money tool the draft node remains the only writer, even on a
+    tenant whose corpus would otherwise ground the agent's prose."""
+    tenant_id, conversation_id = await _seed_tenant_with_chunk_and_conversation(superuser_conn)
+    provider = _provider_for_route("quoting", tenant_id=tenant_id)
+    order = await _node_order(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert order == ["agent", "draft", "price_gate", "inspection"]
+
+    provider = _provider_for_route("quoting", tenant_id=tenant_id)
+    final_state = await _final_state(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert final_state["author_node"] == "draft"
+
+
+def test_money_tool_output_never_becomes_the_agent_draft() -> None:
+    """The same rule at the predicate: a money tool disqualifies the prose
+    whatever the route ends up being called."""
+    chunk = {"id": "1", "content": "We are open weekdays 9-5.", "metadata": {}}
+    assert _grounded_terminal_prose(
+        route="knowledge",
+        called_tools={"search_knowledge"},
+        retrieved_chunks=[chunk],
+        selections=[],
+    )
+    assert not _grounded_terminal_prose(
+        route="knowledge",
+        called_tools={"search_knowledge", "calculate_quote"},
+        retrieved_chunks=[chunk],
+        selections=[],
+    )
+
+
+def _grounded_recommendation_provider() -> ToolAwareFakeProvider:
+    """A recommendation turn: one recommend_items round, then grounded prose."""
+    return ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(
+                tool_calls=[
+                    ToolCall(id="call_r", name="recommend_items", args={"preferences": "durable"}),
+                ]
+            ),
+            ToolTurn(text="Item One is a durable widget.", tool_calls=[]),
+        ],
+        stream_text="(the draft node must not run on this turn)",
+        extract_route="recommendation",
+    )
+
+
+async def test_grounded_recommendation_turn_is_answered_by_the_agent(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """recommend_items already carried its items, so this route is grounded by
+    the same rule once the agent's prose ships as the draft."""
+    tenant_id, conversation_id = await _seed_tenant_with_catalog_and_conversation(superuser_conn)
+
+    provider = _grounded_recommendation_provider()
+    order = await _node_order(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert order == ["agent", "price_gate", "inspection"]
+
+    provider = _grounded_recommendation_provider()
+    final_state = await _final_state(provider, tenant_id=tenant_id, conversation_id=conversation_id)
+    assert final_state["draft_response"] == "Item One is a durable widget."
+    assert final_state["author_node"] == "agent"
+    assert final_state["selections"]
+    assert provider.draft_prompts == []
+
+
+async def test_grounded_prose_citations_name_the_tool_chunks(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """Citations on the new path come from the chunks the tool handed the model,
+    which is exactly what the prose was written from."""
+    tenant_id, conversation_id = await _seed_tenant_with_chunk_and_conversation(superuser_conn)
+    provider = _grounded_knowledge_provider()
+    graph = build_graph()
+    initial_state = _initial_state(tenant_id=tenant_id, conversation_id=conversation_id)
+    events: list[dict[str, Any]] = []
+    async for event in graph.astream(
+        initial_state, context=_context_for(provider, tenant_id=tenant_id), stream_mode="custom"
+    ):
+        events.append(event)
+
+    citation_events = [event for event in events if event.get("type") == "citations"]
+    assert len(citation_events) == 1
+    assert citation_events[0]["citations"] == [
+        {
+            "index": 1,
+            "source": "faq.md",
+            "snippet": "We are open weekdays 9-5.",
+        }
+    ]

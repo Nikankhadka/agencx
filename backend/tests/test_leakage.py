@@ -26,7 +26,7 @@ import httpx
 import pytest
 
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
-from app.llm.provider import ChatMessage, SchemaT
+from app.llm.provider import ChatMessage, SchemaT, ToolTurn
 from app.main import app
 from app.retrieval.dependency import get_reranker_dependency
 from app.shared import db
@@ -127,6 +127,24 @@ class _ParrotProvider(ToolAwareFakeProvider):
         if "route" in schema.model_fields:
             return schema.model_validate({"route": "knowledge", "confidence": 1.0, "reason": "t"})
         return schema.model_validate({})  # T-021 InspectionVerdicts - all-pass defaults
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[ChatMessage],
+        tools: list[Any],
+        tool_choice: str = "auto",
+    ) -> ToolTurn:
+        turn = await super().chat_with_tools(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
+        if not turn.tool_calls:
+            # Slice 3 ships this terminal prose as the draft, and it runs with
+            # the same system prompt the search_knowledge chunks entered, so the
+            # parrot echoes that prompt here too - keeping it maximally
+            # sensitive to a cross-tenant leak on the new answer path.
+            return ToolTurn(text=messages[0]["content"], tool_calls=[])
+        return turn
 
     async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
         yield messages[0]["content"]

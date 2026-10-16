@@ -44,7 +44,13 @@ pytestmark = pytest.mark.db
 
 
 class FakeChatProvider(ToolAwareFakeProvider):
-    def __init__(self, *, intent: str | None = None, action: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        intent: str | None = None,
+        action: str | None = None,
+        terminal_text: str = "Sure, here's the answer [1].",
+    ) -> None:
         from app.llm.provider import ToolCall, ToolTurn
 
         super().__init__(
@@ -54,7 +60,11 @@ class FakeChatProvider(ToolAwareFakeProvider):
                         ToolCall(id="call_s", name="search_knowledge", args={"query": "test"}),
                     ]
                 ),
-                ToolTurn(text="ok", tool_calls=[]),
+                # Slice 3: the loop's terminal prose IS the draft on a grounded
+                # tool turn, so this text (not chat_stream below) is what the
+                # customer sees. It cites [1] so the citations event fires from
+                # the tool's chunk.
+                ToolTurn(text=terminal_text, tool_calls=[]),
             ],
             extract_route="knowledge",
             extract_intent=intent,
@@ -68,10 +78,14 @@ class FakeChatProvider(ToolAwareFakeProvider):
 
 class StreamedDeltasProvider(FakeChatProvider):
     """FakeChatProvider whose draft is exactly the given deltas, so a test can
-    assert on the text the customer actually receives."""
+    assert on the text the customer actually receives.
+
+    The terminal agent round is left with empty prose, so this turn is not
+    grounded and the draft node still streams the deltas (the marker tests are
+    about the controller's stripping of a streamed draft)."""
 
     def __init__(self, deltas: list[str]) -> None:
-        super().__init__()
+        super().__init__(terminal_text="")
         self._deltas = deltas
 
     async def chat_stream(self, messages: list[Any]) -> AsyncIterator[str]:
@@ -235,9 +249,9 @@ async def test_chat_persists_customer_and_assistant_messages(
     # reach the transcript.
     assert rows[1]["content"] == "Sure, here's the answer."
     # F-3: the trace's author column is populated by the graph, not only by
-    # seeds - this knowledge turn went through the search tool, so the draft
-    # node authored the answer.
-    assert rows[1]["agent_node"] == "draft"
+    # seeds - this knowledge turn called search_knowledge, and slice 3 ships the
+    # agent's grounded terminal prose as the draft, so the agent authored it.
+    assert rows[1]["agent_node"] == "agent"
 
 
 @pytest.mark.parametrize(

@@ -618,11 +618,19 @@ def _tools_for(package: ContextPackage) -> list[ToolSpec]:
     ]
 
 
+def _chunk_field(chunk: Any, field: str) -> Any:
+    """One field from a retrieved chunk, whether it is a ``RetrievedChunk`` (the
+    fast-path package) or the dict a tool result carries."""
+    return chunk[field] if isinstance(chunk, dict) else getattr(chunk, field)
+
+
 def _cited_chunks(answer: str, chunks: list[Any]) -> list[dict[str, Any]]:
     """The chunks the answer actually cited, in citation order.
 
     A fast-path package can hold the whole corpus; the customer's citation chips
     should name what the answer used, not everything the model could have read.
+    Accepts both the package's ``RetrievedChunk`` objects and the dicts a tool
+    result carries (slice 3 cites the tool's chunks).
     """
     seen: list[int] = []
     for match in _CITATION_RE.finditer(answer):
@@ -631,12 +639,41 @@ def _cited_chunks(answer: str, chunks: list[Any]) -> list[dict[str, Any]]:
             seen.append(index)
     return [
         {
-            "id": str(chunks[index - 1].id),
-            "content": chunks[index - 1].content,
-            "metadata": chunks[index - 1].metadata,
+            "id": str(_chunk_field(chunks[index - 1], "id")),
+            "content": _chunk_field(chunks[index - 1], "content"),
+            "metadata": _chunk_field(chunks[index - 1], "metadata"),
         }
         for index in seen
     ]
+
+
+# Tools whose output the quoting rules own: after any of these the draft node is
+# the only writer, so a figure can never reach the customer from model prose (C-2).
+_MONEY_TOOLS = frozenset({"get_quote_inputs", "calculate_quote"})
+
+
+def _grounded_terminal_prose(
+    *,
+    route: str,
+    called_tools: set[str],
+    retrieved_chunks: list[dict[str, Any]],
+    selections: list[dict[str, Any]],
+) -> bool:
+    """Whether the agent's own terminal prose can BE the draft (slice 3).
+
+    True when the loop's last round produced prose, a routing tool put material
+    into that prompt - ``search_knowledge`` now returns the chunks, and
+    ``recommend_items`` its items - and no money tool was called. Prose after a
+    money tool would bypass the quoting rules, and every other route (conversation,
+    order_status, a refusal) is left to the draft node as before.
+    """
+    if called_tools & _MONEY_TOOLS:
+        return False
+    if route == "knowledge":
+        return bool(retrieved_chunks)
+    if route == "recommendation":
+        return bool(selections)
+    return False
 
 
 async def run(state: AgentState) -> dict[str, Any]:
@@ -812,7 +849,9 @@ async def run(state: AgentState) -> dict[str, Any]:
                             ctx.reranker,
                         )
                         retrieved_chunks = chunks
-                        result_text = _tool_result(spotlight, {"found": len(chunks)})
+                        result_text = _tool_result(
+                            spotlight, {"found": len(chunks), "chunks": chunks}
+                        )
                         writer(
                             {
                                 "type": "tool_call",
@@ -1168,13 +1207,11 @@ async def run(state: AgentState) -> dict[str, Any]:
         # P-3: the model answered straight from the package, so its prose is the
         # draft and the draft node is skipped - one LLM call for the whole turn.
         #
-        # Only a turn that called no tools qualifies, for two hard reasons.
-        # Prose after ``search_knowledge`` is not grounded in anything the model
-        # read: that tool hands back a match *count*, never the chunks, and
-        # draft_node is where the retrieved text actually enters a prompt. And
-        # prose after a money tool would bypass draft_node's quoting rules,
-        # which are what keep figures off the model (the quote card is the sole
-        # source of numbers). Saving a call is never worth either.
+        # Only a turn that called no tools qualifies *here*, because this branch
+        # grounds from the package: on the hybrid path the package carries no
+        # corpus, so prose after a search would be judged against nothing. A tool
+        # turn whose prose IS grounded in the tool result (and called no money
+        # tool) takes the branch below instead.
         #
         # Everything after the draft is untouched: this text still goes through
         # inspection before a customer sees any of it.
@@ -1200,6 +1237,61 @@ async def run(state: AgentState) -> dict[str, Any]:
         writer({"type": "token", "text": answer_text})
         logger.info(
             "agent direct answer",
+            extra={"route": route, "chars": len(answer_text), "cited": len(cited)},
+        )
+        return {
+            "route": route,
+            "draft_response": answer_text,
+            "draft_deterministic": False,
+            "retrieved_chunks": grounding,
+            "selections": selections,
+            "engine_quote": engine_quote,
+            "lookup": lookup_result,
+            "owner_material": package.owner_material(),
+            "offerings_text": package.offerings_text(),
+            "contract": contract,
+            "author_node": "agent",
+            "intent": intent_for_route(route),
+            "action": "respond",
+            **contact_state,
+        }
+
+    if answer_text and _grounded_terminal_prose(
+        route=route,
+        called_tools=called_tools,
+        retrieved_chunks=retrieved_chunks,
+        selections=selections,
+    ):
+        # Slice 3: the terminal round's prose is grounded in what the tool that
+        # ran before it put in the prompt - ``search_knowledge`` now returns the
+        # chunks, ``recommend_items`` its items - and no money tool was called,
+        # so this prose IS the draft and the draft node is skipped: one fewer
+        # model call on every such turn.
+        #
+        # Everything after the draft is untouched: this still goes through
+        # price_gate and inspection, and a rejected draft still redrafts through
+        # the draft node (graph.py routes the retry edge by node name). The
+        # grounding used here is the tool's chunks, which is exactly what the
+        # model read; inspection judges against the same material.
+        grounding = retrieved_chunks
+        cited = _cited_chunks(answer_text, grounding) if grounding else []
+        if cited:
+            writer(
+                {
+                    "type": "citations",
+                    "citations": [
+                        {
+                            "index": i + 1,
+                            "source": citation_source(chunk),
+                            "snippet": chunk["content"][:200],
+                        }
+                        for i, chunk in enumerate(cited)
+                    ],
+                }
+            )
+        writer({"type": "token", "text": answer_text})
+        logger.info(
+            "agent grounded tool answer",
             extra={"route": route, "chars": len(answer_text), "cited": len(cited)},
         )
         return {
