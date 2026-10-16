@@ -1,6 +1,7 @@
 # 13 - Latency instrument
 
-**Status:** In progress - slice 1 of 7.
+**Status:** In progress - slice 1, the instrument, landed; the noise floor and
+the model matrix are the current order.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/slice-1-instrument` off `development`.
 
@@ -8,10 +9,10 @@
 
 Measure a real customer turn's latency with one command, on the app's own
 telemetry, so a later change is judged against a measured noise floor rather
-than a guess. This slice builds the instrument. It changes no prompt, route, or
-budget and leaves the platform `DEFAULT_*` limits untouched; the only settings
-it moves are the demo tenants' own daily limits, raised so a matrix day does not
-hit them (see `docs/agencx/evidence/latency-2026-10/data/tenant-limits.md`).
+than a guess. The work changes no prompt, route, or budget and leaves the
+platform `DEFAULT_*` limits untouched; the only settings it moves are the demo
+tenants' own daily limits, raised so a matrix day does not hit them (see
+`docs/agencx/evidence/latency-2026-10/data/tenant-limits.md`).
 
 ## Protocol
 
@@ -22,44 +23,64 @@ up, pass or fail, in the evidence folder.
 
 ## Slice backlog
 
-1. The instrument: per-turn record, percentile math, runner, `make latency` - landed.
-2. Noise floor: two runs of unchanged code, per-metric variance - next.
-3. Four-model matrix: one comparison table - next.
-4. Faster route and retrieval steps - later.
-5. Prompt-cache tradeoff - needs the founder's ruling first.
-6. Evidence: JSON plus markdown under `docs/agencx/evidence/latency-2026-10/` - structure landed.
-7. Lint, typecheck, and tests green - landed.
+1. The instrument: per-turn record, percentile math, runner, `make latency`;
+   DoD includes the noise floor and the model matrix - instrument landed; noise
+   floor and matrix in this order.
+2. Cap output tokens: `LLM_MAX_TOKENS_DRAFT` is 0 (uncapped); cap the draft
+   prose first, and cap extract only after the schemas shrink - a reasoning
+   model spends its cap on hidden thinking and dies with
+   `LengthFinishReasonError`.
+3. Kill the discarded agent call (`backend/app/agents/agent_node.py:1167`):
+   the hybrid path makes a call whose result is thrown away, so
+   `llm_call_count` 4 to 3; the grounding/money reason the call exists for must
+   be preserved.
+4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
+   search needs no embedding, so embed and search can run together; a
+   `search_ms` drop; watch transaction and connection semantics.
+5. Prompt caching, replacing the per-request spotlight nonce - needs the
+   founder's ruling; gate at no regression against injection's 0.967.
+6. Paid-tier A/B across the matrix: latency, cost, and tool-call correctness
+   per model.
+7. Streaming with inspection off the critical path - deferred; needs a
+   chunked-validation design, a security ruling, and eval rework, and may be
+   unnecessary if 2 through 6 land.
 
 ## Corpus
 
 | Tenant | Vertical | Path (expected) | LLM calls (expected) |
 |---|---|---|---|
-| bytefix | phone repair | fast | 2 |
 | sababa2 | restaurant | fast | 2 |
 | sababa | restaurant | hybrid | 4 |
-| northgate | dental | fast | 2 |
+| bytefix | phone repair | control | 2 |
 
 `sababa` versus `sababa2` is a controlled A/B on the same 96-item menu.
+`northgate` is limits-only, not a corpus tenant: its seed path is dead on the
+pre-existing ABN/GST onboarding-confirm gap, so it cannot serve a real turn yet
+(see `docs/agencx/evidence/latency-2026-10/data/tenant-limits.md`).
 
 ## Model matrix
 
-| Route | Base URL | Model id | Key env var | Tier |
-|---|---|---|---|---|
-| OpenRouter | `https://openrouter.ai/api/v1` | `deepseek/deepseek-v4.1-flash` | `OPENROUTER_API_KEY` | candidate |
-| OpenRouter | `https://openrouter.ai/api/v1` | `inclusionai/ling-3.0-flash` | `OPENROUTER_API_KEY` | candidate |
-| Zen | `https://opencode.ai/inference/openai/v1` | `opencode/ling-3.1-flash-free` | `OPENCODE_ZEN_API_KEY` | probe |
-| Zen | `https://opencode.ai/inference/openai/v1` | `opencode/space-bunny-free` | `OPENCODE_ZEN_API_KEY` | probe, never a candidate |
+The committed config is `backend/evals/latency_config.json`. At the time of
+writing, two OpenRouter candidates are runnable, and both Zen probes are
+blocked with recorded reasons and artifacts:
 
-The committed config is `backend/evals/latency_config.json`. The Zen rows show
-OpenCode's provider-namespaced id for readability; the Zen endpoint expects the
-**bare** id (`space-bunny-free`, not `opencode/space-bunny-free`), which is what
-the config's `api_model` carries and what `/v1/models` returns - see any
-`data/opencode-*-__bytefix.json` skip artifact.
+| Route | Model id | Tier | State |
+|---|---|---|---|
+| OpenRouter | `deepseek/deepseek-v4.1-flash` | candidate | runnable |
+| OpenRouter | `inclusionai/ling-3.0-flash` | candidate | runnable |
+| Zen | `opencode/ling-3.1-flash-free` | probe | blocked: absent from the live catalogue |
+| Zen | `opencode/space-bunny-free` | probe | blocked: the endpoint refuses non-OpenCode clients |
+
+The Zen rows show OpenCode's provider-namespaced id for readability; the Zen
+endpoint expects the **bare** id (`space-bunny-free`), which is what the
+config's `api_model` carries. See the `data/opencode-*-__bytefix.json` skip
+artifacts for the exact catalogue and error.
 
 ## Open decisions
 
-- The noise tolerance is set from slice 2's measured floor.
-- The prompt-cache tradeoff needs the founder's ruling before slice 5.
+- The noise tolerance is set from the measured run-to-run spread (see the
+  noise-floor artifacts); a change counts as real only when it exceeds it.
+- The prompt-cache tradeoff (slice 5) needs the founder's ruling first.
 
 ## Evidence standard
 
