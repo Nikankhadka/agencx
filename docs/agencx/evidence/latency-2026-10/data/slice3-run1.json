@@ -1,0 +1,868 @@
+{
+  "run": "slice3-run1",
+  "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4.1-flash LATENCY_TENANTS=all LATENCY_TURNS=5",
+  "artifacts": [
+    {
+      "model": {
+        "label": "openrouter/deepseek-v4.1-flash",
+        "route": "openrouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_model": "deepseek/deepseek-v4.1-flash",
+        "tier": "candidate"
+      },
+      "tenant": "bytefix",
+      "messages": [
+        "What repairs do you offer?",
+        "How long do repairs usually take?",
+        "Do you fix water-damaged phones?",
+        "Do you offer a warranty on your repairs?",
+        "Can you replace a charging port?"
+      ],
+      "expected_path": "fast",
+      "expected_llm_calls": 2,
+      "provider_models_fetched_at": "2026-10-16T14:42:34Z",
+      "provider_model_present": true,
+      "provider_model_count": 465,
+      "provider_id_form": null,
+      "provider_pricing": {
+        "prompt": "0.00000015",
+        "completion": "0.0000006",
+        "input_cache_read": "0.000000003",
+        "overrides": [
+          {
+            "utc_days": [
+              "saturday",
+              "sunday"
+            ],
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 0,
+            "utc_end": 100,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 100,
+            "utc_end": 400,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 400,
+            "utc_end": 600,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 600,
+            "utc_end": 1000,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 1000,
+            "utc_end": 0,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          }
+        ]
+      },
+      "embedder": {
+        "provider": "local",
+        "model": "BAAI/bge-small-en-v1.5"
+      },
+      "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4.1-flash LATENCY_TENANTS=all LATENCY_TURNS=5",
+      "commit": "2ac8247",
+      "generated_at": "2026-10-16T14:42:34Z",
+      "turns": [
+        {
+          "message": "What repairs do you offer?",
+          "conversation_id": "31defda4-e993-40ab-bd82-764f3a0ab9d0",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10022.1,
+            "first_model_token_ms": 4884.0,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 1,
+            "input_tokens": 5750,
+            "output_tokens": 606,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "How long do repairs usually take?",
+          "conversation_id": "651bd8e8-aa2e-42dd-9c92-dfc4624ec009",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10005.6,
+            "first_model_token_ms": 1609.6,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 1,
+            "input_tokens": 5727,
+            "output_tokens": 151,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "Do you fix water-damaged phones?",
+          "conversation_id": "016f7a1d-2eae-464a-9a4c-cc49e801cf03",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10006.7,
+            "first_model_token_ms": 2534.8,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 1,
+            "input_tokens": 5753,
+            "output_tokens": 205,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "Do you offer a warranty on your repairs?",
+          "conversation_id": "6fd02440-d8c6-48e0-be86-94e5bce8b274",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "token",
+            "done"
+          ],
+          "record": {
+            "total_ms": 5122.5,
+            "first_model_token_ms": 1615.3,
+            "first_prose_ms": 5119.1,
+            "buffer_hold_ms": 3503.8,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 2,
+            "input_tokens": 8919,
+            "output_tokens": 846,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "Can you replace a charging port?",
+          "conversation_id": "29454289-3648-4df6-891d-52a751d288e0",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10006.9,
+            "first_model_token_ms": 1483.0,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 3,
+            "input_tokens": 12652,
+            "output_tokens": 1076,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        }
+      ]
+    },
+    {
+      "model": {
+        "label": "openrouter/deepseek-v4.1-flash",
+        "route": "openrouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_model": "deepseek/deepseek-v4.1-flash",
+        "tier": "candidate"
+      },
+      "tenant": "sababa",
+      "messages": [
+        "Which dishes are vegan or gluten free?",
+        "What are your most popular items?",
+        "What time do you open?",
+        "Do you have anything without nuts?",
+        "What is the Super Plate?"
+      ],
+      "expected_path": "hybrid",
+      "expected_llm_calls": 4,
+      "provider_models_fetched_at": "2026-10-16T14:44:00Z",
+      "provider_model_present": true,
+      "provider_model_count": 465,
+      "provider_id_form": null,
+      "provider_pricing": {
+        "prompt": "0.00000015",
+        "completion": "0.0000006",
+        "input_cache_read": "0.000000003",
+        "overrides": [
+          {
+            "utc_days": [
+              "saturday",
+              "sunday"
+            ],
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 0,
+            "utc_end": 100,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 100,
+            "utc_end": 400,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 400,
+            "utc_end": 600,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 600,
+            "utc_end": 1000,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 1000,
+            "utc_end": 0,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          }
+        ]
+      },
+      "embedder": {
+        "provider": "local",
+        "model": "BAAI/bge-small-en-v1.5"
+      },
+      "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4.1-flash LATENCY_TENANTS=all LATENCY_TURNS=5",
+      "commit": "2ac8247",
+      "generated_at": "2026-10-16T14:44:00Z",
+      "turns": [
+        {
+          "message": "Which dishes are vegan or gluten free?",
+          "conversation_id": "b72ebd83-8c4c-459f-8caa-3d248e1d6f74",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10020.1,
+            "first_model_token_ms": 4551.1,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": 47.1,
+            "search_ms": 2.3,
+            "rerank_ms": 238.8,
+            "path": "hybrid",
+            "llm_call_count": 2,
+            "input_tokens": 11760,
+            "output_tokens": 699,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "recommendation"
+          }
+        },
+        {
+          "message": "What are your most popular items?",
+          "conversation_id": "ab7c50a3-4b1d-4017-9eb3-3c97d2fb0e43",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10007.1,
+            "first_model_token_ms": 3739.2,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "hybrid",
+            "llm_call_count": 3,
+            "input_tokens": 16170,
+            "output_tokens": 1218,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "What time do you open?",
+          "conversation_id": "0291908c-0c08-4ddd-8b54-0db1740c0429",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10007.8,
+            "first_model_token_ms": 792.2,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "hybrid",
+            "llm_call_count": 3,
+            "input_tokens": 5653,
+            "output_tokens": 539,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "conversation"
+          }
+        },
+        {
+          "message": "Do you have anything without nuts?",
+          "conversation_id": "53d0a3b9-4d35-46a7-bb3c-55eaf8845554",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10006.4,
+            "first_model_token_ms": 5737.4,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": 16.2,
+            "search_ms": 2.2,
+            "rerank_ms": 182.8,
+            "path": "hybrid",
+            "llm_call_count": 2,
+            "input_tokens": 11736,
+            "output_tokens": 694,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "recommendation"
+          }
+        },
+        {
+          "message": "What is the Super Plate?",
+          "conversation_id": "d5a1af33-923c-4390-b89e-17d380fce094",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10006.1,
+            "first_model_token_ms": 4661.2,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": 15.0,
+            "search_ms": 1.2,
+            "rerank_ms": 247.1,
+            "path": "hybrid",
+            "llm_call_count": 2,
+            "input_tokens": 7769,
+            "output_tokens": 295,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "recommendation"
+          }
+        }
+      ]
+    },
+    {
+      "model": {
+        "label": "openrouter/deepseek-v4.1-flash",
+        "route": "openrouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_model": "deepseek/deepseek-v4.1-flash",
+        "tier": "candidate"
+      },
+      "tenant": "sababa2",
+      "messages": [
+        "Which dishes are vegan or gluten free?",
+        "What are your most popular items?",
+        "What time do you open?",
+        "Do you have anything without nuts?",
+        "What is the Super Plate?"
+      ],
+      "expected_path": "fast",
+      "expected_llm_calls": 2,
+      "provider_models_fetched_at": "2026-10-16T14:43:19Z",
+      "provider_model_present": true,
+      "provider_model_count": 465,
+      "provider_id_form": null,
+      "provider_pricing": {
+        "prompt": "0.00000015",
+        "completion": "0.0000006",
+        "input_cache_read": "0.000000003",
+        "overrides": [
+          {
+            "utc_days": [
+              "saturday",
+              "sunday"
+            ],
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 0,
+            "utc_end": 100,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 100,
+            "utc_end": 400,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 400,
+            "utc_end": 600,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 600,
+            "utc_end": 1000,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "utc_days": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday"
+            ],
+            "utc_start": 1000,
+            "utc_end": 0,
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000003"
+          }
+        ]
+      },
+      "embedder": {
+        "provider": "local",
+        "model": "BAAI/bge-small-en-v1.5"
+      },
+      "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4.1-flash LATENCY_TENANTS=all LATENCY_TURNS=5",
+      "commit": "2ac8247",
+      "generated_at": "2026-10-16T14:43:19Z",
+      "turns": [
+        {
+          "message": "Which dishes are vegan or gluten free?",
+          "conversation_id": "e4d810e9-93ed-4522-bab2-9eb9eba206e1",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "token",
+            "done"
+          ],
+          "record": {
+            "total_ms": 8362.3,
+            "first_model_token_ms": 2423.0,
+            "first_prose_ms": 8357.3,
+            "buffer_hold_ms": 5934.3,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 2,
+            "input_tokens": 21070,
+            "output_tokens": 1091,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "What are your most popular items?",
+          "conversation_id": "7642b73f-878c-4354-9f71-73f9b29c2ddc",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "progress",
+            "citations",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10008.5,
+            "first_model_token_ms": 1417.6,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 3,
+            "input_tokens": 30958,
+            "output_tokens": 1230,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "What time do you open?",
+          "conversation_id": "01375e86-cc90-49fa-8189-f6f492d564f9",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "token",
+            "done"
+          ],
+          "record": {
+            "total_ms": 3986.5,
+            "first_model_token_ms": 1164.9,
+            "first_prose_ms": 3983.9,
+            "buffer_hold_ms": 2819.0,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 2,
+            "input_tokens": 20560,
+            "output_tokens": 518,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "Do you have anything without nuts?",
+          "conversation_id": "3496ada9-548b-4e56-8995-3aaf19cf06fe",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "refusal",
+            "handoff",
+            "done"
+          ],
+          "record": {
+            "total_ms": 10008.4,
+            "first_model_token_ms": 1432.6,
+            "first_prose_ms": null,
+            "buffer_hold_ms": null,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 1,
+            "input_tokens": 12003,
+            "output_tokens": 391,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        },
+        {
+          "message": "What is the Super Plate?",
+          "conversation_id": "ae6f771c-6add-45b5-865a-6c17731dcd8b",
+          "usage_models": [
+            "deepseek/deepseek-v4.1-flash"
+          ],
+          "model_match": true,
+          "event_types": [
+            "conversation",
+            "progress",
+            "progress",
+            "progress",
+            "token",
+            "done"
+          ],
+          "record": {
+            "total_ms": 7307.6,
+            "first_model_token_ms": 2033.4,
+            "first_prose_ms": 7304.8,
+            "buffer_hold_ms": 5271.4,
+            "embed_ms": null,
+            "search_ms": null,
+            "rerank_ms": null,
+            "path": "fast",
+            "llm_call_count": 2,
+            "input_tokens": 20550,
+            "output_tokens": 809,
+            "leg": null,
+            "failover_engaged": false,
+            "route": "knowledge"
+          }
+        }
+      ]
+    }
+  ]
+}

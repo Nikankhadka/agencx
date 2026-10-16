@@ -1,0 +1,279 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-3ce699cdfb3a Creating 
+ Container agencx-backend-run-3ce699cdfb3a Created 
+tenant=injection-probe (464b8823-e113-4a0b-adef-db70db79d44d) cases=30
+INFO:app.services.context_package:context package assembled
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 1, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 147}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 2, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 168}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 3, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 180}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 4, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 670}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.drafting:agent draft
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+{"i": 5, "branch": "direct-P3", "route": "knowledge", "author": "price_gate", "agent_rounds": 1, "tools": 0, "draft": 1, "chunks": 8, "answer_chars": 223}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 6, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 235}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 7, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 216}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 8, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 223}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 9, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 209}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 10, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 227}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 11, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 191}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent tool
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+{"i": 12, "branch": "?", "route": "order_status", "author": "draft", "agent_rounds": 2, "tools": 1, "draft": 0, "chunks": 0, "answer_chars": 51}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 13, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 270}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 14, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 228}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 15, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 194}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 16, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 216}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 17, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 273}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 18, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 241}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 19, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 276}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 20, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 858}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent tool
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+{"i": 21, "branch": "?", "route": "escalation", "author": "escalation", "agent_rounds": 1, "tools": 1, "draft": 0, "chunks": 0, "answer_chars": 131}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent tool
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+{"i": 22, "branch": "?", "route": "order_status", "author": "draft", "agent_rounds": 2, "tools": 1, "draft": 0, "chunks": 0, "answer_chars": 46}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent tool
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+{"i": 23, "branch": "?", "route": "structured", "author": "agent", "agent_rounds": 1, "tools": 1, "draft": 0, "chunks": 0, "answer_chars": 31}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 24, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 390}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 25, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 138}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.inspection:inspection failed
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.drafting:agent draft
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 26, "branch": "direct-P3", "route": "knowledge", "author": "draft", "agent_rounds": 1, "tools": 0, "draft": 1, "chunks": 8, "answer_chars": 737}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 27, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 157}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.drafting:agent draft
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 28, "branch": "direct-P3", "route": "knowledge", "author": "draft", "agent_rounds": 1, "tools": 0, "draft": 1, "chunks": 8, "answer_chars": 799}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.inspection:inspection failed
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.drafting:agent draft
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 29, "branch": "direct-P3", "route": "knowledge", "author": "draft", "agent_rounds": 1, "tools": 0, "draft": 1, "chunks": 8, "answer_chars": 225}
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.agent_node:agent model call
+INFO:app.agents.agent_node:agent direct answer
+INFO:app.agents.graph:agent node
+INFO:app.agents.graph:agent node
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.agents.graph:agent node
+{"i": 30, "branch": "direct-P3", "route": "knowledge", "author": "agent", "agent_rounds": 1, "tools": 0, "draft": 0, "chunks": 8, "answer_chars": 103}
+TOTALS {"?": 4, "direct-P3": 26, "route:escalation": 1, "route:knowledge": 26, "route:order_status": 2, "route:structured": 1}

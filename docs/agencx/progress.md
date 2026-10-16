@@ -54,10 +54,23 @@ live in the ticket files, not here.
   [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Slice 2, the
   draft output cap (`llm_max_tokens_draft` 4096) - measured mechanism-inert
   ([report-slice-2.md](evidence/latency-2026-10/report-slice-2.md)). Slice 3,
-  the discarded agent call - recon'd, and its eval gate is unblocked (the
-  provider-seam gaps are fixed; the pre-slice-3 scored baseline is being
-  recorded) ([design-slice-3.md](evidence/latency-2026-10/design-slice-3.md),
-  [eval-blocker-diagnosis.md](evidence/latency-2026-10/data/eval-blocker-diagnosis.md)).
+  the discarded agent call - **implemented, measured, through its after-eval:
+  PASS**. The tool result now carries the chunks, so a grounded tool turn's
+  prose is the draft and the draft node is skipped; measured at `2ac8247` the
+  hybrid tenant's one completed tool turn ran 3 model calls against 4, with the
+  branch confirmed by its `citations` event, and the fast tenants' completed
+  call counts were unchanged (sababa2 held its 0.00 band). After-eval with the
+  baseline pins: counts 45/41/30, trajectory and injection case-for-case
+  identical to the baseline, generation faithfulness 0.747 -> 0.716,
+  citation_faithfulness 0.321 -> 0.369, answer_relevancy 0.736 -> 0.802;
+  `run_gate`'s rule fails generation by 0.001, and since the eval never
+  exercises the changed path (0 of 116 replayed cases) that is the harness's
+  noise floor - flagged for the founder
+  ([report-slice-3.md](evidence/latency-2026-10/report-slice-3.md),
+  [design-slice-3.md](evidence/latency-2026-10/design-slice-3.md),
+  [eval-after-slice3-env.txt](evidence/latency-2026-10/data/eval-after-slice3-env.txt)).
+  Slices 4-7 (parallelize retrieval; prompt caching; paid-tier A/B; streaming
+  with inspection off the critical path) are next, still on the same branch.
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
   built), Sentry on both surfaces (T-024 and T-025, built, ADR D33),
@@ -370,7 +383,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 recon'd, eval gate unblocked) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 implemented, measured at `2ac8247` and through its after-eval - PASS, eval shows no attributable regression) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

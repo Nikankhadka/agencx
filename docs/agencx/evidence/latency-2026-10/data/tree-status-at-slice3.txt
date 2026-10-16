@@ -1,0 +1,52 @@
+# Tree state at the slice-3 measurement commit
+#
+# Taken at 2ac82475d69fedf8f836c9b653191442c4c7b576 (host), after the PART 0 bookkeeping commit,
+# before any latency or eval run.
+#
+# 1. git status --porcelain: 27 entries, all pre-existing and unrelated to this
+#    branch's work (26 deleted RF-17 evidence files + the untracked .claude/ dir).
+#    Nothing in this list is a slice-3 change. (This file itself was written after
+#    the capture, so it is not in its own list.)
+
+ D docs/agencx/evidence/rf-17-2026-10-03/01-bytefix-storefront-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/01-lumident-storefront-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/01-sababa-storefront-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/01-wellspring-storefront-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/02-bytefix-storefront-mobile.png
+ D docs/agencx/evidence/rf-17-2026-10-03/02-lumident-storefront-mobile.png
+ D docs/agencx/evidence/rf-17-2026-10-03/02-sababa-storefront-mobile.png
+ D docs/agencx/evidence/rf-17-2026-10-03/02-wellspring-storefront-mobile.png
+ D docs/agencx/evidence/rf-17-2026-10-03/03-bytefix-chat-start-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/03-lumident-chat-start-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/03-sababa-chat-start-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/03-wellspring-chat-start-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/04-bytefix-chat-reply-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/04-lumident-chat-reply-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/04-sababa-chat-reply-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/04-wellspring-chat-reply-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/05-bytefix-queue-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/05-lumident-queue-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/05-sababa-queue-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/05-wellspring-queue-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/06-bytefix-business-hub-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/06-lumident-business-hub-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/06-sababa-business-hub-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/06-wellspring-business-hub-desktop.png
+ D docs/agencx/evidence/rf-17-2026-10-03/README.md
+ D docs/agencx/evidence/sababa-chat-eval-interim.md
+?? .claude/
+?? docs/agencx/evidence/latency-2026-10/data/tree-status-at-slice3.txt
+
+# 2. The runtime diff vs the baseline commit d152572 - backend/app only. It is
+#    exactly slice 3's agent_node.py; no other runtime file differs.
+
+$ git diff --stat d152572..HEAD -- backend/app
+ backend/app/agents/agent_node.py | 114 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 103 insertions(+), 11 deletions(-)
+
+# 3. The five files make format-check reports (failover.py, evals/latency_run.py,
+#    evals/latency_report.py, tests/test_latency_report.py,
+#    tests/test_llm_provider_retry.py) were already unformatted on this branch
+#    BEFORE slice 3 (they are unchanged in the diff above) and are deliberately
+#    deferred to a post-eval housekeeping commit, so the measured runtime diff is
+#    slice 3 and nothing else.

@@ -1,0 +1,68 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-560aecfdfaed Creating 
+ Container agencx-backend-run-560aecfdfaed Created 
+[1/45] If I sell my phone after a repair, does the new owner still 
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 10076.50it/s]
+[2/45] What's covered under your repair warranty?
+[3/45] Does the warranty cover if I drop my phone again after the r
+[4/45] How long does a screen repair usually take?
+[5/45] How long will a water damage assessment take?
+[6/45] What happens if you need to order a part for my rarer phone 
+[7/45] Do I need to book an appointment before coming in?
+[8/45] What happens if I don't pick up my phone after it's repaired
+[9/45] Can I get my device fixed after hours?
+[10/45] If the repair fails, do I still owe anything?
+[11/45] Can I get a refund if I change my mind after picking up my r
+[12/45] Is there a fee if I cancel before you start working on my ph
+[13/45] Is the diagnostic fee waived if I go ahead with the repair?
+[14/45] Will you access my photos or personal data during a screen r
+[15/45] Do software or data-recovery jobs need special consent?
+[16/45] Will you match a quote I got from another repair shop?
+[17/45] If my phone breaks again after a repair but it's a different
+[18/45] Can you repair a phone I didn't originally buy from you?
+[19/45] Do you have loaner phones while mine is being repaired?
+[20/45] Are your technicians certified?
+[21/45] How much is a screen repair for a budget Android phone?
+[22/45] What does a flagship OEM screen replacement cost compared to
+[23/45] Can you give me a screen repair price for my tablet?
+[24/45] How much to fix a foldable phone's screen?
+[25/45] What's the price difference between a standard and flagship 
+[26/45] How much does a charging port repair cost?
+[27/45] My phone won't charge at all - do you charge for a diagnosti
+[28/45] What's the fee for a general diagnostic?
+[29/45] How much for a water damage assessment and what happens afte
+[30/45] What does rush service cost?
+[31/45] How much is a wireless charging coil replacement?
+[32/45] What's the capital of France?
+[33/45] Can you recommend a good pizza place nearby?
+[34/45] What's the current stock price of Apple?
+[35/45] Can I pay in crypto?
+[36/45] Do you offer a payment plan or instalments on a big repair?
+[37/45] Is there a student discount?
+[38/45] Do you take trade-ins against the cost of a repair?
+[39/45] Can you bill my phone insurance directly?
+[40/45] Do you post repaired phones back by courier?
+[41/45] Are you open on Sunday?
+[42/45] Is there parking outside the shop?
+[43/45] Do you sell gift cards?
+[44/45] What services do you offer?
+[45/45] Can you give me a list of the items and prices you sell?
+metric                  value
+------------------------------------
+cases                   45.000
+positive_cases          33.000
+faithfulness            0.716
+answer_relevancy        0.802
+citation_faithfulness   0.369
+negative_cases          12.000
+refusal_accuracy        0.000

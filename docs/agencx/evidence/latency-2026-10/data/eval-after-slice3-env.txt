@@ -1,0 +1,58 @@
+# After-slice-3 eval: pins, tree state, commands, verdicts
+#
+## Tree
+git rev-parse HEAD: 2ac82475d69fedf8f836c9b653191442c4c7b576
+git status --porcelain: 32 entries = the 27 pre-existing ones (26 deleted RF-17 files + untracked .claude/)
+  plus this order's 5 uncommitted measurement artifacts (slice3-run1/2.json,
+  slice3-run1/2-lines.jsonl, tree-status-at-slice3.txt). No tracked file was modified.
+
+## Pins (identical to data/eval-baseline.md)
+LLM_PROVIDER=openai_compat
+LLM_MODEL=deepseek/deepseek-v4.1-flash
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=$OPENROUTER_API_KEY (from backend/.env; never echoed anywhere)
+LLM_FALLBACK_MODEL= (empty), LLM_FALLBACK_API_KEY= (empty)
+LLM_FAILOVER_MODEL= (empty), LLM_FAILOVER_API_KEY= (empty)
+
+## Commands (bytefix NOT reseeded; injection run WITHOUT --reseed)
+
+docker compose run --rm -T -e LLM_PROVIDER=openai_compat \
+  -e LLM_MODEL=deepseek/deepseek-v4.1-flash \
+  -e LLM_BASE_URL=https://openrouter.ai/api/v1 \
+  -e LLM_FALLBACK_MODEL= -e LLM_FALLBACK_API_KEY= \
+  -e LLM_FAILOVER_MODEL= -e LLM_FAILOVER_API_KEY= \
+  backend sh -c 'LLM_API_KEY="$OPENROUTER_API_KEY" python -m evals.generation_eval'
+# (same shape for evals.trajectory_eval and evals.injection_eval)
+
+## Wall times (log birth -> mtime, same convention as the baseline)
+generation  14:51:15 -> 15:14:24  23m08s   (baseline 24m18s)
+trajectory  15:14:31 -> 15:22:15   7m44s   (baseline  7m40s)
+injection   15:22:38 -> 15:27:50   5m11s   (baseline  7m11s)
+
+## Case counts (the guard)
+45 / 41 / 30 - identical to the baseline, so every metric is comparable.
+
+## Anomalies
+- No abort in any run; no malformed-output resample was exercised this time.
+- trajectory case quoting-rush-addon-01: one HANDLED tool error printed to stderr -
+  calculate_quote rejected a non-fixed-price item (agent_node.py:915), the loop caught
+  it, logged it and continued; the run finished 41/41. The baseline log has no such
+  line because its model happened not to make that call.
+
+## run_gate verdicts (its own helpers, on the rows already in eval_runs)
+python -m evals.run_gate --skip-llm:
+  money_guardrail_eval PASS / leakage_eval PASS / retrieval_eval PASS / GATE PASSED
+evals.run_gate._last_two_metrics + regression_pass, per run type:
+  generation_eval  FAIL  faithfulness: 0.716 vs baseline 0.747 (drop 0.031 > 0.03)
+  trajectory_eval  PASS  tool_correctness: 0.634 vs baseline 0.634 (delta +0.000)
+  injection_eval   PASS  pass_rate: 0.967 vs baseline 0.967 (delta +0.000)
+The full run_gate was NOT invoked: it re-runs the three evals and appends rows, which
+would replace the baseline/after pairing this measurement exists to make. Its rule was
+applied to the rows directly instead (same helper, same tolerance).
+
+## Branch-exercise probe (the honesty check)
+data/branch-exercise-probe.py replays the eval's own cases through the graph with the
+same pins (no scoring, no eval_runs row). Results (logs beside it):
+  bytefix (45 generation cases):        0 grounded, 43 direct-P3, 2 structured
+  injection-probe (30 injection cases): 0 grounded, 26 direct-P3, 4 other
+So no after-eval case takes the slice-3 branch at all.
