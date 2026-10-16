@@ -140,4 +140,13 @@ were the pins attempted; no others were tried.
 
 A latency-only run WAS possible (`make latency` works); it was declined because
 it cannot gate a grounding change - the eval is the gate, not the clock. So
-slice 3 stops at this note.
+slice 3 stopped at this note.
+
+**Update (unblock order).** The blocker was diagnosed
+(`data/eval-blocker-diagnosis.md`): the free chain died on a fast 5xx that was
+not failover-class and a server-side `json_validate_failed` 400 that was not
+resampled, and the deepseek "hang" was a crawl misread because
+`generation_eval` printed nothing per case. Both provider-seam gaps are now
+fixed and `generation_eval` prints per-case progress, so a scored run is
+reachable (a 6-case scored smoke completes). A scored pre-slice-3 baseline run
+is the next order, before the implementation above.

@@ -3,8 +3,12 @@
 **Status:** In progress - slice 1 landed (instrument, noise floor, model
 matrix). Slice 2 (draft output cap, 4096) measured: mechanism inert - the cap
 never bound, so no latency effect is attributable. Slice 3 (drop the discarded
-agent call) is recon'd and BLOCKED at the design gate: no scored eval is
-achievable (see `docs/agencx/evidence/latency-2026-10/design-slice-3.md`).
+agent call) is recon'd (`docs/agencx/evidence/latency-2026-10/design-slice-3.md`)
+and its **eval gate is now unblocked**: the provider-seam gaps that killed
+generation/trajectory/injection are fixed (a fast 5xx now fails over; a
+server-side `json_validate_failed` 400 resamples) - see
+`docs/agencx/evidence/latency-2026-10/data/eval-blocker-diagnosis.md`. A scored
+baseline run is the next order; the slice-3 implementation is untouched.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -63,8 +67,9 @@ validated and the founder says go.
    Timeouts truncate recorded call counts (max observed 4), so the structural
    claim rests on completed turns. The measurement must also report
    `input_tokens` (a chunk-carrying tool result is re-sent each later round).
-   BLOCKED: the eval is provider-unavailable - no scored run is achievable, so
-   no behavior change may ship.
+   The eval gate that blocked slice 3 is now unblocked - the provider-seam gaps
+   are fixed (`data/eval-blocker-diagnosis.md`); a scored pre-slice-3 baseline
+   is the next order, before the implementation.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.

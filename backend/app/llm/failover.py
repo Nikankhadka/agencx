@@ -63,6 +63,21 @@ _FAILOVER_ERRORS = (
     ValidationError,
 )
 
+
+def _is_failover_error(error: BaseException) -> bool:
+    """Whether this failure hands the call to the next leg.
+
+    Beyond ``_FAILOVER_ERRORS``, a 5xx counts: the vendor is reachable but
+    broken or congested, exactly how a free tier presents a capacity spike
+    (Gemini's ``503 UNAVAILABLE``), and the next leg deserves the call. A
+    generic 4xx does NOT - a malformed request fails identically on every leg.
+    The slow path (``_first_win``) has always failed over on any exception; this
+    closes the fast path's 5xx gap so a fast 503 does not kill the turn.
+    """
+    return isinstance(error, _FAILOVER_ERRORS) or (
+        isinstance(error, APIStatusError) and error.status_code >= 500
+    )
+
 # How long the primary gets to produce a first token before the next leg starts
 # racing it. The product promise is <= 4s to first token (PRD section 9); this is
 # the trigger, not the promise - the race is what keeps the promise when a leg
@@ -192,7 +207,9 @@ class FailoverProvider(LLMProvider):
         if done:
             try:
                 result: _T = primary_task.result()
-            except _FAILOVER_ERRORS as error:
+            except Exception as error:  # noqa: BLE001 - _is_failover_error decides
+                if not _is_failover_error(error):
+                    raise
                 self._note_failure("primary", error)
                 logger.warning(
                     "primary llm %s failed (%s: %s); failing over",

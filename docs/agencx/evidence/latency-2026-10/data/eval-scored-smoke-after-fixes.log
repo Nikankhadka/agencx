@@ -1,0 +1,41 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-a45b0612037d Creating 
+ Container agencx-backend-run-a45b0612037d Created 
+[1/6] If I sell my phone after a repair, does the new owner still 
+llm rate-limited; retrying in 20s (attempt 1/3)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 9946.33it/s]
+[2/6] What's covered under your repair warranty?
+llm rate-limited; retrying in 20s (attempt 1/3)
+[3/6] Does the warranty cover if I drop my phone again after the r
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+[4/6] How long does a screen repair usually take?
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+[5/6] How long will a water damage assessment take?
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+[6/6] What happens if you need to order a part for my rarer phone 
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+llm rate-limited; retrying in 20s (attempt 1/3)
+metric                  value
+------------------------------------
+cases                   6.000
+positive_cases          6.000
+faithfulness            0.931
+answer_relevancy        0.807
+citation_faithfulness   0.542

@@ -61,6 +61,10 @@ explicit = true
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# var/ is gitignored scratch (uploads, backups, debug scripts). It is in the
+# bind-mounted ./backend and has no .git inside the container, so ruff cannot
+# respect .gitignore there - exclude it explicitly.
+extend-exclude = ["var"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]

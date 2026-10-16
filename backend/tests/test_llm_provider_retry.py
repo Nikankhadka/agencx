@@ -41,6 +41,23 @@ def _bad_request_error() -> BadRequestError:
     return BadRequestError("invalid tool history", response=response, body={"error": {}})
 
 
+def _json_validate_failed_error() -> BadRequestError:
+    """Groq's server-side structured-output rejection: a 400 whose body carries
+    ``code: json_validate_failed`` and the raw ``failed_generation``."""
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    return BadRequestError(
+        "Failed to generate JSON",
+        response=response,
+        body={
+            "error": {
+                "code": "json_validate_failed",
+                "failed_generation": "INJECTION-CANARY-ALPHA",
+            }
+        },
+    )
+
+
 def _daily_quota_error() -> RateLimitError:
     """A Gemini free-tier daily-quota 429: RESOURCE_EXHAUSTED with a per-day
     quotaId - non-transient, the model stays exhausted until tomorrow."""
@@ -185,6 +202,39 @@ async def test_extract_resamples_on_malformed_structured_output(
     result = await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
     assert result.value == "parsed"
     assert completions.calls == 2
+
+
+async def test_extract_resamples_a_server_side_json_validate_failed(
+    _no_real_sleep: list[float],
+) -> None:
+    """When the vendor validates ``response_format`` itself (Groq), a
+    non-complying model arrives as a 400 ``json_validate_failed`` - the
+    server-side twin of the client-side ``ValidationError`` above - and is
+    resampled on the same leg. Stochastic in the wild: the real failing request
+    emitted the injection canary instead of the required JSON."""
+
+    class _Schema(BaseModel):
+        value: str
+
+    completions = _Completions(
+        [_json_validate_failed_error()], _completion('{"value": "parsed"}')
+    )
+    result = await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
+    assert result.value == "parsed"
+    assert completions.calls == 2  # one rejection, one resample
+
+
+async def test_extract_does_not_resample_a_generic_400(_no_real_sleep: list[float]) -> None:
+    """A 400 that is not ``json_validate_failed`` is a genuinely malformed
+    request, not a flaky model: it surfaces on the first attempt."""
+
+    class _Schema(BaseModel):
+        value: str
+
+    completions = _Completions([_bad_request_error()], _completion('{"value": "parsed"}'))
+    with pytest.raises(BadRequestError):
+        await _provider(completions).extract(system_prompt="s", user_input="u", schema=_Schema)
+    assert completions.calls == 1
 
 
 # --- null-choices upstream error bodies ------------------------------------------

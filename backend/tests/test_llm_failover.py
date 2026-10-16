@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from openai import BadRequestError, RateLimitError
+from openai import BadRequestError, InternalServerError, RateLimitError
 from pydantic import BaseModel
 
 from app.llm.failover import FailoverProvider, collect_legs
@@ -108,6 +108,38 @@ def _bad_request() -> BadRequestError:
     request = httpx.Request("POST", "https://example.test/v1/chat/completions")
     response = httpx.Response(400, request=request)
     return BadRequestError("invalid tool history", response=response, body={"error": {}})
+
+
+def _server_error() -> InternalServerError:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(503, request=request)
+    return InternalServerError(
+        "503 UNAVAILABLE", response=response, body={"error": {"code": 503, "status": "UNAVAILABLE"}}
+    )
+
+
+async def test_fast_5xx_fails_over_to_the_fallback() -> None:
+    """A 5xx that returns within the first-token budget must still hand the call
+    to the fallback. The slow path always did; the fast path used to re-raise,
+    and the free tier's Gemini 503 presents exactly this way (a fast capacity
+    spike), so the gate died even with a fallback configured."""
+    primary = _Fake(name="primary", failures=[_server_error()])
+    fallback = _Fake(name="fallback", failures=[])
+    result = await FailoverProvider(primary, fallback).chat([{"role": "user", "content": "q"}])
+    assert result == "fallback-text"
+    assert primary.chat_calls == 1
+    assert fallback.chat_calls == 1
+
+
+async def test_fast_generic_400_still_propagates() -> None:
+    """A 4xx that is not a structured-output rejection is not failover-class:
+    every leg would fail a malformed request the same way."""
+    primary = _Fake(name="primary", failures=[_bad_request()])
+    fallback = _Fake(name="fallback", failures=[])
+    with pytest.raises(BadRequestError):
+        await FailoverProvider(primary, fallback).chat([{"role": "user", "content": "q"}])
+    assert primary.chat_calls == 1
+    assert fallback.chat_calls == 0
 
 
 async def test_chat_fails_over_when_primary_retries_are_exhausted() -> None:

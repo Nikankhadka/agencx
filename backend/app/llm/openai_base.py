@@ -23,7 +23,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Literal, cast
 
 import httpx
-from openai import LengthFinishReasonError, RateLimitError
+from openai import BadRequestError, LengthFinishReasonError, RateLimitError
 from pydantic import BaseModel, Field, ValidationError
 
 from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolCall, ToolSpec, ToolTurn
@@ -152,10 +152,29 @@ def _is_daily_quota(error: RateLimitError) -> bool:
     return False
 
 
+def _is_json_validate_failed(error: BadRequestError) -> bool:
+    """A server-side structured-output rejection.
+
+    Groq validates the response against ``response_format`` server-side and, when
+    the model does not comply, returns a 400 whose ``body.error.code`` is
+    ``json_validate_failed`` (with the raw ``failed_generation``). It is the
+    server-side twin of the client-side ``ValidationError`` this module already
+    resamples, so it gets the same treatment. Guarded by exactly that code, so a
+    genuinely malformed request still surfaces instead of being retried.
+    """
+    body = getattr(error, "body", None)
+    if not isinstance(body, dict):
+        return False
+    err = body.get("error")
+    return isinstance(err, dict) and err.get("code") == "json_validate_failed"
+
+
 async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
     """Await ``factory()``, retrying transient failures: a 429 (backed off,
-    honoring Retry-After) or a malformed structured-output resample (short
-    fixed delay). Any other exception, and the final attempt, propagate."""
+    honoring Retry-After), a malformed structured-output resample (short fixed
+    delay) - whether the vendor rejected it client-side (``ValidationError``) or
+    server-side (``json_validate_failed``) - and an unusable response body. Any
+    other exception, and the final attempt, propagate."""
     for attempt in range(_RETRY_ATTEMPTS):
         try:
             return await factory()
@@ -164,6 +183,20 @@ async def _with_retry[T](factory: Callable[[], Awaitable[T]]) -> T:
                 raise
             logger.warning(
                 "llm returned an unusable response body; retrying (attempt %d/%d)",
+                attempt + 1,
+                _RETRY_ATTEMPTS,
+            )
+            await asyncio.sleep(1.0)
+        except BadRequestError as error:
+            if not _is_json_validate_failed(error):
+                # A genuinely malformed request, not a flaky model: every leg
+                # would fail it the same way, so surface it.
+                raise
+            if attempt == _RETRY_ATTEMPTS - 1:
+                raise
+            logger.warning(
+                "llm rejected structured output server-side (json_validate_failed); "
+                "resampling (attempt %d/%d)",
                 attempt + 1,
                 _RETRY_ATTEMPTS,
             )

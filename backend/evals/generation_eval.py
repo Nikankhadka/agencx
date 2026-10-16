@@ -404,7 +404,13 @@ async def run_eval(
         ]
 
     results: list[CaseResult] = []
-    for case, conversation_id in zip(cases, conversation_ids, strict=True):
+    for index, (case, conversation_id) in enumerate(
+        zip(cases, conversation_ids, strict=True), start=1
+    ):
+        # Per-case progress: the final table is the only other output, so a slow
+        # run (deepseek under OpenRouter 429s) looked like a hang and a working
+        # one got killed. Mirrors injection_eval's per-case line.
+        print(f"[{index}/{len(cases)}] {case.question[:60]}", flush=True)
         answer, chunks = await _answer_case(
             case,
             tenant_id=tenant_id,
