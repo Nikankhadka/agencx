@@ -9,13 +9,18 @@ the turn does not die) - truncation is only fatal on a structured output.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
 
-from app.llm.openai_base import OpenAISDKProvider
+import pytest
+
+from app.llm.failover import FailoverProvider
+from app.llm.openai_base import OpenAISDKProvider, UpstreamResponseError
+from app.llm.provider import ChatMessage, LLMProvider, SchemaT, ToolSpec, ToolTurn
 from app.shared.config import Settings
 
-_DRAFT_CAP = 2048
+_DRAFT_CAP = 4096
 
 
 def _usage(prompt: int = 1, completion: int = 1) -> SimpleNamespace:
@@ -121,8 +126,88 @@ async def test_truncated_chat_stream_ends_gracefully() -> None:
     assert out == "half an "  # the truncated stream still yields what arrived
 
 
-def test_shipped_draft_cap_default_is_2048_and_extract_stays_uncapped() -> None:
+def test_shipped_draft_cap_default_is_4096_and_extract_stays_uncapped() -> None:
     """The shipped default is the real change: local dev must not pin it back to
     0 (backend/.env does not set either cap)."""
     assert Settings.model_fields["llm_max_tokens_draft"].default == _DRAFT_CAP
     assert Settings.model_fields["llm_max_tokens_extract"].default == 0
+
+
+# --- the cap also sits on the native tool-calling call -----------------------
+
+
+def _tool_call_completion(arguments: str) -> SimpleNamespace:
+    tool_call = SimpleNamespace(
+        id="c1", function=SimpleNamespace(name="search_knowledge", arguments=arguments)
+    )
+    message = SimpleNamespace(content=None, parsed=None, tool_calls=[tool_call])
+    return SimpleNamespace(
+        usage=_usage(), choices=[SimpleNamespace(message=message, finish_reason="length")]
+    )
+
+
+async def test_truncated_tool_call_args_raise_a_controlled_error() -> None:
+    """A length-truncated tool-call payload surfaces as the failover-class
+    UpstreamResponseError - never a raw JSON parse error, and never a silently
+    accepted half-built call."""
+    completions = _RecordingCompletions(_tool_call_completion('{"query": "half a quest'))
+    provider = _provider(completions, max_tokens_draft=8)
+    with pytest.raises(UpstreamResponseError) as excinfo:
+        await provider.chat_with_tools(messages=[{"role": "user", "content": "q"}], tools=[])
+    assert "unparseable arguments" in str(excinfo.value)
+    assert completions.calls == 1  # the same leg is not re-asked
+
+
+class _ErroringProvider(LLMProvider):
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+        self.calls = 0
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        raise NotImplementedError
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        raise NotImplementedError
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        raise NotImplementedError
+        yield
+
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto"
+    ) -> ToolTurn:
+        self.calls += 1
+        raise self._error
+
+
+class _ConstantToolProvider(LLMProvider):
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        raise NotImplementedError
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        return "fallback answer"
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        raise NotImplementedError
+        yield
+
+    async def chat_with_tools(
+        self, *, messages: list[ChatMessage], tools: list[ToolSpec], tool_choice: str = "auto"
+    ) -> ToolTurn:
+        return ToolTurn(text="fallback answer", tool_calls=[])
+
+
+async def test_truncated_tool_call_is_re_asked_on_the_next_leg() -> None:
+    """UpstreamResponseError is failover-class, so with a second leg configured
+    the model is asked again there instead of the turn dying."""
+    primary = _ErroringProvider(UpstreamResponseError("truncated tool args"))
+    fallback = _ConstantToolProvider()
+    turn = await FailoverProvider(primary, fallback, ttft_budget_s=5.0).chat_with_tools(
+        messages=[{"role": "user", "content": "q"}], tools=[]
+    )
+    assert turn.text == "fallback answer"
+    assert primary.calls == 1

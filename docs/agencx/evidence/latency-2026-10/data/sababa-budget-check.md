@@ -30,3 +30,27 @@ per turn, 15 turns is about 225k tokens, about 11% of the remaining budget.
 
 **Verdict: PROCEED.** The remaining sababa budget covers the planned turns with
 wide margin, so no matrix turn should be cut off by the daily token cap.
+
+## Slice 2 re-check
+
+Before the slice-2 runs, the same query:
+
+```
+$ docker compose exec -T db psql -U postgres -d wren -c "
+  select t.slug,
+    coalesce(sum(cl.input_tokens + cl.output_tokens), 0) as tokens_today,
+    count(*) as calls_today,
+    (select c.config->'limits' from tenant_config c where c.tenant_id = t.id) as limits
+  from tenants t
+  left join cost_logs cl on cl.tenant_id = t.id and cl.created_at >= date_trunc('day', now())
+  where t.slug in ('sababa','sababa2','bytefix')
+  group by t.id, t.slug order by t.slug;"
+  slug    | tokens_today | calls_today |                       limits
+----------+--------------+-------------+----------------------------------------------------
+ bytefix  |       253559 |          47 | {"daily_tokens": 50000000, "daily_cost_usd": 50.0}
+ sababa   |       166943 |          48 |
+ sababa2  |       266617 |          23 | {"daily_tokens": 50000000, "daily_cost_usd": 50.0}
+```
+
+Remaining for sababa: 2,000,000 - 166,943 = **1,833,057 tokens**. Two runs of
+five sababa turns need about 150k, so **PROCEED**.

@@ -52,7 +52,7 @@ live in the ticket files, not here.
   model pinned and writes the 14-key per-turn record; the noise floor and model
   matrix are in
   [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Slice 2, the
-  draft output cap (`llm_max_tokens_draft` 2048) - measured no-measurable-effect
+  draft output cap (`llm_max_tokens_draft` 4096) - measured mechanism-inert
   ([report-slice-2.md](evidence/latency-2026-10/report-slice-2.md)). Next: slice
   3, the discarded agent call.
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
@@ -367,7 +367,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, no-measurable-effect) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

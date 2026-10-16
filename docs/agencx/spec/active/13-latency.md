@@ -1,8 +1,9 @@
 # 13 - Latency instrument
 
 **Status:** In progress - slice 1 landed (instrument, noise floor, model
-matrix). Slice 2 (draft output cap) measured: no-measurable-effect (the cap
-never bound). Slices 3 through 7 not started.
+matrix). Slice 2 (draft output cap, 4096) measured: mechanism inert - the cap
+never bound, so no latency effect is attributable. Slices 3 through 7 not
+started.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -36,9 +37,10 @@ validated and the founder says go.
 2. Cap output tokens: `LLM_MAX_TOKENS_DRAFT` is 0 (uncapped); cap the draft
    prose first, and cap extract only after the schemas shrink - a reasoning
    model spends its cap on hidden thinking and dies with
-   `LengthFinishReasonError`. Done: `llm_max_tokens_draft` ships at 2048;
-   measured no-measurable-effect (per-call output stayed under the cap, so it
-   never truncated) - see
+   `LengthFinishReasonError`. Done: `llm_max_tokens_draft` ships at 4096
+   (raised from a first 2048 that sat near the observed max); measured
+   mechanism-inert - per-call output stayed under the cap, so it never
+   truncated - see
    `docs/agencx/evidence/latency-2026-10/report-slice-2.md`.
 3. Kill the discarded agent call (`backend/app/agents/agent_node.py:1167`):
    the hybrid path makes a call whose result is thrown away, so
@@ -88,10 +90,15 @@ artifacts for the exact catalogue and error.
 
 ## Open decisions
 
-- The noise tolerance is set from the measured floor (`data/noise-floor.md`):
-  a change counts as real only when it exceeds the per-tenant run-to-run band
-  for that metric - for example 2.8s on bytefix `total_ms`. The bands are wide,
-  so slices 2 through 6 need repeats, not single runs, to clear them.
+- Noise tolerance, revised and derived from four runs: the bands in
+  `data/noise-floor.md` came from two runs and understated cross-run variance.
+  The going-forward bands - from the four unchanged-mechanism runs
+  (noise-run1/2 plus slice2-run1/2, slice 2 counting as unchanged because its
+  cap never bound) - are bytefix 2950.8 ms, sababa2 2031.3 ms, sababa 2532.7 ms
+  on `total_ms`. A change counts as real only when it exceeds its band.
+- Mechanism plausibility comes first: a slice that cannot mechanically affect a
+  timing metric - for example an output cap that never binds - is judged inert
+  regardless of whether the noise happened to move inside or outside the band.
 - The prompt-cache tradeoff (slice 5) needs the founder's ruling first.
 
 ## Evidence standard

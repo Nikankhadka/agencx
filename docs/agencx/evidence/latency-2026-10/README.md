@@ -12,7 +12,9 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | [data/noise-floor.md](data/noise-floor.md) | p50/p95 per run and the cross-run tolerance rule |
 | `data/matrix-*.json` | One artifact per model x tenant (both candidates x three tenants) |
 | [data/matrix.md](data/matrix.md) | The comparison table and its provenance |
-| [data/sababa-budget-check.md](data/sababa-budget-check.md) | The pre-matrix daily-budget check for the unraised tenant |
+| [data/sababa-budget-check.md](data/sababa-budget-check.md) | The pre-matrix daily-budget check for the unraised tenant (slice-1 and slice-2) |
+| [data/cost-log-output-tokens.md](data/cost-log-output-tokens.md) | Per-call output-token SQL behind the draft-cap value |
+| `data/eval-slice2.log` | The slice-2 `make eval` output (provider-blocked) |
 | `data/opencode-*-__bytefix.json` | Zen probe skips: the exact catalogue and provider refusal |
 | [data/tenant-limits.md](data/tenant-limits.md) | The demo tenants' daily limits and the northgate ABN/GST gap |
 | `data/make-check.log` | The `make lint && make typecheck && make test` output |
