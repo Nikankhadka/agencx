@@ -24,7 +24,11 @@ verdict is **no-measurable-effect** - the saved work is the sparse query's own
 duration, measured at median 0.38 ms, far below what this instrument resolves at
 3-4 hybrid turns per run. No scored eval was run: the change is output-preserving
 and both eval tenants are fast-path, so `retrieve()` never runs there; the
-deterministic gate that does call it passes unchanged.
+deterministic gate that does call it passes unchanged. **The cumulative
+comparison for slices 1-4 - baseline vs stack tip per tenant, and the eval trio -
+is `docs/agencx/evidence/latency-2026-10/report-cumulative.md` (raw tables and
+provenance in `data/cumulative.md`); slices 5-7 are unstarted and need founder
+rulings (slice 5 the security ruling for prompt caching; 6 and 7 optional).**
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -230,6 +234,44 @@ fetch timestamp, never taken from a config comment.
 ## Report format
 
 One report per slice or work item, under 300 words, beside its data.
+
+## Merge readiness (slices 1-4)
+
+Checked at the tip of `latency/stack` when the cumulative package landed
+(`report-cumulative.md`):
+
+- **Gates green:** `make lint` (ruff check + the import contracts),
+  `make typecheck` (mypy strict + `tsc`), `make test` (1418 passed),
+  `make format-check` (248 files clean, recorded in `data/format-check.log`).
+- **Tree state:** nothing uncommitted but the pre-existing, unrelated deletions
+  (26 RF-17 evidence files + untracked `.claude/`); no runtime drift beyond the
+  slices themselves. A stray `brag-output/` line was added to `.gitignore` by
+  something outside this work during the wrap-up window - it is left untouched and
+  is not part of any slice.
+- **No reseeds:** `bytefix` is still `e9139d84-0e9f-4282-9af6-e0dc9bf4b56e` and the
+  injection probe `464b8823-e113-4a0b-adef-db70db79d44d`; the baseline, after and
+  repeat `eval_runs` rows are all intact.
+- **Branch:** `latency/stack`, unpushed, no upstream configured.
+
+**Blockers before merge** (all founder-facing):
+
+1. **Citation-chip ruling.** Slice 3 narrows the citations event to the chunks the
+   prose cited, so a grounded hybrid answer shows fewer chips than the old draft
+   path showed and none when the prose carries no `[n]`. Deliberate, tested, and
+   invisible to the scored eval - it needs an explicit decision
+   (`design-slice-3.md`, consequences).
+2. **Slices 5-7.** Slice 5 (prompt caching, replacing the per-request spotlight
+   nonce) needs the security ruling and gates at no regression against the
+   re-measured injection 0.9667. Slice 6 (paid-tier A/B) and slice 7 (streaming
+   with inspection off the critical path, which needs a chunked-validation design,
+   a security ruling and eval rework) are optional and unstarted.
+3. **The open `run_gate` FAIL.** Generation faithfulness fell 0.0311 against a
+   0.03 tolerance between the baseline and after windows, on a path the eval never
+   exercises; the identical-code repeat spread is 0.0019, so it is a provider
+   level shift the tolerance cannot resolve. The choice is to accept it as such,
+   re-baseline the window, or widen the tolerance.
+4. **The merge request itself.** One merge to `development`, then `staging`, only
+   on the founder's go.
 
 ## Instrument
 
