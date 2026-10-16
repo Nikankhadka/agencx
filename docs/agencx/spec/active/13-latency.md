@@ -16,7 +16,15 @@ generation faithfulness drift (-0.0311) is NOT noise - the identical-code repeat
 spread is +0.0019 - so `run_gate`'s FAIL on that key stays open. Slice 3
 verdict: **pass on the mechanism**; see
 `docs/agencx/evidence/latency-2026-10/report-slice-3.md` and the corrections in
-`data/eval-noise-repeat.md`.
+`data/eval-noise-repeat.md`. Slice 4 (overlap the retrieval steps) is
+**implemented and measured**: the code landed (`040a473`), the mechanism is
+proven structurally (sparse starts inside the embedding window; dense waits for
+both, because one connection runs one operation at a time), and the timing
+verdict is **no-measurable-effect** - the saved work is the sparse query's own
+duration, measured at median 0.38 ms, far below what this instrument resolves at
+3-4 hybrid turns per run. No scored eval was run: the change is output-preserving
+and both eval tenants are fast-path, so `retrieve()` never runs there; the
+deterministic gate that does call it passes unchanged.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -116,6 +124,36 @@ validated and the founder says go.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.
+   **Outcome (implemented, measured - pass structurally, no-measurable-effect on
+   the clock).** Landed in `040a473` and measured there. The final shape: the
+   sparse query starts first and the embedding runs beside it, and dense is
+   awaited once the embedding is in hand AND sparse has landed - because a
+   connection runs ONE operation at a time (a second in-flight query raises
+   asyncpg's `InterfaceError`, which the first cut hit: with the test embedder
+   returning without yielding, dense started while sparse was still pending, and
+   the existing retrieval tests caught it) and the RLS tenant context lives on
+   the caller's connection, so no second connection is available to this
+   function. Fused inputs stay `[dense, sparse]`, the filters and the rerank call
+   are untouched, and the failure semantics are the sequential ones (the awaited
+   embedding's error wins; an in-flight sparse task is cancelled and its outcome
+   taken). Bands: the documented rule - completed hybrid turns - has NO sample
+   (`sababa` completed one turn in six runs), so the fallback (every hybrid turn
+   that ran `retrieve`) gives `search_ms` 2.52 ms, `embed_ms` 68.4 ms and
+   `rerank_ms` 247.0 ms. Hybrid `search_ms` p50 fell in both runs (1.9-2.7 ->
+   1.25 / 1.15) with every p50 delta inside the band, but `rerank_ms` - which
+   this slice cannot touch - also steps over its own band once, so the bands
+   cannot certify a causal claim in either direction. The ceiling is physical:
+   only the sparse query's own duration can move, measured at median 0.38 ms
+   against a 506-1098 ms warm `retrieve`. **No scored eval**: the change is
+   output-preserving by construction (pinned by an equivalence test against a
+   spelled-out sequential reference) and both eval tenants are fast-path, where
+   `get_business_context` returns the corpus before `retrieve` is called
+   (`services/retrieval.py:138-149`) - confirmed by 70 fast-path turns with null
+   retrieval timings and by slice 3's replay (0 of 116 cases used a retrieval
+   tool). The deterministic gate that does call `retrieve` passes with recall@5
+   1.000 / MRR 0.911 / nDCG@5 0.934, identical to the pre-change logs. Full
+   write-up: `docs/agencx/evidence/latency-2026-10/report-slice-4.md` and
+   `data/slice4-bands.md`.
 5. Prompt caching, replacing the per-request spotlight nonce - needs the
    founder's ruling; gate at no regression against injection's 0.967 (the
    founder's stated baseline - re-measure it before slice 5 gates on it).

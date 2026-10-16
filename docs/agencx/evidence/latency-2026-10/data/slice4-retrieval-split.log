@@ -1,0 +1,24 @@
+ Container agencx-db-1 Running 
+ Container agencx-mailpit-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-138c42d8e9ad Creating 
+ Container agencx-backend-run-138c42d8e9ad Created 
+tenant=sababa (965f6133-eae7-44a3-ab45-f61ff92f6cca) queries=5
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 10723.95it/s]
+Loading weights:   0%|          | 0/105 [00:00<?, ?it/s]Loading weights: 100%|██████████| 105/105 [00:00<00:00, 11660.41it/s]
+  Which dishes are vegan or gluten free?     embed= 8265.2 dense=  1.75 sparse=  0.88 retrieve= 9545.7
+  What are your most popular items?          embed=   11.8 dense=  0.77 sparse=  0.26 retrieve=  505.8
+  What time do you open?                     embed=   14.0 dense=  0.74 sparse=  0.23 retrieve=  908.2
+  Do you have anything without nuts?         embed=   14.8 dense=  0.64 sparse=  0.45 retrieve= 1016.3
+  What is the Super Plate?                   embed=    9.5 dense=  0.55 sparse=  0.38 retrieve= 1097.7
+MEDIAN embed=14.03 dense=0.74 sparse=0.38 retrieve_total=1016.29
+MAX saving available from the overlap (sparse alone) = 0.88 ms
