@@ -1,56 +1,46 @@
-# Latency slice 1 - the instrument
+# Latency slice 1 - instrument and campaign
 
-**Status:** landed. **Branch:** `latency/slice-1-instrument`.
+**Status:** slice 1 done to its DoD (instrument, noise floor, model matrix).
+**Branch:** `latency/slice-1-instrument`.
 
-## What landed
+## Instrument
 
-- `make latency` drives one real turn through `POST /api/chat` with one model
-  pinned, and writes one JSON record per turn.
-- The record (`backend/app/observability/turn_record.py`) carries the 14
-  required keys, emitted once per graph turn in the handler's outermost
-  `finally` so `total_ms` spans the same range on success and failure.
-- `usage_models` carries the model the provider response names (the **served**
-  model, `backend/app/llm/openai_base.py`), not the id that was requested, so
-  `model_match` is a real identity check.
-- The percentile rule (linear interpolation between the two closest ranks) is
-  in `backend/app/observability/percentile.py`, unit-tested.
-- Per-tenant daily limits raised to 50,000,000 tokens and $50 for bytefix,
-  sababa2 and northgate; sababa stays at the defaults. See
-  `data/tenant-limits.md`.
+`make latency` drives a fixed message set through the real chat surface with one
+model pinned and writes the 14-key per-turn record
+(`backend/app/observability/turn_record.py`); `backend/evals/latency_run.py`
+runs it and `backend/evals/latency_report.py` tabulates it. Costs price by the
+configured id (`backend/app/observability/cost.py`).
 
-## Smoke
+## Noise floor
 
-Command: `make latency`. Model `deepseek/deepseek-v4.1-flash` on OpenRouter,
-tenant bytefix. Artifact:
-`data/openrouter-deepseek-v4-1-flash__bytefix.json`.
+Two back-to-back runs, `deepseek/deepseek-v4.1-flash`, three tenants, five fixed
+messages each. Data `data/noise-run1.json`, `data/noise-run2.json`; table
+`data/noise-floor.md`.
 
-| measure | value |
-|---|---|
-| total_ms | 7295.1 |
-| first_model_token_ms | 3792.3 |
-| first_prose_ms | 7257.1 |
-| buffer_hold_ms | 3464.8 |
-| llm_call_count / path / route | 2 / fast / knowledge |
-| input_tokens / output_tokens | 8875 / 754 |
-| leg / failover_engaged | null / false |
-| model_match | true |
+- total_ms p50, run 1 to run 2: bytefix 3977 to 6772, sababa 6588 to 7135,
+  sababa2 4521 to 4946.
+- Cross-run absolute delta (larger of the p50 and p95 deltas): bytefix
+  2794.6 ms, sababa 669.4 ms, sababa2 425.6 ms.
+- **Tolerance rule:** a later change counts as real only when it exceeds these
+  per-tenant bands; anything inside is noise. The bands are wide, so a
+  single-run before/after claim is untrustworthy on this stack.
+- Budget/escalation turns, flagged not averaged: 6 of 15 (run 1), 9 of 15 (run
+  2).
 
-## Probe skips
+## Matrix
 
-Command: `make latency LATENCY_MODELS=opencode/ling-3.1-flash-free,opencode/space-bunny-free LATENCY_TENANTS=bytefix`.
+Two candidates are runnable and both Zen probes are blocked
+(`data/opencode-*-__bytefix.json`). Full table: `data/matrix.md`.
 
-- `ling-3.1-flash-free` is absent from the Zen catalogue (46 ids, in the
-  artifact).
-- `space-bunny-free` is listed, but the endpoint answers `HTTP 403
-  FreeTierError` (non-OpenCode clients are refused).
-Artifacts: `data/opencode-*-__bytefix.json`.
+- deepseek: completed 4 of 5 (bytefix, p50 3977 ms), 4 of 5 (sababa2, 4521 ms),
+  2 of 5 (sababa, hybrid, 6588 ms).
+- inclusionai/ling-3.0-flash: 0 of 5 on both fast tenants (every turn hit the
+  10s turn budget), 3 of 5 on sababa.
+- `model_match` true and `failover_engaged` false on every row; cost
+  $0.0007 to $0.006 per five turns.
 
-## Findings
+## Headline A/B (deepseek, same 96-item menu)
 
-- Pass: `make latency`, lint, typecheck and the suite are green
-  (`data/make-check.log`).
-- `leg` is null because a run pins one leg (no failover provider);
-  `usage_models` proves which model answered.
-- Pre-existing: `make seed-tenant2` (northgate) fails confirm on missing
-  ABN/GST; see `data/tenant-limits.md`.
-- Not started: the noise floor and the matrix (the next order).
+sababa2 (fast) p50 4521 ms, 4 of 5 completed; sababa (hybrid) p50 6588 ms, 2 of
+5. The fast path is both faster and far more reliable, but neither path meets
+the 4s first-token promise on this stack.

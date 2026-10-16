@@ -1,7 +1,7 @@
 # 13 - Latency instrument
 
-**Status:** In progress - slice 1, the instrument, landed; the noise floor and
-the model matrix are the current order.
+**Status:** In progress - slice 1 landed (instrument, noise floor, model
+matrix). Slices 2 through 7 not started.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/slice-1-instrument` off `development`.
 
@@ -24,8 +24,9 @@ up, pass or fail, in the evidence folder.
 ## Slice backlog
 
 1. The instrument: per-turn record, percentile math, runner, `make latency`;
-   DoD includes the noise floor and the model matrix - instrument landed; noise
-   floor and matrix in this order.
+   DoD includes the noise floor and the model matrix - landed (instrument,
+   noise floor, matrix; see
+   `docs/agencx/evidence/latency-2026-10/report.md`).
 2. Cap output tokens: `LLM_MAX_TOKENS_DRAFT` is 0 (uncapped); cap the draft
    prose first, and cap extract only after the schemas shrink - a reasoning
    model spends its cap on hidden thinking and dies with
@@ -78,8 +79,10 @@ artifacts for the exact catalogue and error.
 
 ## Open decisions
 
-- The noise tolerance is set from the measured run-to-run spread (see the
-  noise-floor artifacts); a change counts as real only when it exceeds it.
+- The noise tolerance is set from the measured floor (`data/noise-floor.md`):
+  a change counts as real only when it exceeds the per-tenant run-to-run band
+  for that metric - for example 2.8s on bytefix `total_ms`. The bands are wide,
+  so slices 2 through 6 need repeats, not single runs, to clear them.
 - The prompt-cache tradeoff (slice 5) needs the founder's ruling first.
 
 ## Evidence standard
