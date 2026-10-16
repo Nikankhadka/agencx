@@ -55,18 +55,27 @@ live in the ticket files, not here.
   draft output cap (`llm_max_tokens_draft` 4096) - measured mechanism-inert
   ([report-slice-2.md](evidence/latency-2026-10/report-slice-2.md)). Slice 3,
   the discarded agent call - **implemented, measured, through its after-eval:
-  PASS**. The tool result now carries the chunks, so a grounded tool turn's
-  prose is the draft and the draft node is skipped; measured at `2ac8247` the
-  hybrid tenant's one completed tool turn ran 3 model calls against 4, with the
-  branch confirmed by its `citations` event, and the fast tenants' completed
-  call counts were unchanged (sababa2 held its 0.00 band). After-eval with the
+  PASS on the mechanism**. The tool result now carries the chunks, so a grounded
+  tool turn's prose is the draft and the draft node is skipped; measured at
+  `2ac8247` the evidence is the mechanism - `agent grounded tool answer` fired 8
+  times, only on the hybrid tenant's tool turns, and only the new branch logs it
+  - plus the fast tenants' completed counts not moving (p50 delta 0, sababa2's
+  0.00 band held). The hybrid tenant's single completed turn ran 3 model calls
+  against 4 (n=1, 0.50 from one baseline p50 and 1.0 from the other). Run 1's
+  grounded knowledge turn was rejected by inspection and redrafted through the
+  draft node (the retry edge still works); seven of the eight grounded turns went
+  straight through. On those turns the branch emitted zero citations events, so
+  the customer saw no source chips where the old path emitted one per chunk
+  (flagged for founder review in `design-slice-3.md`). After-eval with the
   baseline pins: counts 45/41/30, trajectory and injection case-for-case
-  identical to the baseline, generation faithfulness 0.747 -> 0.716,
-  citation_faithfulness 0.321 -> 0.369, answer_relevancy 0.736 -> 0.802;
-  `run_gate`'s rule fails generation by 0.001, and since the eval never
-  exercises the changed path (0 of 116 replayed cases) that is the harness's
-  noise floor - flagged for the founder
+  identical to the baseline, generation faithfulness 0.7475 -> 0.7163,
+  citation_faithfulness 0.3207 -> 0.3692, answer_relevancy 0.7356 -> 0.8025. The
+  eval cannot reach the branch (`_tools_for` never offers the retrieval tools on
+  the fast path, `agent_node.py:604-605`), and the -0.0311 faithfulness drift is
+  NOT noise - the identical-code repeat spread is +0.0019 - so `run_gate`'s FAIL
+  on that key stays open for the founder
   ([report-slice-3.md](evidence/latency-2026-10/report-slice-3.md),
+  [data/eval-noise-repeat.md](evidence/latency-2026-10/data/eval-noise-repeat.md),
   [design-slice-3.md](evidence/latency-2026-10/design-slice-3.md),
   [eval-after-slice3-env.txt](evidence/latency-2026-10/data/eval-after-slice3-env.txt)).
   Slices 4-7 (parallelize retrieval; prompt caching; paid-tier A/B; streaming
@@ -383,7 +392,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 implemented, measured at `2ac8247` and through its after-eval - PASS, eval shows no attributable regression) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 implemented, measured at `2ac8247` and through its after-eval - PASS on the mechanism, mechanism proof plus unchanged fast tenants; the one gated regression is a between-window drift the eval cannot attribute, and `run_gate`'s FAIL on it stays open) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

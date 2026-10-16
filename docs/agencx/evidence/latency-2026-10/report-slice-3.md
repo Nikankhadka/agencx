@@ -1,37 +1,40 @@
-# Slice 3 report - the discarded agent call
+# Slice 3 report
 
-**Change.** `search_knowledge`'s result now carries the chunks, so a tool turn's grounded
-terminal prose becomes the draft and the draft node is skipped (agent -> price_gate ->
-inspection); retries, money, refusals, cards unchanged. Code `cbad1b0`, measured at
-`2ac8247`.
+**Change.** `search_knowledge`'s result now carries the chunks, so a grounded tool turn's
+prose is the draft; the draft node is skipped (agent -> price_gate -> inspection). Code
+`cbad1b0`, measured at `2ac8247`.
 
 **Commands.** `make latency LATENCY_MODELS=openrouter/deepseek-v4.1-flash
-LATENCY_TENANTS=all LATENCY_TURNS=5` x2 -> `data/slice3-run{1,2}.json`; three pinned evals,
-no `--reseed` -> `data/eval-after-slice3-<type>.log`.
+LATENCY_TENANTS=all LATENCY_TURNS=5` x2; three pinned evals, no `--reseed`.
 
-**Structural gate.** Completed-turn `llm_call_count`: sababa2 `[2,2,2]`/`[2,2,2,2]` (band
-0.00 held), bytefix `[2]`/`[1,2,2]` (inside 1.90). Sababa: one completed turn at 3 (2 rounds
-+ inspection, no draft) where that shape was 4, plus a `citations` event proving the branch
-ran; `grounded=1, draft=0` on every tool turn.
+**Structural gate.** sababa2 `[2,2,2]`/`[2,2,2,2]`, bytefix `[2]`/`[1,2,2]`: p50 delta 0,
+sababa2's 0.00 band held. Sababa's ONE completed turn (3 calls) is 0.50 from baseline p50
+3.5 (the band), 1.0 from 4.0; the proof is the mechanism - `agent grounded
+tool answer` fired 8 times, only on sababa's tool turns, and only the new branch logs it.
 
-**Completion, timing, tokens.** Completions did not rise (bytefix 1/5 & 3/5, sababa2 3/5 &
-4/5, sababa 0/5 & 1/5). p50s exceed the revised bands, as pre-slice p50s in this window did -
-corroboration only. The grounded hybrid turn carried 15,333 input tokens against 5.7-9.1k
-pre-slice: the chunk-carrying result is re-sent, so the counter-effect is real. All turns:
-one leg, `usage_models == ["deepseek/deepseek-v4.1-flash"]`.
+**Retry edge.** 7 of the 8 ran to the gates; run 1's knowledge turn `b3de4472` was rejected
+and redrafted by the draft node (`agent draft`, `cited: 0`); run 2: none.
 
-**After-eval** (counts verified 45/41/30). Trajectory and injection are
-case-for-case identical to the baseline: tool_correctness 0.634->0.634 (same 15 failures),
-persona 1.000->1.000, step_efficiency 0.972->0.974, pass_rate 0.967->0.967 (same single
-leak). Generation: faithfulness 0.747->0.716, answer_relevancy 0.736->0.802,
-citation_faithfulness 0.321->0.369, refusal_accuracy 0.000->0.000, negative_cases 12->12.
-`run_gate`: absolute gates pass; its rule fails generation by 0.001 (drop 0.031 > 0.03).
+**Citations narrowing.** No grounded turn emitted a citations event (`cited: 0`): no source
+chips where the old path emitted one per chunk (run 1's lone event was that redraft).
+Founder review.
 
-**Honesty check.** The eval never touches the change: replaying its 45 generation and 30
-injection cases gave **0** new-branch hits (43 P-3 + 2 structured; 26 P-3 + 4 other). It
-scores the unchanged path, so -0.031 is this harness's noise on faithfulness and the
-tolerance sits at the noise floor.
+**Completion, timing, tokens.** Completions unchanged (1/5 & 3/5, 3/5 & 4/5, 0/5 & 1/5);
+p50s above the bands; the grounded turn took 15,333 input tokens vs 5.7-11.9k pre-slice
+(the re-send cost). One leg,
+`usage_models == ["deepseek/deepseek-v4.1-flash"]`.
 
-**Verdict: pass.** Structural gate met, mechanism confirmed; the eval is a
-no-collateral-regression check whose failing key is noise, not a regression - flagged for
-the founder.
+**After-eval** (counts 45/41/30). Trajectory and injection identical. Generation:
+faithfulness 0.7475 -> **0.7163**, answer_relevancy 0.7356 -> 0.8025, citation_faithfulness
+0.3207 -> 0.3692 (refusal_accuracy 0.000, negative_cases 12). `run_gate` fails generation
+by 0.001.
+
+**-0.0311 is not noise.** Repeat - after (identical code) = +0.0019, ~17x the within-window
+spread: a between-window shift, likely provider drift (2 resamples vs 1), unproven (one
+baseline sample). -0.03 cannot resolve it; FAIL open.
+
+**Blindness is structural:** `_tools_for` returns the fast-path list before the retrieval
+tools are appended (`agent_node.py:604-605`), so fast-path tenants cannot reach it (0/116
+replayed).
+
+**Verdict: pass on the mechanism**; the n=1 sample, chip change and open FAIL.

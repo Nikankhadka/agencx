@@ -86,12 +86,11 @@ slower per run and resampled malformed output twice against the baseline's once.
 explanation is *not* proven: there is one sample in the baseline window, so a
 re-measurement there is needed before the level shift is called environmental.
 
-This also corrects the slice-3 report's parenthetical that the -0.031 "is this
-harness's noise": the harness's within-window noise on faithfulness is ~0.002, and the
-gate's FAIL should be treated as an open, unexplained item rather than absorbed noise.
-The two judge-heavy metrics behave the other way - their within-window spread
-(0.041-0.049) is comparable to their own baseline->after moves (0.048-0.067), so those
-two moves are within noise.
+This is what `report-slice-3.md` now records: the -0.0311 is written as a between-window
+level shift, not as "this harness's noise" (the within-window spread on faithfulness is
+~0.002, and the gate's FAIL is carried as an open, unexplained item). The two judge-heavy
+metrics behave the other way - their within-window spread (0.041-0.049) is comparable to
+their own baseline->after moves (0.048-0.067), so those two moves are within noise.
 
 ## `eval_runs` row this run creates
 

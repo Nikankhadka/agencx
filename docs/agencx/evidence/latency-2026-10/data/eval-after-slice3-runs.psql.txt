@@ -1,0 +1,24 @@
+# eval_runs rows after the slice-3 after-eval and the noise repeat (committed 2026-10-16 20:23 UTC)
+#
+# Captured with the local dev database up:
+#   docker compose exec -T db psql -U postgres -d wren -c '\pset pager off' \
+#     -c "select e.id, t.slug, e.run_type, e.metrics::text, e.created_at from eval_runs e join tenants t on t.id = e.tenant_id where e.run_type in ('generation','trajectory','injection') order by e.created_at;"
+#
+# The first three rows are the pre-slice-3 baseline (data/eval-baseline-runs.psql.txt),
+# the next three are the after-slice-3 run, and the last is the identical-code noise
+# repeat. bytefix is still e9139d84-0e9f-4282-9af6-e0dc9bf4b56e (never reseeded).
+# The after-run's 4-dp values live only here and in data/eval-noise-repeat.md; the
+# eval logs print 3 dp.
+
+Pager usage is off.
+                  id                  |      slug       |  run_type  |                                                                                                      metrics                                                                                                      |          created_at           
+--------------------------------------+-----------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------
+ 24e961dc-5463-4657-8abf-d6a2fca367a2 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7474747474747475, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.7356345066768284, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3207070707070707} | 2026-10-16 13:05:56.121846+00
+ f0573dba-d950-43a7-aa85-6c2fbcb08120 | bytefix         | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9715447154471545, "tool_correctness": 0.6341463414634146}                                                | 2026-10-16 13:19:44.951942+00
+ 2f739e87-369a-4a95-bb5d-7c8213a249fc | injection-probe | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                             | 2026-10-16 13:32:12.292589+00
+ 9a4e3918-dfa1-40a1-adee-6ee0e7fc19e1 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7163299663299664, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.8024507183653592, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3691919191919192} | 2026-10-16 15:14:23.24187+00
+ 2e4371b8-21e0-4e3e-9bd0-811a1c908d5b | bytefix         | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9742547425474254, "tool_correctness": 0.6341463414634146}                                                | 2026-10-16 15:22:15.602168+00
+ db028f43-9f83-4ff9-a013-9c80d7e66e46 | injection-probe | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                             | 2026-10-16 15:27:49.930971+00
+ f11f79f9-af16-46e2-a33b-85431f8bfa73 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7181818181818181, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.7534896167958404, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3282828282828283} | 2026-10-16 20:14:17.354734+00
+(7 rows)
+

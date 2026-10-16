@@ -4,12 +4,19 @@
 matrix). Slice 2 (draft output cap, 4096) measured: mechanism inert - the cap
 never bound, so no latency effect is attributable. Slice 3 (drop the discarded
 agent call) is **implemented, measured and through its after-eval**: the code
-landed (`cbad1b0`, measured at `2ac8247`), the structural gate is met on the one
-completed hybrid turn (3 calls against 4) with the new branch confirmed running
-by its `citations` event, and the after-eval shows no attributable regression -
-it never exercises the changed path (0 of 116 cases), so the eval is a
-no-collateral-regression check only. Slice 3 verdict: **pass**; see
-`docs/agencx/evidence/latency-2026-10/report-slice-3.md`.
+landed (`cbad1b0`, measured at `2ac8247`) and the structural gate is carried by
+the mechanism - `agent grounded tool answer` fired 8 times (4 per run, only on
+sababa's tool turns) and that line exists only inside the new branch, while the
+fast tenants' completed call counts did not move (p50 delta 0; sababa2's 0.00
+band held). Hybrid sababa has a single completed turn, at 3 calls against 4,
+0.50 from one baseline p50 and 1.0 from the other, so the sample is thin. The
+after-eval shows no attributable regression but is blind to the change
+(`_tools_for` never offers the retrieval tools on the fast path), and its
+generation faithfulness drift (-0.0311) is NOT noise - the identical-code repeat
+spread is +0.0019 - so `run_gate`'s FAIL on that key stays open. Slice 3
+verdict: **pass on the mechanism**; see
+`docs/agencx/evidence/latency-2026-10/report-slice-3.md` and the corrections in
+`data/eval-noise-repeat.md`.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -71,27 +78,41 @@ validated and the founder says go.
    The eval gate that blocked slice 3 is now unblocked - the provider-seam gaps
    are fixed (`data/eval-blocker-diagnosis.md`); the scored pre-slice-3 baseline
    is recorded (`data/eval-baseline.md`).
-   **Outcome (implemented, measured, evaluated - pass).** The change landed in
-   `cbad1b0` and was measured at `2ac8247`: `search_knowledge`'s tool result now
-   carries the spotlight-wrapped chunks, and a tool turn whose terminal prose
-   is grounded (chunks for `knowledge`, selections for `recommendation`) with no
-   money tool skips the draft node - retries, money routes, refusals and cards
-   are untouched, and the citations event narrows to the cited chunks (flagged
-   for founder review in `design-slice-3.md`). Structural result: on the hybrid
-   tenant's one completed tool turn, `llm_call_count` 3 (2 agent rounds +
-   inspection, no draft) where the same shape was 4, with the branch confirmed
-   by its `citations` event; `grounded=1, draft=0` on every tool turn of both
-   runs; sababa2 held its 0.00 band exactly and bytefix stayed inside 1.90.
+   **Outcome (implemented, measured, evaluated - pass on the mechanism).** The
+   change landed in `cbad1b0` and was measured at `2ac8247`:
+   `search_knowledge`'s tool result now carries the spotlight-wrapped chunks, and
+   a tool turn whose terminal prose is grounded (chunks for `knowledge`,
+   selections for `recommendation`) with no money tool skips the draft node -
+   retries, money routes, refusals and cards are untouched, and the citations
+   event narrows to the cited chunks (flagged for founder review in
+   `design-slice-3.md`). Structural result: `agent grounded tool answer` fired 8
+   times (4 per run, only on sababa's tool turns) and that line exists only
+   inside the new branch; the hybrid tenant's single completed tool turn ran
+   `llm_call_count` 3 (2 agent rounds + inspection, no draft) where the same
+   shape was 4 - 0.50 from one baseline p50 and 1.0 from the other, n=1, so the
+   mechanism is the load-bearing evidence, not the sample. The fast tenants did
+   not move (p50 delta 0; sababa2 held its 0.00 band exactly, bytefix inside
+   1.90). Seven of the 8 grounded turns ran straight to the gates and run 1's
+   grounded knowledge turn was rejected and redrafted by the draft node - the
+   retry edge still works. On those turns the branch emitted ZERO citations
+   events (`cited: 0` on all 8), so the customer saw no source chips where the
+   old draft path emitted one per retrieved chunk; run 1's lone `citations` event
+   belonged to that redraft, not to the new branch.
    Completion rate did not rise and p50s stayed above the revised bands (as
    pre-slice runs in the same window did) - corroboration only. The after-eval
    is case-for-case identical to the baseline on trajectory and injection and
-   moved only on generation (faithfulness -0.031, answer_relevancy +0.067,
-   citation_faithfulness +0.048); `run_gate`'s own rule therefore FAILS
-   generation by 0.001 - but the eval never exercises the changed path (0 of 116
-   replayed cases take the new branch), so that delta is the harness's noise
-   floor, not a regression. Slice verdict: **pass**, with the tolerance finding
-   flagged for the founder. Full write-up:
-   `docs/agencx/evidence/latency-2026-10/report-slice-3.md`.
+   moved only on generation (faithfulness -0.0311, answer_relevancy +0.0668,
+   citation_faithfulness +0.0485); `run_gate`'s own rule therefore FAILS
+   generation by 0.001. The eval never exercises the changed path, and it cannot:
+   `_tools_for` returns the fast-path tool list before the retrieval tools are
+   appended (`agent_node.py:604-605`), and both eval tenants are fast-path (0 of
+   116 replayed cases take the branch). The -0.0311 drift is NOT noise: the
+   identical-code repeat spread is +0.0019 (`data/eval-noise-repeat.md`), ~17x
+   smaller, so it is a between-window level shift - likely provider-side drift,
+   unproven with one baseline sample - and the -0.03 tolerance cannot resolve a
+   drift of that size. The FAIL stays open. Slice verdict: **pass on the
+   mechanism**, with the thin sample, the chip change and the open eval FAIL
+   recorded in `report-slice-3.md`.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
    `search_ms` drop; watch transaction and connection semantics.
