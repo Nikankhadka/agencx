@@ -1,0 +1,340 @@
+"""Slice 1 (latency): the turn-latency runner.
+
+Drives real customer turns through the real chat surface - ``POST /api/chat``,
+the same route, controller, and SSE shape the browser hits - with one model
+pinned per run, and writes one JSON file per model x tenant under the evidence
+folder.
+
+**Why in-process.** The per-turn record is emitted by the chat controller as a
+single structured log line on the ``app.latency`` logger (see
+``app/observability/turn_record.py``). Running the app through httpx's
+``ASGITransport`` in this same process lets the runner attach a logging handler
+and tap exactly that line: no cross-process log plumbing, and no way for a turn
+served elsewhere to land in this run's evidence. The route, controller, graph,
+retrieval, and SSE framing are all the real ones.
+
+**Model pinning.** ``docker compose run -e`` pins a *container*; the runner must
+pin the *process* it drives. It writes ``LLM_PROVIDER`` / ``LLM_BASE_URL`` /
+``LLM_API_KEY`` / ``LLM_MODEL`` and empties both other tiers' model names, then
+clears the settings cache, so the app builds exactly one provider leg. A turn
+whose reported ``usage_models`` is anything but the pinned model is recorded as
+``model_match: false`` - a wrong number is surfaced, never averaged in.
+
+Usage::
+
+    python -m evals.latency_run                      # smoke: first model, first tenant, one turn
+    python -m evals.latency_run --models all --tenants all --turns 3
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from app.observability.turn_record import LATENCY_LOGGER_NAME
+from app.shared.config import get_settings
+
+DEFAULT_CONFIG = Path(__file__).with_name("latency_config.json")
+DEFAULT_OUT = Path("/evidence/data")
+PROVIDER_HTTP_TIMEOUT_S = 30.0
+TURN_TIMEOUT_S = 180.0
+
+# Emptied on every pin so exactly one leg is configured for the run.
+_DISABLED_LEG_VARS = (
+    "LLM_FALLBACK_MODEL",
+    "LLM_FALLBACK_API_KEY",
+    "LLM_FAILOVER_MODEL",
+    "LLM_FAILOVER_API_KEY",
+)
+
+
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _make_command(args: argparse.Namespace) -> str:
+    """The `make latency` invocation that reproduces this run, for the evidence."""
+    parts = ["make latency"]
+    if args.models:
+        parts.append(f"LATENCY_MODELS={args.models}")
+    if args.tenants:
+        parts.append(f"LATENCY_TENANTS={args.tenants}")
+    if args.turns != 1:
+        parts.append(f"LATENCY_TURNS={args.turns}")
+    return " ".join(parts)
+
+
+def _slugify(value: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in value).strip("-").lower()
+
+
+class _RecordHandler(logging.Handler):
+    """Collects the ``latency_turn`` payload off every record on ``app.latency``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[dict[str, Any]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        payload = getattr(record, "latency_turn", None)
+        if isinstance(payload, dict):
+            self.records.append(payload)
+
+
+def _load_config(path: Path) -> dict[str, Any]:
+    with path.open() as fh:
+        data: dict[str, Any] = json.load(fh)
+    return data
+
+
+def _select(items: list[dict[str, Any]], selector: str | None, key: str) -> list[dict[str, Any]]:
+    """The selected config rows: default the first, ``all`` for every row, or a
+    comma-separated list of keys."""
+    if selector is None:
+        return items[:1]
+    if selector == "all":
+        return items
+    wanted = {s.strip() for s in selector.split(",") if s.strip()}
+    chosen = [item for item in items if item.get(key) in wanted]
+    missing = wanted - {item.get(key) for item in chosen}
+    if missing:
+        raise SystemExit(f"unknown {key}: {', '.join(sorted(missing))}")
+    return chosen
+
+
+async def _fetch_provider_models(
+    http: httpx.AsyncClient, url: str, key: str
+) -> list[dict[str, Any]]:
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    resp = await http.get(url, headers=headers)
+    resp.raise_for_status()
+    raw: Any = resp.json()
+    models = raw.get("data") if isinstance(raw, dict) else None
+    return models if isinstance(models, list) else []
+
+
+def _find_model(models: list[dict[str, Any]], api_model: str) -> dict[str, Any] | None:
+    for entry in models:
+        if isinstance(entry, dict) and entry.get("id") == api_model:
+            return entry
+    return None
+
+
+def _pin_model(model: dict[str, Any]) -> None:
+    key = os.environ.get(str(model["key_env"]), "")
+    if not key:
+        raise SystemExit(f"{model['key_env']} is unset")
+    os.environ["LLM_PROVIDER"] = "openai_compat"
+    os.environ["LLM_BASE_URL"] = str(model["base_url"])
+    os.environ["LLM_API_KEY"] = key
+    os.environ["LLM_MODEL"] = str(model["api_model"])
+    for var in _DISABLED_LEG_VARS:
+        os.environ[var] = ""
+    get_settings.cache_clear()
+
+
+async def _drive_turn(
+    client: httpx.AsyncClient,
+    *,
+    slug: str,
+    message: str,
+    conversation_id: str | None,
+) -> tuple[str | None, list[str], str | None]:
+    """One real turn. Returns (conversation_id, event types, error)."""
+    body: dict[str, Any] = {"slug": slug, "message": message}
+    if conversation_id is not None:
+        body["conversation_id"] = conversation_id
+    resp = await client.post("/api/chat", json=body)
+    if resp.status_code != 200:
+        return None, [], f"HTTP {resp.status_code}: {resp.text[:200]}"
+
+    seen: str | None = None
+    event_types: list[str] = []
+    for line in resp.text.splitlines():
+        if not line.startswith("data: "):
+            continue
+        try:
+            event = json.loads(line[len("data: ") :])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_types.append(str(event.get("type")))
+        if event.get("type") == "conversation":
+            seen = str(event.get("conversation_id"))
+    return seen, event_types, None
+
+
+async def _run_model_tenant(
+    client: httpx.AsyncClient,
+    http: httpx.AsyncClient,
+    *,
+    model: dict[str, Any],
+    tenant: dict[str, Any],
+    turns: int,
+    command: str,
+    handler: _RecordHandler,
+) -> dict[str, Any]:
+    provider_models = await _fetch_provider_models(
+        http, str(model["models_url"]), os.environ.get(str(model["key_env"]), "")
+    )
+    fetched_at = _utc_now()
+    entry = _find_model(provider_models, str(model["api_model"]))
+    result: dict[str, Any] = {
+        "model": {k: model.get(k) for k in ("label", "route", "base_url", "api_model", "tier")},
+        "tenant": tenant["slug"],
+        "message": tenant["message"],
+        "expected_path": tenant.get("expected_path"),
+        "expected_llm_calls": tenant.get("expected_llm_calls"),
+        "provider_models_fetched_at": fetched_at,
+        "provider_model_present": entry is not None,
+        "provider_pricing": entry.get("pricing") if entry else None,
+        "command": command,
+        "generated_at": _utc_now(),
+        "turns": [],
+    }
+    if entry is None:
+        result["skipped"] = (
+            f"{model['api_model']} absent from {model['models_url']} at {fetched_at}"
+        )
+        return result
+
+    conversation_id: str | None = None
+    for _ in range(turns):
+        handler.records.clear()
+        conversation_id, event_types, error = await _drive_turn(
+            client, slug=str(tenant["slug"]), message=str(tenant["message"]),
+            conversation_id=conversation_id,
+        )
+        if error is not None:
+            result["turns"].append({"error": error})
+            break
+        matches = [r for r in handler.records if r.get("conversation_id") == conversation_id]
+        if not matches:
+            result["turns"].append(
+                {
+                    "conversation_id": conversation_id,
+                    "error": "no latency record emitted for this turn",
+                    "event_types": event_types,
+                }
+            )
+            continue
+        for record in matches:
+            usage_models = [str(m) for m in record.get("usage_models", [])]
+            result["turns"].append(
+                {
+                    "conversation_id": record.get("conversation_id"),
+                    "usage_models": usage_models,
+                    "model_match": bool(usage_models)
+                    and set(usage_models) == {str(model["api_model"])},
+                    "event_types": event_types,
+                    "record": record.get("record"),
+                }
+            )
+    return result
+
+
+def _write(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def _print_turn(model_label: str, tenant: str, index: int, turn: dict[str, Any]) -> None:
+    if turn.get("error") is not None:
+        print(f"  {model_label} x {tenant} turn {index}: ERROR {turn['error']}")
+        return
+    record = turn.get("record") or {}
+    print(
+        f"  {model_label} x {tenant} turn {index}: "
+        f"total_ms={record.get('total_ms')} path={record.get('path')} "
+        f"route={record.get('route')} calls={record.get('llm_call_count')} "
+        f"leg={record.get('leg')} failover={record.get('failover_engaged')} "
+        f"model_match={turn.get('model_match')}"
+    )
+
+
+async def run(args: argparse.Namespace) -> int:
+    from app.main import app
+
+    config = _load_config(Path(args.config))
+    models = _select(list(config["models"]), args.models, "label")
+    tenants = _select(list(config["corpus"]), args.tenants, "slug")
+    out_dir = Path(args.out)
+    command = _make_command(args)
+
+    handler = _RecordHandler()
+    latency_logger = logging.getLogger(LATENCY_LOGGER_NAME)
+    latency_logger.setLevel(logging.INFO)
+    latency_logger.addHandler(handler)
+
+    written: list[Path] = []
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with (
+            httpx.AsyncClient(
+                transport=transport, base_url="http://latency", timeout=TURN_TIMEOUT_S
+            ) as client,
+            httpx.AsyncClient(timeout=PROVIDER_HTTP_TIMEOUT_S) as http,
+        ):
+            for model in models:
+                try:
+                    _pin_model(model)
+                except SystemExit as exc:
+                    path = out_dir / f"{_slugify(str(model['label']))}__skipped.json"
+                    _write(
+                        path,
+                        {
+                            "model": model,
+                            "skipped": str(exc),
+                            "command": command,
+                            "generated_at": _utc_now(),
+                        },
+                    )
+                    written.append(path)
+                    print(f"SKIP {model['label']}: {exc}")
+                    continue
+                for tenant in tenants:
+                    result = await _run_model_tenant(
+                        client, http, model=model, tenant=tenant, turns=args.turns,
+                        command=command, handler=handler,
+                    )
+                    path = out_dir / f"{_slugify(str(model['label']))}__{tenant['slug']}.json"
+                    _write(path, result)
+                    written.append(path)
+                    if result.get("skipped") is not None:
+                        print(f"SKIP {model['label']} x {tenant['slug']}: {result['skipped']}")
+                        continue
+                    for index, turn in enumerate(result["turns"], start=1):
+                        _print_turn(str(model["label"]), str(tenant["slug"]), index, turn)
+
+    print(f"\nwrote {len(written)} file(s):")
+    for path in written:
+        print(f"  {path}")
+    return 0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else "")
+    parser.add_argument(
+        "--models", default=None, help="comma-separated model labels, or 'all' (default: first)"
+    )
+    parser.add_argument(
+        "--tenants", default=None, help="comma-separated tenant slugs, or 'all' (default: first)"
+    )
+    parser.add_argument("--turns", type=int, default=1, help="turns per tenant in one conversation")
+    parser.add_argument("--out", default=str(DEFAULT_OUT), help="evidence output directory")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="model and corpus config")
+    args = parser.parse_args()
+    raise SystemExit(asyncio.run(run(args)))
+
+
+if __name__ == "__main__":
+    main()

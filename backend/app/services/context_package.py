@@ -41,6 +41,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from app.observability.turn_record import record_path
 from app.onboarding.flow import read_services
 from app.retrieval.types import RetrievedChunk
 from app.services.knowledge_version import knowledge_version
@@ -306,6 +307,9 @@ async def get_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     async with _cache_lock:
         cached = _cache.get(tenant_id)
     if cached is not None and cached.version == version and not cached.is_expired():
+        # Slice 1: the package is the turn's fast/hybrid decision, on the cached
+        # and the freshly-built path alike.
+        record_path("fast" if cached.fast_path else "hybrid")
         return cached
 
     # Assembled outside the lock: holding it across four queries would serialize
@@ -315,6 +319,7 @@ async def get_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     package = await build_package(conn, tenant_id)
     async with _cache_lock:
         _cache[tenant_id] = package
+    record_path("fast" if package.fast_path else "hybrid")
     return package
 
 

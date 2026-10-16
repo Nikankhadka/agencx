@@ -12,6 +12,7 @@ import time
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from app.observability.turn_record import record_retrieval
 from app.retrieval.dense import dense_search
 from app.retrieval.fuse import reciprocal_rank_fusion
 from app.retrieval.sparse import sparse_search
@@ -63,15 +64,18 @@ async def retrieve(
 
     reranked = time.perf_counter()
     result = await reranker.rerank(query=query, candidates=fused, top_k=top_k)
+    rerank_ms = round((time.perf_counter() - reranked) * 1000, 1)
     # Retrieval sits on the critical path of every knowledge/recommendation/
     # quoting turn, so its cost needs to be visible next to the LLM calls it is
     # measured against rather than being lumped into the specialist node's span.
+    # The same numbers feed the per-turn latency record (slice 1).
+    record_retrieval(embed_ms=embed_ms, search_ms=search_ms, rerank_ms=rerank_ms)
     logger.info(
         "retrieval",
         extra={
             "embed_ms": embed_ms,
             "search_ms": search_ms,
-            "rerank_ms": round((time.perf_counter() - reranked) * 1000, 1),
+            "rerank_ms": rerank_ms,
             "total_ms": round((time.perf_counter() - started) * 1000, 1),
             "candidates": len(fused),
             "kept": len(result),

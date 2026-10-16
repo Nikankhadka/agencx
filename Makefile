@@ -286,6 +286,26 @@ eval: ## Run the full eval gate (deterministic + LLM-judged) - NEEDS make seed-t
 eval-skip-llm: ## Deterministic eval gate only (skip LLM-judged) - NEEDS make seed-tenant1 first
 	$(BE) python -m evals.run_gate --skip-llm
 
+# ── latency ────────────────────────────────────────────────────────────────────
+
+# Slice 1 (docs/agencx/spec/active/13-latency.md): drive real customer turns
+# through the chat surface with one model pinned per run, and write one JSON
+# record per turn. The evidence dir is bind-mounted into the runner, so the JSON
+# lands in the repo with no copy step. Defaults are the smoke - one model, one
+# tenant, one turn - and the corpus tenants must already be seeded. Widen with
+# LATENCY_MODELS / LATENCY_TENANTS (a comma list, or 'all') and LATENCY_TURNS.
+LATENCY_EVIDENCE := $(CURDIR)/docs/agencx/evidence/latency-2026-10
+
+.PHONY: latency
+latency: ## Measure turn latency (slice 1); flags LATENCY_MODELS / LATENCY_TENANTS / LATENCY_TURNS
+	@mkdir -p $(LATENCY_EVIDENCE)/data
+	$(DC) run --rm \
+		-v $(LATENCY_EVIDENCE):/evidence \
+		backend python -m evals.latency_run \
+		$(if $(LATENCY_MODELS),--models $(LATENCY_MODELS)) \
+		$(if $(LATENCY_TENANTS),--tenants $(LATENCY_TENANTS)) \
+		$(if $(LATENCY_TURNS),--turns $(LATENCY_TURNS))
+
 # ── build & CI ─────────────────────────────────────────────────────────────────
 
 .PHONY: build

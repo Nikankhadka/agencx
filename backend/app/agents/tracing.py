@@ -11,6 +11,7 @@ from langgraph.config import get_stream_writer
 from langgraph.runtime import get_runtime
 
 from app.agents.state import AgentState, GraphContext
+from app.observability.turn_record import record_route
 
 logger = logging.getLogger("app.agents.graph")
 
@@ -64,12 +65,15 @@ def traced(name: str, node: Callable[[AgentState], Awaitable[dict[str, Any]]]) -
             duration_ms = round((time.perf_counter() - started) * 1000, 1)
             attrs = _span_attrs(result)
             span.set(**attrs, duration_ms=duration_ms)
+            route = result.get("route", state.get("route"))
+            # Slice 1: the turn's route rides the per-turn latency record too.
+            record_route(route)
             logger.info(
                 "agent node",
                 extra={
                     "node": name,
                     "duration_ms": duration_ms,
-                    "route": result.get("route", state.get("route")),
+                    "route": route,
                 },
             )
             return result

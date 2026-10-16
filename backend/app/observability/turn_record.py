@@ -1,0 +1,200 @@
+"""Slice 1 (latency): the per-turn record.
+
+A customer turn's latency is spread across the code that produces it:
+
+- the chat controller owns ``total_ms``, the first-token/first-prose gap, and
+  (via the existing sinks) the token counts and which provider leg answered;
+- the two retrieval paths know ``embed_ms`` / ``search_ms`` / ``rerank_ms`` and
+  the fast-versus-hybrid ``path``;
+- the agent tracing wrapper knows the ``route``.
+
+This module is the one place they meet. Components write the measures they own
+into a per-turn accumulator; the controller reads it back and emits exactly one
+record per turn as a single structured log line. The runner taps that line.
+
+It mirrors ``collect_usage`` (app/observability/cost.py) and ``collect_legs``
+(app/llm/failover.py), and for the same reason: the graph runs in child tasks
+that get a copy of the context, so only mutation of a *shared object* opened by
+the turn is visible back to the turn that opened it.
+
+The record carries exactly these keys, each always present and ``None`` where a
+measure does not apply:
+
+``total_ms``, ``first_model_token_ms``, ``first_prose_ms``, ``buffer_hold_ms``,
+``embed_ms``, ``search_ms``, ``rerank_ms``, ``path``, ``llm_call_count``,
+``input_tokens``, ``output_tokens``, ``leg``, ``failover_engaged``, ``route``.
+
+``llm_call_count`` is ``len(usages)`` - the number of provider calls that
+reported token usage. One caveat: in a failover race both legs can complete
+before the loser is cancelled, so a raced turn can report one more call than
+the graph asked for. The record's ``leg`` and ``usage_models`` make that
+visible rather than silent.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+
+LATENCY_LOGGER_NAME = "app.latency"
+
+_logger = logging.getLogger(LATENCY_LOGGER_NAME)
+
+
+@dataclass
+class TurnRecord:
+    """The measures a turn's components write before the controller emits."""
+
+    path: str | None = None
+    route: str | None = None
+    embed_ms: float | None = None
+    search_ms: float | None = None
+    rerank_ms: float | None = None
+
+    def add_retrieval(
+        self,
+        *,
+        embed_ms: float | None,
+        search_ms: float | None,
+        rerank_ms: float | None,
+    ) -> None:
+        """Add one retrieval's stage timings to the turn's totals.
+
+        A turn can retrieve more than once (a redraft, or a recommendation
+        pass after a knowledge pass), so the record reports the turn's total
+        retrieval cost rather than one arbitrary pass. A stage not run in a
+        pass contributes nothing.
+        """
+        self.embed_ms = _add(self.embed_ms, embed_ms)
+        self.search_ms = _add(self.search_ms, search_ms)
+        self.rerank_ms = _add(self.rerank_ms, rerank_ms)
+
+
+def _add(total: float | None, value: float | None) -> float | None:
+    if value is None:
+        return total
+    return value if total is None else round(total + value, 1)
+
+
+_sink: ContextVar[TurnRecord | None] = ContextVar("_turn_record_sink", default=None)
+
+
+@contextmanager
+def collect_turn_record() -> Iterator[TurnRecord]:
+    """Open a fresh accumulator for the duration of a turn. Nesting replaces
+    the sink and restores the previous one (contextvars are task-local)."""
+    record = TurnRecord()
+    token = _sink.set(record)
+    try:
+        yield record
+    finally:
+        _sink.reset(token)
+
+
+def _active() -> TurnRecord | None:
+    return _sink.get()
+
+
+def record_retrieval(
+    *, embed_ms: float | None, search_ms: float | None, rerank_ms: float | None
+) -> None:
+    """Called by the retrieval entry point. No active sink (an eval, a test,
+    a non-chat caller) means the measure is dropped."""
+    record = _active()
+    if record is not None:
+        record.add_retrieval(embed_ms=embed_ms, search_ms=search_ms, rerank_ms=rerank_ms)
+
+
+def record_path(path: str) -> None:
+    """Which path produced the grounding material ('fast' or 'hybrid')."""
+    record = _active()
+    if record is not None:
+        record.path = path
+
+
+def record_route(route: str | None) -> None:
+    """The turn's route, written by the agent tracing wrapper."""
+    record = _active()
+    if record is not None and route is not None:
+        record.route = route
+
+
+def build_record(
+    record: TurnRecord,
+    *,
+    total_ms: float,
+    first_model_token_ms: float | None,
+    first_prose_ms: float | None,
+    buffer_hold_ms: float | None,
+    llm_call_count: int,
+    input_tokens: int,
+    output_tokens: int,
+    leg: str | None,
+    failover_engaged: bool,
+) -> dict[str, object]:
+    """The exact 14-key record. Every key is present; ``None`` is a measure
+    that did not apply (a deterministic turn writes no prose; the fast path
+    embeds and reranks nothing)."""
+    return {
+        "total_ms": total_ms,
+        "first_model_token_ms": first_model_token_ms,
+        "first_prose_ms": first_prose_ms,
+        "buffer_hold_ms": buffer_hold_ms,
+        "embed_ms": record.embed_ms,
+        "search_ms": record.search_ms,
+        "rerank_ms": record.rerank_ms,
+        "path": record.path,
+        "llm_call_count": llm_call_count,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "leg": leg,
+        "failover_engaged": failover_engaged,
+        "route": record.route,
+    }
+
+
+def emit_turn_record(
+    record: TurnRecord,
+    *,
+    tenant_id: str,
+    conversation_id: str,
+    usage_models: Sequence[str],
+    total_ms: float,
+    first_model_token_ms: float | None,
+    first_prose_ms: float | None,
+    buffer_hold_ms: float | None,
+    llm_call_count: int,
+    input_tokens: int,
+    output_tokens: int,
+    leg: str | None,
+    failover_engaged: bool,
+) -> dict[str, object]:
+    """Emit one record for the turn as a single structured log line, and
+    return the payload so an in-process caller can also read it directly.
+
+    The line is on ``app.latency`` and keyed to the tenant and conversation;
+    ``usage_models`` names every model that reported usage, so a turn served by
+    an unexpected model is visible in the evidence rather than averaged in.
+    """
+    payload: dict[str, object] = {
+        "record": build_record(
+            record,
+            total_ms=total_ms,
+            first_model_token_ms=first_model_token_ms,
+            first_prose_ms=first_prose_ms,
+            buffer_hold_ms=buffer_hold_ms,
+            llm_call_count=llm_call_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            leg=leg,
+            failover_engaged=failover_engaged,
+        ),
+        "tenant_id": tenant_id,
+        "conversation_id": conversation_id,
+        "usage_models": sorted(set(usage_models)),
+    }
+    _logger.info("latency turn", extra={"latency_turn": payload})
+    return payload

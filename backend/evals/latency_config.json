@@ -1,0 +1,71 @@
+{
+  "models": [
+    {
+      "label": "openrouter/deepseek-v4.1-flash",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "deepseek/deepseek-v4.1-flash",
+      "key_env": "OPENROUTER_API_KEY",
+      "models_url": "https://openrouter.ai/api/v1/models",
+      "tier": "candidate"
+    },
+    {
+      "label": "openrouter/inclusionai-ling-3.0-flash",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "inclusionai/ling-3.0-flash",
+      "key_env": "OPENROUTER_API_KEY",
+      "models_url": "https://openrouter.ai/api/v1/models",
+      "tier": "candidate"
+    },
+    {
+      "label": "opencode/ling-3.1-flash-free",
+      "route": "zen",
+      "base_url": "https://opencode.ai/inference/openai/v1",
+      "api_model": "ling-3.1-flash-free",
+      "key_env": "OPENCODE_ZEN_API_KEY",
+      "models_url": "https://opencode.ai/inference/v1/models",
+      "tier": "probe"
+    },
+    {
+      "label": "opencode/space-bunny-free",
+      "route": "zen",
+      "base_url": "https://opencode.ai/inference/openai/v1",
+      "api_model": "space-bunny-free",
+      "key_env": "OPENCODE_ZEN_API_KEY",
+      "models_url": "https://opencode.ai/inference/v1/models",
+      "tier": "probe",
+      "candidate": false
+    }
+  ],
+  "corpus": [
+    {
+      "slug": "bytefix",
+      "vertical": "phone repair",
+      "expected_path": "fast",
+      "expected_llm_calls": 2,
+      "message": "How much is a screen replacement?"
+    },
+    {
+      "slug": "sababa2",
+      "vertical": "restaurant",
+      "expected_path": "fast",
+      "expected_llm_calls": 2,
+      "message": "Which dishes are vegan or gluten free?"
+    },
+    {
+      "slug": "sababa",
+      "vertical": "restaurant",
+      "expected_path": "hybrid",
+      "expected_llm_calls": 4,
+      "message": "What are your most popular items?"
+    },
+    {
+      "slug": "northgate",
+      "vertical": "dental",
+      "expected_path": "fast",
+      "expected_llm_calls": 2,
+      "message": "What are your opening hours?"
+    }
+  ]
+}

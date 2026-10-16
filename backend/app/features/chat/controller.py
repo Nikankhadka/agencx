@@ -32,10 +32,15 @@ from app.agents.spotlight import scan_input
 from app.agents.state import AgentState, GraphContext
 from app.features.chat import service
 from app.llm.embedder import Embedder
-from app.llm.failover import collect_legs
+from app.llm.failover import LegOutcome, collect_legs
 from app.llm.provider import LLMProvider
 from app.observability.cost import TokenUsage, collect_usage
 from app.observability.tracing import get_tracer
+from app.observability.turn_record import (
+    TurnRecord,
+    collect_turn_record,
+    emit_turn_record,
+)
 from app.retrieval.rerank import Reranker
 from app.shared import config, db
 from app.shared.limits import (
@@ -269,6 +274,8 @@ async def stream_chat_response(
     first_model_token_ms: float | None = None
     first_prose_ms: float | None = None
     usages: list[TokenUsage] | None = None
+    legs: LegOutcome | None = None
+    turn_record: TurnRecord | None = None
     try:
         # T-030: one trace per turn (a no-op unless Langfuse keys are set),
         # and collect every LLM call's token usage for the whole turn so a
@@ -280,6 +287,10 @@ async def stream_chat_response(
             # P-2: which leg answered, how fast it produced anything, and whether
             # the race was needed. Scalars only - no prompts, no completions.
             collect_legs() as legs,
+            # Slice 1: the accumulator the retrieval paths and the agent tracing
+            # wrapper write their measures into (embed/search/rerank, path,
+            # route). Emitted once per turn below.
+            collect_turn_record() as turn_record,
         ):
             # T-028: every LLM call the graph makes is time-bounded by the
             # tenant's llm_timeout via this wrapper - no node has to remember
@@ -492,6 +503,34 @@ async def stream_chat_response(
         yield {"type": "handoff"}
         yield {"type": "done"}
         return
+    finally:
+        # Slice 1: exactly one record per turn, on every exit path (success,
+        # turn-budget, step cap, provider fault), from whatever the turn
+        # measured. A measure that did not apply is null, never absent - a
+        # deterministic turn records null prose timings, the fast path records
+        # null embed/search/rerank - so a missing number reads as a null, not
+        # as a gap the reader has to notice.
+        if turn_record is not None:
+            usage_list = usages or []
+            emit_turn_record(
+                turn_record,
+                tenant_id=str(tenant_id),
+                conversation_id=str(conversation_id),
+                usage_models=[u.model for u in usage_list],
+                total_ms=_ms_since(turn_started),
+                first_model_token_ms=first_model_token_ms,
+                first_prose_ms=first_prose_ms,
+                buffer_hold_ms=(
+                    round(first_prose_ms - first_model_token_ms, 1)
+                    if first_model_token_ms is not None and first_prose_ms is not None
+                    else None
+                ),
+                llm_call_count=len(usage_list),
+                input_tokens=sum(u.input_tokens for u in usage_list),
+                output_tokens=sum(u.output_tokens for u in usage_list),
+                leg=legs.leg if legs is not None else None,
+                failover_engaged=legs.failover_engaged if legs is not None else False,
+            )
 
     await service.persist_assistant_turn(
         tenant_id=tenant_id,
