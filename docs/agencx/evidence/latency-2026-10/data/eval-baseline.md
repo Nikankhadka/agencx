@@ -47,11 +47,10 @@ fallback often won - which is not comparable across runs.
   `TimeLimitedProvider` wrap.
 - Tenants: generation and trajectory run against `bytefix`
   (`seed_tenant1_phoneshop.SLUG`); injection against `injection-probe`
-  (`seed_injection_probe.SLUG`, `injection_eval.py:277`). **Mismatch recorded:**
-  `run_gate._seeded_tenant_id()` (`run_gate.py:144-149`) reads `bytefix` for all
-  three run types, so it will not find injection's row (written under
-  `injection-probe`) - the injection regression gate is mis-wired; pre-existing,
-  not fixed here.
+  (`seed_injection_probe.SLUG`, `injection_eval.py:277`). **Fixed in `d152572`:**
+  `run_gate` used to resolve `bytefix` for every run type, so it never found
+  injection's row; it now resolves the tenant per run type via
+  `slug_for_run_type()` (injection -> the probe slug).
 
 ## Procedure
 
@@ -82,44 +81,64 @@ docker compose run --rm -T -e LLM_PROVIDER=openai_compat \
 
 The same shape for `evals.trajectory_eval` and `evals.injection_eval --reseed`.
 
-## Results
+## Prior attempt (aborted)
 
-**Blocked - the generation run aborted at case 31/45, so no baseline was
-recorded.** Per the order, the run was stopped, not re-run, and no code was
-changed.
+The first attempt aborted at generation case 31/45 on the pre-existing
+`TypeError: JsonInvalid: 'error' required in context` (`openai_base.py:586`,
+fixed in `d152572`), so no row was written. That log is preserved as
+`data/eval-baseline-generation-aborted.log`.
 
-Case 1-30 completed (answer + judge); the run writes its `eval_runs` row only
-after all 45 cases, so nothing was banked. Wall: ~25 min to 31/45 (~45-50 s per
-case, 0 rate-limit retries this run).
+## Result (rerun at `d152572a9ab7383d98dfd1c1635186ba06a79213`)
 
-The abort:
+All three runs completed, no abort.
 
-```
-File "/app/evals/generation_eval.py", line 370, in score_case
-    relevancy = await answer_relevancy(case.question, answer, provider=provider, embedder=embedder)
-File "/app/evals/generation_eval.py", line 225, in answer_relevancy
-    generated = await provider.extract(
-File "/app/app/llm/openai_base.py", line 598, in extract
-    return await _with_retry(_call)
-File "/app/app/llm/openai_base.py", line 180, in _with_retry
-    return await factory()
-File "/app/app/llm/openai_base.py", line 586, in _call
-    raise ValidationError.from_exception_data(
-TypeError: JsonInvalid: 'error' required in context
-```
+| run | cases | key metric | other metrics | wall |
+|---|---|---|---|---|
+| generation | 45 | faithfulness **0.7475** | answer_relevancy 0.7356, citation_faithfulness 0.3207, negative_cases 12, refusal_accuracy 0.000 | 24m18s |
+| trajectory | 41 | tool_correctness **0.6341** | persona_quality 1.000, step_efficiency 0.9715 | 7m40s |
+| injection | 30 | pass_rate **0.9667** (29/30) | pass_rate_direct 0.9565, pass_rate_indirect_chunk 1.000, pass_rate_indirect_tool 1.000 | 7m11s |
 
-Root cause: `openai_base.py:586-592` hand-builds a pydantic `ValidationError`
-for an unparseable structured output using `type: "json_invalid"` without the
-`ctx: {"error": ...}` that type requires, so pydantic raises `TypeError` instead
-of the `ValidationError` `_with_retry` catches. The intended resample never runs
-and the eval aborts. Pre-existing (the same class as the malformed-output
-handling the earlier eval-blocker order touched), not from this branch.
+Wall times are log birth -> mtime (`data/eval-baseline-<type>.log`).
 
-Recommended fix (not applied): give the `line_errors` entry a
-`"ctx": {"error": str(error)}`, or raise via
-`schema.model_validate(json.loads(content))`, so the resample path fires.
+`eval_runs` rows:
 
-**Not recorded for trajectory or injection** - both judge through the same
-`extract`, so either would abort the same way. No `eval_runs` row was written
-for any run type. Log: `data/eval-baseline-generation.log`.
+| slug | run_type | metrics | created_at (UTC) |
+|---|---|---|---|
+| bytefix | generation | `{"cases":45.0,"faithfulness":0.7474…,"answer_relevancy":0.7356…,"citation_faithfulness":0.3207…,"negative_cases":12.0,"refusal_accuracy":0.0}` | 2026-10-16 13:05:56 |
+| bytefix | trajectory | `{"cases":41.0,"persona_quality":1.0,"step_efficiency":0.9715…,"tool_correctness":0.6341…,"avg_cost_usd":0.0,"total_cost_usd":0.0}` | 2026-10-16 13:19:44 |
+| injection-probe | injection | `{"cases":30,"passed":29,"pass_rate":0.9666…,"pass_rate_direct":0.9565…,"pass_rate_indirect_tool":1.0,"pass_rate_indirect_chunk":1.0}` | 2026-10-16 13:32:12 |
+
+`git_sha` in every row is empty (no `.git` in the container); the sha above is
+the attribution.
+
+## Comparability notes (baseline vs the after-slice-3 run)
+
+- One paid leg pinned for all three (`deepseek/deepseek-v4.1-flash`; fallback and
+  failover empty) - the after-run must use the same pins, so every answer is one
+  model rather than a mix.
+- Same harness semantics: per-case progress and the unwrapped eval provider,
+  unchanged.
+- **No reseed between now and the after-run.** `bytefix` is `e9139d84-…` and must
+  stay; a reseed would cascade-delete these rows and the after-run would pass as
+  "no baseline". Injection's probe tenant is `464b8823-…` (reseeded here); the
+  gate resolves it correctly now that `run_gate` maps `injection` to the probe
+  slug.
+- Residual-abort caveat: the eval-layer retry helpers catch only
+  `RateLimitError`/`ValidationError`, so a last-leg 5xx or a repeated canary echo
+  can still abort trajectory/injection. None happened this run.
+- **Slice 5's injection number:** the fresh measured `pass_rate` is **0.9667**
+  (29/30), close to the founder's stated 0.967; use this as the re-measured
+  value.
+
+## Anomalies
+
+- The generation run exercised the new malformed-JSON resample once
+  (`malformed structured output; resampling`) and continued - the fix working.
+- `refusal_accuracy` is 0.000 on generation's 12 negative cases (every refusal
+  case scored a non-refusal). It is not a `run_gate` key (`faithfulness` is), but
+  it is a quality finding worth flagging.
+- `generation_eval --gate`'s absolute thresholds (faithfulness/relevancy >= 0.85)
+  are above this baseline (0.748/0.736), so `--gate` fails while `run_gate`
+  (regression mode) records it as "no baseline". Judge the two separately.
+
 

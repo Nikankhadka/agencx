@@ -171,9 +171,11 @@ under the un-raced fallback, so the baseline pins one paid leg instead.
   ("trajectory_eval","tool_correctness","trajectory"),
   ("injection_eval","pass_rate","injection"))`; the tenant is
   `_seeded_tenant_id()` = **bytefix's current id**.
-- Two traps for the next order: (1) the baseline must be a **full run** - the
-  only `generation` row today is the 6-case smoke, so a full run would compare
-  45 cases against 6 (mismatched); and (2) **do not reseed bytefix** between the
-  baseline and the after run - a new tenant id makes the old rows invisible and
-  the gate silently passes as "no baseline". No `trajectory` or `injection` rows
-  exist yet.
+- Two traps for the next order: (1) the baseline must be a **full run** - a
+  6-case smoke as baseline mis-compares against a full 45-case run; and (2) **do
+  not reseed bytefix** between the baseline and the after run (`eval_runs` is
+  `on delete cascade`, so a reseed deletes the baseline row and the gate silently
+  passes as "no baseline").
+- Both fixed/recorded since: `run_gate` now resolves the tenant per run type
+  (`slug_for_run_type`; injection -> the probe slug), and the full baseline is
+  recorded in `data/eval-baseline.md`.
