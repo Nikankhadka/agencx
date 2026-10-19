@@ -10,7 +10,7 @@
 # to hosted providers - launching this image with EMBEDDER=local or
 # RERANKER=local fails at first use with ModuleNotFoundError, by design.
 
-FROM python:3.12.14-slim AS builder
+FROM python:3.14.0-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.31 /uv /uvx /bin/
 
@@ -40,7 +40,7 @@ RUN uv sync --frozen --no-group local-ml
 
 CMD ["pytest"]
 
-FROM python:3.12.14-slim AS runtime
+FROM python:3.14.0-slim AS runtime
 
 RUN useradd --create-home --uid 1000 wren
 WORKDIR /app
