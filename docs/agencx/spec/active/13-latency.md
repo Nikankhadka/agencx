@@ -31,8 +31,17 @@ and both eval tenants are fast-path, so `retrieve()` never runs there; the
 deterministic gate that does call it passes unchanged. **The cumulative
 comparison for slices 1-4 - baseline vs stack tip per tenant, and the eval trio -
 is `docs/agencx/evidence/latency-2026-10/report-cumulative.md` (raw tables and
-provenance in `data/cumulative.md`); slices 5-7 are unstarted and need founder
-rulings (slice 5 the security ruling for prompt caching; 6 and 7 optional).**
+provenance in `data/cumulative.md`).** Slice 5 (prompt caching, replacing the
+per-request spotlight nonce) is **implemented, measured and gate-passing**: the
+code landed (`7613091`, review hardening and the measured tip `d99ca54`), the
+injection gate PASSED at 29/30 = 0.967 against 0.9667 with the same single leak,
+and the cache is proven by non-zero `cached_input_tokens` in both runs (run 1
+cold, 20.6% of input tokens cached; run 2 warm, 64.5%; each tenant's turn 1
+always cold). There is **no clock claim** - 10 of 15 turns per run hit the 10 s
+turn budget and are censored out, so the completed samples are thin; see
+`docs/agencx/evidence/latency-2026-10/report-slice-5.md`. Slices 6 (paid-tier
+A/B) and 7 (streaming) remain: slice 6 is queued with its design decided, slice 7
+is deferred and needs the founder to reopen scope.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -174,9 +183,43 @@ validated and the founder says go.
    1.000 / MRR 0.911 / nDCG@5 0.934, identical to the pre-change logs. Full
    write-up: `docs/agencx/evidence/latency-2026-10/report-slice-4.md` and
    `data/slice4-bands.md`.
-5. Prompt caching, replacing the per-request spotlight nonce - needs the
-   founder's ruling; gate at no regression against injection's 0.967 (the
-   founder's stated baseline - re-measure it before slice 5 gates on it).
+5. Prompt caching, replacing the per-request spotlight nonce. The security
+   ruling is recorded (supervisor, under the founder's delegation of
+   2026-10-19): the nonce is retired for ONE fixed 16-hex delimiter, so the
+   prompt prefix is byte-identical across calls and the provider can cache it.
+   Enforcement is `escape_delimiters` - now tolerant of case, whitespace,
+   invisible and full-width delimiter disguises, and emitting a non-forgeable
+   `escaped` marker - plus the standing instruction plus Inspection; the fixed
+   token is public by design and the injection gate guards the decision.
+   **Gate:** no regression against injection's 0.967 (the founder's stated
+   baseline - re-measured first at 0.9667).
+   **Outcome (implemented, measured, gate PASS - cache proven, no clock claim).**
+   The change landed in `7613091` with the review hardening in `d99ca54` (the
+   measured tip), and the turn record gained `cached_input_tokens`. **Injection
+   gate: PASS** - 29/30 = 0.967 >= 0.9667, the same single leak
+   (`direct-policy-invent-01`), and both delimiter-forgery cases held; row
+   `513cec2f`. **Cache reads are proven:** `cached_input_tokens` is non-zero in
+   both runs - run 1 (cold) cached on 6 of 15 turns, 29,056 of 140,884 input
+   tokens (20.6%); run 2 (warm) on 14 of 15, 109,184 of 169,219 (64.5%); turn 1
+   of every tenant is always cold. Per-tenant cached totals: bytefix
+   5,376 -> 27,904; sababa2 12,288 -> 60,672; sababa 11,392 -> 20,608.
+   **No clock claim:** 10 of 15 turns per run hit the 10 s turn budget and are
+   censored out of the percentiles, so the completed samples are thin (bytefix
+   1/5 and 2/5, sababa2 1/5 and 2/5, sababa 0/5 both runs). Generation (45
+   cases; row `e8ab818f`) faithfulness 0.7628, answer_relevancy 0.8124,
+   citation_faithfulness 0.3737, refusal 0.000; the faithfulness rise (+0.0465
+   against the slice-3 after row) is OUTSIDE the +0.0019 identical-code spread -
+   an upward between-window shift with no mechanism in a delimiter-byte change,
+   so it is not a regression and is not attributed to this slice, while
+   answer_relevancy (+0.0099) and citation_faithfulness (+0.0045) sit inside
+   their same-code spreads. Trajectory (41 cases; row `6219ba04`)
+   tool_correctness 0.6098 (25/41), persona 1.000, step_efficiency 0.9677; the
+   identical-code repeat (row `302b9a94`) gives 0.6341 (26/41), persona 1.000,
+   step_efficiency 0.9797 - so the -0.0244 delta IS the same-code spread, the one
+   flipped case being `knowledge-price-match-01` (flaky; failed once, passed on
+   repeat), inside `run_gate`'s -0.03. Full write-up:
+   `docs/agencx/evidence/latency-2026-10/report-slice-5.md` and
+   `data/slice5-cache.md`.
 6. Paid-tier A/B across the matrix: latency, cost, and tool-call correctness
    per model.
 7. Streaming with inspection off the critical path - deferred; needs a
@@ -236,7 +279,6 @@ artifacts for the exact catalogue and error.
 - Mechanism plausibility comes first: a slice that cannot mechanically affect a
   timing metric - for example an output cap that never binds - is judged inert
   regardless of whether the noise happened to move inside or outside the band.
-- The prompt-cache tradeoff (slice 5) needs the founder's ruling first.
 
 ## Evidence standard
 
@@ -275,13 +317,25 @@ closed by ruling, not reclassified as noise, with the tolerance unchanged. This
 close-out is docs-only: it changes no code and does not invalidate the gates
 recorded above.
 
+**Ruling recorded (2026-10-20, slice 5).** The per-request spotlight nonce is
+retired for one fixed 16-hex delimiter so the prompt prefix is cacheable; the
+decision was taken by the supervisor under the founder's delegation of
+2026-10-19 and is guarded by the injection gate (no regression against 0.9667),
+which passed. The fixed token is public by design; the enforcement is
+`escape_delimiters` (case/whitespace/invisible/full-width tolerant, with a
+non-forgeable `escaped` marker) plus the standing instruction plus Inspection -
+none of the three may be weakened without re-running the injection gate. Details
+in `docs/agencx/evidence/latency-2026-10/report-slice-5.md`.
+
 **Blockers before merge** (founder-facing):
 
-1. **Slices 5-7.** Slice 5 (prompt caching, replacing the per-request spotlight
-   nonce) needs the security ruling and gates at no regression against the
-   re-measured injection 0.9667. Slice 6 (paid-tier A/B) and slice 7 (streaming
-   with inspection off the critical path, which needs a chunked-validation design,
-   a security ruling and eval rework) are optional and unstarted.
+1. **Slices 6-7.** Slice 6 (paid-tier A/B across the matrix: latency, cost, and
+   tool-call correctness per model) is **queued**, with its design decided - it
+   needs no founder ruling. Slice 7 (streaming with inspection off the critical
+   path, which needs a chunked-validation design, a security ruling and eval
+   rework) is **deferred**: it changes when a customer sees model prose and the
+   US-060 inspection buffer is ratified, so only a founder scope decision reopens
+   it.
 2. **The merge request itself.** One merge to `development`, then `staging`, only
    on the founder's go.
 

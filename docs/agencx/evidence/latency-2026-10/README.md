@@ -9,6 +9,7 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | [design-slice-3.md](design-slice-3.md) | Slice 3 design and post-implementation notes: the discarded agent call, its gate, the retry options; implemented in `cbad1b0`, citations ratified cited-only and internal only (founder ruling 2026-10-19) |
 | [report-slice-3.md](report-slice-3.md) | Slice 3: the skipped draft call, a PASS on the mechanism; both founder rulings recorded (cited-only citations; generation FAIL accepted as provider drift) |
 | [report-slice-4.md](report-slice-4.md) | Slice 4: retrieval overlap, a PASS structurally with no-measurable-effect on the clock |
+| [report-slice-5.md](report-slice-5.md) | Slice 5: stable prompt prefix - injection gate PASS (29/30 = 0.967), cache reads proven, no clock claim |
 | [report-cumulative.md](report-cumulative.md) | Slices 1-4, baseline vs tip: calls, completion, tokens, the eval trio, merge readiness |
 | [data/slice2-rounds.md](data/slice2-rounds.md) | Per-turn agent rounds / tool rounds from the slice-2 logs, with the extraction recipe |
 | `data/slice2-run{1,2}-lines.jsonl` | The filtered log lines behind `slice2-rounds.md` (source logs were `/tmp`) |
@@ -27,6 +28,12 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | `data/eval-baseline-{generation,trajectory,injection}.log` | The three completed baseline runs |
 | `data/eval-baseline-generation-aborted.log` | The first attempt, which aborted on the pre-existing pydantic TypeError |
 | `data/eval-scored-smoke-after-fixes.log` | The 6-case scored smoke re-run after the two provider-seam fixes |
+| `data/slice5-run{1,2}.json` | The two slice-5 measurement runs (measured at `d99ca54`), with `cached_input_tokens` in the per-turn record |
+| `data/slice5-run{1,2}.log` | The runner logs behind those two runs |
+| [data/slice5-cache.md](data/slice5-cache.md) | The cache evidence: per-run and per-tenant `cached_input_tokens`, turn 1 always cold, and the sample counts behind the no-clock-claim |
+| `data/eval-after-slice5-{generation,injection,trajectory}.log` | The slice-5 after-evals in order of the gate, under the baseline single-leg deepseek pins |
+| `data/eval-after-slice5-trajectory-repeat.log` | The identical-code trajectory repeat that bounds the -0.0244 as the harness's own same-code spread |
+| `data/eval-after-slice5-generation-aborted.log` | The aborted first generation attempt: a degraded OpenRouter window stalled one case for ~10+ min, killed by the 15-min no-progress watchdog |
 | `data/opencode-*-__bytefix.json` | Zen probe skips: the exact catalogue and provider refusal |
 | [data/tenant-limits.md](data/tenant-limits.md) | The demo tenants' daily limits and the northgate ABN/GST gap |
 | `data/make-check.log` | The `make lint && make typecheck && make test` output |

@@ -49,7 +49,8 @@ live in the ticket files, not here.
 - [ ] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
   post-launch): slices stack on `latency/stack` (not merged until the founder
   says go). Slice 1, the instrument - `make latency` drives real turns with one
-  model pinned and writes the 14-key per-turn record; the noise floor and model
+  model pinned and writes the 15-key per-turn record (`cached_input_tokens` added
+  by slice 5); the noise floor and model
   matrix are in
   [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Slice 2, the
   draft output cap (`llm_max_tokens_draft` 4096) - measured mechanism-inert
@@ -108,10 +109,42 @@ live in the ticket files, not here.
   (trajectory and injection case-identical; generation FAIL by 0.001, accepted as
   a provider level shift by founder ruling 2026-10-19, tolerance unchanged)
   ([report-cumulative.md](evidence/latency-2026-10/report-cumulative.md),
-  [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md)). Slices 5-7
-  (prompt caching; paid-tier A/B; streaming with inspection off the critical path)
-  are unstarted and need founder rulings; the merge checklist and its two
-  remaining blockers (the 5-7 decisions, the merge request) are in
+  [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md)).
+  **Slice 5, prompt caching (a stable prompt prefix) - implemented, measured,
+  gate PASS, the cache proven, and NO clock claim.** The per-request spotlight
+  nonce is retired for ONE fixed 16-hex delimiter, so the prompt prefix is
+  byte-identical across calls and the provider can cache it (ruling recorded
+  2026-10-20 by the supervisor under the founder's delegation of 2026-10-19 - the
+  fixed token is public by design, and the enforcement is `escape_delimiters`,
+  now case/whitespace/invisible/full-width tolerant and emitting a non-forgeable
+  `escaped` marker, plus the standing instruction plus Inspection, with the
+  injection gate guarding the decision). Code landed `7613091`; review hardening
+  and the measured tip `d99ca54`. Injection gate PASS: 29/30 = 0.967 >= 0.9667,
+  the same single leak (`direct-policy-invent-01`), both delimiter-forgery cases
+  held (row `513cec2f`). Cache reads proven by non-zero `cached_input_tokens` in
+  both runs - run 1 (cold) 6/15 turns, 29,056 of 140,884 input tokens (20.6%);
+  run 2 (warm) 14/15 turns, 109,184 of 169,219 (64.5%); turn 1 of every tenant is
+  always cold; per-tenant cached totals 5,376 -> 27,904 (bytefix), 12,288 ->
+  60,672 (sababa2), 11,392 -> 20,608 (sababa). No clock claim: 10/15 turns per
+  run hit the 10 s turn budget and are censored out, so the completed samples are
+  thin (bytefix 1/5 and 2/5, sababa2 1/5 and 2/5, sababa 0/5 both runs).
+  Generation (45 cases, row `e8ab818f`) faithfulness 0.7628, answer_relevancy
+  0.8124, citation_faithfulness 0.3737, refusal 0.000 - the faithfulness rise
+  (+0.0465 against the slice-3 after row) is OUTSIDE the +0.0019 identical-code
+  spread, an upward between-window shift with no mechanism in a delimiter-byte
+  change, so it is not a regression and is not attributed to slice 5, while
+  answer_relevancy (+0.0099) and citation (+0.0045) sit inside theirs.
+  Trajectory (41 cases, row `6219ba04`) tool_correctness 0.6098 (25/41), persona
+  1.000, step_efficiency 0.9677; the identical-code repeat (row `302b9a94`) gives
+  0.6341 (26/41) / 1.000 / 0.9797, so the -0.0244 delta IS the same-code spread
+  (the one flipped case is `knowledge-price-match-01`, flaky) and it sits inside
+  `run_gate`'s -0.03
+  ([report-slice-5.md](evidence/latency-2026-10/report-slice-5.md),
+  [data/slice5-cache.md](evidence/latency-2026-10/data/slice5-cache.md)).
+  **Slice 6 (paid-tier A/B across the matrix) is queued with its design decided;
+  slice 7 (streaming with inspection off the critical path) stays deferred and
+  needs the founder to reopen scope.** The merge checklist and its two remaining
+  blockers (the slice 6/7 decisions, the merge request) are in
   [13-latency.md](spec/active/13-latency.md#merge-readiness-slices-1-4).
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
@@ -425,7 +458,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending the 5-7 decisions and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; cumulative comparison built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slices 5-7 need founder rulings, and the merge checklist has two remaining blockers) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending the slice 6/7 decisions and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; cumulative comparison built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 6 is queued and slice 7 deferred, and the merge checklist has two remaining blockers) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items
