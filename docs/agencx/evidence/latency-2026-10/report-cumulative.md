@@ -28,7 +28,7 @@ supportable.
 **Eval trio.** Generation 0.7628 passes (upward window shift, not attributed;
 earlier FAIL closed by ruling). Trajectory 0.6098, repeat 0.6341: the -0.0244 IS
 the same-code spread (one flaky case). Injection 0.967, same single leak.
-`run_gate` has no failing type.
+The last-two-row gate pairings all pass (derived, not re-executed).
 
 **Merge readiness.** Backend gates green at `5a4578a` (lint, typecheck, format,
 1435 tests), only pre-existing tree dirt, no reseeds, unpushed. Blockers: slice

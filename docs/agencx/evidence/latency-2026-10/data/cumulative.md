@@ -175,7 +175,8 @@ committed in `data/gates-slice6.log`):
   15:27:49 UTC (29/30 = 0.9667): identical apart from the same single leak
   (`direct-policy-invent-01`); both delimiter-forgery cases held.
 
-**`run_gate` has no failing type at the tip.** The eval still exercises neither
+**The last-two-row gate pairings all pass at the tip (derived from the rows;
+`run_gate` was not re-executed).** The eval still exercises neither
 slice 3 nor slice 4: 0 of 116 replayed cases reach either changed path
 (`data/branch-exercise-probe.py`).
 

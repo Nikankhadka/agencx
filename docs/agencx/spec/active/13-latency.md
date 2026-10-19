@@ -29,8 +29,9 @@ duration, measured at median 0.38 ms, far below what this instrument resolves at
 3-4 hybrid turns per run. No scored eval was run: the change is output-preserving
 and both eval tenants are fast-path, so `retrieve()` never runs there; the
 deterministic gate that does call it passes unchanged. **The cumulative
-comparison for slices 1-4 - baseline vs stack tip per tenant, and the eval trio -
-is `docs/agencx/evidence/latency-2026-10/report-cumulative.md` (raw tables and
+comparison for slices 1-6 - baseline vs stack tip per tenant, the cache proof,
+the paid-tier matrix, and the eval trio - is
+`docs/agencx/evidence/latency-2026-10/report-cumulative.md` (raw tables and
 provenance in `data/cumulative.md`).** Slice 5 (prompt caching, replacing the
 per-request spotlight nonce) is **implemented, measured and gate-passing**: the
 code landed (`7613091`, review hardening and the measured tip `d99ca54`), the
@@ -49,10 +50,8 @@ run); and the production primary Google gemini-3.5-flash-lite was added
 (`5a4578a`, no published price), completing 10/15 in a good window then 2/15
 under 429s. No latency or correctness ranking is supportable; see
 `docs/agencx/evidence/latency-2026-10/report-slice-6.md`,
-`data/slice6-matrix.md` and `data/slice6-google.md`. The cumulative package for
-slices 1-6 is `report-cumulative.md` with raw tables and provenance in
-`data/cumulative.md`. Slice 7 (streaming) remains deferred and needs the founder
-to reopen scope.
+`data/slice6-matrix.md` and `data/slice6-google.md`. Slice 7 (streaming)
+remains deferred and needs the founder to reopen scope.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -352,8 +351,9 @@ Checked at the tip of `latency/stack` when the cumulative package landed
 `data/gates-slice6.log`; the same tree state (only the pre-existing dirty
 entries plus the docs this package adds), the same two tenant ids (no reseeds),
 and the branch still unpushed. The newest `eval_runs` rows per type are in the
-same log; `run_gate` has no failing type (generation 0.7628, trajectory 0.6098
-with its identical-code repeat at 0.6341, injection 0.967).
+same log; the last-two-row gate pairings all pass (derived, not re-executed:
+generation 0.7628, trajectory 0.6098 with its identical-code repeat at 0.6341,
+injection 0.967).
 
 **Rulings recorded (2026-10-19).** The two founder-facing items this section
 carried are closed: the slice-3 citations narrowing is ratified as cited-only (no
