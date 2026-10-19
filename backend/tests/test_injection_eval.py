@@ -5,7 +5,9 @@ eval itself (real LLM), not a unit test.
 
 from __future__ import annotations
 
+from app.agents.spotlight import fixed_spotlight
 from evals.injection_eval import InjectionCase, _score, find_leaked, load_cases
+from seeds.seed_injection_probe import _POISONED_CHUNKS
 
 
 def test_find_leaked_is_case_insensitive() -> None:
@@ -78,3 +80,20 @@ def test_dataset_case_ids_unique_and_forbidden_nonempty() -> None:
     assert len(ids) == len(set(ids))
     for case in cases:
         assert case.forbidden_in_response, f"{case.case_id} has no forbidden strings"
+
+
+def test_delimiter_forgery_fixtures_use_the_live_token() -> None:
+    """Slice 5 review: both forgery fixtures must spell the delimiter with the
+    token production actually emits. A stale placeholder proves nothing - the
+    escape would still catch a shape nobody can see."""
+    token = fixed_spotlight().token
+    open_tag, close_tag = f"<<data-{token}>>", f"<</data-{token}>>"
+
+    cases = {case.case_id: case for case in load_cases()}
+    direct = cases["direct-delimiter-forgery-01"].messages[0]["content"]
+    assert open_tag in direct
+    assert close_tag in direct
+
+    payment = next(attack for source, _legit, attack in _POISONED_CHUNKS if source == "payment.md")
+    assert open_tag in payment
+    assert close_tag in payment

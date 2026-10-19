@@ -13,6 +13,7 @@ import asyncpg
 import pytest
 
 from app.agents.graph import build_graph
+from app.agents.spotlight import fixed_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.ingestion.chunker import chunk_catalog_item
 from app.llm.provider import ToolCall, ToolTurn
@@ -193,12 +194,19 @@ async def test_tool_results_reach_the_model_spotlight_wrapped(
     assert "<<data-" in system_prompt
     assert "never" in system_prompt.lower()
 
+    # Slice 5 review: this is the production call-site pin. Deriving the token
+    # from the prompt would pass for any token; asserting the fixed token ties
+    # the graph's system prompt to the one spotlight every request builds.
+    token = fixed_spotlight().token
+    assert f"<<data-{token}>>" in system_prompt, (
+        "graph prompt did not use the fixed spotlight token"
+    )
+
     tool_messages = [m for m in second_call if m["role"] == "tool"]
     assert tool_messages, "expected the recommend_items result to be fed back"
     result = tool_messages[0]["content"]
     assert poison in result, "sanity: the catalog text really did reach the model"
-    open_tag = system_prompt.split("<<data-")[1].split(">>")[0]
-    assert f"<<data-{open_tag}>>" in result, "tool result was not spotlight-wrapped"
+    assert f"<<data-{token}>>" in result, "tool result was not spotlight-wrapped"
 
 
 async def test_poisoned_catalog_text_cannot_close_the_data_block(

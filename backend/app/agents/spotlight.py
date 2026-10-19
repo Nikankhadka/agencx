@@ -46,12 +46,28 @@ _BOUNDARY_SHAPE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Invisible characters that can sit inside the delimiter shape without changing
+# how it reads, and the full-width angle brackets that render like ``<``/``>``.
+# Normalization runs before the shape match so a disguised delimiter is caught.
+_INVISIBLE_CHARS_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff\u00ad]")
+_CONFUSABLE_ANGLES = str.maketrans({"＜": "<", "＞": ">"})
+
+# The wrap invariant (escape the shape, then add exactly one open/close) only
+# holds for the fixed 16-lowercase-hex token shape.
+_TOKEN_RE = re.compile(r"\A[0-9a-f]{16}\Z")
+
 
 @dataclass(frozen=True)
 class Spotlight:
     """The fixed boundary token and its derived delimiters."""
 
     token: str
+
+    def __post_init__(self) -> None:
+        if not _TOKEN_RE.fullmatch(self.token):
+            raise ValueError(
+                f"spotlight token must be 16 lowercase hex characters, got {self.token!r}"
+            )
 
     @property
     def open_tag(self) -> str:
@@ -125,7 +141,14 @@ def scan_input(message: str) -> bool:
 def escape_delimiters(content: str) -> str:
     """Neutralize anything shaped like a spotlight delimiter inside content
     (unbalanced or otherwise) - a poisoned document carrying a guessed or
-    copied delimiter must never terminate the data block. Case and whitespace
-    variants of the shape are caught too, and the result does not re-match, so
-    the escape is idempotent."""
-    return _BOUNDARY_SHAPE_RE.sub(r"<[\1\2-\3]>", content)
+    copied delimiter must never terminate the data block.
+
+    Before matching, invisible characters that can hide the shape (zero-width
+    space/non-joiner/joiner, word joiner, BOM, soft hyphen) are stripped and
+    full-width angle brackets are folded to ASCII, so disguised variants are
+    caught too. The replacement carries an explicit ``escaped`` marker (an
+    attacker's literal ``[data-...]`` text is not byte-identical to the real
+    defanged form) and cannot re-match the shape, so the escape is idempotent.
+    """
+    normalized = _INVISIBLE_CHARS_RE.sub("", content).translate(_CONFUSABLE_ANGLES)
+    return _BOUNDARY_SHAPE_RE.sub(r"<[\1\2-\3 escaped]>", normalized)

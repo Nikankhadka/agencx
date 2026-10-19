@@ -1425,6 +1425,69 @@ async def test_latency_record_is_emitted_exactly_once_on_success(
     assert record["total_ms"] >= record["first_prose_ms"]
 
 
+class CachedUsageChatProvider(FakeChatProvider):
+    """Slice 5 review: reports a prompt-cache read on every model call, so a
+    real /api/chat turn can check the per-turn record's ``cached_input_tokens``
+    sum end to end."""
+
+    CACHED_PER_CALL = 7
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cached_reported = 0
+
+    def _report_cached(self) -> None:
+        report_usage("fake-model", 10, 5, cached_tokens=self.CACHED_PER_CALL)
+        self.cached_reported += self.CACHED_PER_CALL
+
+    async def chat_with_tools(
+        self,
+        *,
+        messages: list[Any],
+        tools: list[Any],
+        tool_choice: str = "auto",
+    ) -> Any:
+        self._report_cached()
+        return await super().chat_with_tools(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        self._report_cached()
+        return await super().extract(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
+
+
+async def test_latency_record_sums_cached_prompt_reads(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``cached_input_tokens`` on the emitted per-turn record must be the turn's
+    real sum of every call's ``cached_tokens``. A regression that hardcodes 0
+    (or reads a single call) hides exactly what the latency work measures."""
+    slug = f"chat-cached-{uuid.uuid4().hex[:8]}"
+    await _seed_tenant_with_chunk(superuser_conn, slug=slug)
+    provider = CachedUsageChatProvider()
+    app.dependency_overrides[get_llm_provider] = lambda: provider
+    app.dependency_overrides[get_reranker_dependency] = lambda: ControllableReranker(score=1.0)
+
+    with caplog.at_level(logging.INFO, logger="app.latency"):
+        response = await client.post(
+            "/api/chat", json={"slug": slug, "message": "What are your hours?"}
+        )
+    assert response.status_code == 200
+
+    payloads = _latency_payloads(caplog)
+    assert len(payloads) == 1, f"expected exactly one latency record, got {len(payloads)}"
+    record = payloads[0]["record"]
+    assert provider.cached_reported > 0, "sanity: the fake really reported cache reads"
+    assert record["cached_input_tokens"] == provider.cached_reported
+
+
 class SlowProvider(ToolAwareFakeProvider):
     """Every model call sleeps far past the tenant's turn budget, so the turn
     takes the TimeoutError path - deterministically, without a real clock wait

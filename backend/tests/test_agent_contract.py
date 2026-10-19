@@ -278,10 +278,12 @@ def test_the_fast_path_prompt_puts_business_data_after_the_contract() -> None:
 
 
 def test_the_system_prompt_is_byte_identical_across_builds() -> None:
-    """Slice 5: the spotlight token is fixed, so the same package renders the
-    same prompt bytes - the stable prefix a provider prompt cache can hit. Under
-    the retired per-request nonce the two builds differed on every call, so
-    every provider cache missed."""
+    """Slice 5: the renderer is pure for a given spotlight - the same package
+    and the same token produce the same prompt bytes, the stable prefix a
+    provider prompt cache can hit. This does NOT prove the production call site
+    uses the fixed token (it could pass any token here); that pin lives in
+    tests/test_recommendation_agent.py, which asserts the graph's own system
+    prompt carries ``fixed_spotlight().token``."""
     package = ContextPackage(
         tenant_id=uuid.uuid4(),
         version=datetime.now(UTC),
