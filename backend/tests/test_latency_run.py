@@ -79,3 +79,38 @@ async def test_reuse_sends_the_previous_turns_id(monkeypatch: pytest.MonkeyPatch
     # Turn 1 opens the conversation; every later turn must join that same one.
     assert passed == [None, "conversation-1", "conversation-2", "conversation-3", "conversation-4"]
     assert result["conversation_mode"] == "reuse"
+
+
+def test_single_legs_blanks_the_configured_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default mode pins exactly one leg, as every earlier run did."""
+    import os
+
+    from app.shared.config import get_settings
+
+    monkeypatch.setenv("TEST_KEY", "test-key")
+    monkeypatch.setenv("LLM_FALLBACK_MODEL", "fallback-model")
+    monkeypatch.setenv("LLM_FAILOVER_MODEL", "failover-model")
+
+    latency_run._pin_model(_MODEL, legs="single")
+
+    assert os.environ["LLM_FALLBACK_MODEL"] == ""
+    assert os.environ["LLM_FAILOVER_MODEL"] == ""
+    assert get_settings().llm_fallback_model == ""
+
+
+def test_configured_legs_keep_the_env_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configured mode leaves the fallback/failover legs the container's .env set."""
+    import os
+
+    from app.shared.config import get_settings
+
+    monkeypatch.setenv("TEST_KEY", "test-key")
+    monkeypatch.setenv("LLM_FALLBACK_MODEL", "fallback-model")
+    monkeypatch.setenv("LLM_FAILOVER_MODEL", "failover-model")
+
+    latency_run._pin_model(_MODEL, legs="configured")
+
+    assert os.environ["LLM_FALLBACK_MODEL"] == "fallback-model"
+    assert os.environ["LLM_FAILOVER_MODEL"] == "failover-model"
+    assert get_settings().llm_fallback_model == "fallback-model"
+    assert get_settings().llm_failover_model == "failover-model"

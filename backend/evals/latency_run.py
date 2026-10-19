@@ -15,8 +15,11 @@ retrieval, and SSE framing are all the real ones.
 
 **Model pinning.** ``docker compose run -e`` pins a *container*; the runner must
 pin the *process* it drives. It writes ``LLM_PROVIDER`` / ``LLM_BASE_URL`` /
-``LLM_API_KEY`` / ``LLM_MODEL`` and empties both other tiers' model names, then
-clears the settings cache, so the app builds exactly one provider leg. Each
+``LLM_API_KEY`` / ``LLM_MODEL`` and, in the default ``single`` mode, empties
+both other tiers' model names, then clears the settings cache, so the app
+builds exactly one provider leg. ``--legs configured`` leaves the fallback and
+failover tiers as the container's ``.env`` configured them, so the production
+race runs unchanged. Each
 turn's ``usage_models`` carries the model the provider says it **served** (read
 from the response body, see ``app/llm/openai_base.py``), not the id that was
 requested; ``model_match`` is true only when every reported model equals the
@@ -80,6 +83,8 @@ def _make_command(args: argparse.Namespace) -> str:
         parts.append(f"LATENCY_TURNS={args.turns}")
     if args.conversation != "fresh":
         parts.append(f"LATENCY_CONVERSATION={args.conversation}")
+    if args.legs != "single":
+        parts.append(f"LATENCY_LEGS={args.legs}")
     return " ".join(parts)
 
 
@@ -180,7 +185,9 @@ async def _probe_provider(http: httpx.AsyncClient, model: dict[str, Any]) -> str
     return None
 
 
-def _pin_model(model: dict[str, Any]) -> None:
+def _pin_model(model: dict[str, Any], legs: str = "single") -> None:
+    """Pin the primary leg. ``single`` also blanks the rest of the chain;
+    ``configured`` leaves the container's .env fallback/failover intact."""
     key = os.environ.get(str(model["key_env"]), "")
     if not key:
         raise SystemExit(f"{model['key_env']} is unset")
@@ -188,9 +195,25 @@ def _pin_model(model: dict[str, Any]) -> None:
     os.environ["LLM_BASE_URL"] = str(model["base_url"])
     os.environ["LLM_API_KEY"] = key
     os.environ["LLM_MODEL"] = str(model["api_model"])
-    for var in _DISABLED_LEG_VARS:
-        os.environ[var] = ""
+    if legs == "single":
+        for var in _DISABLED_LEG_VARS:
+            os.environ[var] = ""
     get_settings.cache_clear()
+
+
+def _legs_config() -> dict[str, Any]:
+    """The non-secret identity of the configured fallback/failover legs."""
+    settings = get_settings()
+    return {
+        "fallback": {
+            "model": settings.llm_fallback_model,
+            "base_url": settings.llm_fallback_base_url,
+        },
+        "failover": {
+            "model": settings.llm_failover_model,
+            "base_url": settings.llm_failover_base_url,
+        },
+    }
 
 
 async def _drive_turn(
@@ -235,6 +258,8 @@ async def _run_model_tenant(
     command: str,
     handler: _RecordHandler,
     conversation: str = "fresh",
+    legs_mode: str = "single",
+    legs_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     provider_models = await _fetch_provider_models(
         http, str(model["models_url"]), os.environ.get(str(model["key_env"]), "")
@@ -259,10 +284,13 @@ async def _run_model_tenant(
         "embedder": _embedder_config(),
         "command": command,
         "conversation_mode": conversation,
+        "legs_mode": legs_mode,
         "commit": _commit_sha(),
         "generated_at": _utc_now(),
         "turns": [],
     }
+    if legs_config is not None:
+        result["legs_config"] = legs_config
     if entry is None:
         # Record the exact catalogue so the absence is checkable from the
         # artifact, not just asserted.
@@ -378,7 +406,7 @@ async def run(args: argparse.Namespace) -> int:
         ):
             for model in models:
                 try:
-                    _pin_model(model)
+                    _pin_model(model, legs=args.legs)
                 except SystemExit as exc:
                     path = out_dir / f"{_slugify(str(model['label']))}__skipped.json"
                     _write(
@@ -386,6 +414,7 @@ async def run(args: argparse.Namespace) -> int:
                         {
                             "model": model,
                             "skipped": str(exc),
+                            "legs_mode": args.legs,
                             "command": command,
                             "commit": _commit_sha(),
                             "generated_at": _utc_now(),
@@ -394,6 +423,7 @@ async def run(args: argparse.Namespace) -> int:
                     written.append(path)
                     print(f"SKIP {model['label']}: {exc}")
                     continue
+                legs_config = _legs_config() if args.legs == "configured" else None
                 for tenant in tenants:
                     result = await _run_model_tenant(
                         client,
@@ -404,6 +434,8 @@ async def run(args: argparse.Namespace) -> int:
                         command=command,
                         handler=handler,
                         conversation=args.conversation,
+                        legs_mode=args.legs,
+                        legs_config=legs_config,
                     )
                     path = out_dir / f"{_slugify(str(model['label']))}__{tenant['slug']}.json"
                     _write(path, result)
@@ -439,6 +471,12 @@ def main() -> None:
         choices=("fresh", "reuse"),
         default="fresh",
         help="fresh opens a new conversation each turn; reuse keeps turn 1's (default: fresh)",
+    )
+    parser.add_argument(
+        "--legs",
+        choices=("single", "configured"),
+        default="single",
+        help="single blanks the fallback/failover legs; configured uses the .env chain",
     )
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="evidence output directory")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="model and corpus config")

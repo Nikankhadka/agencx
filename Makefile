@@ -311,7 +311,8 @@ latency: ## Measure turn latency; flags LATENCY_MODELS / LATENCY_TENANTS / LATEN
 		$(if $(LATENCY_MODELS),--models $(LATENCY_MODELS)) \
 		$(if $(LATENCY_TENANTS),--tenants $(LATENCY_TENANTS)) \
 		$(if $(LATENCY_TURNS),--turns $(LATENCY_TURNS)) \
-		$(if $(LATENCY_CONVERSATION),--conversation $(LATENCY_CONVERSATION))
+		$(if $(LATENCY_CONVERSATION),--conversation $(LATENCY_CONVERSATION)) \
+		$(if $(LATENCY_LEGS),--legs $(LATENCY_LEGS))
 
 # ── build & CI ─────────────────────────────────────────────────────────────────
 
