@@ -1,0 +1,81 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "bytefix",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T19:59:52Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_LEGS=configured LATENCY_COALESCE=3",
+  "conversation_mode": "fresh",
+  "legs_mode": "configured",
+  "commit": "b857399",
+  "generated_at": "2026-10-19T19:59:52Z",
+  "turns": [
+    {
+      "message": "What repairs do you offer?\n\nHow long do repairs usually take?\n\nDo you fix water-damaged phones?",
+      "conversation_id": "1330ff82-5c42-4ee4-a232-c583533df07d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3411.3,
+        "first_model_token_ms": 1877.8,
+        "first_prose_ms": 3408.1,
+        "buffer_hold_ms": 1530.3,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8778,
+        "output_tokens": 265,
+        "cached_input_tokens": 2026,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ],
+  "legs_config": {
+    "fallback": {
+      "model": "openai/gpt-oss-120b",
+      "base_url": "https://api.groq.com/openai/v1"
+    },
+    "failover": {
+      "model": "",
+      "base_url": ""
+    }
+  },
+  "coalesce": 3,
+  "coalesced_message": "What repairs do you offer?\n\nHow long do repairs usually take?\n\nDo you fix water-damaged phones?"
+}

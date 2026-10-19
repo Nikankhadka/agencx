@@ -1,0 +1,80 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "sababa",
+  "messages": [
+    "Which dishes are vegan or gluten free?",
+    "What are your most popular items?",
+    "What time do you open?",
+    "Do you have anything without nuts?",
+    "What is the Super Plate?"
+  ],
+  "expected_path": "hybrid",
+  "expected_llm_calls": 4,
+  "provider_models_fetched_at": "2026-10-19T20:00:02Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_LEGS=configured LATENCY_COALESCE=3",
+  "conversation_mode": "fresh",
+  "legs_mode": "configured",
+  "commit": "b857399",
+  "generated_at": "2026-10-19T20:00:02Z",
+  "turns": [
+    {
+      "message": "Which dishes are vegan or gluten free?\n\nWhat are your most popular items?\n\nWhat time do you open?",
+      "conversation_id": "87e460e8-e7f4-4261-aae1-216683d69337",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4502.8,
+        "first_model_token_ms": 3141.1,
+        "first_prose_ms": 4498.5,
+        "buffer_hold_ms": 1357.4,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 3,
+        "input_tokens": 14692,
+        "output_tokens": 354,
+        "cached_input_tokens": 5750,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ],
+  "legs_config": {
+    "fallback": {
+      "model": "openai/gpt-oss-120b",
+      "base_url": "https://api.groq.com/openai/v1"
+    },
+    "failover": {
+      "model": "",
+      "base_url": ""
+    }
+  },
+  "coalesce": 3,
+  "coalesced_message": "Which dishes are vegan or gluten free?\n\nWhat are your most popular items?\n\nWhat time do you open?"
+}
