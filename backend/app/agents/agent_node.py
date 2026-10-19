@@ -42,7 +42,7 @@ from app.agents.draft_node import citation_source
 from app.agents.drafting import MONEY_GUIDANCE
 from app.agents.escalation import normalize_email, record_escalation
 from app.agents.intent import ESCALATION_REASONS, as_intent, intent_for_route, intent_for_tools
-from app.agents.spotlight import Spotlight, new_spotlight
+from app.agents.spotlight import Spotlight, fixed_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.agents.tools import lookup_order_or_ticket
 from app.llm.provider import ChatMessage, ToolSpec
@@ -464,7 +464,9 @@ _WIRE_ROLES = {"customer": "user", "assistant": "assistant", "human_agent": "ass
 
 
 def _system_prompt(package: ContextPackage, spotlight: Spotlight) -> str:
-    """The turn's system prompt, built fresh so the spotlight token is fresh.
+    """The turn's system prompt. The spotlight token is fixed (slice 5), so the
+    same package renders the same bytes - the stable prefix a provider prompt
+    cache can hit.
 
     W-9: it opens with the code-owned contract and the tenant's voice, and
     everything after that is business data - which is exactly what the
@@ -683,7 +685,7 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     # One spotlight per turn: every tool result below is wrapped with it, and
     # the instruction that explains the delimiters ships in the same prompt.
-    spotlight = new_spotlight()
+    spotlight = fixed_spotlight()
 
     called_tools: set[str] = set()
     retrieved_chunks: list[dict[str, Any]] = []

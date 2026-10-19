@@ -110,6 +110,9 @@ def _summary(artifact: dict[str, Any]) -> dict[str, Any]:
         "expected_calls": artifact.get("expected_llm_calls"),
         "input_tokens": int(sum(float(r["input_tokens"]) for r in records)),
         "output_tokens": int(sum(float(r["output_tokens"]) for r in records)),
+        # Slice 5: a committed slice-1/slice-4 artifact predates the key, so
+        # read it as zero rather than raising.
+        "cached_input_tokens": int(sum(float(r.get("cached_input_tokens", 0)) for r in records)),
         "cost_usd": cost,
         "model_match": all(matched) if matched else None,
         "error_turns": sum(1 for t in turns if "error" in t),
@@ -240,8 +243,8 @@ def _matrix_markdown(mt: list[dict[str, Any]], generated: str) -> str:
         "",
         "| model | tenant | path (obs) | exp path | turns | budget | p50 total_ms | "
         "p95 total_ms | p50 first_tok | p50 buffer | calls (all turns) | exp calls | "
-        "in/out tok | cost usd | model_match | failover |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "in/out tok | cache tok | cost usd | model_match | failover |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s in mt:
         m = s["metrics"]
@@ -251,7 +254,8 @@ def _matrix_markdown(mt: list[dict[str, Any]], generated: str) -> str:
             f"| {_fmt(m['total_ms']['p50'])} | {_fmt(m['total_ms']['p95'])} "
             f"| {_fmt(m['first_model_token_ms']['p50'])} | {_fmt(m['buffer_hold_ms']['p50'])} "
             f"| {s['all_calls']} | {s['expected_calls']} "
-            f"| {s['input_tokens']}/{s['output_tokens']} | {_fmt(s['cost_usd'], 6)} "
+            f"| {s['input_tokens']}/{s['output_tokens']} | {s['cached_input_tokens']} "
+            f"| {_fmt(s['cost_usd'], 6)} "
             f"| {_model_match_cell(s)} | {s['failover']} |"
         )
     lines.append("")
@@ -284,7 +288,8 @@ def main() -> None:
         print(
             f"{s['label']} {s['tenant']}: completed {s['completed']}/{s['turns']} "
             f"p50={_fmt(m['p50'])} p95={_fmt(m['p95'])} calls={s['all_calls']} "
-            f"cost=${_fmt(s['cost_usd'], 6)} match={_model_match_cell(s)}"
+            f"cache={s['cached_input_tokens']} cost=${_fmt(s['cost_usd'], 6)} "
+            f"match={_model_match_cell(s)}"
         )
     print(f"wrote {data / 'noise-floor.md'} and {data / 'matrix.md'}")
 

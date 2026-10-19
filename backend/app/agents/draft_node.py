@@ -19,7 +19,7 @@ from langgraph.runtime import get_runtime
 
 from app.agents.drafting import MONEY_GUIDANCE, stream_draft
 from app.agents.escalation import handoff_message
-from app.agents.spotlight import new_spotlight
+from app.agents.spotlight import fixed_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.llm.provider import ChatMessage
 from app.shared import db
@@ -92,7 +92,7 @@ def _build_knowledge_prompt(
     *,
     offerings_text: str = "",
 ) -> str:
-    spotlight = new_spotlight()
+    spotlight = fixed_spotlight()
     context_block = "\n\n".join(
         f"[{i + 1}] {spotlight.wrap(c['content'])}" for i, c in enumerate(chunks)
     )
@@ -121,7 +121,7 @@ def _build_recommendation_prompt(
     selections: list[dict[str, Any]],
     violations: list[str] | None,
 ) -> str:
-    spotlight = new_spotlight()
+    spotlight = fixed_spotlight()
     items_block = "\n".join(
         f"[{i + 1}] {spotlight.wrap(sel['name'] + ': ' + (sel['description'] or ''))}"
         + (f" (${sel['price_cents'] / 100:.2f})" if sel.get("price_cents") is not None else "")
@@ -146,7 +146,7 @@ def _build_quoting_prompt(
     # Line-item labels come from tenant-authored pricing rules and catalog
     # items, so they are wrapped like every other piece of tenant data (T-027).
     # Quantities are engine-computed and safe unwrapped.
-    spotlight = new_spotlight()
+    spotlight = fixed_spotlight()
     coverage = "\n".join(
         f"- {spotlight.wrap(item['label'])} x{item['quantity']}"
         for item in engine_quote["line_items"]

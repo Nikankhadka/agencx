@@ -312,7 +312,7 @@ async def test_judge_prompt_fences_the_customer_message(
     superuser_conn: asyncpg.Connection[Any],
 ) -> None:
     """T-027: the customer's raw message is untrusted text. It must reach the
-    judge prompt inside the per-request spotlight delimiters, alongside the
+    judge prompt inside the fixed spotlight delimiters, alongside the
     standing data-not-instruction line, rather than as bare interpolated prose."""
     tenant_id = await _seed_tenant_with_chunk(superuser_conn)
     provider = FakeInspectionProvider(

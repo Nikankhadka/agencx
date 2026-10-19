@@ -25,7 +25,13 @@ measure does not apply:
 
 ``total_ms``, ``first_model_token_ms``, ``first_prose_ms``, ``buffer_hold_ms``,
 ``embed_ms``, ``search_ms``, ``rerank_ms``, ``path``, ``llm_call_count``,
-``input_tokens``, ``output_tokens``, ``leg``, ``failover_engaged``, ``route``.
+``input_tokens``, ``output_tokens``, ``cached_input_tokens``, ``leg``,
+``failover_engaged``, ``route``.
+
+``cached_input_tokens`` (slice 5) is the turn's total provider prompt-cache
+reads - the signal that the stable prefix (see ``app/agents/spotlight.py``) is
+actually being cached. It is a subset of ``input_tokens``, so it is
+observability only, not an extra input count.
 
 ``llm_call_count`` is ``len(usages)`` - the number of provider calls that
 reported token usage. One caveat: in a failover race both legs can complete
@@ -67,6 +73,7 @@ RECORD_KEYS: frozenset[str] = frozenset(
         "llm_call_count",
         "input_tokens",
         "output_tokens",
+        "cached_input_tokens",
         "leg",
         "failover_engaged",
         "route",
@@ -189,10 +196,12 @@ def build_record(
     output_tokens: int,
     leg: str | None,
     failover_engaged: bool,
+    cached_input_tokens: int = 0,
 ) -> dict[str, object]:
-    """The exact 14-key record. Every key is present; ``None`` is a measure
+    """The exact 15-key record. Every key is present; ``None`` is a measure
     that did not apply (a deterministic turn writes no prose; the fast path
-    embeds and reranks nothing)."""
+    embeds and reranks nothing). ``cached_input_tokens`` defaults to 0 so a
+    caller that does not collect it still produces a complete record."""
     return {
         "total_ms": total_ms,
         "first_model_token_ms": first_model_token_ms,
@@ -205,6 +214,7 @@ def build_record(
         "llm_call_count": llm_call_count,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
+        "cached_input_tokens": cached_input_tokens,
         "leg": leg,
         "failover_engaged": failover_engaged,
         "route": record.route,
@@ -226,6 +236,7 @@ def emit_turn_record(
     output_tokens: int,
     leg: str | None,
     failover_engaged: bool,
+    cached_input_tokens: int = 0,
 ) -> dict[str, object]:
     """Emit one record for the turn as a single structured log line, and
     return the payload so an in-process caller can also read it directly.
@@ -247,6 +258,7 @@ def emit_turn_record(
             output_tokens=output_tokens,
             leg=leg,
             failover_engaged=failover_engaged,
+            cached_input_tokens=cached_input_tokens,
         ),
         "tenant_id": tenant_id,
         "conversation_id": conversation_id,

@@ -575,6 +575,10 @@ async def stream_chat_response(
                 llm_call_count=len(usage_list),
                 input_tokens=sum(u.input_tokens for u in usage_list),
                 output_tokens=sum(u.output_tokens for u in usage_list),
+                # Slice 5: provider prompt-cache reads for the turn, so a cache
+                # hit is visible in the per-turn record (OpenRouter reports it
+                # under usage.prompt_tokens_details.cached_tokens).
+                cached_input_tokens=sum(u.cached_tokens for u in usage_list),
                 leg=legs.leg if legs is not None else None,
                 failover_engaged=legs.failover_engaged if legs is not None else False,
             )

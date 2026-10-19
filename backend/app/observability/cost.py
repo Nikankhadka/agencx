@@ -47,6 +47,10 @@ class TokenUsage:
     # whose response names the requested id exactly (or a caller that does not
     # distinguish them, including every test fake).
     price_model: str | None = None
+    # Slice 5: tokens the provider served from its prompt cache (a subset of
+    # ``input_tokens``). 0 when the provider reports none - it is observability,
+    # not cost: a cache read still bills as input on the free-first tiers.
+    cached_tokens: int = 0
 
     @property
     def price_key(self) -> str:
@@ -101,12 +105,15 @@ def report_usage(
     output_tokens: int,
     *,
     price_model: str | None = None,
+    cached_tokens: int = 0,
 ) -> None:
     """Called by a provider after a completion. No active sink (e.g. an eval
     or a test not collecting cost) -> silently dropped.
 
     ``model`` is the served id; ``price_model`` is the configured id to price
-    by (defaults to ``model`` when the caller does not distinguish them)."""
+    by (defaults to ``model`` when the caller does not distinguish them);
+    ``cached_tokens`` is the provider's prompt-cache read count, defaulting to
+    0 so a provider that reports none stays backward compatible."""
     sink = _usage_sink.get()
     if sink is not None:
         sink.append(
@@ -115,6 +122,7 @@ def report_usage(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 price_model=price_model,
+                cached_tokens=cached_tokens,
             )
         )
 

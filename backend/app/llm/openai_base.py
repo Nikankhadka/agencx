@@ -97,11 +97,18 @@ def _report(configured_model: str, response: Any) -> None:
     so a versioned served name still prices correctly."""
     usage = getattr(response, "usage", None)
     if usage is not None:
+        # Slice 5: OpenRouter reports cache hits under
+        # ``usage.prompt_tokens_details.cached_tokens``. The detail block is
+        # vendor-specific and absent on some endpoints, so read it defensively -
+        # absent, null, or a null count is 0, never an AttributeError.
+        details = getattr(usage, "prompt_tokens_details", None)
+        cached_tokens = getattr(details, "cached_tokens", 0) or 0
         report_usage(
             _served_model(configured_model, response),
             usage.prompt_tokens or 0,
             usage.completion_tokens or 0,
             price_model=configured_model,
+            cached_tokens=cached_tokens,
         )
 
 

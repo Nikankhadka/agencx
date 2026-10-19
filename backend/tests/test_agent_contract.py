@@ -36,7 +36,7 @@ from app.agents.contract import LEAK_MARKER, contract_prelude, customer_contract
 from app.agents.drafting import MONEY_GUIDANCE
 from app.agents.graph import build_graph
 from app.agents.inspection import check_prompt_leak
-from app.agents.spotlight import new_spotlight
+from app.agents.spotlight import fixed_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.ingestion.chunker import chunk_catalog_item
 from app.llm.provider import ToolCall, ToolTurn
@@ -271,10 +271,30 @@ def test_the_fast_path_prompt_puts_business_data_after_the_contract() -> None:
         profile={"business_name": "Test Co", "hours": "Mon-Fri 9-5"},
         fast_path=True,
     )
-    prompt = _system_prompt(package, new_spotlight())
+    prompt = _system_prompt(package, fixed_spotlight())
     assert prompt.startswith(contract_prelude("Test Co", package.voice))
     assert prompt.index("Business facts the owner gave you") > prompt.index(HOSTILE_VOICE)
     assert MONEY_GUIDANCE in prompt
+
+
+def test_the_system_prompt_is_byte_identical_across_builds() -> None:
+    """Slice 5: the spotlight token is fixed, so the same package renders the
+    same prompt bytes - the stable prefix a provider prompt cache can hit. Under
+    the retired per-request nonce the two builds differed on every call, so
+    every provider cache missed."""
+    package = ContextPackage(
+        tenant_id=uuid.uuid4(),
+        version=datetime.now(UTC),
+        business_name="Test Co",
+        profile={"business_name": "Test Co", "hours": "Mon-Fri 9-5"},
+        chunks=[
+            RetrievedChunk(id=uuid.uuid4(), content="We are open weekdays 9am to 5pm."),
+        ],
+        fast_path=True,
+    )
+    first = _system_prompt(package, fixed_spotlight())
+    second = _system_prompt(package, fixed_spotlight())
+    assert first == second
 
 
 # --- every prose route, through the real graph ---------------------------------

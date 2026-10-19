@@ -53,7 +53,7 @@ from pydantic import BaseModel
 from app.agents.escalation import contact_ask
 from app.agents.intent import as_action, as_intent, intent_for_route
 from app.agents.price_gate import owner_material
-from app.agents.spotlight import new_spotlight
+from app.agents.spotlight import fixed_spotlight
 from app.agents.state import AgentState, GraphContext
 from app.pricing.validation_gate import validate as validate_price_provenance
 
@@ -271,9 +271,9 @@ async def run(state: AgentState) -> dict[str, Any]:
 
     # T-027: the customer's message is untrusted text reaching the judge prompt.
     # The retrieved context is deliberately left unwrapped here (pre-existing),
-    # but the message is fenced with the per-request spotlight delimiter plus
-    # the standing data-not-instruction line, like every other untrusted input.
-    spot = new_spotlight()
+    # but the message is fenced with the fixed spotlight delimiter plus the
+    # standing data-not-instruction line, like every other untrusted input.
+    spot = fixed_spotlight()
 
     llm_verdicts = await ctx.provider.extract(
         system_prompt=(

@@ -46,6 +46,7 @@ def test_record_always_carries_exactly_the_required_keys() -> None:
     assert record["embed_ms"] is None
     assert record["leg"] is None
     assert record["failover_engaged"] is False
+    assert record["cached_input_tokens"] == 0
 
 
 def test_sink_collects_component_measures_and_totals_retrieval() -> None:
@@ -89,6 +90,7 @@ def test_emit_logs_one_line_keyed_to_the_turn(caplog: pytest.LogCaptureFixture) 
             llm_call_count=2,
             input_tokens=1000,
             output_tokens=200,
+            cached_input_tokens=750,
             leg="primary",
             failover_engaged=False,
         )
@@ -104,6 +106,7 @@ def test_emit_logs_one_line_keyed_to_the_turn(caplog: pytest.LogCaptureFixture) 
     assert set(record) == RECORD_KEYS
     assert record["llm_call_count"] == 2
     assert record["buffer_hold_ms"] == 400.0
+    assert record["cached_input_tokens"] == 750
 
 
 def _routes_returned_by_the_decision_point() -> set[str]:

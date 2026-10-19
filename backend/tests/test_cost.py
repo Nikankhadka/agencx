@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -69,6 +70,65 @@ def test_collect_usage_captures_reported_calls() -> None:
         TokenUsage(model="gpt-4o-mini", input_tokens=100, output_tokens=50),
         TokenUsage(model="text-embedding-3-small", input_tokens=20, output_tokens=0),
     ]
+
+
+def test_report_usage_carries_cached_tokens() -> None:
+    with collect_usage() as usages:
+        report_usage("gpt-4o-mini", 100, 50, cached_tokens=80)
+    assert usages == [
+        TokenUsage(model="gpt-4o-mini", input_tokens=100, output_tokens=50, cached_tokens=80)
+    ]
+
+
+def test_report_usage_defaults_cached_tokens_to_zero() -> None:
+    """Backward compatible: a provider that reports no cache detail is a zero,
+    not a TypeError."""
+    with collect_usage() as usages:
+        report_usage("gpt-4o-mini", 100, 50)
+    assert usages[0].cached_tokens == 0
+
+
+# --- cached-token extraction from the provider response -----------------------
+
+
+def _usage_response(**usage_fields: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        model="served-model",
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20, **usage_fields),
+    )
+
+
+def test_report_extracts_cached_tokens_from_prompt_tokens_details() -> None:
+    """Slice 5: OpenRouter reports ``usage.prompt_tokens_details.cached_tokens``
+    - the one signal that a prompt-cache hit actually happened."""
+    from app.llm.openai_base import _report
+
+    response = _usage_response(prompt_tokens_details=SimpleNamespace(cached_tokens=64))
+    with collect_usage() as usages:
+        _report("configured-model", response)
+    assert usages == [
+        TokenUsage(
+            model="served-model",
+            input_tokens=100,
+            output_tokens=20,
+            price_model="configured-model",
+            cached_tokens=64,
+        )
+    ]
+
+
+def test_report_tolerates_absent_or_null_cached_tokens() -> None:
+    """The detail block is vendor-specific and may be absent, null, or carry a
+    null count - every one of those is a zero, never an AttributeError."""
+    from app.llm.openai_base import _report
+
+    absent = _usage_response()  # no prompt_tokens_details attribute at all
+    null_detail = _usage_response(prompt_tokens_details=None)
+    null_count = _usage_response(prompt_tokens_details=SimpleNamespace(cached_tokens=None))
+    for response in (absent, null_detail, null_count):
+        with collect_usage() as usages:
+            _report("configured-model", response)
+        assert usages[0].cached_tokens == 0
 
 
 def test_collect_usage_nesting_restores_outer_sink() -> None:

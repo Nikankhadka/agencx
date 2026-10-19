@@ -17,11 +17,15 @@ Assembly is four queries (config, version, offerings, corpus), so a cache miss o
 first message costs a few milliseconds, not a round trip to a provider.
 
 **Why the corpus is stored raw rather than as a finished prompt string.** The
-spotlight fence (T-027) uses per-request random delimiters; baking them into a
-cached string would freeze one delimiter for the package's whole lifetime and
-weaken the fence to a known token. So the package caches what is expensive (the
-reads) and each turn builds its own prompt with a fresh spotlight, which is
-string work.
+prompt still has to be assembled per turn (the customer message, the routing,
+the tool guidance), so the package caches what is expensive (the reads) and the
+turn's string work is cheap. (Slice 5 note: the spotlight fence (T-027) now uses
+ONE FIXED delimiter for every request, so the fence is no longer the reason the
+corpus stays unwrapped - it is cached raw simply because assembling the final
+prompt is per-turn work regardless. The fixed token is deliberate so the prompt
+prefix is byte-stable for provider prompt caching; the enforcement is the
+delimiter escape plus the standing instruction plus Inspection, gated by
+``evals/injection_eval.py``.)
 
 ponytail: the cache is a module-level dict, so each container worker keeps its own
 copy and reassembles independently - at Stage 1 scale that is a few

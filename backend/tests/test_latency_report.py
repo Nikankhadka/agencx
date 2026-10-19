@@ -27,6 +27,7 @@ def _record(**overrides: Any) -> dict[str, Any]:
         "llm_call_count": 2,
         "input_tokens": 10,
         "output_tokens": 5,
+        "cached_input_tokens": 4,
         "leg": None,
         "failover_engaged": False,
         "route": "knowledge",
@@ -117,6 +118,31 @@ def test_calls_column_reports_the_all_turn_set() -> None:
     calls_col = 10  # model, tenant, path, exp path, turns, budget, p50, p95, first, buffer, calls
     assert cells[calls_col] == "[1, 2]"
     assert "[]" not in row
+
+
+def test_cached_input_tokens_are_summed_and_old_records_still_read() -> None:
+    artifact = _artifact(
+        _turn(_record(cached_input_tokens=750)),
+        _turn(_record(cached_input_tokens=250)),
+    )
+    assert latency_report._summary(artifact)["cached_input_tokens"] == 1000
+
+    # A committed slice-1/slice-4 artifact predates the key; the report must read
+    # it as zero rather than raising.
+    legacy = _artifact(_turn(_record()))
+    legacy["turns"][0]["record"].pop("cached_input_tokens")
+    assert latency_report._summary(legacy)["cached_input_tokens"] == 0
+
+
+def test_matrix_reports_cached_tokens_without_moving_the_calls_column() -> None:
+    summary = latency_report._summary(_artifact(_turn(_record(cached_input_tokens=750))))
+    markdown = latency_report._matrix_markdown([summary], "t")
+    header = next(line for line in markdown.splitlines() if line.startswith("| model |"))
+    assert "cache tok" in header
+    row = next(line for line in markdown.splitlines() if line.startswith(f"| {summary['label']} |"))
+    cells = [cell.strip() for cell in row.split("|")[1:-1]]
+    assert cells[10] == "[2]"  # calls column index is unchanged
+    assert "750" in row
 
 
 def test_model_match_ignores_error_turns_and_reports_their_count() -> None:

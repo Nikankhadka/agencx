@@ -16,7 +16,7 @@ import uuid
 from datetime import UTC, datetime
 
 from app.agents.drafting import MONEY_GUIDANCE
-from app.agents.spotlight import new_spotlight
+from app.agents.spotlight import fixed_spotlight
 from app.onboarding.agent import _EXTRACT_PROMPT, _URL_EXTRACT_PROMPT
 from app.services.context_package import ContextPackage
 
@@ -52,7 +52,7 @@ def test_customer_assistant_carries_the_rule_on_both_paths() -> None:
     from app.agents.agent_node import _system_prompt
 
     for fast_path in (True, False):
-        prompt = _system_prompt(_package(fast_path=fast_path), new_spotlight())
+        prompt = _system_prompt(_package(fast_path=fast_path), fixed_spotlight())
         assert MONEY_GUIDANCE in prompt
 
 
