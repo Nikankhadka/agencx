@@ -20,6 +20,13 @@ import { PriceSummaryCard, type PriceSummaryPayload } from "@/components/ui/Pric
 import { CatalogCard, type CatalogPayload } from "@/components/ui/CatalogCard";
 import { EscalationBanner } from "@/components/ui/EscalationBanner";
 import { parseChatStreamEvent, type ChatStreamEvent } from "@/lib/chat-events";
+import {
+  clearQueue,
+  coalesce,
+  enqueue,
+  hasQueued,
+  queuedCount,
+} from "@/lib/chat-queue";
 import { messageFromPublic } from "@/lib/chat-restore";
 import type { PublicMessage } from "@/lib/api-schemas";
 import { customerOpening } from "@/lib/greeting";
@@ -166,6 +173,15 @@ export function CustomerChat({
   // not a stop: the chat stays live and only the human-reply poll starts.
   const [escalated, setEscalated] = useState(false);
   const [handoffSeen, setHandoffSeen] = useState(false);
+  // A question submitted while a turn is in flight waits here and is sent as
+  // one combined turn when the reply finishes. In memory only, by design: a
+  // refresh drops the queue and keeps only the composer draft.
+  const [queued, setQueued] = useState<string[]>([]);
+  const queuedRef = useRef<string[]>([]);
+  // The drain reads escalation synchronously. The state value captured by the
+  // in-flight turn is stale by the time its `finally` runs, because the
+  // `escalated` stream event lands mid-turn.
+  const escalatedRef = useRef(false);
   // Starter chips only make sense before the customer has said anything -
   // hidden the moment the first real message goes out, never shown again.
   const [showStarters, setShowStarters] = useState(starterQuestions.length > 0);
@@ -200,6 +216,9 @@ export function CustomerChat({
       setHandoffSeen,
       setEscalated,
     );
+    // The restored limit stop is synchronous context for the drain guard, not
+    // just a banner: nothing may be sent into a locked conversation.
+    if (readSession(escalatedKey(slug)) === "1") escalatedRef.current = true;
     if (!storedId) return;
     let cancelled = false;
     void (async () => {
@@ -341,29 +360,72 @@ export function CustomerChat({
     }
   }
 
-  async function send(text: string) {
+  function setQueue(next: string[]) {
+    queuedRef.current = next;
+    setQueued(next);
+  }
+
+  function clearQueued() {
+    setQueue(clearQueue());
+  }
+
+  /**
+   * The queue lives outside the turn so questions can arrive while a reply is
+   * in flight. Clearing the ref before starting the combined turn is the
+   * double-drain guard: the next `finally` sees an empty queue.
+   */
+  function drainQueued() {
+    if (escalatedRef.current) {
+      clearQueued();
+      return;
+    }
+    const pending = queuedRef.current;
+    if (!hasQueued(pending)) return;
+    const combined = coalesce(pending);
+    clearQueued();
+    void startTurn(combined);
+  }
+
+  function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || busy || escalated) return;
+    if (!trimmed || escalated || escalatedRef.current) return;
+    if (busy) {
+      // Mid-turn: hold the question for the combined turn that follows this
+      // reply, and clear the composer for the next one. The draft is cleared
+      // with it so a refresh does not resurrect text that is already queued.
+      setQueue(enqueue(queuedRef.current, trimmed));
+      setInput("");
+      writeSession(draftKey(slug), "");
+      return;
+    }
+    void startTurn(trimmed);
+  }
+
+  async function startTurn(text: string) {
     setBusy(true);
     // RF-13: the composer clears for normal typing feedback, but the exact
     // payload is held as the in-flight draft so a mid-flight refresh keeps it.
     // The `done` handler clears it, and only while it still matches this turn.
     setInput("");
-    writeSession(draftKey(slug), trimmed);
+    writeSession(draftKey(slug), text);
     setShowStarters(false);
     // The bubble this turn owns, by stable id rather than a render-time index.
     const customerId = nextMessageId();
     const assistantId = nextMessageId();
     setMessages((prev) => [
       ...prev,
-      { id: customerId, role: "customer", text: trimmed },
+      { id: customerId, role: "customer", text },
       { id: assistantId, role: "assistant", text: "", streaming: true },
     ]);
 
     try {
-      await runChatTurn(assistantId, trimmed, true);
+      await runChatTurn(assistantId, text, true);
     } finally {
       setBusy(false);
+      // A burst queued behind this reply becomes one turn - even after a
+      // failure, which keeps its Retry bubble and restores this text to the
+      // composer; only a limit stop cancels the burst.
+      drainQueued();
     }
   }
 
@@ -389,6 +451,7 @@ export function CustomerChat({
       await runChatTurn(messageId, text, false);
     } finally {
       setBusy(false);
+      drainQueued();
     }
   }
 
@@ -474,7 +537,11 @@ export function CustomerChat({
         writeSession(handoffKey(slug), "1");
         break;
       case "escalated":
+        escalatedRef.current = true;
         setEscalated(true);
+        // A limit stop locks the composer; a burst queued behind this turn can
+        // never be sent into that conversation, so drop it.
+        clearQueued();
         // RF-12: a limit stop is terminal; a refresh must restore the locked
         // composer and the banner, not reopen the chat.
         writeSession(escalatedKey(slug), "1");
@@ -562,6 +629,40 @@ export function CustomerChat({
           onSubmit={handleSubmit}
           className="flex shrink-0 flex-col gap-2 border-t border-border pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
+          {hasQueued(queued) ? (
+            <section
+              data-testid="queued-questions"
+              aria-live="polite"
+              className="flex flex-col gap-1 rounded-md border border-border bg-surface-sunken px-3 py-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-meta font-medium text-text">
+                  Queued ({queuedCount(queued)})
+                </span>
+                <button
+                  type="button"
+                  onClick={clearQueued}
+                  aria-label="Clear queued questions"
+                  className="text-meta font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+                >
+                  Clear
+                </button>
+              </div>
+              <ul className="flex flex-col gap-1">
+                {queued.map((question, index) => (
+                  <li
+                    key={`${index}-${question}`}
+                    className="truncate text-footnote text-text-secondary"
+                  >
+                    {question}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-meta text-ink-a40">
+                They send together when the current reply finishes.
+              </p>
+            </section>
+          ) : null}
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <Input
@@ -573,14 +674,15 @@ export function CustomerChat({
                   // RF-12: persist the unsent draft so a refresh restores it.
                   writeSession(draftKey(slug), e.target.value);
                 }}
-                disabled={busy}
                 autoFocus
               />
             </div>
             {/* No stop affordance: the customer never interrupts the
                 assistant's own reply, so the send icon stays put rather than
-                swapping to a control that would let them. */}
-            <Button type="submit" disabled={busy} aria-label="Send">
+                swapping to a control that would let them. The composer stays
+                usable while busy; submitting queues the question for the
+                combined turn that follows. */}
+            <Button type="submit" aria-label="Send">
               <Icon name="send" size={20} />
             </Button>
           </div>

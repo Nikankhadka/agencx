@@ -23,4 +23,5 @@ answered only part of the burst.
 inspect chains (11-19 s cumulative); one coalesced turn pays one (3.4-5.7 s). This is a product
 change, not a latency optimization of the same workload: the customer gets one reply covering a
 burst instead of three replies. That interaction is the remaining unknown, not the clock. The
-coalesced-burst UI work is justified; it does not need a smaller judge or a longer budget.
+composer now queues a message submitted mid-reply and sends the burst as one combined turn, so the
+measured interaction is the shipped one; it does not need a smaller judge or a longer budget.

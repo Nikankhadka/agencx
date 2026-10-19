@@ -263,6 +263,19 @@ validated and the founder says go.
    chunked-validation design, a security ruling, and eval rework, and may be
    unnecessary if 2 through 6 land.
 
+**Follow-on: burst coalescing.** This is not one of slices 1-7 and changes no
+backend code. The customer composer now keeps accepting messages while a reply
+is in flight, queues them in memory, and when that reply finishes sends the
+burst as ONE turn joined by blank lines - one customer bubble, one stream, the
+existing retry and citations behavior. Styling adds a small queued strip above
+the composer with the texts, a count, a hint, and a Clear control; an escalation
+drops the queue. The measured justification is in
+`docs/agencx/evidence/latency-2026-10/report-coalesce.md`: one combined
+three-question turn took 3.4-5.7 s against 10.8-21.6 s for three serial turns
+(69-77% saved), 6/6 turns completed, every question answered. This is a product
+behavior change - the customer gets one reply covering the burst instead of
+three replies - not a latency optimization of the same workload.
+
 ## Corpus
 
 | Tenant | Vertical | Path (expected) | LLM calls (expected) |
