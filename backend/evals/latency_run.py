@@ -30,6 +30,7 @@ Usage::
 
     python -m evals.latency_run                      # smoke: first model, first tenant, one turn
     python -m evals.latency_run --models all --tenants all --turns 3
+    python -m evals.latency_run --coalesce 3          # first three questions as one message
 """
 
 from __future__ import annotations
@@ -85,7 +86,18 @@ def _make_command(args: argparse.Namespace) -> str:
         parts.append(f"LATENCY_CONVERSATION={args.conversation}")
     if args.legs != "single":
         parts.append(f"LATENCY_LEGS={args.legs}")
+    if args.coalesce:
+        parts.append(f"LATENCY_COALESCE={args.coalesce}")
     return " ".join(parts)
+
+
+def _coalesced(messages: list[str], n: int) -> str:
+    """The first ``n`` messages as ONE customer message, separated by a blank
+    line. ``n`` <= 0 is the historical single-message behaviour: just the first
+    message, so the caller can keep cycling."""
+    if n <= 0:
+        return messages[0]
+    return "\n\n".join(messages[:n])
 
 
 def _slugify(value: str) -> str:
@@ -260,6 +272,7 @@ async def _run_model_tenant(
     conversation: str = "fresh",
     legs_mode: str = "single",
     legs_config: dict[str, Any] | None = None,
+    coalesce: int = 0,
 ) -> dict[str, Any]:
     provider_models = await _fetch_provider_models(
         http, str(model["models_url"]), os.environ.get(str(model["key_env"]), "")
@@ -291,6 +304,9 @@ async def _run_model_tenant(
     }
     if legs_config is not None:
         result["legs_config"] = legs_config
+    if coalesce > 0:
+        result["coalesce"] = coalesce
+        result["coalesced_message"] = _coalesced(messages, coalesce)
     if entry is None:
         # Record the exact catalogue so the absence is checkable from the
         # artifact, not just asserted.
@@ -315,9 +331,14 @@ async def _run_model_tenant(
     # comparison. ``reuse`` keeps the id the previous turn opened, so the
     # transcript grows the way it does for a customer sending rapid messages.
     # Turns cycle through the messages when fewer messages than turns are given.
+    # With ``coalesce`` > 0 the first N are joined and sent as ONE message every
+    # turn instead, so a burst of questions is answered in a single turn.
     current_id: str | None = None
     for turn_index in range(turns):
-        message = messages[turn_index % len(messages)]
+        if coalesce > 0:
+            message = _coalesced(messages, coalesce)
+        else:
+            message = messages[turn_index % len(messages)]
         handler.records.clear()
         conversation_id, event_types, error = await _drive_turn(
             client,
@@ -436,6 +457,7 @@ async def run(args: argparse.Namespace) -> int:
                         conversation=args.conversation,
                         legs_mode=args.legs,
                         legs_config=legs_config,
+                        coalesce=args.coalesce,
                     )
                     path = out_dir / f"{_slugify(str(model['label']))}__{tenant['slug']}.json"
                     _write(path, result)
@@ -477,6 +499,12 @@ def main() -> None:
         choices=("single", "configured"),
         default="single",
         help="single blanks the fallback/failover legs; configured uses the .env chain",
+    )
+    parser.add_argument(
+        "--coalesce",
+        type=int,
+        default=0,
+        help="send the first N messages joined by a blank line as one turn (default: 0, off)",
     )
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="evidence output directory")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="model and corpus config")
