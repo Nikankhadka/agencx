@@ -88,11 +88,31 @@ def _summary(artifact: dict[str, Any]) -> dict[str, Any]:
     pricing = artifact.get("provider_pricing")
     cost: float | None = None
     if isinstance(pricing, dict) and pricing.get("prompt") and pricing.get("completion"):
-        cost = round(
-            sum(float(r["input_tokens"]) for r in records) * float(pricing["prompt"])
-            + sum(float(r["output_tokens"]) for r in records) * float(pricing["completion"]),
-            6,
-        )
+        input_tokens = sum(float(r["input_tokens"]) for r in records)
+        output_tokens = sum(float(r["output_tokens"]) for r in records)
+        cache_read = pricing.get("input_cache_read")
+        if cache_read is not None:
+            # Slice 6: cache reads bill at their own (cheaper) rate. The cached
+            # count is clamped to the input count per turn - a provider cannot
+            # cache more than was sent - and a record without the key reads as 0.
+            cached = sum(
+                min(float(r.get("cached_input_tokens", 0)), float(r["input_tokens"]))
+                for r in records
+            )
+            cost = round(
+                (input_tokens - cached) * float(pricing["prompt"])
+                + cached * float(cache_read)
+                + output_tokens * float(pricing["completion"]),
+                6,
+            )
+        else:
+            # No published cache-read price (a legacy artifact, or a cache-blind
+            # provider): price exactly as before, every input token at `prompt`.
+            cost = round(
+                input_tokens * float(pricing["prompt"])
+                + output_tokens * float(pricing["completion"]),
+                6,
+            )
     return {
         "label": artifact["model"]["label"],
         "tenant": artifact["tenant"],

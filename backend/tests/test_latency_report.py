@@ -145,6 +145,50 @@ def test_matrix_reports_cached_tokens_without_moving_the_calls_column() -> None:
     assert "750" in row
 
 
+def _legacy_formula(artifact: dict[str, Any]) -> str:
+    """The cost math before slice 6: every input token billed at ``prompt``."""
+    pricing = artifact["provider_pricing"]
+    records = latency_report._records(artifact)
+    total = sum(float(r["input_tokens"]) for r in records) * float(pricing["prompt"]) + sum(
+        float(r["output_tokens"]) for r in records
+    ) * float(pricing["completion"])
+    return f"{round(total, 6):.6f}"
+
+
+def test_cost_legacy_artifact_matches_the_old_formula_exactly() -> None:
+    # A committed slice-1/slice-4 artifact predates both the cached-token key and
+    # the cache read price; it must price byte-for-byte as it always did.
+    legacy = _artifact(_turn(_record()))
+    legacy["turns"][0]["record"].pop("cached_input_tokens")
+    assert "input_cache_read" not in legacy["provider_pricing"]
+    assert f"{latency_report._summary(legacy)['cost_usd']:.6f}" == _legacy_formula(legacy)
+
+
+def test_cost_prices_cache_reads_when_the_price_is_present() -> None:
+    artifact = _artifact(_turn(_record(input_tokens=10, cached_input_tokens=4, output_tokens=5)))
+    artifact["provider_pricing"]["input_cache_read"] = "0.0000005"
+    cost = latency_report._summary(artifact)["cost_usd"]
+    # 6 uncached * 0.000001 + 4 cached * 0.0000005 + 5 out * 0.000002.
+    assert f"{cost:.6f}" == "0.000018"
+    assert cost < float(_legacy_formula(artifact))  # cheaper than cache-blind pricing
+
+
+def test_cost_is_unchanged_when_the_cache_price_is_absent() -> None:
+    # Cached tokens are in the record but the provider publishes no cache-read
+    # price: a cache read is billed at the prompt rate, so the cost is unchanged.
+    artifact = _artifact(_turn(_record(input_tokens=10, cached_input_tokens=4, output_tokens=5)))
+    assert "input_cache_read" not in artifact["provider_pricing"]
+    assert f"{latency_report._summary(artifact)['cost_usd']:.6f}" == _legacy_formula(artifact)
+
+
+def test_cost_clamps_cached_tokens_above_input() -> None:
+    artifact = _artifact(_turn(_record(input_tokens=10, cached_input_tokens=50, output_tokens=5)))
+    artifact["provider_pricing"]["input_cache_read"] = "0.0000005"
+    cost = latency_report._summary(artifact)["cost_usd"]
+    # clamped to 10 cached, 0 uncached: 10 * 0.0000005 + 5 * 0.000002.
+    assert f"{cost:.6f}" == "0.000015"
+
+
 def test_model_match_ignores_error_turns_and_reports_their_count() -> None:
     artifact = _artifact(_turn(_record(), model_match=True), {"error": "boom"})
     summary = latency_report._summary(artifact)
