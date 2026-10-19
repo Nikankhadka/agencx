@@ -78,6 +78,8 @@ def _make_command(args: argparse.Namespace) -> str:
         parts.append(f"LATENCY_TENANTS={args.tenants}")
     if args.turns != 1:
         parts.append(f"LATENCY_TURNS={args.turns}")
+    if args.conversation != "fresh":
+        parts.append(f"LATENCY_CONVERSATION={args.conversation}")
     return " ".join(parts)
 
 
@@ -232,6 +234,7 @@ async def _run_model_tenant(
     turns: int,
     command: str,
     handler: _RecordHandler,
+    conversation: str = "fresh",
 ) -> dict[str, Any]:
     provider_models = await _fetch_provider_models(
         http, str(model["models_url"]), os.environ.get(str(model["key_env"]), "")
@@ -255,6 +258,7 @@ async def _run_model_tenant(
         "provider_pricing": entry.get("pricing") if entry else None,
         "embedder": _embedder_config(),
         "command": command,
+        "conversation_mode": conversation,
         "commit": _commit_sha(),
         "generated_at": _utc_now(),
         "turns": [],
@@ -278,19 +282,26 @@ async def _run_model_tenant(
             )
             return result
 
-    # Each turn is its own conversation: the fixed message set is measured
-    # independently, so a growing transcript does not confound the run-to-run
-    # comparison. Turns cycle through the messages when fewer messages than
-    # turns are given.
+    # ``fresh`` measures the fixed message set independently: each turn is its
+    # own conversation, so a growing transcript does not confound the run-to-run
+    # comparison. ``reuse`` keeps the id the previous turn opened, so the
+    # transcript grows the way it does for a customer sending rapid messages.
+    # Turns cycle through the messages when fewer messages than turns are given.
+    current_id: str | None = None
     for turn_index in range(turns):
         message = messages[turn_index % len(messages)]
         handler.records.clear()
         conversation_id, event_types, error = await _drive_turn(
-            client, slug=str(tenant["slug"]), message=message, conversation_id=None
+            client,
+            slug=str(tenant["slug"]),
+            message=message,
+            conversation_id=current_id if conversation == "reuse" else None,
         )
         if error is not None:
             result["turns"].append({"message": message, "error": error})
             break
+        if conversation == "reuse":
+            current_id = conversation_id
         matches = [r for r in handler.records if r.get("conversation_id") == conversation_id]
         if not matches:
             result["turns"].append(
@@ -392,6 +403,7 @@ async def run(args: argparse.Namespace) -> int:
                         turns=args.turns,
                         command=command,
                         handler=handler,
+                        conversation=args.conversation,
                     )
                     path = out_dir / f"{_slugify(str(model['label']))}__{tenant['slug']}.json"
                     _write(path, result)
@@ -416,7 +428,18 @@ def main() -> None:
     parser.add_argument(
         "--tenants", default=None, help="comma-separated tenant slugs, or 'all' (default: first)"
     )
-    parser.add_argument("--turns", type=int, default=1, help="turns per tenant in one conversation")
+    parser.add_argument(
+        "--turns",
+        type=int,
+        default=1,
+        help="turns per tenant; with --conversation reuse they share one conversation",
+    )
+    parser.add_argument(
+        "--conversation",
+        choices=("fresh", "reuse"),
+        default="fresh",
+        help="fresh opens a new conversation each turn; reuse keeps turn 1's (default: fresh)",
+    )
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="evidence output directory")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="model and corpus config")
     args = parser.parse_args()
