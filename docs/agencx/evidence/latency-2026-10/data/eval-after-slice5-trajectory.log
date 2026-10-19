@@ -1,0 +1,241 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-cc1c3a997a92 Creating 
+ Container agencx-backend-run-cc1c3a997a92 Created 
+[1/41] quoting-single-rule-01
+[2/41] quoting-multiline-01
+[3/41] quoting-quantity-item-01
+[4/41] quoting-budget-within-01
+[5/41] quoting-rush-addon-01
+llm produced malformed structured output; resampling (attempt 1/3)
+[6/41] quoting-vague-clarify-01
+[7/41] quoting-water-damage-01
+[8/41] rec-protector-01
+[9/41] rec-case-01
+[10/41] rec-charger-01
+[11/41] rec-refurb-phone-01
+[12/41] rec-bundle-01
+[13/41] order-found-repair-01
+[14/41] order-found-shipped-01
+[15/41] order-found-lowercase-01
+[16/41] order-unknown-ref-01
+[17/41] order-no-ref-given-01
+[18/41] esc-human-request-01
+[19/41] esc-angry-complaint-01
+[20/41] esc-refund-dispute-01
+[21/41] esc-legal-threat-01
+[22/41] esc-repeat-refusal-01
+[23/41] mixed-order-quote-01
+[24/41] mixed-rec-quote-01
+[25/41] mixed-knowledge-quote-01
+[26/41] mixed-order-escalation-01
+[27/41] knowledge-warranty-01
+[28/41] knowledge-turnaround-01
+[29/41] knowledge-price-match-01
+[30/41] knowledge-data-privacy-01
+[31/41] lean-price-verbatim-01
+[32/41] lean-price-verbatim-02
+[33/41] lean-price-verbatim-03
+[34/41] lean-price-verbatim-04
+[35/41] lean-policy-01
+[36/41] lean-policy-02
+[37/41] persona-disclosure-01
+[38/41] persona-restraint-01
+[39/41] persona-frustration-01
+[40/41] persona-missing-info-01
+[41/41] persona-handoff-consent-01
+metric                  value
+------------------------------------
+cases                   41.000
+tool_correctness        0.610
+step_efficiency         0.968
+total_cost_usd          0.000
+avg_cost_usd            0.000
+persona_quality         1.000
+
+=== quoting-single-rule-01 (quoting) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'screen-repair-budget'}
+  FAILURE: terminal quote_exists=False, expected True
+  FAILURE: terminal escalation_exists=True, expected False
+  steps=8 (min 4, efficiency 0.50) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> inspection, inspection_attempted, inspection_decision, inspection_violations
+  step 4: draft -> author_node, draft_response, inspection_violations, retrieved_chunks
+  step 5: price_gate -> price_gate_decision
+  step 6: inspection -> action, author_node, draft_response, escalated, escalation_reason, inspection, inspection_decision, intent
+  step 7: escalation -> escalated
+  step 8: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "That one's outside what I can answer for you, so I've asked someone from the business to follow up with you on it. I'm still here for anything else. Can I get your name and email so the business can follow up?"
+
+=== quoting-multiline-01 (quoting) - FAIL ===
+  FAILURE: routed to 'structured', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'screen-repair-flagship-aftermarket'}
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'battery-flagship'}
+  FAILURE: terminal quote_exists=False, expected True
+  steps=2 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, response, route, selections
+  step 2: inspection -> action, inspection, inspection_decision, intent
+  route='structured' reason=None
+  draft: 'Here is the current price summary.'
+
+=== quoting-quantity-item-01 (quoting) - FAIL ===
+  FAILURE: routed to 'structured', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'item', 'item_name': 'Tempered Glass Screen Protector', 'quantity': 2}
+  FAILURE: terminal quote_exists=False, expected True
+  steps=2 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, response, route, selections
+  step 2: inspection -> action, inspection, inspection_decision, intent
+  route='structured' reason=None
+  draft: 'Here is the current price summary.'
+
+=== quoting-budget-within-01 (quoting) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'screen-repair-flagship-aftermarket'}
+  FAILURE: terminal quote_exists=False, expected True
+  steps=5 (min 4, efficiency 0.80) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_attempted, price_gate_decision, price_violations
+  step 3: draft -> author_node, draft_response, price_violations, retrieved_chunks
+  step 4: price_gate -> price_gate_decision
+  step 5: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "The published option that fits your budget is the flagship iPhone screen repair with an aftermarket display, at 129 dollars [2]. The same repair with an original OEM display is listed at 179 dollars, which is above what you're looking to spend [2].\n\nTwo things worth flagging: screen pricing is set by device tier, and the lower 59 dollar screen price applies to budget and mid-range Android phones, not iPhones [2]. So it's worth confirming your exact iPhone model before you commit. Most screen repairs are done the same day, usually within two to three hours of drop-off [3], and every repair is covered by a 90-day warranty against defects in parts and workmanship [3].\n\nIf you tell me which iPhone you have, I can pass that along to the team so the owner can confirm the exact price for your model before you come in."
+
+=== quoting-rush-addon-01 (quoting) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'charging-port-repair'}
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'rush-fee'}
+  FAILURE: terminal quote_exists=False, expected True
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "Charging port repair for a loose or non-functioning port is $45 [2], and rush service is a flat $15 add-on on top of the repair price [2]. I can't add those into a single total for you, but those are the two published figures.\n\nOn timing, most repairs are finished same day, usually within two to three hours of drop-off [3], and walk-ins are welcome - booking ahead just guarantees a same-day slot during busy periods [1]. Want me to pass this along to the team so they can confirm today's availability and the exact total for you?"
+
+=== quoting-vague-clarify-01 (quoting) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['quoting']
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "It depends on what's wrong and which phone you've got. Screen replacements run 59 dollars for budget or mid-range Android phones, or 129 dollars for a flagship with an aftermarket display and 179 dollars with an original OEM one [1][2]. A standard battery swap is 49 dollars, or 69 dollars for flagship models, and a charging port repair is 45 dollars [2].\n\nWhat's the phone and what's it doing? I can point you to the right price."
+
+=== quoting-water-damage-01 (quoting) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['quoting']
+  FAILURE: expected selection not made: {'kind': 'rule', 'code': 'water-damage-diagnostic'}
+  FAILURE: terminal quote_exists=False, expected True
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: 'Water damage assessment and cleaning is 35 dollars, and that covers the assessment and cleaning - any repair after that gets quoted separately once the team sees how far the damage goes [2]. Those cases usually take three to five business days because they need a diagnostic soak and component-level testing [3]. Walk-ins are welcome during business hours, though booking ahead online guarantees a same-day slot [1].'
+
+=== rec-protector-01 (recommendation) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['recommendation']
+  FAILURE: expected selection not made: {'kind': 'item', 'item_name': 'Tempered Glass Screen Protector'}
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: 'A tempered glass screen protector is the usual first pick - 9H hardness and free installation, at 10 dollars. A shock-absorbing case is worth adding too, since it takes the impact when a phone lands on a corner; the universal one is 15 dollars and also comes with free installation, though it fits most models rather than every one.\n\nWant me to check anything else, like whether a case fits your particular phone?'
+
+=== rec-case-01 (recommendation) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['recommendation']
+  FAILURE: expected selection not made: {'kind': 'item', 'item_name': 'Phone Case - Universal'}
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "Yep, we do. We've got a universal shock-absorbing phone case that fits most models for $15, and it comes with free installation [2]. Just bring your phone in and the team can get one fitted for you."
+
+=== rec-refurb-phone-01 (recommendation) - FAIL ===
+  FAILURE: unsourced monetary figure in draft: '$249'
+  FAILURE: unsourced monetary figure in draft: '$349'
+  FAILURE: unsourced monetary figure in draft: '$299'
+  FAILURE: unsourced monetary figure in draft: '$279'
+  steps=3 (min 3, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "We've got four Grade A refurbished phones right now: iPhone 11 in 64GB at $249, iPhone 12 in 128GB at $349, Samsung Galaxy S21 at $299, and Google Pixel 6 at $279. All four come with a 90-day warranty.\n\nWant me to check anything else, like a screen or battery repair for your current phone?"
+
+=== rec-bundle-01 (recommendation) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['recommendation']
+  FAILURE: expected selection not made: {'kind': 'item', 'item_name': 'Phone Case - Universal'}
+  FAILURE: expected selection not made: {'kind': 'item', 'item_name': 'Tempered Glass Screen Protector'}
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "Nice, congrats on the new phone. For protection, I'd go with two things: our universal shock-absorbing case, which fits most models for 15 dollars, and a tempered glass screen protector for 10 dollars - 9H hardness, and installation is free.\n\nIf you want, tell me the model and I can check whether we've got anything more specific that fits."
+
+=== order-no-ref-given-01 (order_status) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['order_status']
+  FAILURE: expected a lookup {'ref_code': None, 'found': False} but no lookup happened
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: 'Happy to check for you! I just need your repair or ticket reference code to look it up. Do you have it handy?'
+
+=== esc-refund-dispute-01 (escalation) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['escalation']
+  FAILURE: terminal escalation_exists=False, expected True
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "I can help get this looked into. Here's what the refund policy says, so you know where you stand: if a repair can't be completed, you owe nothing and get your device back as-is. If you change your mind after a repair is finished and picked up, there's a full refund within 14 days, as long as the part hasn't been damaged by misuse. Cancelling before the device has been opened is always free, and once a part has been installed, a restocking portion of the price may apply since the part can't be resold as new. Diagnostic fees are waived if you go ahead with the recommended repair.\n\nWhat's the situation with your device, and do you have the repair or order reference handy? I can pull up the details and get someone from the business to look at the refund for you directly - that's usually the fastest path, and there's no need to go to your bank before letting the team take a look."
+
+=== esc-legal-threat-01 (escalation) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['escalation']
+  FAILURE: terminal escalation_exists=False, expected True
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "I understand this feels urgent, and I want to help get it sorted. I don't have any details about what's gone wrong yet though, so can you tell me what the issue is - a repair, an order, or something else?\n\nI can't promise anything about timing myself, but if you'd like, I can pass this straight to someone at the business so they can look into it and follow up with you."
+
+=== mixed-rec-quote-01 (mixed_intent) - FAIL ===
+  FAILURE: routed to 'knowledge', expected one of ['recommendation', 'quoting']
+  steps=3 (min 4, efficiency 1.00) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: 'The usual picks for a new phone would be a shock-absorbing case at 15 dollars, a tempered-glass screen protector at 10 dollars, and if you need them, a braided USB-C cable at 12 dollars or a 20W wall adapter at 18 dollars [2]. The screen protector is 10 dollars and installation is free [2].\n\nWant me to have someone set any of those aside for you, or is there something else I can help with?'
+
+=== knowledge-price-match-01 (knowledge) - FAIL ===
+  FAILURE: terminal escalation_exists=True, expected False
+  steps=8 (min 3, efficiency 0.38) cost=$0.0000 reasoning=n/a persona=n/a
+  step 1: agent -> action, author_node, contract, customer_email_known, customer_name_known, draft_deterministic, draft_response, engine_quote, intent, lookup, offerings_text, owner_material, retrieved_chunks, route, selections
+  step 2: price_gate -> price_gate_decision
+  step 3: inspection -> inspection, inspection_attempted, inspection_decision, inspection_violations
+  step 4: draft -> author_node, draft_response, inspection_violations, retrieved_chunks
+  step 5: price_gate -> price_gate_decision
+  step 6: inspection -> action, author_node, draft_response, escalated, escalation_reason, inspection, inspection_decision, intent
+  step 7: escalation -> escalated
+  step 8: inspection -> action, inspection, inspection_decision, intent
+  route='knowledge' reason=None
+  draft: "That one's outside what I can answer for you, so I've asked someone from the business to follow up with you on it. I'm still here for anything else. Can I get your name and email so the business can follow up?"
