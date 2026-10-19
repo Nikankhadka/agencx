@@ -141,10 +141,21 @@ live in the ticket files, not here.
   `run_gate`'s -0.03
   ([report-slice-5.md](evidence/latency-2026-10/report-slice-5.md),
   [data/slice5-cache.md](evidence/latency-2026-10/data/slice5-cache.md)).
-  **Slice 6 (paid-tier A/B across the matrix) is queued with its design decided;
-  slice 7 (streaming with inspection off the critical path) stays deferred and
+  **Slice 6 (paid-tier A/B across the matrix) is implemented, measured, and
+  CLOSED WITH NO WINNER**: the cache-adjusted cost model shipped (`2004617`),
+  the OpenRouter matrix ran twice at that commit and is heavily censored
+  (13/15, 14/15, 12/15, 14/15 turns), ling's trajectory cannot run because its
+  providers reject structured outputs (Novita 400, retry upstream with no
+  choices) so no tool-correctness row exists, and the production primary Google
+  gemini-3.5-flash-lite was added (`5a4578a`, no published price) with 10/15
+  turns completed in a good window then 2/15 under 429s. No latency or
+  correctness ranking is supportable. The cumulative package for slices 1-6 is
+  [report-cumulative.md](evidence/latency-2026-10/report-cumulative.md) with raw
+  tables in
+  [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md).
+  **Slice 7 (streaming with inspection off the critical path) stays deferred and
   needs the founder to reopen scope.** The merge checklist and its two remaining
-  blockers (the slice 6/7 decisions, the merge request) are in
+  blockers (slice 7 and the merge request) are in
   [13-latency.md](spec/active/13-latency.md#merge-readiness-slices-1-4).
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
@@ -458,7 +469,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending the slice 6/7 decisions and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; cumulative comparison built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 6 is queued and slice 7 deferred, and the merge checklist has two remaining blockers) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending slice 7 and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge checklist has two remaining blockers) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

@@ -1,0 +1,70 @@
+# Gates at the tip - 5a4578a5a234c7559f86c12a58d57547808527db (5a4578a) - 2026-10-19T15:57:54Z
+
+## make lint-backend
+Analyzed 121 files, 310 dependencies.
+-------------------------------------
+
+Pricing never reaches a model KEPT
+The deterministic services layer never asks a model KEPT
+The provider seam is a leaf KEPT
+
+Contracts: 3 kept, 0 broken.
+EXIT: 0
+
+## make typecheck-backend
+docker compose run --rm --no-deps backend mypy
+ Container agencx-backend-run-0e3d0fc5c326 Creating 
+ Container agencx-backend-run-0e3d0fc5c326 Created 
+Success: no issues found in 246 source files
+EXIT: 0
+
+## make format-check
+docker compose run --rm --no-deps backend ruff format --check .
+ Container agencx-backend-run-1a0a6f79cc0e Creating 
+ Container agencx-backend-run-1a0a6f79cc0e Created 
+248 files already formatted
+EXIT: 0
+
+## make test-backend
+tests/test_spotlight.py .........                                        [ 90%]
+tests/test_startup_config.py ......                                      [ 90%]
+tests/test_storage_delete_prefix.py ....                                 [ 91%]
+tests/test_tracing.py ......                                             [ 91%]
+tests/test_trajectory_dataset.py .......                                 [ 91%]
+tests/test_trajectory_eval.py ..................                         [ 93%]
+tests/test_turn_record.py .....                                          [ 93%]
+tests/test_url_ingestion.py ............................................ [ 96%]
+...............                                                          [ 97%]
+tests/test_validation_gate.py .................................          [100%]
+
+============================ 1435 passed in 39.45s =============================
+EXIT: 0
+
+## State checks
+
+# tenants (bytefix and injection-probe ids unchanged; no reseed)
+Pager usage is off.
+                  id                  |      slug       
+--------------------------------------+-----------------
+ e9139d84-0e9f-4282-9af6-e0dc9bf4b56e | bytefix
+ 464b8823-e113-4a0b-adef-db70db79d44d | injection-probe
+ 965f6133-eae7-44a3-ab45-f61ff92f6cca | sababa
+ bb7e88de-c838-418a-8b03-816aa395e0ed | sababa2
+(4 rows)
+
+
+# newest three eval_runs rows per type
+Pager usage is off.
+                  id                  |      slug       |  run_type  |                                                                                                      metrics                                                                                                       |          created_at           
+--------------------------------------+-----------------+------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------
+ e8ab818f-3947-4d9c-8d09-ef328ace3551 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7627946127946128, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.8123611206366136, "refusal_accuracy": 0.0, "citation_faithfulness": 0.37373737373737376} | 2026-10-19 14:43:00.95951+00
+ f11f79f9-af16-46e2-a33b-85431f8bfa73 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7181818181818181, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.7534896167958404, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3282828282828283}  | 2026-10-16 20:14:17.354734+00
+ 9a4e3918-dfa1-40a1-adee-6ee0e7fc19e1 | bytefix         | generation | {"cases": 45.0, "faithfulness": 0.7163299663299664, "negative_cases": 12.0, "positive_cases": 33.0, "answer_relevancy": 0.8024507183653592, "refusal_accuracy": 0.0, "citation_faithfulness": 0.3691919191919192}  | 2026-10-16 15:14:23.24187+00
+ 513cec2f-04b6-4426-8f0d-9835a90ad302 | injection-probe | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                              | 2026-10-19 12:54:12.479211+00
+ db028f43-9f83-4ff9-a013-9c80d7e66e46 | injection-probe | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                              | 2026-10-16 15:27:49.930971+00
+ 2f739e87-369a-4a95-bb5d-7c8213a249fc | injection-probe | injection  | {"cases": 30, "passed": 29, "pass_rate": 0.9666666666666667, "pass_rate_direct": 0.9565217391304348, "pass_rate_indirect_tool": 1.0, "pass_rate_indirect_chunk": 1.0}                                              | 2026-10-16 13:32:12.292589+00
+ 302b9a94-66f0-4066-aa72-8eadf163a1ed | bytefix         | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9796747967479674, "tool_correctness": 0.6341463414634146}                                                 | 2026-10-19 15:09:49.751264+00
+ 6219ba04-11e7-43d6-909e-bc466cf77409 | bytefix         | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9676829268292683, "tool_correctness": 0.6097560975609756}                                                 | 2026-10-19 14:58:24.725389+00
+ 2e4371b8-21e0-4e3e-9bd0-811a1c908d5b | bytefix         | trajectory | {"cases": 41.0, "avg_cost_usd": 0.0, "total_cost_usd": 0.0, "persona_quality": 1.0, "step_efficiency": 0.9742547425474254, "tool_correctness": 0.6341463414634146}                                                 | 2026-10-16 15:22:15.602168+00
+(9 rows)
+

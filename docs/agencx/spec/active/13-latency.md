@@ -39,9 +39,20 @@ and the cache is proven by non-zero `cached_input_tokens` in both runs (run 1
 cold, 20.6% of input tokens cached; run 2 warm, 64.5%; each tenant's turn 1
 always cold). There is **no clock claim** - 10 of 15 turns per run hit the 10 s
 turn budget and are censored out, so the completed samples are thin; see
-`docs/agencx/evidence/latency-2026-10/report-slice-5.md`. Slices 6 (paid-tier
-A/B) and 7 (streaming) remain: slice 6 is queued with its design decided, slice 7
-is deferred and needs the founder to reopen scope.
+`docs/agencx/evidence/latency-2026-10/report-slice-5.md`. Slice 6 (paid-tier
+A/B across the matrix) is **implemented and measured, with NO WINNER**: the
+cache-adjusted cost model shipped (`2004617`); ling's trajectory is impossible
+because its providers reject structured outputs (Novita 400, then a retry that
+forwarded an upstream error with no choices), so no tool-correctness row exists;
+the OpenRouter matrix x2 is heavily censored (12-14 of 15 turns per model per
+run); and the production primary Google gemini-3.5-flash-lite was added
+(`5a4578a`, no published price), completing 10/15 in a good window then 2/15
+under 429s. No latency or correctness ranking is supportable; see
+`docs/agencx/evidence/latency-2026-10/report-slice-6.md`,
+`data/slice6-matrix.md` and `data/slice6-google.md`. The cumulative package for
+slices 1-6 is `report-cumulative.md` with raw tables and provenance in
+`data/cumulative.md`. Slice 7 (streaming) remains deferred and needs the founder
+to reopen scope.
 **Phase 1 area:** Performance (post-launch).
 **Branch:** `latency/stack` (all slices stack here; one merge to
 `development` at the end, on the founder's go).
@@ -222,6 +233,33 @@ validated and the founder says go.
    `data/slice5-cache.md`.
 6. Paid-tier A/B across the matrix: latency, cost, and tool-call correctness
    per model.
+   **Outcome (implemented, measured - NO WINNER).** The cache-adjusted cost model
+   shipped in `2004617`: `evals/latency_report.py` prices cache reads when
+   `input_cache_read` is published - `(input - cached)*prompt +
+   cached*cache_read + output*completion`, with `cached` clamped to `input` per
+   turn - and keeps the all-input-at-prompt formula byte-for-byte when absent;
+   four tests pin legacy identity, the reduced figure, absent-price and clamping.
+   The OpenRouter matrix ran twice at `2004617` with
+   `LATENCY_MODELS=all` and is heavily censored by the 10 s budget: 13/15,
+   14/15, 12/15 and 14/15 turns for deepseek run 1, ling run 1, deepseek run 2
+   and ling run 2. Cache-adjusted costs (live prices, clamped):
+   deepseek $0.003906/$0.002753, ling $0.001692/$0.001563 - 28-60% below the
+   cache-blind figures. Ling's trajectory eval cannot run in this window: its
+   providers reject structured outputs (`BadRequestError` 400 from Novita, "model
+   features structured outputs not support"; the retry surfaced an upstream
+   error body with no choices), so both attempts aborted before the aggregate
+   insert and no `eval_runs` row or tool-correctness number exists
+   (`data/eval-slice6-ling-trajectory.log`,
+   `data/eval-slice6-ling-trajectory-retry.log`; the slice-5 pairing stayed
+   intact). The production primary Google gemini-3.5-flash-lite was added as a
+   config row (`models/gemini-3.5-flash-lite`; no published price, cost `n/a`):
+   it completed 10/15 turns in run 1 (including drafted `sababa` turns, 4/5) and
+   2/15 in run 2 where Google 429s censored `sababa` entirely. **No winner:**
+   completed moves are card turns or n<=4, ling has no correctness score, and
+   the Google window swings 10 to 2 - a cross-model window this censored
+   supports no latency or correctness ranking. Write-up:
+   `docs/agencx/evidence/latency-2026-10/report-slice-6.md`,
+   `data/slice6-matrix.md`, `data/slice6-google.md`.
 7. Streaming with inspection off the critical path - deferred; needs a
    chunked-validation design, a security ruling, and eval rework, and may be
    unnecessary if 2 through 6 land.
@@ -308,6 +346,15 @@ Checked at the tip of `latency/stack` when the cumulative package landed
   repeat `eval_runs` rows are all intact.
 - **Branch:** `latency/stack`, unpushed, no upstream configured.
 
+**Re-checked at the slices 1-6 tip (`5a4578a`).** Gates green:
+`make lint-backend` (3 contracts kept), `make typecheck-backend` (246 files),
+`make format-check` (248 files) and `make test-backend` (1435 passed), tails in
+`data/gates-slice6.log`; the same tree state (only the pre-existing dirty
+entries plus the docs this package adds), the same two tenant ids (no reseeds),
+and the branch still unpushed. The newest `eval_runs` rows per type are in the
+same log; `run_gate` has no failing type (generation 0.7628, trajectory 0.6098
+with its identical-code repeat at 0.6341, injection 0.967).
+
 **Rulings recorded (2026-10-19).** The two founder-facing items this section
 carried are closed: the slice-3 citations narrowing is ratified as cited-only (no
 fallback to all retrieved chunks) and is internal - the controller strips markers
@@ -329,13 +376,15 @@ in `docs/agencx/evidence/latency-2026-10/report-slice-5.md`.
 
 **Blockers before merge** (founder-facing):
 
-1. **Slices 6-7.** Slice 6 (paid-tier A/B across the matrix: latency, cost, and
-   tool-call correctness per model) is **queued**, with its design decided - it
-   needs no founder ruling. Slice 7 (streaming with inspection off the critical
-   path, which needs a chunked-validation design, a security ruling and eval
-   rework) is **deferred**: it changes when a customer sees model prose and the
-   US-060 inspection buffer is ratified, so only a founder scope decision reopens
-   it.
+1. **Slice 7.** Slice 6 (paid-tier A/B across the matrix: latency, cost, and
+   tool-call correctness per model) is **closed with no winner**: the cost model
+   shipped, the OpenRouter matrix is heavily censored on both runs, ling cannot
+   be scored for tool correctness (its providers reject structured outputs), and
+   the Google primary swung from 10/15 to 2/15 under 429s. Slice 7 (streaming
+   with inspection off the critical path, which needs a chunked-validation
+   design, a security ruling and eval rework) is **deferred**: it changes when a
+   customer sees model prose and the US-060 inspection buffer is ratified, so
+   only a founder scope decision reopens it.
 2. **The merge request itself.** One merge to `development`, then `staging`, only
    on the founder's go.
 

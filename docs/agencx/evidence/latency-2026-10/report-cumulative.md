@@ -1,35 +1,35 @@
-# Cumulative comparison - slices 1-4 on `latency/stack`
+# Cumulative comparison - slices 1-6 on `latency/stack`
 
-**Stack.** Slices 1-4, each verified against its own gate, nothing merged or
-pushed: 1 instrument + noise floor (`44f739b`), 2 draft cap, inert (`4f40ef3`),
-3 grounded prose, one call saved (`cbad1b0`/`2ac8247`), 4 retrieval overlap
-(`040a473`). Slices 5-7 await rulings. Tables: `data/cumulative.md`.
+Six unpushed slices: 1 instrument (`44f739b`), 2 draft cap, inert (`4f40ef3`),
+3 grounded prose, one call saved (`2ac8247`), 4 retrieval overlap (`040a473`),
+5 cacheable prefix, cache proven (`d99ca54`), 6 cache-adjusted cost (`2004617`)
+plus matrix and Google primary (`5a4578a`). Tables: `data/cumulative.md`.
 
-**Baseline (slice-1 `noise-run1/2`) vs tip (`slice4-run1/2`, `040a473`).**
+**Calls win.** Hybrid sababa p50 4.0 -> 3.0 on completed turns (grounded tool
+turn, 8 firings); sababa2 2.0 -> 2.0 (0.00 band held); bytefix 2.0 -> 2.0 (band
+1.90). Completion stays inside each tenant's own spread; no `total_ms` claim
+(drift exceeds bands).
 
-- **Calls per completed turn.** Hybrid `sababa` p50 **4.0 -> 3.0** (grounded tool
-  turn; -1.0 vs a 0.50 band); sababa2 **2.0 -> 2.0** (0.00 band held; 2 calls on
-  all 28 completed turns); bytefix **2.0 -> 2.0** (band 1.90).
-- **Completion.** Inside every tenant's own historical spread (bytefix 1-4,
-  sababa2 3-4, sababa 0-2 of 5).
-- **`total_ms`.** No claim: one of four bytefix pairings exceeds its band
-  (+3488.8 vs 2950.8), and the bytefix p50 spans 3977-7466 over eight identical
-  runs.
-- **Tokens.** Fast tenants flat (sababa2 input 20.5-21.1k); the hybrid tip reaches
-  16.2k against 11.9k, as slice 3's tool result re-sends the chunks.
+**Cache proof.** `cached_input_tokens` non-zero in both runs: run 1 (cold) 20.6%
+of input tokens, run 2 (warm) 64.5%, turn 1 cold per tenant. Per tenant 5,376 ->
+27,904; 12,288 -> 60,672; 11,392 -> 20,608. No clock claim: 10/15 turns per run
+hit the 10 s budget.
 
-**Mechanism gains the clock cannot see:** one saved provider call per grounded
-tool turn (8 log firings), and the retrieval overlap (at most the sparse query's
-0.38 ms).
+**Cost model.** `2004617` charges `(input - cached) * prompt + cached *
+input_cache_read + output * completion`, clamped, legacy formula when a price is
+absent. Deepseek $0.003906/$0.002753; ling $0.001692/$0.001563; Google n/a (no
+published price).
 
-**Eval trio.** Trajectory and injection are case-identical to the baseline
-(0.6341; 0.9667 - the re-measured number for slice 5's future gate, not 0.967).
-Generation 0.7475 -> 0.7163 -> 0.7182: a FAIL by 0.001, ruled a provider level
-shift and accepted by the founder 2026-10-19, **not** absorbed as noise; the
-tolerance stays 0.03. The eval reaches neither changed path (0 of 116 cases).
+**Model A/B: no winner.** Twelve to fourteen of fifteen OpenRouter turns per
+model per run were censored; Google completed 10/15 then 2/15 under 429s; ling
+has no tool-correctness row (structured outputs rejected). No ranking is
+supportable.
 
-**Not claimed:** no clock gain inside any band; slices 2 and 4 are structural only;
-slice 3's own timing is corroboration (n=1).
+**Eval trio.** Generation 0.7628 passes (upward window shift, not attributed;
+earlier FAIL closed by ruling). Trajectory 0.6098, repeat 0.6341: the -0.0244 IS
+the same-code spread (one flaky case). Injection 0.967, same single leak.
+`run_gate` has no failing type.
 
-**Merge readiness** (checklist in `13-latency.md`): gates green, tree clean,
-unpushed. Blockers: the 5-7 decisions (5 needs the security ruling), the merge request.
+**Merge readiness.** Backend gates green at `5a4578a` (lint, typecheck, format,
+1435 tests), only pre-existing tree dirt, no reseeds, unpushed. Blockers: slice
+7 (deferred, founder scope) and the merge go.
