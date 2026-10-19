@@ -64,16 +64,21 @@ live in the ticket files, not here.
   against 4 (n=1, 0.50 from one baseline p50 and 1.0 from the other). Run 1's
   grounded knowledge turn was rejected by inspection and redrafted through the
   draft node (the retry edge still works); seven of the eight grounded turns went
-  straight through. On those turns the branch emitted zero citations events, so
-  the customer saw no source chips where the old path emitted one per chunk
-  (flagged for founder review in `design-slice-3.md`). After-eval with the
+  straight through. The citations event narrows to the cited chunks, but the
+  customer surface is unchanged: citation markers are stripped from every
+  approved token run before the flush and persistence
+  (`controller.py:71-102`), so no chip renders on either path. Cited-only is
+  founder-ratified (2026-10-19, no fallback to all retrieved chunks).
+  After-eval with the
   baseline pins: counts 45/41/30, trajectory and injection case-for-case
   identical to the baseline, generation faithfulness 0.7475 -> 0.7163,
   citation_faithfulness 0.3207 -> 0.3692, answer_relevancy 0.7356 -> 0.8025. The
   eval cannot reach the branch (`_tools_for` never offers the retrieval tools on
   the fast path, `agent_node.py:604-605`), and the -0.0311 faithfulness drift is
-  NOT noise - the identical-code repeat spread is +0.0019 - so `run_gate`'s FAIL
-  on that key stays open for the founder
+  NOT noise - the identical-code repeat spread is +0.0019 - so `run_gate` fails
+  that key by 0.001; founder ruling 2026-10-19 accepted it as a provider level
+  shift and closed it, with the 0.03 tolerance unchanged and no reclassification
+  as noise
   ([report-slice-3.md](evidence/latency-2026-10/report-slice-3.md),
   [data/eval-noise-repeat.md](evidence/latency-2026-10/data/eval-noise-repeat.md),
   [design-slice-3.md](evidence/latency-2026-10/design-slice-3.md),
@@ -94,19 +99,19 @@ live in the ticket files, not here.
   (recall@5 1.000, MRR 0.911, nDCG@5 0.934)
   ([report-slice-4.md](evidence/latency-2026-10/report-slice-4.md),
   [data/slice4-bands.md](evidence/latency-2026-10/data/slice4-bands.md)).
-  **The cumulative comparison for slices 1-4 is built and merged-ready pending
-  rulings**: baseline (slice-1 runs) vs stack tip per tenant - hybrid provider
+  **The cumulative comparison for slices 1-4 is built and merged-ready, pending
+  the 5-7 decisions and the merge go**: baseline (slice-1 runs) vs stack tip per
+  tenant - hybrid provider
   calls p50 4.0 -> 3.0, sababa2's 0.00 band held exactly, completion inside every
   tenant's own spread, no `total_ms` claim (provider drift exceeds the bands), the
   hybrid input up to 16.2k from slice 3's chunk re-send - plus the eval trio
-  (trajectory and injection case-identical; generation FAIL by 0.001, an open
-  provider level shift)
+  (trajectory and injection case-identical; generation FAIL by 0.001, accepted as
+  a provider level shift by founder ruling 2026-10-19, tolerance unchanged)
   ([report-cumulative.md](evidence/latency-2026-10/report-cumulative.md),
   [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md)). Slices 5-7
   (prompt caching; paid-tier A/B; streaming with inspection off the critical path)
-  are unstarted and need founder rulings; the merge checklist and its four
-  blockers (citation-chip ruling, the 5-7 decisions, the open `run_gate` FAIL, the
-  merge request) are in
+  are unstarted and need founder rulings; the merge checklist and its two
+  remaining blockers (the 5-7 decisions, the merge request) are in
   [13-latency.md](spec/active/13-latency.md#merge-readiness-slices-1-4).
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
@@ -420,7 +425,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending rulings` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with the gated generation drift open; slice 4 measured at `040a473`, PASS structurally with no clock effect; cumulative comparison built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slices 5-7 need founder rulings, and the merge checklist has four open blockers) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending the 5-7 decisions and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; cumulative comparison built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slices 5-7 need founder rulings, and the merge checklist has two remaining blockers) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

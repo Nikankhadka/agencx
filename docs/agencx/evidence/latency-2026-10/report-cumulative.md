@@ -24,13 +24,12 @@ tool turn (8 log firings), and the retrieval overlap (at most the sparse query's
 
 **Eval trio.** Trajectory and injection are case-identical to the baseline
 (0.6341; 0.9667 - the re-measured number for slice 5's future gate, not 0.967).
-Generation 0.7475 -> 0.7163 -> 0.7182: an open FAIL by 0.001, a provider level
-shift, **not** absorbed as noise - the 0.03 tolerance cannot resolve it. The eval
-reaches neither changed path (0 of 116 cases).
+Generation 0.7475 -> 0.7163 -> 0.7182: a FAIL by 0.001, ruled a provider level
+shift and accepted by the founder 2026-10-19, **not** absorbed as noise; the
+tolerance stays 0.03. The eval reaches neither changed path (0 of 116 cases).
 
 **Not claimed:** no clock gain inside any band; slices 2 and 4 are structural only;
 slice 3's own timing is corroboration (n=1).
 
 **Merge readiness** (checklist in `13-latency.md`): gates green, tree clean,
-unpushed. Blockers: the citation-chip ruling, the 5-7 decisions (5 needs the
-security ruling), the open `run_gate` FAIL, the merge request.
+unpushed. Blockers: the 5-7 decisions (5 needs the security ruling), the merge request.

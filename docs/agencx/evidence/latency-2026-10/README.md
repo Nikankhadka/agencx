@@ -6,7 +6,10 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 |---|---|
 | [report.md](report.md) | Slice 1 report: instrument, noise floor, matrix, A/B verdict |
 | [report-slice-2.md](report-slice-2.md) | Slice 2: the draft output cap, measured no-measurable-effect |
-| [design-slice-3.md](design-slice-3.md) | Slice 3 design (not implemented): the discarded agent call, its gate, the retry options |
+| [design-slice-3.md](design-slice-3.md) | Slice 3 design and post-implementation notes: the discarded agent call, its gate, the retry options; implemented in `cbad1b0`, citations ratified cited-only and internal only (founder ruling 2026-10-19) |
+| [report-slice-3.md](report-slice-3.md) | Slice 3: the skipped draft call, a PASS on the mechanism; both founder rulings recorded (cited-only citations; generation FAIL accepted as provider drift) |
+| [report-slice-4.md](report-slice-4.md) | Slice 4: retrieval overlap, a PASS structurally with no-measurable-effect on the clock |
+| [report-cumulative.md](report-cumulative.md) | Slices 1-4, baseline vs tip: calls, completion, tokens, the eval trio, merge readiness |
 | [data/slice2-rounds.md](data/slice2-rounds.md) | Per-turn agent rounds / tool rounds from the slice-2 logs, with the extraction recipe |
 | `data/slice2-run{1,2}-lines.jsonl` | The filtered log lines behind `slice2-rounds.md` (source logs were `/tmp`) |
 | `data/slice2-run1.json`, `data/slice2-run2.json` | The two slice-2 measurement runs (commit `4f40ef3`) |

@@ -13,7 +13,11 @@ band held). Hybrid sababa has a single completed turn, at 3 calls against 4,
 after-eval shows no attributable regression but is blind to the change
 (`_tools_for` never offers the retrieval tools on the fast path), and its
 generation faithfulness drift (-0.0311) is NOT noise - the identical-code repeat
-spread is +0.0019 - so `run_gate`'s FAIL on that key stays open. Slice 3
+spread is +0.0019 - so `run_gate` fails that key by 0.001. Founder ruling
+2026-10-19: the FAIL is accepted as a provider level shift and closed, the 0.03
+tolerance is unchanged and it is not reclassified as noise; the citations-event
+narrowing is ratified cited-only with no fallback to all retrieved chunks, and it
+is internal only (the customer surface renders no chip on either path). Slice 3
 verdict: **pass on the mechanism**; see
 `docs/agencx/evidence/latency-2026-10/report-slice-3.md` and the corrections in
 `data/eval-noise-repeat.md`. Slice 4 (overlap the retrieval steps) is
@@ -96,8 +100,9 @@ validated and the founder says go.
    a tool turn whose terminal prose is grounded (chunks for `knowledge`,
    selections for `recommendation`) with no money tool skips the draft node -
    retries, money routes, refusals and cards are untouched, and the citations
-   event narrows to the cited chunks (flagged for founder review in
-   `design-slice-3.md`). Structural result: `agent grounded tool answer` fired 8
+   event narrows to the cited chunks (founder-ratified cited-only, 2026-10-19;
+   internal only, see `design-slice-3.md`). Structural result: `agent grounded
+   tool answer` fired 8
    times (4 per run, only on sababa's tool turns) and that line exists only
    inside the new branch; the hybrid tenant's single completed tool turn ran
    `llm_call_count` 3 (2 agent rounds + inspection, no draft) where the same
@@ -107,9 +112,15 @@ validated and the founder says go.
    1.90). Seven of the 8 grounded turns ran straight to the gates and run 1's
    grounded knowledge turn was rejected and redrafted by the draft node - the
    retry edge still works. On those turns the branch emitted ZERO citations
-   events (`cited: 0` on all 8), so the customer saw no source chips where the
-   old draft path emitted one per retrieved chunk; run 1's lone `citations` event
-   belonged to that redraft, not to the new branch.
+   events (`cited: 0` on all 8); run 1's lone `citations` event belonged to that
+   redraft, not to the new branch. The narrowing is internal only: the controller
+   strips citation markers from every approved token run before the flush and
+   before persistence (`app/features/chat/controller.py:71-102`, via
+   `app/shared/text.py:42`), so the customer surface renders no chip on either
+   path - `renderWithCitations` only emits a `CitationChip` for a `[n]` that
+   never survives (`frontend/src/app/[slug]/CustomerChat.tsx:117-124`), and
+   `CitationChip` has no rendering surface (`design/frontend.md:377`). Cited-only
+   is the ratified behaviour, with no fallback to all retrieved chunks.
    Completion rate did not rise and p50s stayed above the revised bands (as
    pre-slice runs in the same window did) - corroboration only. The after-eval
    is case-for-case identical to the baseline on trajectory and injection and
@@ -122,8 +133,10 @@ validated and the founder says go.
    identical-code repeat spread is +0.0019 (`data/eval-noise-repeat.md`), ~17x
    smaller, so it is a between-window level shift - likely provider-side drift,
    unproven with one baseline sample - and the -0.03 tolerance cannot resolve a
-   drift of that size. The FAIL stays open. Slice verdict: **pass on the
-   mechanism**, with the thin sample, the chip change and the open eval FAIL
+   drift of that size. Founder ruling 2026-10-19: accepted as a provider level
+   shift and **closed** by ruling, explicitly not reclassified as noise, with the
+   tolerance unchanged. Slice verdict: **pass on the mechanism**, with the thin
+   sample and both rulings (the accepted FAIL; citations cited-only and internal)
    recorded in `report-slice-3.md`.
 4. Parallelize retrieval (`backend/app/retrieval/service.py:43-60`): sparse
    search needs no embedding, so embed and search can run together; a
@@ -253,24 +266,23 @@ Checked at the tip of `latency/stack` when the cumulative package landed
   repeat `eval_runs` rows are all intact.
 - **Branch:** `latency/stack`, unpushed, no upstream configured.
 
-**Blockers before merge** (all founder-facing):
+**Rulings recorded (2026-10-19).** The two founder-facing items this section
+carried are closed: the slice-3 citations narrowing is ratified as cited-only (no
+fallback to all retrieved chunks) and is internal - the controller strips markers
+on both paths, so no chip renders either way; and `run_gate`'s generation FAIL
+(-0.0311 against a 0.03 tolerance) is accepted as a provider level shift and
+closed by ruling, not reclassified as noise, with the tolerance unchanged. This
+close-out is docs-only: it changes no code and does not invalidate the gates
+recorded above.
 
-1. **Citation-chip ruling.** Slice 3 narrows the citations event to the chunks the
-   prose cited, so a grounded hybrid answer shows fewer chips than the old draft
-   path showed and none when the prose carries no `[n]`. Deliberate, tested, and
-   invisible to the scored eval - it needs an explicit decision
-   (`design-slice-3.md`, consequences).
-2. **Slices 5-7.** Slice 5 (prompt caching, replacing the per-request spotlight
+**Blockers before merge** (founder-facing):
+
+1. **Slices 5-7.** Slice 5 (prompt caching, replacing the per-request spotlight
    nonce) needs the security ruling and gates at no regression against the
    re-measured injection 0.9667. Slice 6 (paid-tier A/B) and slice 7 (streaming
    with inspection off the critical path, which needs a chunked-validation design,
    a security ruling and eval rework) are optional and unstarted.
-3. **The open `run_gate` FAIL.** Generation faithfulness fell 0.0311 against a
-   0.03 tolerance between the baseline and after windows, on a path the eval never
-   exercises; the identical-code repeat spread is 0.0019, so it is a provider
-   level shift the tolerance cannot resolve. The choice is to accept it as such,
-   re-baseline the window, or widen the tolerance.
-4. **The merge request itself.** One merge to `development`, then `staging`, only
+2. **The merge request itself.** One merge to `development`, then `staging`, only
    on the founder's go.
 
 ## Instrument

@@ -131,26 +131,34 @@ Options, with call accounting:
 
 ## Consequences of the selected design (post-implementation)
 
-**1. Citations narrow to the cited chunks - customer-visible. FLAGGED FOR
-FOUNDER REVIEW.** The implemented agent path emits the `citations` event from
-`_cited_chunks(prose, tool_chunks)`, i.e. only the chunks the prose actually
-marked, matching P-3. The draft node's knowledge branch emitted a chip for
-**every** retrieved chunk (`draft_node.py:229-233`). So on a grounded knowledge
-turn the answer now shows FEWER chips than before, and NONE when the prose
-carries no `[n]` marker - where the draft node would have shown all of them.
-This is deliberate (a chip should name what the answer used, not everything the
-model could read) but it is a customer-visible change on the Surface-1 answer.
+**1. Citations narrow to the cited chunks - internal only.** The implemented
+agent path emits the `citations` event from `_cited_chunks(prose, tool_chunks)`,
+i.e. only the chunks the prose actually marked, matching P-3. The draft node's
+knowledge branch emitted a chip for **every** retrieved chunk
+(`draft_node.py:229-233`). So the event narrows to what the answer used, and is
+empty when the prose carries no `[n]` marker. **The customer surface is
+unchanged.** Citation markers are stripped from every approved token run before
+the flush and before persistence (`app/features/chat/controller.py:71-102`, via
+`app.shared.text.strip_citation_markers`, `app/shared/text.py:42`), so the text
+that reaches the browser never carries an `[n]`: `renderWithCitations`
+(`frontend/src/app/[slug]/CustomerChat.tsx:117-124`) only renders a `CitationChip`
+for a surviving `[n]`, and `CitationChip` is retained with no surface rendering it
+(`design/frontend.md:377`). Neither the old draft path nor the new agent path
+showed a chip. **Founder ruling 2026-10-19:** cited-only is ratified, with no
+fallback to all retrieved chunks; the change is internal and needs no
+customer-facing note.
 
 The scored eval **cannot see it**: `citation_faithfulness` is computed from the
 ANSWER TEXT's `[n]` markers against the chunks the eval retrieved
 (`generation_eval.py:244-259`, `:371`) - the SSE chips are never scored, and the
 chunks the eval scores against come from `final_state["retrieved_chunks"]`,
 which is the same list on both paths. The eval is therefore not evidence either
-way for the chip change; the tests are
+way for the citations change; the tests are
 (`test_grounded_prose_citations_carry_only_the_chunks_it_cited` - two chunks,
 one marker, exactly one chip - and
-`test_grounded_prose_without_markers_emits_no_citations`), and the founder should
-ratify it as intended, since nothing in `run_gate` would ever catch it.
+`test_grounded_prose_without_markers_emits_no_citations`), and the founder
+ratified it as intended on 2026-10-19, since nothing in `run_gate` would ever
+catch it.
 
 **2. The money route is closed three ways, not one.** The guard in
 `_grounded_terminal_prose` (`_MONEY_TOOLS`) cannot fire today, and the reason is
