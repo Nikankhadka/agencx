@@ -38,6 +38,16 @@
       "tier": "probe",
       "candidate": false,
       "provider_id_form": "bare id: the Zen /v1/models endpoint returns ids like 'space-bunny-free', never 'opencode/space-bunny-free'; the 'opencode/' prefix is OpenCode's own provider namespace, not part of the API id"
+    },
+    {
+      "label": "google/gemini-3.5-flash-lite",
+      "route": "google",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "api_model": "models/gemini-3.5-flash-lite",
+      "key_env": "LLM_API_KEY",
+      "models_url": "https://generativelanguage.googleapis.com/v1beta/openai/models",
+      "tier": "candidate",
+      "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model"
     }
   ],
   "limits_only_tenants": [

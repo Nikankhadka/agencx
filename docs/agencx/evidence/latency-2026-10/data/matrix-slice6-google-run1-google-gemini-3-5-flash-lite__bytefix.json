@@ -1,0 +1,200 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "bytefix",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T15:48:11Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_TURNS=5",
+  "commit": "8ebf463",
+  "generated_at": "2026-10-19T15:48:11Z",
+  "turns": [
+    {
+      "message": "What repairs do you offer?",
+      "conversation_id": "9f6c9206-bb16-4f69-bf3c-480cb9a018bc",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10022.3,
+        "first_model_token_ms": 7090.2,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 5753,
+        "output_tokens": 31,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "How long do repairs usually take?",
+      "conversation_id": "2dc9592e-ddd8-4897-a330-0c74c2d63762",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 7107.3,
+        "first_model_token_ms": 5560.5,
+        "first_prose_ms": 7103.5,
+        "buffer_hold_ms": 1543.0,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8669,
+        "output_tokens": 196,
+        "cached_input_tokens": 2026,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you fix water-damaged phones?",
+      "conversation_id": "336a0f4e-28a9-43cf-b0ad-c170bf54f5cc",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 8355.2,
+        "first_model_token_ms": 6827.3,
+        "first_prose_ms": 8352.4,
+        "buffer_hold_ms": 1525.1,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8664,
+        "output_tokens": 181,
+        "cached_input_tokens": 2026,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you offer a warranty on your repairs?",
+      "conversation_id": "1e4f3e74-f8c5-46c9-a0d8-4bf3cad8185c",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 8794.4,
+        "first_model_token_ms": 6550.0,
+        "first_prose_ms": 8789.6,
+        "buffer_hold_ms": 2239.6,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8671,
+        "output_tokens": 185,
+        "cached_input_tokens": 2026,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Can you replace a charging port?",
+      "conversation_id": "9e6ed3be-aeec-43eb-a78d-2443d4ba290b",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.4,
+        "first_model_token_ms": 8158.2,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 5754,
+        "output_tokens": 29,
+        "cached_input_tokens": 2026,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ]
+}
