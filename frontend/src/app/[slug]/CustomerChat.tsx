@@ -383,7 +383,7 @@ export function CustomerChat({
     if (!hasQueued(pending)) return;
     const combined = coalesce(pending);
     clearQueued();
-    void startTurn(combined);
+    void startTurn(combined, { preserveComposer: true });
   }
 
   function send(text: string) {
@@ -401,13 +401,19 @@ export function CustomerChat({
     void startTurn(trimmed);
   }
 
-  async function startTurn(text: string) {
+  async function startTurn(text: string, { preserveComposer = false } = {}) {
     setBusy(true);
     // RF-13: the composer clears for normal typing feedback, but the exact
     // payload is held as the in-flight draft so a mid-flight refresh keeps it.
     // The `done` handler clears it, and only while it still matches this turn.
-    setInput("");
-    writeSession(draftKey(slug), text);
+    // A drained burst passes `preserveComposer`: it runs in the old turn's
+    // `finally`, so it cannot trust a captured `input` value, and it must never
+    // touch the composer - whatever is there is a fresh draft the customer
+    // typed while the previous reply was streaming.
+    if (!preserveComposer) {
+      setInput("");
+      writeSession(draftKey(slug), text);
+    }
     setShowStarters(false);
     // The bubble this turn owns, by stable id rather than a render-time index.
     const customerId = nextMessageId();
