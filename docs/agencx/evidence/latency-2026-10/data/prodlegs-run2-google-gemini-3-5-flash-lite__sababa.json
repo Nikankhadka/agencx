@@ -1,0 +1,213 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "sababa",
+  "messages": [
+    "Which dishes are vegan or gluten free?",
+    "What are your most popular items?",
+    "What time do you open?",
+    "Do you have anything without nuts?",
+    "What is the Super Plate?"
+  ],
+  "expected_path": "hybrid",
+  "expected_llm_calls": 4,
+  "provider_models_fetched_at": "2026-10-19T19:48:21Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_TURNS=5 LATENCY_CONVERSATION=reuse LATENCY_LEGS=configured",
+  "conversation_mode": "reuse",
+  "legs_mode": "configured",
+  "commit": "55dfe39addfa2e3695c9b004d67401f025a48c1d",
+  "generated_at": "2026-10-19T19:48:21Z",
+  "turns": [
+    {
+      "message": "Which dishes are vegan or gluten free?",
+      "conversation_id": "007cb7e5-2a33-4ac7-b67b-07399babd10b",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4577.0,
+        "first_model_token_ms": 3040.6,
+        "first_prose_ms": 4572.8,
+        "buffer_hold_ms": 1532.2,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 3,
+        "input_tokens": 14615,
+        "output_tokens": 337,
+        "cached_input_tokens": 1694,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What are your most popular items?",
+      "conversation_id": "007cb7e5-2a33-4ac7-b67b-07399babd10b",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 7460.3,
+        "first_model_token_ms": 3179.0,
+        "first_prose_ms": 7456.0,
+        "buffer_hold_ms": 4277.0,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 9,
+        "input_tokens": 45815,
+        "output_tokens": 640,
+        "cached_input_tokens": 5408,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What time do you open?",
+      "conversation_id": "007cb7e5-2a33-4ac7-b67b-07399babd10b",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 2691.6,
+        "first_model_token_ms": 1517.6,
+        "first_prose_ms": 2689.7,
+        "buffer_hold_ms": 1172.1,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 2,
+        "input_tokens": 4003,
+        "output_tokens": 176,
+        "cached_input_tokens": 0,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "conversation"
+      }
+    },
+    {
+      "message": "Do you have anything without nuts?",
+      "conversation_id": "007cb7e5-2a33-4ac7-b67b-07399babd10b",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4634.1,
+        "first_model_token_ms": 2891.1,
+        "first_prose_ms": 4630.7,
+        "buffer_hold_ms": 1739.6,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 3,
+        "input_tokens": 15136,
+        "output_tokens": 262,
+        "cached_input_tokens": 0,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What is the Super Plate?",
+      "conversation_id": "007cb7e5-2a33-4ac7-b67b-07399babd10b",
+      "usage_models": [
+        "openai/gpt-oss-120b"
+      ],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.8,
+        "first_model_token_ms": null,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "hybrid",
+        "llm_call_count": 1,
+        "input_tokens": 2929,
+        "output_tokens": 117,
+        "cached_input_tokens": 0,
+        "leg": "fallback",
+        "failover_engaged": true,
+        "route": null
+      }
+    }
+  ],
+  "legs_config": {
+    "fallback": {
+      "model": "openai/gpt-oss-120b",
+      "base_url": "https://api.groq.com/openai/v1"
+    },
+    "failover": {
+      "model": "",
+      "base_url": ""
+    }
+  }
+}

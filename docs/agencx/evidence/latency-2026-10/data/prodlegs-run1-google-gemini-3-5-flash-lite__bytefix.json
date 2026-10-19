@@ -1,0 +1,212 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "bytefix",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T19:45:45Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_TURNS=5 LATENCY_CONVERSATION=reuse LATENCY_LEGS=configured",
+  "conversation_mode": "reuse",
+  "legs_mode": "configured",
+  "commit": "55dfe39addfa2e3695c9b004d67401f025a48c1d",
+  "generated_at": "2026-10-19T19:45:45Z",
+  "turns": [
+    {
+      "message": "What repairs do you offer?",
+      "conversation_id": "55f695ad-5ffc-4241-bcbe-51e79d8bfed2",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4072.5,
+        "first_model_token_ms": 2026.9,
+        "first_prose_ms": 4069.1,
+        "buffer_hold_ms": 2042.2,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8666,
+        "output_tokens": 200,
+        "cached_input_tokens": 2026,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "How long do repairs usually take?",
+      "conversation_id": "55f695ad-5ffc-4241-bcbe-51e79d8bfed2",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3765.3,
+        "first_model_token_ms": 1612.9,
+        "first_prose_ms": 3763.2,
+        "buffer_hold_ms": 2150.3,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8816,
+        "output_tokens": 215,
+        "cached_input_tokens": 2024,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you fix water-damaged phones?",
+      "conversation_id": "55f695ad-5ffc-4241-bcbe-51e79d8bfed2",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 2995.8,
+        "first_model_token_ms": 1361.2,
+        "first_prose_ms": 2992.9,
+        "buffer_hold_ms": 1631.7,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8853,
+        "output_tokens": 183,
+        "cached_input_tokens": 2022,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you offer a warranty on your repairs?",
+      "conversation_id": "55f695ad-5ffc-4241-bcbe-51e79d8bfed2",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3122.5,
+        "first_model_token_ms": 1380.0,
+        "first_prose_ms": 3120.4,
+        "buffer_hold_ms": 1740.4,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8832,
+        "output_tokens": 170,
+        "cached_input_tokens": 2019,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Can you replace a charging port?",
+      "conversation_id": "55f695ad-5ffc-4241-bcbe-51e79d8bfed2",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 2784.7,
+        "first_model_token_ms": 1310.1,
+        "first_prose_ms": 2781.3,
+        "buffer_hold_ms": 1471.2,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8866,
+        "output_tokens": 183,
+        "cached_input_tokens": 2016,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ],
+  "legs_config": {
+    "fallback": {
+      "model": "openai/gpt-oss-120b",
+      "base_url": "https://api.groq.com/openai/v1"
+    },
+    "failover": {
+      "model": "",
+      "base_url": ""
+    }
+  }
+}

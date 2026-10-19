@@ -1,0 +1,211 @@
+{
+  "model": {
+    "label": "google/gemini-3.5-flash-lite",
+    "route": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_model": "models/gemini-3.5-flash-lite",
+    "tier": "candidate"
+  },
+  "tenant": "bytefix",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T19:47:27Z",
+  "provider_model_present": true,
+  "provider_model_count": 63,
+  "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model",
+  "provider_pricing": null,
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=google/gemini-3.5-flash-lite LATENCY_TENANTS=all LATENCY_TURNS=5 LATENCY_CONVERSATION=reuse LATENCY_LEGS=configured",
+  "conversation_mode": "reuse",
+  "legs_mode": "configured",
+  "commit": "55dfe39addfa2e3695c9b004d67401f025a48c1d",
+  "generated_at": "2026-10-19T19:47:27Z",
+  "turns": [
+    {
+      "message": "What repairs do you offer?",
+      "conversation_id": "772532b5-6f07-4717-a0b2-dad46b38288d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3947.2,
+        "first_model_token_ms": 2482.1,
+        "first_prose_ms": 3943.8,
+        "buffer_hold_ms": 1461.7,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8704,
+        "output_tokens": 221,
+        "cached_input_tokens": 2026,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "How long do repairs usually take?",
+      "conversation_id": "772532b5-6f07-4717-a0b2-dad46b38288d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3533.7,
+        "first_model_token_ms": 1905.2,
+        "first_prose_ms": 3530.1,
+        "buffer_hold_ms": 1624.9,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8862,
+        "output_tokens": 199,
+        "cached_input_tokens": 2024,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you fix water-damaged phones?",
+      "conversation_id": "772532b5-6f07-4717-a0b2-dad46b38288d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3362.2,
+        "first_model_token_ms": 1517.9,
+        "first_prose_ms": 3359.7,
+        "buffer_hold_ms": 1841.8,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8913,
+        "output_tokens": 199,
+        "cached_input_tokens": 2022,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you offer a warranty on your repairs?",
+      "conversation_id": "772532b5-6f07-4717-a0b2-dad46b38288d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3171.6,
+        "first_model_token_ms": 1427.1,
+        "first_prose_ms": 3168.7,
+        "buffer_hold_ms": 1741.6,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8909,
+        "output_tokens": 211,
+        "cached_input_tokens": 2019,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Can you replace a charging port?",
+      "conversation_id": "772532b5-6f07-4717-a0b2-dad46b38288d",
+      "usage_models": [
+        "models/gemini-3.5-flash-lite"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 3357.2,
+        "first_model_token_ms": 1615.8,
+        "first_prose_ms": 3354.6,
+        "buffer_hold_ms": 1738.8,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 8974,
+        "output_tokens": 176,
+        "cached_input_tokens": 2017,
+        "leg": "primary",
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ],
+  "legs_config": {
+    "fallback": {
+      "model": "openai/gpt-oss-120b",
+      "base_url": "https://api.groq.com/openai/v1"
+    },
+    "failover": {
+      "model": "",
+      "base_url": ""
+    }
+  }
+}
