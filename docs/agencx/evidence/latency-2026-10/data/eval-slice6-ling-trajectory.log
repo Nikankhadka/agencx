@@ -1,0 +1,80 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-327a78c372ca Creating 
+ Container agencx-backend-run-327a78c372ca Created 
+[1/41] quoting-single-rule-01
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/app/evals/trajectory_eval.py", line 654, in <module>
+    main()
+  File "/app/evals/trajectory_eval.py", line 650, in main
+    raise SystemExit(asyncio.run(main_async(gate=args.gate, verbose=args.verbose)))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 609, in main_async
+    metrics, scores = await run_eval(
+                      ^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 500, in run_eval
+    trajectory = await _with_rate_limit_retry(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 454, in _with_rate_limit_retry
+    return await coro_factory()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 401, in run_case
+    async for event in graph.astream(initial_state, context=context, stream_mode="updates"):
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/main.py", line 3440, in astream
+    async for _ in runner.atick(
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/_runner.py", line 396, in atick
+    await arun_with_retry(
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/_retry.py", line 744, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 733, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 501, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/agents/tracing.py", line 64, in wrapped
+    result = await node(state)
+             ^^^^^^^^^^^^^^^^^
+  File "/app/app/agents/inspection.py", line 279, in run
+    llm_verdicts = await ctx.provider.extract(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 611, in extract
+    return await _with_retry(_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 187, in _with_retry
+    return await factory()
+           ^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 555, in _call
+    completion = await self._client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/openai/resources/chat/completions/completions.py", line 2877, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1716, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.BadRequestError: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{"code":400, "reason":"INVALID_REQUEST_BODY", "message":"model features structured outputs not support", "metadata":{}}', 'provider_name': 'Novita', 'is_byok': False, 'previous_errors': [{'code': 429, 'message': 'Provider returned error', 'provider_name': 'DeepInfra', 'raw': 'inclusionai/ling-3.0-flash is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations'}]}}, 'user_id': 'user_3Dcio3rSKq1H1OmxdiCnYFyYyiV'}
+During task with name 'inspection' and id 'dfd710f6-d483-98a1-dd1d-2897dccd394e'
+

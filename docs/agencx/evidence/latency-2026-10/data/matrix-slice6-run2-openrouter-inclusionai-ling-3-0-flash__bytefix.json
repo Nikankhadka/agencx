@@ -1,0 +1,208 @@
+{
+  "model": {
+    "label": "openrouter/inclusionai-ling-3.0-flash",
+    "route": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_model": "inclusionai/ling-3.0-flash",
+    "tier": "candidate"
+  },
+  "tenant": "bytefix",
+  "messages": [
+    "What repairs do you offer?",
+    "How long do repairs usually take?",
+    "Do you fix water-damaged phones?",
+    "Do you offer a warranty on your repairs?",
+    "Can you replace a charging port?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T15:36:26Z",
+  "provider_model_present": true,
+  "provider_model_count": 469,
+  "provider_id_form": null,
+  "provider_pricing": {
+    "prompt": "0.000000021",
+    "completion": "0.000000063",
+    "input_cache_read": "0.0000000042"
+  },
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=all LATENCY_TENANTS=all LATENCY_TURNS=5",
+  "commit": "2004617",
+  "generated_at": "2026-10-19T15:36:26Z",
+  "turns": [
+    {
+      "message": "What repairs do you offer?",
+      "conversation_id": "a49d7d79-5118-4d75-b8bc-b35d7c0b96c2",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.0,
+        "first_model_token_ms": 3157.2,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 6101,
+        "output_tokens": 359,
+        "cached_input_tokens": 6080,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "How long do repairs usually take?",
+      "conversation_id": "b2a2018b-5313-435a-9c14-5a84800b21d6",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "citations",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10009.3,
+        "first_model_token_ms": 1514.9,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 6102,
+        "output_tokens": 129,
+        "cached_input_tokens": 6080,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you fix water-damaged phones?",
+      "conversation_id": "f9d1fbd8-9cac-4e28-bc8d-1798879dba52",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10007.5,
+        "first_model_token_ms": 1686.3,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 6103,
+        "output_tokens": 136,
+        "cached_input_tokens": 6080,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you offer a warranty on your repairs?",
+      "conversation_id": "82f39eb0-1f33-4b13-81c3-203413420e28",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10007.5,
+        "first_model_token_ms": 1435.9,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 6104,
+        "output_tokens": 136,
+        "cached_input_tokens": 6080,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Can you replace a charging port?",
+      "conversation_id": "e127b816-cdfd-453e-a047-f628d54a6a50",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10007.6,
+        "first_model_token_ms": 1833.4,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 6102,
+        "output_tokens": 141,
+        "cached_input_tokens": 6080,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ]
+}

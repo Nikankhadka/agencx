@@ -1,0 +1,207 @@
+{
+  "model": {
+    "label": "openrouter/inclusionai-ling-3.0-flash",
+    "route": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_model": "inclusionai/ling-3.0-flash",
+    "tier": "candidate"
+  },
+  "tenant": "sababa2",
+  "messages": [
+    "Which dishes are vegan or gluten free?",
+    "What are your most popular items?",
+    "What time do you open?",
+    "Do you have anything without nuts?",
+    "What is the Super Plate?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-19T15:37:16Z",
+  "provider_model_present": true,
+  "provider_model_count": 469,
+  "provider_id_form": null,
+  "provider_pricing": {
+    "prompt": "0.000000021",
+    "completion": "0.000000063",
+    "input_cache_read": "0.0000000042"
+  },
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=all LATENCY_TENANTS=all LATENCY_TURNS=5",
+  "commit": "2004617",
+  "generated_at": "2026-10-19T15:37:16Z",
+  "turns": [
+    {
+      "message": "Which dishes are vegan or gluten free?",
+      "conversation_id": "19ea8d27-ab84-47be-8cf4-81c06e6b93fc",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10005.3,
+        "first_model_token_ms": 1542.3,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 13311,
+        "output_tokens": 279,
+        "cached_input_tokens": 13248,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What are your most popular items?",
+      "conversation_id": "c76a16a4-2b57-4a88-948f-96d935dc4bcc",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.9,
+        "first_model_token_ms": 2066.3,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 13310,
+        "output_tokens": 198,
+        "cached_input_tokens": 13248,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What time do you open?",
+      "conversation_id": "53ab15df-c03e-4ad9-adf1-66263a9e74e8",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10005.3,
+        "first_model_token_ms": 1540.9,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 13309,
+        "output_tokens": 59,
+        "cached_input_tokens": 13248,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "Do you have anything without nuts?",
+      "conversation_id": "c67637c1-2a24-4bb9-b9ac-4c6086a07e56",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.4,
+        "first_model_token_ms": 1889.4,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 13310,
+        "output_tokens": 359,
+        "cached_input_tokens": 13248,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What is the Super Plate?",
+      "conversation_id": "d1bf433a-ad10-4585-a9aa-c006254ed274",
+      "usage_models": [
+        "inclusionai/ling-3.0-flash"
+      ],
+      "model_match": true,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10006.9,
+        "first_model_token_ms": 2026.2,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 13309,
+        "output_tokens": 206,
+        "cached_input_tokens": 13248,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ]
+}

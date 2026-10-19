@@ -1,0 +1,82 @@
+ Container agencx-db-1 Running 
+ Container agencx-mailpit-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-2215b28e8088 Creating 
+ Container agencx-backend-run-2215b28e8088 Created 
+[1/41] quoting-single-rule-01
+[2/41] quoting-multiline-01
+[3/41] quoting-quantity-item-01
+[4/41] quoting-budget-within-01
+[5/41] quoting-rush-addon-01
+[6/41] quoting-vague-clarify-01
+[7/41] quoting-water-damage-01
+[8/41] rec-protector-01
+llm produced malformed structured output; resampling (attempt 1/3)
+llm returned an unusable response body; retrying (attempt 2/3)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/app/evals/trajectory_eval.py", line 654, in <module>
+    main()
+  File "/app/evals/trajectory_eval.py", line 650, in main
+    raise SystemExit(asyncio.run(main_async(gate=args.gate, verbose=args.verbose)))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 609, in main_async
+    metrics, scores = await run_eval(
+                      ^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 500, in run_eval
+    trajectory = await _with_rate_limit_retry(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 454, in _with_rate_limit_retry
+    return await coro_factory()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/app/evals/trajectory_eval.py", line 401, in run_case
+    async for event in graph.astream(initial_state, context=context, stream_mode="updates"):
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/main.py", line 3440, in astream
+    async for _ in runner.atick(
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/_runner.py", line 396, in atick
+    await arun_with_retry(
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/pregel/_retry.py", line 744, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 733, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 501, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/agents/tracing.py", line 64, in wrapped
+    result = await node(state)
+             ^^^^^^^^^^^^^^^^^
+  File "/app/app/agents/inspection.py", line 279, in run
+    llm_verdicts = await ctx.provider.extract(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 611, in extract
+    return await _with_retry(_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 187, in _with_retry
+    return await factory()
+           ^^^^^^^^^^^^^^^
+  File "/app/app/llm/openai_base.py", line 586, in _call
+    _require_choices(completion)
+  File "/app/app/llm/openai_base.py", line 72, in _require_choices
+    raise UpstreamResponseError(
+app.llm.openai_base.UpstreamResponseError: provider returned a response with no choices (likely an upstream error body forwarded under a 200)
+During task with name 'inspection' and id '66a6a502-9779-a490-d056-98dfb640e4da'
+

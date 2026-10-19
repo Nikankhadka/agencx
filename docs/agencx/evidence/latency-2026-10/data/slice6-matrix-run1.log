@@ -1,0 +1,19 @@
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-fd19c2c830e0 Creating 
+ Container agencx-backend-run-fd19c2c830e0 Created 
+openrouter/deepseek-v4.1-flash bytefix: completed 1/5 p50=1999.0 p95=1999.0 calls=[1] cache=22272 cost=$0.000305 match=True
+openrouter/deepseek-v4.1-flash sababa: completed 0/5 p50=- p95=- calls=[2, 3, 4] cache=14336 cost=$0.001534 match=True
+openrouter/deepseek-v4.1-flash sababa2: completed 1/5 p50=4557.3 p95=4557.3 calls=[1, 2] cache=12032 cost=$0.002067 match=True
+openrouter/inclusionai-ling-3.0-flash bytefix: completed 0/5 p50=- p95=- calls=[1] cache=24320 cost=$0.000281 match=True
+openrouter/inclusionai-ling-3.0-flash sababa: completed 1/5 p50=1113.9 p95=1113.9 calls=[1, 2, 3] cache=26112 cost=$0.000825 match=True
+openrouter/inclusionai-ling-3.0-flash sababa2: completed 0/5 p50=- p95=- calls=[1] cache=52992 cost=$0.000586 match=True
+wrote /evidence/_scratch-slice6-run1/noise-floor.md and /evidence/_scratch-slice6-run1/matrix.md

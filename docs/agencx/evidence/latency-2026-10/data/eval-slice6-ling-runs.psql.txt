@@ -1,0 +1,40 @@
+# Slice 6 ling trajectory eval - eval_runs state, before and after
+#
+# Command (pinned single leg): docker compose run --rm -T \
+#   -e LLM_PROVIDER=openai_compat -e LLM_MODEL=inclusionai/ling-3.0-flash \
+#   -e LLM_BASE_URL=https://openrouter.ai/api/v1 \
+#   -e LLM_FALLBACK_MODEL= -e LLM_FALLBACK_API_KEY= \
+#   -e LLM_FAILOVER_MODEL= -e LLM_FAILOVER_API_KEY= \
+#   backend sh -c 'LLM_API_KEY="$OPENROUTER_API_KEY" python -m evals.trajectory_eval'
+#
+# BEFORE the ling run (captured 2026-10-20):
+#   docker compose exec -T db psql -U postgres -d wren -c '\pset pager off' \
+#     -c "select e.id, t.slug, e.run_type, e.created_at from eval_runs e join tenants t on t.id=e.tenant_id where e.run_type='trajectory' order by e.created_at desc limit 3;"
+#
+                  id                  |  slug   |  run_type  |          created_at           
+--------------------------------------+---------+------------+-------------------------------
+ 302b9a94-66f0-4066-aa72-8eadf163a1ed | bytefix | trajectory | 2026-10-19 15:09:49.751264+00
+ 6219ba04-11e7-43d6-909e-bc466cf77409 | bytefix | trajectory | 2026-10-19 14:58:24.725389+00
+ 2e4371b8-21e0-4e3e-9bd0-811a1c908d5b | bytefix | trajectory | 2026-10-16 15:22:15.602168+00
+#
+# AFTER the two ling attempts, the same query (no row was written by either):
+#
+Pager usage is off.
+                  id                  |  slug   |  run_type  |          created_at           
+--------------------------------------+---------+------------+-------------------------------
+ 302b9a94-66f0-4066-aa72-8eadf163a1ed | bytefix | trajectory | 2026-10-19 15:09:49.751264+00
+ 6219ba04-11e7-43d6-909e-bc466cf77409 | bytefix | trajectory | 2026-10-19 14:58:24.725389+00
+ 2e4371b8-21e0-4e3e-9bd0-811a1c908d5b | bytefix | trajectory | 2026-10-16 15:22:15.602168+00
+(3 rows)
+
+#
+# Both attempts failed before any aggregate row:
+#   attempt 1 (eval-slice6-ling-trajectory.log): aborted at case 1/41,
+#     openai.BadRequestError 400 from provider Novita:
+#     'model features structured outputs not support' (DeepInfra was 429'd).
+#   attempt 2 (eval-slice6-ling-trajectory-retry.log): aborted at case 8/41,
+#     UpstreamResponseError: provider returned a response with no choices
+#     (likely an upstream error body forwarded under a 200).
+#
+# No trajectory row was inserted, so the slice-5 pairing (302b9a94 repeat,
+# 6219ba04 after) is untouched and no DELETE was needed.
