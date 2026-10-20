@@ -44,6 +44,7 @@ Evidence for the latency plan (`docs/agencx/spec/active/13-latency.md`).
 | [data/gates-slice6.log](data/gates-slice6.log) | The four gate tails at `5a4578a`, the tenant ids (no reseeds) and the newest three `eval_runs` rows per type |
 | [data/multiturn.md](data/multiturn.md) | Multi-turn measurement at `3fb604a`: 30 reused-conversation turns, per-turn numbers, cumulative wall time and cache share |
 | [report-multiturn.md](report-multiturn.md) | The multi-turn report: serialized UI, no queue, 4/30 completed and 26 budget handoffs, and why no lever has a measured winner |
+| [report-model-choice.md](report-model-choice.md) | Model choice, two windows: Gemini free primary, paid DeepSeek fallback, free Groq and gpt-oss-20b not viable; per-turn data in `data/modelcmp2.md` |
 | `data/multiturn-run{1,2}-openrouter-deepseek-v4-1-flash__*.json` | The six per-(run,tenant) reused-conversation artifacts, plus `data/multiturn-run{1,2}.log` |
 | [data/tenant-limits.md](data/tenant-limits.md) | The demo tenants' daily limits and the northgate ABN/GST gap |
 | `data/make-check.log` | The `make lint && make typecheck && make test` output |

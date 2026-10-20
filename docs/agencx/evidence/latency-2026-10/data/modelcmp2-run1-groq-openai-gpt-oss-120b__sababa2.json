@@ -1,0 +1,131 @@
+{
+  "model": {
+    "label": "groq/openai-gpt-oss-120b",
+    "route": "groq",
+    "base_url": "https://api.groq.com/openai/v1",
+    "api_model": "openai/gpt-oss-120b",
+    "tier": "candidate"
+  },
+  "tenant": "sababa2",
+  "messages": [
+    "Which dishes are vegan or gluten free?",
+    "What are your most popular items?",
+    "What time do you open?",
+    "Do you have anything without nuts?",
+    "What is the Super Plate?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-20T10:45:57Z",
+  "provider_model_present": true,
+  "provider_model_count": 11,
+  "provider_id_form": "the Groq catalogue returns the bare 'openai/gpt-oss-120b' (11 ids in this window); unlike the brief's expectation it DOES publish pricing (prompt, completion, input_cache_read), which the runner records per artifact",
+  "provider_pricing": {
+    "prompt": "0.00000015",
+    "completion": "0.0000006",
+    "image": "0",
+    "request": "0",
+    "input_cache_read": "0.000000075"
+  },
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4-flash-latest,google/gemini-3.5-flash-lite,groq/openai-gpt-oss-120b,openrouter/openai-gpt-oss-20b LATENCY_TENANTS=all LATENCY_TURNS=3 LATENCY_CONVERSATION=reuse",
+  "conversation_mode": "reuse",
+  "legs_mode": "single",
+  "commit": "9ea418c",
+  "generated_at": "2026-10-20T10:45:57Z",
+  "turns": [
+    {
+      "message": "Which dishes are vegan or gluten free?",
+      "conversation_id": "e5f80b5b-2b59-4ce4-b23c-0e7f70502b36",
+      "usage_models": [],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 188.3,
+        "first_model_token_ms": null,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": null
+      }
+    },
+    {
+      "message": "What are your most popular items?",
+      "conversation_id": "e5f80b5b-2b59-4ce4-b23c-0e7f70502b36",
+      "usage_models": [],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 137.6,
+        "first_model_token_ms": null,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": null
+      }
+    },
+    {
+      "message": "What time do you open?",
+      "conversation_id": "e5f80b5b-2b59-4ce4-b23c-0e7f70502b36",
+      "usage_models": [],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 138.1,
+        "first_model_token_ms": null,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "model": {
+    "label": "openrouter/deepseek-v4-flash-latest",
+    "route": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_model": "~deepseek/deepseek-v4-flash-latest",
+    "tier": "candidate"
+  },
+  "tenant": "sababa2",
+  "messages": [
+    "Which dishes are vegan or gluten free?",
+    "What are your most popular items?",
+    "What time do you open?",
+    "Do you have anything without nuts?",
+    "What is the Super Plate?"
+  ],
+  "expected_path": "fast",
+  "expected_llm_calls": 2,
+  "provider_models_fetched_at": "2026-10-20T10:44:36Z",
+  "provider_model_present": true,
+  "provider_model_count": 470,
+  "provider_id_form": "the leading tilde is part of the live OpenRouter catalogue id (the bare 'deepseek/deepseek-v4-flash-latest' does not exist); the endpoint serves the canonical 'deepseek/deepseek-v4-flash-0731', so usage_models and model_match compare against the alias form and read false even when the pinned alias is what answered",
+  "provider_pricing": {
+    "prompt": "0.0000000049",
+    "completion": "0.00000045",
+    "input_cache_read": "0.0000000049"
+  },
+  "embedder": {
+    "provider": "local",
+    "model": "BAAI/bge-small-en-v1.5"
+  },
+  "command": "make latency LATENCY_MODELS=openrouter/deepseek-v4-flash-latest,google/gemini-3.5-flash-lite,groq/openai-gpt-oss-120b,openrouter/openai-gpt-oss-20b LATENCY_TENANTS=all LATENCY_TURNS=3 LATENCY_CONVERSATION=reuse",
+  "conversation_mode": "reuse",
+  "legs_mode": "single",
+  "commit": "9ea418c",
+  "generated_at": "2026-10-20T10:44:36Z",
+  "turns": [
+    {
+      "message": "Which dishes are vegan or gluten free?",
+      "conversation_id": "8c7186f5-4d63-4d3a-bd06-1b0df5a29fa1",
+      "usage_models": [
+        "deepseek/deepseek-v4-flash-0731"
+      ],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "refusal",
+        "handoff",
+        "done"
+      ],
+      "record": {
+        "total_ms": 10007.4,
+        "first_model_token_ms": 3135.5,
+        "first_prose_ms": null,
+        "buffer_hold_ms": null,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 1,
+        "input_tokens": 12185,
+        "output_tokens": 509,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What are your most popular items?",
+      "conversation_id": "8c7186f5-4d63-4d3a-bd06-1b0df5a29fa1",
+      "usage_models": [
+        "deepseek/deepseek-v4-flash-0731"
+      ],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4979.2,
+        "first_model_token_ms": 1221.1,
+        "first_prose_ms": 4976.3,
+        "buffer_hold_ms": 3755.2,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 21381,
+        "output_tokens": 479,
+        "cached_input_tokens": 11776,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    },
+    {
+      "message": "What time do you open?",
+      "conversation_id": "8c7186f5-4d63-4d3a-bd06-1b0df5a29fa1",
+      "usage_models": [
+        "deepseek/deepseek-v4-flash-0731"
+      ],
+      "model_match": false,
+      "event_types": [
+        "conversation",
+        "progress",
+        "progress",
+        "progress",
+        "token",
+        "done"
+      ],
+      "record": {
+        "total_ms": 4611.9,
+        "first_model_token_ms": 1197.1,
+        "first_prose_ms": 4610.1,
+        "buffer_hold_ms": 3413.0,
+        "embed_ms": null,
+        "search_ms": null,
+        "rerank_ms": null,
+        "path": "fast",
+        "llm_call_count": 2,
+        "input_tokens": 21424,
+        "output_tokens": 461,
+        "cached_input_tokens": 0,
+        "leg": null,
+        "failover_engaged": false,
+        "route": "knowledge"
+      }
+    }
+  ]
+}

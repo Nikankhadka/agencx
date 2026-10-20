@@ -68,6 +68,16 @@
       "models_url": "https://api.groq.com/openai/v1/models",
       "tier": "candidate",
       "provider_id_form": "the Groq catalogue returns the bare 'openai/gpt-oss-120b' (11 ids in this window); unlike the brief's expectation it DOES publish pricing (prompt, completion, input_cache_read), which the runner records per artifact"
+    },
+    {
+      "label": "openrouter/openai-gpt-oss-20b",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "openai/gpt-oss-20b",
+      "key_env": "OPENROUTER_API_KEY",
+      "models_url": "https://openrouter.ai/api/v1/models",
+      "tier": "candidate",
+      "provider_id_form": "the live OpenRouter catalogue carries the bare 'openai/gpt-oss-20b' (no tilde), 131,072 context, tools and structured_outputs advertised; pricing prompt 0.000000018, completion 0.00000009, input_cache_read 0.000000009"
     }
   ],
   "limits_only_tenants": [
