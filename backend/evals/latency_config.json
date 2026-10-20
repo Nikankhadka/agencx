@@ -48,6 +48,26 @@
       "models_url": "https://generativelanguage.googleapis.com/v1beta/openai/models",
       "tier": "candidate",
       "provider_id_form": "the OpenAI-compatible catalogue returns 'models/gemini-3.5-flash-lite' (with the models/ prefix) and no pricing fields; the chat endpoint accepts both the bare and prefixed id and echoes the requested form, so api_model carries the catalogue id for _find_model"
+    },
+    {
+      "label": "openrouter/deepseek-v4-flash-latest",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "~deepseek/deepseek-v4-flash-latest",
+      "key_env": "OPENROUTER_API_KEY",
+      "models_url": "https://openrouter.ai/api/v1/models",
+      "tier": "candidate",
+      "provider_id_form": "the leading tilde is part of the live OpenRouter catalogue id (the bare 'deepseek/deepseek-v4-flash-latest' does not exist); the endpoint serves the canonical 'deepseek/deepseek-v4-flash-0731', so usage_models and model_match compare against the alias form and read false even when the pinned alias is what answered"
+    },
+    {
+      "label": "groq/openai-gpt-oss-120b",
+      "route": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_model": "openai/gpt-oss-120b",
+      "key_env": "LLM_FALLBACK_API_KEY",
+      "models_url": "https://api.groq.com/openai/v1/models",
+      "tier": "candidate",
+      "provider_id_form": "the Groq catalogue returns the bare 'openai/gpt-oss-120b' (11 ids in this window); unlike the brief's expectation it DOES publish pricing (prompt, completion, input_cache_read), which the runner records per artifact"
     }
   ],
   "limits_only_tenants": [

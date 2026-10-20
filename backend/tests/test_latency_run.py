@@ -106,6 +106,27 @@ def test_single_legs_blanks_the_configured_chain(monkeypatch: pytest.MonkeyPatch
     assert get_settings().llm_fallback_model == ""
 
 
+def test_single_legs_keep_a_leg_key_for_a_later_pinned_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row may authenticate with a leg's key (the Groq row uses LLM_FALLBACK_API_KEY).
+
+    ``single`` still blanks the fallback MODEL, so no race is configured; pinning
+    an earlier row must not blank the key a later row reads.
+    """
+    import os
+
+    monkeypatch.setenv("TEST_KEY", "test-key")
+    monkeypatch.setenv("LLM_FALLBACK_API_KEY", "groq-key")
+    monkeypatch.setenv("LLM_FALLBACK_MODEL", "fallback-model")
+
+    latency_run._pin_model(_MODEL, legs="single")
+    latency_run._pin_model({**_MODEL, "key_env": "LLM_FALLBACK_API_KEY"}, legs="single")
+
+    assert os.environ["LLM_FALLBACK_API_KEY"] == "groq-key"
+    assert os.environ["LLM_FALLBACK_MODEL"] == ""
+
+
 def test_configured_legs_keep_the_env_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configured mode leaves the fallback/failover legs the container's .env set."""
     import os

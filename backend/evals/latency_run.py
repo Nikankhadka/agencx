@@ -54,12 +54,14 @@ DEFAULT_OUT = Path("/evidence/data")
 PROVIDER_HTTP_TIMEOUT_S = 30.0
 TURN_TIMEOUT_S = 180.0
 
-# Emptied on every pin so exactly one leg is configured for the run.
+# Emptied on every pin so exactly one leg is configured for the run. Only the
+# MODEL names are blanked: a candidate row may authenticate with a leg's key
+# (the Groq row reads LLM_FALLBACK_API_KEY), and a blank model is what removes
+# the leg from the chain. Blanking keys would make such a row unreadable after
+# an earlier row pinned.
 _DISABLED_LEG_VARS = (
     "LLM_FALLBACK_MODEL",
-    "LLM_FALLBACK_API_KEY",
     "LLM_FAILOVER_MODEL",
-    "LLM_FAILOVER_API_KEY",
 )
 
 
