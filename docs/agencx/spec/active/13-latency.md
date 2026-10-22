@@ -1,6 +1,6 @@
 # 13 - Latency instrument
 
-**Status:** In progress - slice 1 landed (instrument, noise floor, model
+**Status:** Active - in progress - slices 1-6 and the coalesced-burst follow-on merged 2026-10-23; slice 7 deferred. Slice 1 landed (instrument, noise floor, model
 matrix). Slice 2 (draft output cap, 4096) measured: mechanism inert - the cap
 never bound, so no latency effect is attributable. Slice 3 (drop the discarded
 agent call) is **implemented, measured and through its after-eval**: the code
@@ -53,8 +53,29 @@ under 429s. No latency or correctness ranking is supportable; see
 `data/slice6-matrix.md` and `data/slice6-google.md`. Slice 7 (streaming)
 remains deferred and needs the founder to reopen scope.
 **Phase 1 area:** Performance (post-launch).
-**Branch:** `latency/stack` (all slices stack here; one merge to
-`development` at the end, on the founder's go).
+**Branch:** merged - slices 1-6 at `d544ce5`, evidence tip `fcc7efa`; `latency/stack` deleted after the push.
+
+## Acceptance and merge record (2026-10-23)
+
+**Acceptance bar:** the founder required a result at least 10% better than before.
+The bar is met on the shipped burst workflow: one coalesced turn completes in
+3.4-5.7 s where three serial turns take 10.8-21.6 s, a 68-77% reduction, and all
+six measured turns land inside the 10 s budget (`report-coalesce.md`). Hybrid
+provider calls fall p50 4.0 -> 3.0 (25%). There is no >=10% single-turn clock
+claim: `total_ms` is noise-dominated, with one bytefix cell over its band
+(+3488.8 ms against 2950.8) and the same-command p50 spanning 3977-7466 ms across
+eight runs. The stack is accepted on the burst result plus the call-count
+reduction, not on single-turn latency.
+
+**Gates at the merged tip (`fcc7efa`):** `make ci` exit 0. eslint and
+`check:tokens` clean, ruff and 3 import contracts green, `tsc` clean, mypy 251
+files, vitest 43 files / 373 tests, pytest 1514 passed, `format-check` 253 files,
+frontend build success. Working tree clean. No migration.
+
+**Merge:** `development` was fast-forwarded to the tip and pushed, then
+`staging` was fast-forwarded to `development` and pushed. `origin/development`
+and `origin/staging` match the pushed tip. `latency/stack` was deleted after the
+push. Slice 7 remains deferred pending a founder scope decision.
 
 ## Objective
 
@@ -387,6 +408,11 @@ non-forgeable `escaped` marker) plus the standing instruction plus Inspection -
 none of the three may be weakened without re-running the injection gate. Details
 in `docs/agencx/evidence/latency-2026-10/report-slice-5.md`.
 
+**Merged (2026-10-23).** The merge request blocker is closed: the stack is on
+`development` and `staging` (slices 1-6 at `d544ce5`, evidence tip `fcc7efa`),
+pushed, with `make ci` green at the tip. Slice 7 remains the only open item and
+still needs the founder to reopen scope.
+
 **Blockers before merge** (founder-facing):
 
 1. **Slice 7.** Slice 6 (paid-tier A/B across the matrix: latency, cost, and
@@ -398,8 +424,8 @@ in `docs/agencx/evidence/latency-2026-10/report-slice-5.md`.
    design, a security ruling and eval rework) is **deferred**: it changes when a
    customer sees model prose and the US-060 inspection buffer is ratified, so
    only a founder scope decision reopens it.
-2. **The merge request itself.** One merge to `development`, then `staging`, only
-   on the founder's go.
+2. ~~The merge request itself.~~ Closed 2026-10-23: merged to `development`, then
+   `staging`, and pushed.
 
 ## Instrument
 

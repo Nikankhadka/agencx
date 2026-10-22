@@ -46,9 +46,8 @@ live in the ticket files, not here.
 
 ## What is next
 
-- [ ] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
-  post-launch): slices stack on `latency/stack` (not merged until the founder
-  says go). Slice 1, the instrument - `make latency` drives real turns with one
+- [x] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
+  post-launch): merged 2026-10-23 - slices 1-6 and the coalesced-burst follow-on at `d544ce5`, evidence tip `fcc7efa`; slice 7 deferred. Slice 1, the instrument - `make latency` drives real turns with one
   model pinned and writes the 15-key per-turn record (`cached_input_tokens` added
   by slice 5); the noise floor and model
   matrix are in
@@ -154,8 +153,7 @@ live in the ticket files, not here.
   tables in
   [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md).
   **Slice 7 (streaming with inspection off the critical path) stays deferred and
-  needs the founder to reopen scope.** The merge checklist and its two remaining
-  blockers (slice 7 and the merge request) are in
+  needs the founder to reopen scope.** The merge checklist is in
   [13-latency.md](spec/active/13-latency.md#merge-readiness-slices-1-4).
   Follow-on burst coalescing shipped in the composer: a message submitted while
   a reply is in flight is queued and the burst is sent as one combined turn
@@ -473,7 +471,7 @@ live in the ticket files, not here.
 |---|---|---|
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
-| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, merge-ready pending slice 7 and the go` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge checklist has two remaining blockers; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 69-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) |
+| [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, slices 1-6 and coalescing merged at d544ce5; slice 7 deferred` | Latency instrument and model matrix, slices 1-7 stacked on `latency/stack` (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge checklist has two remaining blockers; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 69-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) Merged to development and staging on 2026-10-23; make ci green at the tip (1514 backend, 373 frontend); the founder's 10% bar is met by the coalesced burst (68-77% faster), with no single-turn clock claim. |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items
