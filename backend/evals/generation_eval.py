@@ -261,8 +261,15 @@ async def score_citation_faithfulness(
     if not to_judge:
         return deterministic
 
+    # The whole cited chunk, never a prefix. A 400-char slice cut the
+    # supporting sentence off mid-chunk: the seeded bytefix chunks run 824 to
+    # 1859 chars and the sentence that answers a question often starts after
+    # char 383, so correct citations were graded unsupported. The largest
+    # seeded chunk (1859 chars) fits comfortably with no bound, and
+    # ``score_faithfulness`` already gives the judge every chunk whole, so a
+    # bound here would only reintroduce the same class of false negative.
     pairs_block = "\n\n".join(
-        f"[{index}] Sentence: {sentence!r}\nCited chunk: {chunk_content[:400]!r}"
+        f"[{index}] Sentence: {sentence!r}\nCited chunk: {chunk_content!r}"
         for sentence, index, chunk_content in to_judge
     )
     verdicts = await provider.extract(
@@ -343,7 +350,18 @@ async def score_case(
     *,
     provider: LLMProvider,
     embedder: Embedder,
+    judge: LLMProvider | None = None,
 ) -> CaseResult:
+    """Score one answer.
+
+    ``provider`` is the answering model's provider (kept for existing callers
+    and for the negative-case path, which asks no model anything). ``judge`` is
+    the model that grades faithfulness, relevancy, and citations; it defaults to
+    ``provider`` so every pre-existing caller behaves exactly as before, and a
+    benchmark can pass a fixed, independent judge instead so a candidate never
+    grades its own answer.
+    """
+    grading_provider = judge or provider
     stripped = answer.strip()
     refused = stripped == REFUSAL_MESSAGE
     if case.negative:
@@ -366,9 +384,11 @@ async def score_case(
         )
 
     context = "\n\n".join(chunk["content"] for chunk in chunks)
-    claim_verdicts = await score_faithfulness(answer, context, provider=provider)
-    relevancy = await answer_relevancy(case.question, answer, provider=provider, embedder=embedder)
-    citation_verdicts = await score_citation_faithfulness(answer, chunks, provider=provider)
+    claim_verdicts = await score_faithfulness(answer, context, provider=grading_provider)
+    relevancy = await answer_relevancy(
+        case.question, answer, provider=grading_provider, embedder=embedder
+    )
+    citation_verdicts = await score_citation_faithfulness(answer, chunks, provider=grading_provider)
 
     return CaseResult(
         question=case.question,

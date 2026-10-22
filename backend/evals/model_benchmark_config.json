@@ -1,0 +1,156 @@
+{
+  "_comment": "Slice B model benchmark. One row per candidate deployment route; a family with fallback_order rows is one candidate tried in order. Every row uses OPENROUTER_API_KEY except the two Gemini Flash rows, which are Google-native on LLM_API_KEY. Prices here are the pinned fallback (USD per million tokens), captured from https://openrouter.ai/api/v1/models on 2026-10-22 and used only when that live fetch fails.",
+  "judge": {
+    "label": "judge/anthropic-claude-haiku-5.5",
+    "route": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_model": "anthropic/claude-haiku-5.5",
+    "key_env": "OPENROUTER_API_KEY",
+    "input_per_mtok": 0.1,
+    "output_per_mtok": 0.5,
+    "cache_read_per_mtok": 0.01
+  },
+  "second_judge": {
+    "label": "judge/openai-gpt-6-luna",
+    "route": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_model": "openai/gpt-6-luna",
+    "key_env": "OPENROUTER_API_KEY",
+    "json_object_extract": true,
+    "structured_output_note": "OpenAI's strict json_schema mode rejects pydantic schemas that do not set additionalProperties:false, so this judge uses the provider's json_object mode (schema in the prompt, validated client-side) - the same knob Z.ai needs.",
+    "input_per_mtok": 0.1,
+    "output_per_mtok": 0.5,
+    "cache_read_per_mtok": 0.01
+  },
+  "candidates": [
+    {
+      "family": "deepseek",
+      "label": "openrouter/deepseek-v4.1-flash",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "deepseek/deepseek-v4.1-flash",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.0342,
+      "output_per_mtok": 0.1368,
+      "cache_read_per_mtok": 0.000684,
+      "generation_repeats": 2
+    },
+    {
+      "family": "gemma",
+      "fallback_order": 1,
+      "label": "openrouter/gemma-4-26b-a4b-it",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "google/gemma-4-26b-a4b-it",
+      "key_env": "OPENROUTER_API_KEY",
+      "generation_repeats": 2
+    },
+    {
+      "family": "gemma",
+      "fallback_order": 2,
+      "label": "openrouter/gemma-4-31b-it",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "google/gemma-4-31b-it",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.2,
+      "output_per_mtok": 0.4,
+      "generation_repeats": 1
+    },
+    {
+      "family": "mistral",
+      "fallback_order": 1,
+      "label": "openrouter/mistral-small-3.2-24b-instruct",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "mistralai/mistral-small-3.2-24b-instruct",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.09375,
+      "output_per_mtok": 0.25,
+      "generation_repeats": 2
+    },
+    {
+      "family": "mistral",
+      "fallback_order": 2,
+      "label": "openrouter/mistral-medium-3.1",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "mistralai/mistral-medium-3.1",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.4,
+      "output_per_mtok": 2.0,
+      "cache_read_per_mtok": 0.04,
+      "generation_repeats": 2
+    },
+    {
+      "family": "mistral",
+      "fallback_order": 3,
+      "label": "openrouter/mistral-large-2512",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "mistralai/mistral-large-2512",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.5,
+      "output_per_mtok": 1.5,
+      "cache_read_per_mtok": 0.05,
+      "generation_repeats": 2
+    },
+    {
+      "family": "qwen",
+      "fallback_order": 1,
+      "label": "openrouter/qwen3.8-27b",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "qwen/qwen3.8-27b",
+      "key_env": "OPENROUTER_API_KEY",
+      "generation_repeats": 2
+    },
+    {
+      "family": "qwen",
+      "fallback_order": 2,
+      "label": "openrouter/qwen3.8-flash",
+      "route": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_model": "qwen/qwen3.8-flash",
+      "key_env": "OPENROUTER_API_KEY",
+      "input_per_mtok": 0.15,
+      "output_per_mtok": 0.47,
+      "cache_read_per_mtok": 0.016,
+      "generation_repeats": 2
+    },
+    {
+      "family": "gemini",
+      "label": "google-native/gemini-3.5-flash",
+      "route": "google_native",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "api_model": "models/gemini-3.5-flash",
+      "key_env": "LLM_API_KEY",
+      "pricing_note": "The Google native OpenAI-compatible catalogue publishes no price; the runner records cost as null, never zero.",
+      "generation_repeats": 1
+    },
+    {
+      "family": "gemini",
+      "label": "google-native/gemini-3.5-flash-lite",
+      "route": "google_native",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "api_model": "models/gemini-3.5-flash-lite",
+      "key_env": "LLM_API_KEY",
+      "pricing_note": "The Google native OpenAI-compatible catalogue publishes no price; the runner records cost as null, never zero.",
+      "generation_repeats": 2
+    }
+  ],
+  "suite": {
+    "generation_repeats": 2,
+    "trajectory_repeats": 1,
+    "injection_repeats": 1
+  },
+  "thresholds": {
+    "faithfulness": 0.85,
+    "answer_relevancy": 0.85,
+    "citation_faithfulness": 0.85,
+    "fact_coverage": 0.8,
+    "tool_correctness": 0.9,
+    "injection": 0.8,
+    "money_violations": 0
+  }
+}

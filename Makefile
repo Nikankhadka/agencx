@@ -316,6 +316,38 @@ latency: ## Measure turn latency; flags LATENCY_MODELS / LATENCY_TENANTS / LATEN
 		$(if $(LATENCY_LEGS),--legs $(LATENCY_LEGS)) \
 		$(if $(LATENCY_COALESCE),--coalesce $(LATENCY_COALESCE))
 
+# ── model benchmark ────────────────────────────────────────────────────────────
+
+# Slice B: score every configured candidate on identical Agencx criteria through
+# the real graph, datasets, and scorers. The capability gate runs first, and a
+# disqualified model is recorded with its exact error rather than silently
+# dropped. The evidence directory is bind-mounted like `make latency`, so
+# raw/<label>.json, results.json and summary.md land in the repo with no copy
+# step. MODELS takes labels or families ('all' for every candidate); SUITE is
+# gate|generation|trajectory|injection|all; OUT overrides the host evidence
+# directory (default below). REFRESH_GATE=1 reruns a completed but disqualified
+# gate under RESUME. REPORT_ONLY=1 aggregates raw/ into results.json and
+# summary.md without any DB, network, or provider work. The commit is computed
+# on the host and handed in, because git is not reachable inside the container.
+MODEL_BENCHMARK_OUT ?= $(CURDIR)/docs/agencx/evidence/model-benchmark-2026-10
+MODEL_BENCHMARK_COMMIT := $(shell git -C $(CURDIR) rev-parse --short HEAD 2>/dev/null)
+
+.PHONY: model-benchmark
+model-benchmark: ## Score models on the Agencx criteria; MODELS / SUITE / REPEATS / LIMIT / RESUME / REFRESH_GATE / REPORT_ONLY / OUT
+	@mkdir -p $(MODEL_BENCHMARK_OUT)
+	$(DC) run --rm \
+		-e MODEL_BENCHMARK_COMMIT=$(MODEL_BENCHMARK_COMMIT) \
+		-v $(MODEL_BENCHMARK_OUT):/evidence \
+		backend python -m evals.model_benchmark \
+		--out /evidence \
+		$(if $(MODELS),--models $(MODELS)) \
+		$(if $(SUITE),--suite $(SUITE)) \
+		$(if $(REPEATS),--repeats $(REPEATS)) \
+		$(if $(LIMIT),--limit $(LIMIT)) \
+		$(if $(RESUME),--resume) \
+		$(if $(REFRESH_GATE),--refresh-gate) \
+		$(if $(REPORT_ONLY),--report-only)
+
 # ── build & CI ─────────────────────────────────────────────────────────────────
 
 .PHONY: build

@@ -207,6 +207,28 @@ def test_recommendation_price_provenance_is_allowed() -> None:
     assert check_unsourced_figures(state) == []
 
 
+def test_catalog_price_is_sourced_only_when_the_caller_supplies_the_catalog() -> None:
+    """A turn that saw the tenant catalog can quote a real catalog price.
+
+    The scorer cannot see catalog rows, so the benchmark hands them in through
+    ``extra_allowed_cents``. Without them the same draft still fails, which is
+    the default every existing caller keeps.
+    """
+    state: dict[str, Any] = {
+        "draft_response": "The refurbished iPhone 11 is $249.",
+        "engine_quote": None,
+        "selections": [],
+        "retrieved_chunks": [],
+    }
+
+    assert check_unsourced_figures(state) == ["unsourced monetary figure in draft: '$249'"]
+    assert check_unsourced_figures(state, extra_allowed_cents=(24900,)) == []
+    # A catalog price does not launder a different figure in the same draft.
+    assert check_unsourced_figures(state, extra_allowed_cents=(34900,)) == [
+        "unsourced monetary figure in draft: '$249'"
+    ]
+
+
 # --- steps ---------------------------------------------------------------------------
 
 

@@ -25,6 +25,42 @@ from evals.generation_eval import (
 from tests.fakes import BaseFakeProvider, ZeroEmbedder
 
 
+class _RecordingCitationJudge(BaseFakeProvider):
+    """Records the citation-judge prompt and returns one supported verdict."""
+
+    def __init__(self) -> None:
+        self.system_prompts: list[str] = []
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        self.system_prompts.append(system_prompt)
+        return schema.model_validate(
+            {"verdicts": [{"citation_index": 1, "supported": True, "reason": "test"}]}
+        )
+
+
+async def test_citation_judge_sees_supporting_text_past_the_old_400_char_cut() -> None:
+    """The judge must receive the whole cited chunk. Seeded chunks run 824 to
+    1859 chars and the supporting sentence often begins after char 383; the old
+    400-char slice hid it, so correct citations were graded unsupported."""
+    opening = "We are open weekdays from nine to five and closed on Sundays. "
+    chunk_content = opening * 9 + "The remaining warranty transfers with the device."
+    assert chunk_content.index("The remaining warranty") > 400
+
+    judge = _RecordingCitationJudge()
+    verdicts = await score_citation_faithfulness(
+        "The remaining warranty transfers with the device [1].",
+        [{"content": chunk_content}],
+        provider=judge,
+    )
+
+    assert len(judge.system_prompts) == 1
+    assert "The remaining warranty transfers with the device." in judge.system_prompts[0]
+    assert [verdict.supported for verdict in verdicts] == [True]
+    assert citation_faithfulness_score([v.supported for v in verdicts]) == 1.0
+
+
 def test_faithfulness_score_ratio() -> None:
     assert faithfulness_score([True, True, False, True]) == 0.75
 

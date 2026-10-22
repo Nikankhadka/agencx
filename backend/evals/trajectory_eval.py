@@ -48,7 +48,7 @@ import argparse
 import asyncio
 import json
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -189,11 +189,23 @@ def check_lookup(actual: dict[str, Any] | None, expected: dict[str, Any] | None)
     return failures
 
 
-def check_unsourced_figures(final_state: dict[str, Any]) -> list[str]:
+def check_unsourced_figures(
+    final_state: dict[str, Any], *, extra_allowed_cents: Iterable[int] = ()
+) -> list[str]:
     """Every monetary figure in the final draft must reconcile to the
     engine quote, recommendation's DB-sourced price provenance, or a figure
     stated verbatim in a retrieved chunk (a knowledge answer quoting a real
-    KB price is sourced - T-021's precedent)."""
+    KB price is sourced - T-021's precedent).
+
+    ``extra_allowed_cents`` lets a caller add amounts the turn was allowed to
+    see but this scorer cannot reconstruct from ``final_state``. The model
+    benchmark supplies the tenant catalog here: a turn that saw the catalog can
+    quote a real catalog price, and the artifact never carries the catalog rows
+    the turn saw. This is the benchmark's view of that turn. The runtime price
+    gate (``app/agents/price_gate.py`` over ``app/pricing/validation_gate.py``)
+    is a separate seam and does not call this scorer. With no extra amounts the
+    behaviour is exactly what every existing caller already sees.
+    """
     provenance = [
         int(selection["price_cents"])
         for selection in final_state.get("selections") or []
@@ -204,6 +216,7 @@ def check_unsourced_figures(final_state: dict[str, Any]) -> list[str]:
     # "is this figure sourced?".
     material = [chunk["content"] for chunk in final_state.get("retrieved_chunks") or []]
     allowed = allowed_cents(final_state.get("engine_quote"), provenance, material)
+    allowed |= {int(cents) for cents in extra_allowed_cents}
     draft = final_state.get("draft_response", "")
     return [
         f"unsourced monetary figure in draft: {figure.raw!r}"

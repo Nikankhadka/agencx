@@ -300,8 +300,8 @@ Create one hosted project. It backs the deployed stack; local dev keeps using
 
 - Google AI Studio key -> `LLM_API_KEY` (also reused for embeddings).
 - Cohere key -> `COHERE_API_KEY` (rerank).
-- Optional: Groq key (`LLM_FALLBACK_API_KEY`) and OpenRouter key
-  (`LLM_FAILOVER_API_KEY`) for the two failover legs.
+- Optional: OpenRouter key (`LLM_FALLBACK_API_KEY`) for the paid fallback leg.
+  The failover leg is empty by decision, so no third key is needed.
 - Cloudinary: set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
   `CLOUDINARY_API_SECRET` as backend-only Vercel environment variables. Never
   expose the API secret to the frontend or commit it. After deployment, run
@@ -338,13 +338,13 @@ LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 LLM_API_KEY=<Google AI Studio key>
 LLM_MODEL=gemini-3.5-flash-lite
 LLM_FALLBACK_PROVIDER=openai_compat
-LLM_FALLBACK_BASE_URL=https://api.groq.com/openai/v1
-LLM_FALLBACK_API_KEY=<Groq key, optional>
-LLM_FALLBACK_MODEL=openai/gpt-oss-120b
+LLM_FALLBACK_BASE_URL=https://openrouter.ai/api/v1
+LLM_FALLBACK_API_KEY=<OpenRouter key, paid>
+LLM_FALLBACK_MODEL=deepseek/deepseek-v4.1-flash
 LLM_FAILOVER_PROVIDER=openai_compat
-LLM_FAILOVER_BASE_URL=https://openrouter.ai/api/v1
-LLM_FAILOVER_API_KEY=<OpenRouter key, optional>
-LLM_FAILOVER_MODEL=google/gemma-4-26b-a4b-it:free
+LLM_FAILOVER_BASE_URL=
+LLM_FAILOVER_API_KEY=
+LLM_FAILOVER_MODEL=
 CORPUS_FAST_PATH_MAX_TOKENS=11500
 CATALOG_INLINE_MAX_TOKENS=5500
 EMBEDDER=google
@@ -354,6 +354,17 @@ COHERE_API_KEY=<Cohere key>
 UPLOADS_BUCKET=<Storage bucket name from step 1>
 ENVIRONMENT=production
 ```
+
+The primary is Gemini 3.5 Flash-Lite on the Google AI Studio free tier, which is
+capped at **20 requests/day/model**. That cap is low enough to run out on any
+real working day, so the fallback leg is the one that actually keeps the site
+answering: DeepSeek V4.1 Flash on OpenRouter, a **paid** model, which is why
+`LLM_MONTHLY_BUDGET_USD` now bites from the first fallback call. It was the
+safest OpenRouter candidate in the 2026-10 benchmark (injection 0.967, semantic
+refusal 0.917, zero money violations) but its p95 turn is ~32s, so fallback
+turns are visibly slower than primary ones. The Groq fallback it replaces is
+gone, and the failover leg is empty by decision - there is no third tier.
+Evidence: `docs/agencx/evidence/model-benchmark-2026-10/`.
 
 `GOOGLE_EMBED_MODEL` is not in the list because `config.py` already defaults it
 to `gemini-embedding-001` (text-embedding-004 is retired and 404s); set it only
@@ -367,12 +378,11 @@ look like a missing variable, so check them by name after any project rebuild:
 
 `CORPUS_FAST_PATH_MAX_TOKENS` / `CATALOG_INLINE_MAX_TOKENS` set how large a
 tenant's corpus plus catalog may be before it drops to hybrid retrieval. The
-7500/1500 defaults fit Groq's free-tier 8K tokens-per-minute cap so every
-fallback leg can serve a fast-path turn; the 11500/5500 values carry the
-`sababa2` demo tenant's summarized full menu on the fast path instead. Only the
-Gemini primary (1M-token context) or a paid leg can serve prompts over 8K
-tokens - free Groq 429s them, so such turns skip to the OpenRouter failover.
-Set both back to 7500/1500 to restore the Groq-safe boundary.
+11500/5500 values carry the `sababa2` demo tenant's summarized full menu on the
+fast path. Every leg of the chain accepts a prompt that size: Gemini 3.5
+Flash-Lite (primary) has a 1M-token context, and DeepSeek V4.1 Flash on
+OpenRouter (fallback) has 128k, so no fast-path turn has to skip a leg. Set both
+back to 7500/1500 if a leg with a smaller context window is ever reintroduced.
 
 `WREN_APP_DB_PASSWORD` is the one env var that must **also** exist as the
 database role's password. (`wren_*` names are standing names kept from the
