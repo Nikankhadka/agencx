@@ -134,7 +134,8 @@ const BUSINESSES: BusinessCase[] = [
       "What time do you open?",
     ],
     uniqueOffering: "Super Plate",
-    ownRefs: ["diner.a", "diner.b"],
+    // Current seed_sababa.py customer refs; the old diner.a/diner.b refs were retired.
+    ownRefs: ["Maya T", "Elena"],
     card: {
       itemLabel: "Super Plate",
       priceCents: 3700,
