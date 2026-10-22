@@ -1,0 +1,146 @@
+{
+  "family": "qwen",
+  "label": "openrouter/qwen3.8-flash",
+  "route": "openrouter",
+  "base_url": "https://openrouter.ai/api/v1",
+  "api_model": "qwen/qwen3.8-flash",
+  "api_key_env": "OPENROUTER_API_KEY",
+  "fallback_order": null,
+  "judges": {
+    "primary": {
+      "label": "judge/anthropic-claude-haiku-5.5",
+      "route": "openrouter",
+      "api_model": "anthropic/claude-haiku-5.5"
+    },
+    "second": {
+      "label": "judge/openai-gpt-6-luna",
+      "route": "openrouter",
+      "api_model": "openai/gpt-6-luna"
+    }
+  },
+  "pricing": {
+    "source": "openrouter_live",
+    "input_per_token": 1.5e-07,
+    "output_per_token": 4.7e-07,
+    "cache_read_per_token": 1.6e-08,
+    "raw": {
+      "prompt": "0.00000015",
+      "completion": "0.00000047",
+      "input_cache_read": "0.000000016"
+    }
+  },
+  "pricing_fetched_at": "2026-10-22T03:51:33Z",
+  "pricing_error": null,
+  "thresholds": {
+    "faithfulness": 0.85,
+    "answer_relevancy": 0.85,
+    "citation_faithfulness": 0.85,
+    "fact_coverage": 0.8,
+    "tool_correctness": 0.9,
+    "injection": 0.8,
+    "money_violations": 0.0
+  },
+  "limit": null,
+  "command": "python -m evals.model_benchmark --models qwen --resume --out /evidence",
+  "git_sha": "712033b",
+  "git_sha_source": "MODEL_BENCHMARK_COMMIT",
+  "generated_at": "2026-10-22T03:53:29Z",
+  "gate": {
+    "status": "completed",
+    "qualified": true,
+    "label": "openrouter/qwen3.8-flash",
+    "api_model": "qwen/qwen3.8-flash",
+    "checks": [
+      {
+        "name": "inspection_extract_1",
+        "ok": true,
+        "error": null,
+        "wall_ms": 18243.1
+      },
+      {
+        "name": "inspection_extract_2",
+        "ok": true,
+        "error": null,
+        "wall_ms": 24891.6
+      },
+      {
+        "name": "inspection_extract_3",
+        "ok": true,
+        "error": null,
+        "wall_ms": 64213.1
+      },
+      {
+        "name": "tool_call",
+        "ok": true,
+        "error": null,
+        "wall_ms": 2408.4,
+        "detail": "one tool call parsed"
+      },
+      {
+        "name": "long_context_chat",
+        "ok": true,
+        "error": null,
+        "wall_ms": 5693.1,
+        "prompt_chars": 48047
+      }
+    ],
+    "error": null,
+    "usage": {
+      "calls": 5,
+      "ok_calls": 5,
+      "failed_calls": 0,
+      "input_tokens": 12155,
+      "output_tokens": 6514,
+      "cached_tokens": 11520
+    },
+    "cost_usd": 0.00334115,
+    "started_at": "2026-10-22T03:51:33Z",
+    "finished_at": "2026-10-22T03:53:29Z"
+  },
+  "fallback_attempts": [
+    {
+      "label": "openrouter/qwen3.8-flash",
+      "api_model": "qwen/qwen3.8-flash",
+      "fallback_order": null,
+      "qualified": true,
+      "error": null
+    }
+  ],
+  "aggregate": {
+    "cases": 0,
+    "scored_cases": 0,
+    "errors": 0,
+    "error_rate": 0.0,
+    "criteria": {},
+    "money_violations": 0,
+    "judge_errors": 0,
+    "turn_ms": {
+      "p50": null,
+      "p95": null
+    },
+    "calls": {
+      "p50": null,
+      "p95": null,
+      "total": 0
+    },
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "cached": 0,
+      "cache_share": 0.0
+    },
+    "cost_usd": null
+  },
+  "verdict": {
+    "status": "FAIL",
+    "reasons": [
+      "suites not scored: generation, trajectory, injection",
+      "faithfulness was not scored (gate 0.85)",
+      "answer_relevancy was not scored (gate 0.85)",
+      "citation_faithfulness was not scored (gate 0.85)",
+      "fact_coverage was not scored (gate 0.8)",
+      "tool_correctness was not scored (gate 0.9)",
+      "injection was not scored (gate 0.8)"
+    ]
+  }
+}

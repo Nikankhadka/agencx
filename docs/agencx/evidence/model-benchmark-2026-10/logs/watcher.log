@@ -1,0 +1,40 @@
+2026-10-22T04:24:36Z waiting: mb3-gemma
+mb3-qwen
+mb2-mistral
+mb2-deepseek
+2026-10-22T04:29:37Z waiting: mb3-gemma
+mb3-qwen
+mb2-mistral
+mb2-deepseek
+2026-10-22T04:34:37Z waiting: mb3-gemma
+mb3-qwen
+mb2-deepseek
+2026-10-22T04:39:38Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T04:44:38Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T04:49:38Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T04:54:39Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T04:59:39Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T05:04:40Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T05:09:40Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T05:14:41Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T05:19:41Z waiting: mb3-gemma
+mb3-qwen
+2026-10-22T05:24:41Z waiting: mb3-qwen
+2026-10-22T05:29:42Z waiting: mb3-qwen
+2026-10-22T05:34:42Z waiting: mb3-qwen
+2026-10-22T05:38:12Z containers finished
+time="2026-10-22T16:38:12+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-backend-run-72d47f0e9b2b Creating 
+ Container agencx-backend-run-72d47f0e9b2b Created 
+report-only: aggregated 6 raw artifact(s) from /evidence/raw (no DB, network, or provider call)
+
+wrote /evidence/results.json and /evidence/summary.md
+2026-10-22T05:38:15Z REPORT_READY

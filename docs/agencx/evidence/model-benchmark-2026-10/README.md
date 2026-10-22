@@ -7,6 +7,7 @@
 - Aggregation: `python -m evals.model_benchmark --report-only --out /evidence`
 - Harness: `backend/evals/model_benchmark.py`, config `backend/evals/model_benchmark_config.json`
 - Raw artifacts: `raw/*.json`; aggregate: `results.json`, `summary.md`; per-model logs: `logs/`
+- Abandoned before the final run: `slow-variant-abandoned/` (partial qwen/gemma artifacts and why they were dropped)
 - No key, and no full URL carrying a key, is written to any artifact or to this README.
 
 ## Question

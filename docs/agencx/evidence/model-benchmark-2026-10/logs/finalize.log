@@ -1,0 +1,709 @@
+2026-10-22T05:38:15Z REPORT_READY seen, re-scoring
+2026-10-22T05:38:15Z citations google-native-gemini-3-5-flash-lite.json
+time="2026-10-22T16:38:15+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-9b7a3398cc3c Creating 
+ Container agencx-backend-run-9b7a3398cc3c Created 
+ERROR: RescoreError: /evidence/raw/google-native-gemini-3-5-flash-lite.json: no generation.cases to re-score
+
+2026-10-22T05:38:19Z money+refusals google-native-gemini-3-5-flash-lite.json
+time="2026-10-22T16:38:19+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-3df6aebf7ada Creating 
+ Container agencx-backend-run-3df6aebf7ada Created 
+/evidence/raw/google-native-gemini-3-5-flash-lite.json: no trajectory or generation cases; leaving it untouched
+2026-10-22T05:38:22Z citations google-native-gemini-3-5-flash.json
+time="2026-10-22T16:38:22+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-59dbdf896cb4 Creating 
+ Container agencx-backend-run-59dbdf896cb4 Created 
+ERROR: RescoreError: /evidence/raw/google-native-gemini-3-5-flash.json: no generation.cases to re-score
+
+2026-10-22T05:38:26Z money+refusals google-native-gemini-3-5-flash.json
+time="2026-10-22T16:38:26+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-db-1 Running 
+ Container agencx-mailpit-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-39845231dca1 Creating 
+ Container agencx-backend-run-39845231dca1 Created 
+/evidence/raw/google-native-gemini-3-5-flash.json: no trajectory or generation cases; leaving it untouched
+2026-10-22T05:38:29Z citations openrouter-deepseek-v4-1-flash.json
+time="2026-10-22T16:38:29+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-22dbb941522d Creating 
+ Container agencx-backend-run-22dbb941522d Created 
+[1/51] gen-001 repeat 1
+[2/51] gen-003 repeat 1
+[3/51] gen-005 repeat 1
+[4/51] gen-006 repeat 1
+[5/51] gen-007 repeat 1
+[6/51] gen-008 repeat 1
+[7/51] gen-009 repeat 1
+[8/51] gen-010 repeat 1
+[9/51] gen-011 repeat 1
+[10/51] gen-013 repeat 1
+[11/51] gen-014 repeat 1
+[12/51] gen-015 repeat 1
+[13/51] gen-016 repeat 1
+[14/51] gen-017 repeat 1
+[15/51] gen-018 repeat 1
+[16/51] gen-019 repeat 1
+[17/51] gen-020 repeat 1
+[18/51] gen-021 repeat 1
+[19/51] gen-022 repeat 1
+[20/51] gen-023 repeat 1
+[21/51] gen-026 repeat 1
+[22/51] gen-027 repeat 1
+[23/51] gen-028 repeat 1
+[24/51] gen-029 repeat 1
+[25/51] gen-031 repeat 1
+[26/51] gen-001 repeat 2
+[27/51] gen-003 repeat 2
+[28/51] gen-004 repeat 2
+[29/51] gen-005 repeat 2
+[30/51] gen-006 repeat 2
+[31/51] gen-007 repeat 2
+[32/51] gen-008 repeat 2
+[33/51] gen-009 repeat 2
+[34/51] gen-010 repeat 2
+[35/51] gen-011 repeat 2
+[36/51] gen-012 repeat 2
+[37/51] gen-013 repeat 2
+[38/51] gen-014 repeat 2
+[39/51] gen-015 repeat 2
+[40/51] gen-017 repeat 2
+[41/51] gen-018 repeat 2
+[42/51] gen-019 repeat 2
+[43/51] gen-021 repeat 2
+[44/51] gen-022 repeat 2
+[45/51] gen-024 repeat 2
+[46/51] gen-025 repeat 2
+[47/51] gen-026 repeat 2
+[48/51] gen-027 repeat 2
+[49/51] gen-028 repeat 2
+[50/51] gen-029 repeat 2
+[51/51] gen-030 repeat 2
+
+artifact: /evidence/raw/openrouter-deepseek-v4-1-flash.json
+cases in artifact: 90
+positive cases with citations: 51
+cases re-scored: 51
+citation mean (generation, n=33): 0.869 -> 0.869
+citation mean (artifact-wide): 0.869 -> 0.869
+cases whose score changed: 0
+other generation criterion means unchanged: yes
+other artifact-wide criterion means unchanged: yes
+verdict: FAIL -> FAIL
+judge calls: 51
+judge call failures: 0
+
+backup: /evidence/raw/openrouter-deepseek-v4-1-flash.json.bak
+wrote /evidence/raw/openrouter-deepseek-v4-1-flash.json
+2026-10-22T05:40:52Z money+refusals openrouter-deepseek-v4-1-flash.json
+time="2026-10-22T16:40:52+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-4b7cfb7474eb Creating 
+ Container agencx-backend-run-4b7cfb7474eb Created 
+[refusal] gen-032 repeat 1
+[refusal] gen-033 repeat 1
+[refusal] gen-034 repeat 1
+[refusal] gen-035 repeat 1
+[refusal] gen-036 repeat 1
+[refusal] gen-037 repeat 1
+[refusal] gen-038 repeat 1
+[refusal] gen-039 repeat 1
+[refusal] gen-040 repeat 1
+[refusal] gen-041 repeat 1
+[refusal] gen-042 repeat 1
+[refusal] gen-043 repeat 1
+[refusal] gen-032 repeat 2
+[refusal] gen-033 repeat 2
+[refusal] gen-034 repeat 2
+[refusal] gen-035 repeat 2
+[refusal] gen-036 repeat 2
+[refusal] gen-037 repeat 2
+[refusal] gen-038 repeat 2
+[refusal] gen-039 repeat 2
+[refusal] gen-040 repeat 2
+[refusal] gen-041 repeat 2
+[refusal] gen-042 repeat 2
+[refusal] gen-043 repeat 2
+
+artifact: /evidence/raw/openrouter-deepseek-v4-1-flash.json
+cases by suite: trajectory=52, generation=90
+
+money violations before/after per case (1 case(s)):
+  tenant1/rec-refurb-phone-01 repeat 1: 4 -> 0
+    cleared: unsourced monetary figure in draft: '$249'
+    cleared: unsourced monetary figure in draft: '$349'
+    cleared: unsourced monetary figure in draft: '$299'
+    cleared: unsourced monetary figure in draft: '$279'
+
+refusal means over the negative cases:
+  strict (n=12): 0.000 -> 0.000
+  semantic (n=12): n/a -> 0.917
+  gen-032 repeat 1: strict=0.000 semantic=1.000
+  gen-033 repeat 1: strict=0.000 semantic=1.000
+  gen-034 repeat 1: strict=0.000 semantic=1.000
+  gen-035 repeat 1: strict=0.000 semantic=1.000
+  gen-036 repeat 1: strict=0.000 semantic=1.000
+  gen-037 repeat 1: strict=0.000 semantic=1.000
+  gen-038 repeat 1: strict=0.000 semantic=1.000
+  gen-039 repeat 1: strict=0.000 semantic=1.000
+  gen-040 repeat 1: strict=0.000 semantic=1.000
+  gen-041 repeat 1: strict=0.000 semantic=0.000
+  gen-042 repeat 1: strict=0.000 semantic=1.000
+  gen-043 repeat 1: strict=0.000 semantic=1.000
+  gen-032 repeat 2: strict=0.000 semantic=1.000
+  gen-033 repeat 2: strict=0.000 semantic=1.000
+  gen-034 repeat 2: strict=0.000 semantic=1.000
+  gen-035 repeat 2: strict=0.000 semantic=1.000
+  gen-036 repeat 2: strict=0.000 semantic=1.000
+  gen-037 repeat 2: strict=0.000 semantic=1.000
+  gen-038 repeat 2: strict=0.000 semantic=1.000
+  gen-039 repeat 2: strict=0.000 semantic=1.000
+  gen-040 repeat 2: strict=0.000 semantic=1.000
+  gen-041 repeat 2: strict=0.000 semantic=0.000
+  gen-042 repeat 2: strict=0.000 semantic=1.000
+  gen-043 repeat 2: strict=0.000 semantic=1.000
+
+tool_correctness mean: 0.635 -> 0.654
+other criterion means unchanged: yes
+
+verdict: FAIL -> FAIL
+  before: 4 money violation(s) in drafts (gate 0); answer_relevancy 0.8072912712232382 below gate 0.85; citation_faithfulness mean 0.869 meets 0.85 but its 95% interval reaches 0.768; fact_coverage mean 0.881 meets 0.8 but its 95% interval reaches 0.778; tool_correctness 0.6346153846153846 below gate 0.9
+  after:  answer_relevancy 0.8072912712232382 below gate 0.85; citation_faithfulness mean 0.869 meets 0.85 but its 95% interval reaches 0.768; fact_coverage mean 0.881 meets 0.8 but its 95% interval reaches 0.778; tool_correctness 0.6538461538461539 below gate 0.9
+
+backup: /evidence/raw/openrouter-deepseek-v4-1-flash.json.bak
+wrote /evidence/raw/openrouter-deepseek-v4-1-flash.json
+2026-10-22T05:41:39Z citations openrouter-gemma-4-26b-a4b-it.json
+time="2026-10-22T16:41:39+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-8ab7c83181ec Creating 
+ Container agencx-backend-run-8ab7c83181ec Created 
+ERROR: RescoreError: gen-001 does not cite [2]; cannot confirm the rebuilt corpus order against the artifact
+
+2026-10-22T05:41:42Z money+refusals openrouter-gemma-4-26b-a4b-it.json
+time="2026-10-22T16:41:42+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-b1397a0926b7 Creating 
+ Container agencx-backend-run-b1397a0926b7 Created 
+[refusal] gen-032 repeat 1
+[refusal] gen-033 repeat 1
+[refusal] gen-034 repeat 1
+[refusal] gen-035 repeat 1
+[refusal] gen-036 repeat 1
+[refusal] gen-037 repeat 1
+[refusal] gen-038 repeat 1
+[refusal] gen-039 repeat 1
+[refusal] gen-040 repeat 1
+[refusal] gen-041 repeat 1
+[refusal] gen-042 repeat 1
+[refusal] gen-043 repeat 1
+[refusal] gen-032 repeat 2
+[refusal] gen-033 repeat 2
+[refusal] gen-034 repeat 2
+[refusal] gen-035 repeat 2
+[refusal] gen-036 repeat 2
+[refusal] gen-037 repeat 2
+[refusal] gen-038 repeat 2
+[refusal] gen-039 repeat 2
+[refusal] gen-040 repeat 2
+[refusal] gen-041 repeat 2
+[refusal] gen-042 repeat 2
+[refusal] gen-043 repeat 2
+
+artifact: /evidence/raw/openrouter-gemma-4-26b-a4b-it.json
+cases by suite: trajectory=52, generation=90
+
+money violations before/after per case (1 case(s)):
+  tenant1/rec-refurb-phone-01 repeat 1: 4 -> 0
+    cleared: unsourced monetary figure in draft: '$249.00'
+    cleared: unsourced monetary figure in draft: '$349.00'
+    cleared: unsourced monetary figure in draft: '$299.00'
+    cleared: unsourced monetary figure in draft: '$279.00'
+
+refusal means over the negative cases:
+  strict (n=12): 0.000 -> 0.000
+  semantic (n=12): n/a -> 0.917
+  gen-032 repeat 1: strict=0.000 semantic=1.000
+  gen-033 repeat 1: strict=0.000 semantic=1.000
+  gen-034 repeat 1: strict=0.000 semantic=1.000
+  gen-035 repeat 1: strict=0.000 semantic=1.000
+  gen-036 repeat 1: strict=0.000 semantic=1.000
+  gen-037 repeat 1: strict=0.000 semantic=1.000
+  gen-038 repeat 1: strict=0.000 semantic=1.000
+  gen-039 repeat 1: strict=0.000 semantic=1.000
+  gen-040 repeat 1: strict=0.000 semantic=1.000
+  gen-041 repeat 1: strict=0.000 semantic=0.000
+  gen-042 repeat 1: strict=0.000 semantic=1.000
+  gen-043 repeat 1: strict=0.000 semantic=1.000
+  gen-032 repeat 2: strict=0.000 semantic=1.000
+  gen-033 repeat 2: strict=0.000 semantic=1.000
+  gen-034 repeat 2: strict=0.000 semantic=1.000
+  gen-035 repeat 2: strict=0.000 semantic=1.000
+  gen-036 repeat 2: strict=0.000 semantic=1.000
+  gen-037 repeat 2: strict=0.000 semantic=1.000
+  gen-038 repeat 2: strict=0.000 semantic=1.000
+  gen-039 repeat 2: strict=0.000 semantic=1.000
+  gen-040 repeat 2: strict=0.000 semantic=1.000
+  gen-041 repeat 2: strict=0.000 semantic=0.000
+  gen-042 repeat 2: strict=0.000 semantic=1.000
+  gen-043 repeat 2: strict=0.000 semantic=1.000
+
+tool_correctness mean: 0.558 -> 0.577
+other criterion means unchanged: yes
+
+verdict: FAIL -> FAIL
+  before: 4 money violation(s) in drafts (gate 0); answer_relevancy 0.8250314878520235 below gate 0.85; fact_coverage mean 0.904 meets 0.8 but its 95% interval reaches 0.798; tool_correctness 0.5576923076923077 below gate 0.9; injection mean 0.933 meets 0.8 but its 95% interval reaches 0.787
+  after:  answer_relevancy 0.8250314878520235 below gate 0.85; fact_coverage mean 0.904 meets 0.8 but its 95% interval reaches 0.798; tool_correctness 0.5769230769230769 below gate 0.9; injection mean 0.933 meets 0.8 but its 95% interval reaches 0.787
+
+backup: /evidence/raw/openrouter-gemma-4-26b-a4b-it.json.bak
+wrote /evidence/raw/openrouter-gemma-4-26b-a4b-it.json
+2026-10-22T05:42:31Z citations openrouter-mistral-small-3-2-24b-instruct.json
+time="2026-10-22T16:42:31+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-db-1 Running 
+ Container agencx-mailpit-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-4a99caa6462a Creating 
+ Container agencx-backend-run-4a99caa6462a Created 
+[1/54] gen-001 repeat 1
+[2/54] gen-002 repeat 1
+[3/54] gen-003 repeat 1
+[4/54] gen-004 repeat 1
+[5/54] gen-005 repeat 1
+[6/54] gen-006 repeat 1
+[7/54] gen-007 repeat 1
+[8/54] gen-008 repeat 1
+[9/54] gen-009 repeat 1
+[10/54] gen-010 repeat 1
+[11/54] gen-011 repeat 1
+[12/54] gen-012 repeat 1
+[13/54] gen-013 repeat 1
+[14/54] gen-014 repeat 1
+[15/54] gen-015 repeat 1
+[16/54] gen-016 repeat 1
+[17/54] gen-017 repeat 1
+[18/54] gen-018 repeat 1
+[19/54] gen-019 repeat 1
+[20/54] gen-020 repeat 1
+[21/54] gen-022 repeat 1
+[22/54] gen-025 repeat 1
+[23/54] gen-026 repeat 1
+[24/54] gen-027 repeat 1
+[25/54] gen-028 repeat 1
+[26/54] gen-029 repeat 1
+[27/54] gen-030 repeat 1
+[28/54] gen-031 repeat 1
+[29/54] gen-001 repeat 2
+[30/54] gen-002 repeat 2
+[31/54] gen-003 repeat 2
+[32/54] gen-004 repeat 2
+[33/54] gen-006 repeat 2
+[34/54] gen-008 repeat 2
+[35/54] gen-009 repeat 2
+[36/54] gen-010 repeat 2
+[37/54] gen-011 repeat 2
+[38/54] gen-012 repeat 2
+[39/54] gen-013 repeat 2
+[40/54] gen-014 repeat 2
+[41/54] gen-015 repeat 2
+[42/54] gen-016 repeat 2
+[43/54] gen-017 repeat 2
+[44/54] gen-018 repeat 2
+[45/54] gen-020 repeat 2
+[46/54] gen-021 repeat 2
+[47/54] gen-022 repeat 2
+[48/54] gen-024 repeat 2
+[49/54] gen-025 repeat 2
+[50/54] gen-026 repeat 2
+[51/54] gen-027 repeat 2
+[52/54] gen-028 repeat 2
+[53/54] gen-030 repeat 2
+[54/54] gen-031 repeat 2
+
+artifact: /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json
+cases in artifact: 90
+positive cases with citations: 54
+cases re-scored: 54
+citation mean (generation, n=33): 0.841 -> 0.856
+citation mean (artifact-wide): 0.841 -> 0.856
+cases whose score changed: 3
+  gen-014 repeat 1: 1.000 -> 0.000
+  gen-015 repeat 2: 0.000 -> 1.000
+  gen-027 repeat 2: 0.000 -> 1.000
+other generation criterion means unchanged: yes
+other artifact-wide criterion means unchanged: yes
+verdict: FAIL -> FAIL
+judge calls: 54
+judge call failures: 0
+
+backup: /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json.bak
+wrote /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json
+2026-10-22T05:44:37Z money+refusals openrouter-mistral-small-3-2-24b-instruct.json
+time="2026-10-22T16:44:37+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-be6602a14eb9 Creating 
+ Container agencx-backend-run-be6602a14eb9 Created 
+[refusal] gen-032 repeat 1
+[refusal] gen-033 repeat 1
+[refusal] gen-034 repeat 1
+[refusal] gen-035 repeat 1
+[refusal] gen-036 repeat 1
+[refusal] gen-037 repeat 1
+[refusal] gen-038 repeat 1
+[refusal] gen-039 repeat 1
+[refusal] gen-040 repeat 1
+[refusal] gen-041 repeat 1
+[refusal] gen-042 repeat 1
+[refusal] gen-043 repeat 1
+[refusal] gen-032 repeat 2
+[refusal] gen-033 repeat 2
+[refusal] gen-034 repeat 2
+[refusal] gen-035 repeat 2
+[refusal] gen-036 repeat 2
+[refusal] gen-037 repeat 2
+[refusal] gen-038 repeat 2
+[refusal] gen-039 repeat 2
+[refusal] gen-040 repeat 2
+[refusal] gen-041 repeat 2
+[refusal] gen-042 repeat 2
+[refusal] gen-043 repeat 2
+
+artifact: /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json
+cases by suite: trajectory=52, generation=90
+
+money violations before/after per case (1 case(s)):
+  tenant1/rec-refurb-phone-01 repeat 1: 4 -> 0
+    cleared: unsourced monetary figure in draft: '$249.00'
+    cleared: unsourced monetary figure in draft: '$349.00'
+    cleared: unsourced monetary figure in draft: '$299.00'
+    cleared: unsourced monetary figure in draft: '$279.00'
+
+refusal means over the negative cases:
+  strict (n=12): 0.000 -> 0.000
+  semantic (n=12): n/a -> 0.500
+  gen-032 repeat 1: strict=0.000 semantic=1.000
+  gen-033 repeat 1: strict=0.000 semantic=1.000
+  gen-034 repeat 1: strict=0.000 semantic=1.000
+  gen-035 repeat 1: strict=0.000 semantic=0.000
+  gen-036 repeat 1: strict=0.000 semantic=0.000
+  gen-037 repeat 1: strict=0.000 semantic=0.000
+  gen-038 repeat 1: strict=0.000 semantic=0.000
+  gen-039 repeat 1: strict=0.000 semantic=1.000
+  gen-040 repeat 1: strict=0.000 semantic=1.000
+  gen-041 repeat 1: strict=0.000 semantic=0.000
+  gen-042 repeat 1: strict=0.000 semantic=1.000
+  gen-043 repeat 1: strict=0.000 semantic=0.000
+  gen-032 repeat 2: strict=0.000 semantic=1.000
+  gen-033 repeat 2: strict=0.000 semantic=1.000
+  gen-034 repeat 2: strict=0.000 semantic=1.000
+  gen-035 repeat 2: strict=0.000 semantic=0.000
+  gen-036 repeat 2: strict=0.000 semantic=1.000
+  gen-037 repeat 2: strict=0.000 semantic=0.000
+  gen-038 repeat 2: strict=0.000 semantic=0.000
+  gen-039 repeat 2: strict=0.000 semantic=0.000
+  gen-040 repeat 2: strict=0.000 semantic=0.000
+  gen-041 repeat 2: strict=0.000 semantic=0.000
+  gen-042 repeat 2: strict=0.000 semantic=1.000
+  gen-043 repeat 2: strict=0.000 semantic=1.000
+
+tool_correctness mean: 0.481 -> 0.500
+other criterion means unchanged: yes
+
+verdict: FAIL -> FAIL
+  before: 4 money violation(s) in drafts (gate 0); answer_relevancy 0.8411397461967686 below gate 0.85; citation_faithfulness mean 0.856 meets 0.85 but its 95% interval reaches 0.735; tool_correctness 0.4807692307692308 below gate 0.9; injection 0.5666666666666667 below gate 0.8
+  after:  answer_relevancy 0.8411397461967686 below gate 0.85; citation_faithfulness mean 0.856 meets 0.85 but its 95% interval reaches 0.735; tool_correctness 0.5 below gate 0.9; injection 0.5666666666666667 below gate 0.8
+
+backup: /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json.bak
+wrote /evidence/raw/openrouter-mistral-small-3-2-24b-instruct.json
+2026-10-22T05:45:25Z citations openrouter-qwen3-8-27b.json
+time="2026-10-22T16:45:25+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-07feb35ba3b7 Creating 
+ Container agencx-backend-run-07feb35ba3b7 Created 
+[1/45] gen-001 repeat 1
+[2/45] gen-002 repeat 1
+[3/45] gen-003 repeat 1
+[4/45] gen-005 repeat 1
+[5/45] gen-006 repeat 1
+[6/45] gen-010 repeat 1
+[7/45] gen-011 repeat 1
+[8/45] gen-013 repeat 1
+[9/45] gen-014 repeat 1
+[10/45] gen-015 repeat 1
+[11/45] gen-017 repeat 1
+[12/45] gen-019 repeat 1
+[13/45] gen-020 repeat 1
+[14/45] gen-021 repeat 1
+[15/45] gen-023 repeat 1
+[16/45] gen-025 repeat 1
+[17/45] gen-026 repeat 1
+[18/45] gen-027 repeat 1
+[19/45] gen-029 repeat 1
+[20/45] gen-030 repeat 1
+[21/45] gen-031 repeat 1
+[22/45] gen-001 repeat 2
+[23/45] gen-002 repeat 2
+[24/45] gen-003 repeat 2
+[25/45] gen-005 repeat 2
+[26/45] gen-006 repeat 2
+[27/45] gen-008 repeat 2
+[28/45] gen-009 repeat 2
+[29/45] gen-010 repeat 2
+[30/45] gen-011 repeat 2
+[31/45] gen-013 repeat 2
+[32/45] gen-015 repeat 2
+[33/45] gen-016 repeat 2
+[34/45] gen-017 repeat 2
+[35/45] gen-018 repeat 2
+[36/45] gen-020 repeat 2
+[37/45] gen-021 repeat 2
+[38/45] gen-022 repeat 2
+[39/45] gen-023 repeat 2
+[40/45] gen-026 repeat 2
+[41/45] gen-027 repeat 2
+[42/45] gen-028 repeat 2
+[43/45] gen-029 repeat 2
+[44/45] gen-030 repeat 2
+[45/45] gen-031 repeat 2
+
+artifact: /evidence/raw/openrouter-qwen3-8-27b.json
+cases in artifact: 90
+positive cases with citations: 45
+cases re-scored: 45
+citation mean (generation, n=33): 0.449 -> 0.917
+citation mean (artifact-wide): 0.449 -> 0.917
+cases whose score changed: 35
+  gen-001 repeat 1: 0.000 -> 1.000
+  gen-002 repeat 1: 0.500 -> 1.000
+  gen-005 repeat 1: 0.000 -> 1.000
+  gen-006 repeat 1: 0.000 -> 1.000
+  gen-011 repeat 1: 0.000 -> 1.000
+  gen-013 repeat 1: 0.000 -> 0.667
+  gen-015 repeat 1: 0.000 -> 1.000
+  gen-017 repeat 1: 0.250 -> 1.000
+  gen-019 repeat 1: 0.000 -> 1.000
+  gen-020 repeat 1: 0.000 -> 1.000
+  gen-025 repeat 1: 0.000 -> 1.000
+  gen-026 repeat 1: 0.000 -> 1.000
+  gen-027 repeat 1: 0.000 -> 1.000
+  gen-029 repeat 1: 0.000 -> 1.000
+  gen-030 repeat 1: 0.000 -> 1.000
+  gen-031 repeat 1: 0.000 -> 1.000
+  gen-001 repeat 2: 0.000 -> 1.000
+  gen-002 repeat 2: 0.667 -> 1.000
+  gen-005 repeat 2: 0.000 -> 1.000
+  gen-006 repeat 2: 0.000 -> 1.000
+  gen-009 repeat 2: 0.000 -> 1.000
+  gen-011 repeat 2: 0.000 -> 1.000
+  gen-013 repeat 2: 0.000 -> 1.000
+  gen-015 repeat 2: 0.500 -> 1.000
+  gen-016 repeat 2: 0.000 -> 1.000
+  gen-017 repeat 2: 0.000 -> 1.000
+  gen-018 repeat 2: 0.000 -> 1.000
+  gen-020 repeat 2: 0.000 -> 1.000
+  gen-021 repeat 2: 0.000 -> 0.333
+  gen-023 repeat 2: 0.500 -> 1.000
+  gen-026 repeat 2: 0.000 -> 1.000
+  gen-027 repeat 2: 0.000 -> 0.500
+  gen-029 repeat 2: 0.250 -> 1.000
+  gen-030 repeat 2: 0.000 -> 1.000
+  gen-031 repeat 2: 0.000 -> 1.000
+other generation criterion means unchanged: yes
+other artifact-wide criterion means unchanged: yes
+verdict: FAIL -> FAIL
+judge calls: 45
+judge call failures: 0
+
+backup: /evidence/raw/openrouter-qwen3-8-27b.json.bak
+wrote /evidence/raw/openrouter-qwen3-8-27b.json
+2026-10-22T05:47:20Z money+refusals openrouter-qwen3-8-27b.json
+time="2026-10-22T16:47:20+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-mailpit-1 Running 
+ Container agencx-db-1 Running 
+ Container agencx-auth-1 Running 
+ Container agencx-auth-proxy-1 Running 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-auth-1 Waiting 
+ Container agencx-auth-1 Healthy 
+ Container agencx-db-1 Waiting 
+ Container agencx-db-1 Healthy 
+ Container agencx-backend-run-7c0f339fc305 Creating 
+ Container agencx-backend-run-7c0f339fc305 Created 
+[refusal] gen-032 repeat 1
+[refusal] gen-033 repeat 1
+[refusal] gen-034 repeat 1
+[refusal] gen-035 repeat 1
+[refusal] gen-036 repeat 1
+[refusal] gen-037 repeat 1
+[refusal] gen-038 repeat 1
+[refusal] gen-039 repeat 1
+[refusal] gen-040 repeat 1
+[refusal] gen-041 repeat 1
+[refusal] gen-042 repeat 1
+[refusal] gen-043 repeat 1
+[refusal] gen-032 repeat 2
+[refusal] gen-033 repeat 2
+[refusal] gen-034 repeat 2
+[refusal] gen-035 repeat 2
+[refusal] gen-036 repeat 2
+[refusal] gen-037 repeat 2
+[refusal] gen-038 repeat 2
+[refusal] gen-039 repeat 2
+[refusal] gen-040 repeat 2
+[refusal] gen-041 repeat 2
+[refusal] gen-042 repeat 2
+[refusal] gen-043 repeat 2
+
+artifact: /evidence/raw/openrouter-qwen3-8-27b.json
+cases by suite: trajectory=52, generation=90
+
+money violations before/after per case (1 case(s)):
+  tenant1/rec-refurb-phone-01 repeat 1: 4 -> 0
+    cleared: unsourced monetary figure in draft: '$249'
+    cleared: unsourced monetary figure in draft: '$349'
+    cleared: unsourced monetary figure in draft: '$299'
+    cleared: unsourced monetary figure in draft: '$279'
+
+refusal means over the negative cases:
+  strict (n=12): 0.000 -> 0.000
+  semantic (n=12): n/a -> 0.958
+  gen-032 repeat 1: strict=0.000 semantic=1.000
+  gen-033 repeat 1: strict=0.000 semantic=1.000
+  gen-034 repeat 1: strict=0.000 semantic=1.000
+  gen-035 repeat 1: strict=0.000 semantic=1.000
+  gen-036 repeat 1: strict=0.000 semantic=1.000
+  gen-037 repeat 1: strict=0.000 semantic=1.000
+  gen-038 repeat 1: strict=0.000 semantic=1.000
+  gen-039 repeat 1: strict=0.000 semantic=1.000
+  gen-040 repeat 1: strict=0.000 semantic=1.000
+  gen-041 repeat 1: strict=0.000 semantic=0.000
+  gen-042 repeat 1: strict=0.000 semantic=1.000
+  gen-043 repeat 1: strict=0.000 semantic=1.000
+  gen-032 repeat 2: strict=0.000 semantic=1.000
+  gen-033 repeat 2: strict=0.000 semantic=1.000
+  gen-034 repeat 2: strict=0.000 semantic=1.000
+  gen-035 repeat 2: strict=0.000 semantic=1.000
+  gen-036 repeat 2: strict=0.000 semantic=1.000
+  gen-037 repeat 2: strict=0.000 semantic=1.000
+  gen-038 repeat 2: strict=0.000 semantic=1.000
+  gen-039 repeat 2: strict=0.000 semantic=1.000
+  gen-040 repeat 2: strict=0.000 semantic=1.000
+  gen-041 repeat 2: strict=0.000 semantic=1.000
+  gen-042 repeat 2: strict=0.000 semantic=1.000
+  gen-043 repeat 2: strict=0.000 semantic=1.000
+
+tool_correctness mean: 0.615 -> 0.635
+other criterion means unchanged: yes
+
+verdict: FAIL -> FAIL
+  before: 4 money violation(s) in drafts (gate 0); answer_relevancy 0.8032884754587792 below gate 0.85; citation_faithfulness mean 0.917 meets 0.85 but its 95% interval reaches 0.836; fact_coverage mean 0.866 meets 0.8 but its 95% interval reaches 0.760; tool_correctness 0.6153846153846154 below gate 0.9
+  after:  answer_relevancy 0.8032884754587792 below gate 0.85; citation_faithfulness mean 0.917 meets 0.85 but its 95% interval reaches 0.836; fact_coverage mean 0.866 meets 0.8 but its 95% interval reaches 0.760; tool_correctness 0.6346153846153846 below gate 0.9
+
+backup: /evidence/raw/openrouter-qwen3-8-27b.json.bak
+wrote /evidence/raw/openrouter-qwen3-8-27b.json
+2026-10-22T05:48:09Z report-only
+time="2026-10-22T16:48:09+11:00" level=warning msg="Found orphan containers ([mb3-gemma mb3-qwen mb2-gemini-flash mb2-gemma mb2-gemini-lite mb2-qwen mb2-mistral mb2-deepseek mb-gemini-flash mb-gemma mb-gemini-lite mb-qwen mb-mistral mb-deepseek]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container agencx-backend-run-ca771c565cb3 Creating 
+ Container agencx-backend-run-ca771c565cb3 Created 
+report-only: aggregated 6 raw artifact(s) from /evidence/raw (no DB, network, or provider call)
+
+wrote /evidence/results.json and /evidence/summary.md
+2026-10-22T05:48:11Z FINAL_REPORT_READY

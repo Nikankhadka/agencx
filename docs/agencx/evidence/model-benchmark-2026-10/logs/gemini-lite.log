@@ -1,0 +1,58 @@
+generation suite: google-native/gemini-3.5-flash-lite
+[generation 1/2] gen-001 If I sell my phone after a repair, does the new owner still 
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 8837.97it/s]
+[generation 1/2] gen-002 What's covered under your repair warranty?
+[generation 1/2] gen-003 Does the warranty cover if I drop my phone again after the r
+[generation 1/2] gen-004 How long does a screen repair usually take?
+[generation 1/2] gen-005 How long will a water damage assessment take?
+[generation 1/2] gen-006 What happens if you need to order a part for my rarer phone 
+[generation 1/2] gen-007 Do I need to book an appointment before coming in?
+[generation 1/2] gen-008 What happens if I don't pick up my phone after it's repaired
+[generation 1/2] gen-009 Can I get my device fixed after hours?
+[generation 1/2] gen-010 If the repair fails, do I still owe anything?
+[generation 1/2] gen-011 Can I get a refund if I change my mind after picking up my r
+[generation 1/2] gen-012 Is there a fee if I cancel before you start working on my ph
+[generation 1/2] gen-013 Is the diagnostic fee waived if I go ahead with the repair?
+[generation 1/2] gen-014 Will you access my photos or personal data during a screen r
+[generation 1/2] gen-015 Do software or data-recovery jobs need special consent?
+[generation 1/2] gen-016 Will you match a quote I got from another repair shop?
+[generation 1/2] gen-017 If my phone breaks again after a repair but it's a different
+[generation 1/2] gen-018 Can you repair a phone I didn't originally buy from you?
+[generation 1/2] gen-019 Do you have loaner phones while mine is being repaired?
+[generation 1/2] gen-020 Are your technicians certified?
+[generation 1/2] gen-021 How much is a screen repair for a budget Android phone?
+[generation 1/2] gen-022 What does a flagship OEM screen replacement cost compared to
+[generation 1/2] gen-023 Can you give me a screen repair price for my tablet?
+[generation 1/2] gen-024 How much to fix a foldable phone's screen?
+[generation 1/2] gen-025 What's the price difference between a standard and flagship 
+[generation 1/2] gen-026 How much does a charging port repair cost?
+[generation 1/2] gen-027 My phone won't charge at all - do you charge for a diagnosti
+[generation 1/2] gen-028 What's the fee for a general diagnostic?
+[generation 1/2] gen-029 How much for a water damage assessment and what happens afte
+[generation 1/2] gen-030 What does rush service cost?
+[generation 1/2] gen-031 How much is a wireless charging coil replacement?
+[generation 1/2] gen-032 What's the capital of France?
+[generation 1/2] gen-033 Can you recommend a good pizza place nearby?
+[generation 1/2] gen-034 What's the current stock price of Apple?
+[generation 1/2] gen-035 Can I pay in crypto?
+[generation 1/2] gen-036 Do you offer a payment plan or instalments on a big repair?
+[generation 1/2] gen-037 Is there a student discount?
+llm rate-limited; retrying in 2s (attempt 1/3)
+[generation 1/2] gen-038 Do you take trade-ins against the cost of a repair?
+[generation 1/2] gen-039 Can you bill my phone insurance directly?
+llm rate-limited; retrying in 2s (attempt 1/3)
+llm rate-limited; retrying in 4s (attempt 2/3)
+[generation 1/2] gen-040 Do you post repaired phones back by courier?
+llm rate-limited; retrying in 2s (attempt 1/3)
+llm rate-limited; retrying in 4s (attempt 2/3)
+[generation 1/2] gen-041 Are you open on Sunday?
+[generation 1/2] gen-042 Is there parking outside the shop?
+[generation 1/2] gen-043 Do you sell gift cards?
+[generation 1/2] gen-044 What services do you offer?
+[generation 1/2] gen-045 Can you give me a list of the items and prices you sell?
+[generation 2/2] gen-001 If I sell my phone after a repair, does the new owner still 
+[generation 2/2] gen-002 What's covered under your repair warranty?
+[generation 2/2] gen-003 Does the warranty cover if I drop my phone again after the r
+llm rate-limited; retrying in 2s (attempt 1/3)
+llm rate-limited; retrying in 4s (attempt 2/3)

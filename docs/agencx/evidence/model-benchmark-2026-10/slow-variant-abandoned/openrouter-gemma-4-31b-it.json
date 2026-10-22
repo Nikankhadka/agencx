@@ -1,0 +1,145 @@
+{
+  "family": "gemma",
+  "label": "openrouter/gemma-4-31b-it",
+  "route": "openrouter",
+  "base_url": "https://openrouter.ai/api/v1",
+  "api_model": "google/gemma-4-31b-it",
+  "api_key_env": "OPENROUTER_API_KEY",
+  "fallback_order": null,
+  "judges": {
+    "primary": {
+      "label": "judge/anthropic-claude-haiku-5.5",
+      "route": "openrouter",
+      "api_model": "anthropic/claude-haiku-5.5"
+    },
+    "second": {
+      "label": "judge/openai-gpt-6-luna",
+      "route": "openrouter",
+      "api_model": "openai/gpt-6-luna"
+    }
+  },
+  "pricing": {
+    "source": "openrouter_live",
+    "input_per_token": 2e-07,
+    "output_per_token": 4e-07,
+    "cache_read_per_token": null,
+    "raw": {
+      "prompt": "0.0000002",
+      "completion": "0.0000004"
+    }
+  },
+  "pricing_fetched_at": "2026-10-22T03:51:57Z",
+  "pricing_error": null,
+  "thresholds": {
+    "faithfulness": 0.85,
+    "answer_relevancy": 0.85,
+    "citation_faithfulness": 0.85,
+    "fact_coverage": 0.8,
+    "tool_correctness": 0.9,
+    "injection": 0.8,
+    "money_violations": 0.0
+  },
+  "limit": null,
+  "command": "python -m evals.model_benchmark --models gemma --resume --out /evidence",
+  "git_sha": "712033b",
+  "git_sha_source": "MODEL_BENCHMARK_COMMIT",
+  "generated_at": "2026-10-22T03:56:28Z",
+  "gate": {
+    "status": "completed",
+    "qualified": true,
+    "label": "openrouter/gemma-4-31b-it",
+    "api_model": "google/gemma-4-31b-it",
+    "checks": [
+      {
+        "name": "inspection_extract_1",
+        "ok": true,
+        "error": null,
+        "wall_ms": 252161.4
+      },
+      {
+        "name": "inspection_extract_2",
+        "ok": true,
+        "error": null,
+        "wall_ms": 2030.7
+      },
+      {
+        "name": "inspection_extract_3",
+        "ok": true,
+        "error": null,
+        "wall_ms": 13606.6
+      },
+      {
+        "name": "tool_call",
+        "ok": true,
+        "error": null,
+        "wall_ms": 565.2,
+        "detail": "one tool call parsed"
+      },
+      {
+        "name": "long_context_chat",
+        "ok": true,
+        "error": null,
+        "wall_ms": 2757.6,
+        "prompt_chars": 48047
+      }
+    ],
+    "error": null,
+    "usage": {
+      "calls": 5,
+      "ok_calls": 5,
+      "failed_calls": 0,
+      "input_tokens": 10819,
+      "output_tokens": 413,
+      "cached_tokens": 32
+    },
+    "cost_usd": 0.002329,
+    "started_at": "2026-10-22T03:51:57Z",
+    "finished_at": "2026-10-22T03:56:28Z"
+  },
+  "fallback_attempts": [
+    {
+      "label": "openrouter/gemma-4-31b-it",
+      "api_model": "google/gemma-4-31b-it",
+      "fallback_order": null,
+      "qualified": true,
+      "error": null
+    }
+  ],
+  "aggregate": {
+    "cases": 0,
+    "scored_cases": 0,
+    "errors": 0,
+    "error_rate": 0.0,
+    "criteria": {},
+    "money_violations": 0,
+    "judge_errors": 0,
+    "turn_ms": {
+      "p50": null,
+      "p95": null
+    },
+    "calls": {
+      "p50": null,
+      "p95": null,
+      "total": 0
+    },
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "cached": 0,
+      "cache_share": 0.0
+    },
+    "cost_usd": null
+  },
+  "verdict": {
+    "status": "FAIL",
+    "reasons": [
+      "suites not scored: generation, trajectory, injection",
+      "faithfulness was not scored (gate 0.85)",
+      "answer_relevancy was not scored (gate 0.85)",
+      "citation_faithfulness was not scored (gate 0.85)",
+      "fact_coverage was not scored (gate 0.8)",
+      "tool_correctness was not scored (gate 0.9)",
+      "injection was not scored (gate 0.8)"
+    ]
+  }
+}
