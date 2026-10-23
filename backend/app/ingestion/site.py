@@ -107,10 +107,13 @@ _JUNK_SEGMENTS = {
     "slides",
     "tag",
     "tags",
+    "tandc",
+    "tcs",
     "terms",
     "test",
     "tests",
     "testing",
+    "tnc",
     "wp-admin",
     "wp-json",
     "wp-login",
@@ -269,13 +272,17 @@ def is_junk(url: str) -> bool:
     extension = path[path.rfind(".") :].lower() if "." in path.rsplit("/", 1)[-1] else ""
     if extension in _NON_PAGE_EXTENSIONS:
         return True
-    segments = [segment for segment in path.casefold().split("/") if segment]
-    if any(segment in _JUNK_SEGMENTS for segment in segments):
+    raw_segments = [segment for segment in path.casefold().split("/") if segment]
+    # Split hyphenated variants too: /privacy-policy and /terms-and-conditions
+    # are the same junk as /privacy and /terms, while whole-segment names such
+    # as wp-admin are checked as written.
+    tokens = {token for segment in raw_segments for token in re.split(r"[_.-]+", segment) if token}
+    if any(segment in _JUNK_SEGMENTS for segment in raw_segments) or tokens & _JUNK_SEGMENTS:
         return True
     # A slider's individual slides and a staging page's test-* variants are
     # path variants of something that should never be read.
     staging_prefixes = ("slide-", "slider-", "test-", "sample-", "demo-")
-    if any(segment.startswith(staging_prefixes) for segment in segments):
+    if any(segment.startswith(staging_prefixes) for segment in raw_segments):
         return True
     return False
 
@@ -737,14 +744,18 @@ async def crawl_site(
     title = homepage_title or pages[0].title
     logger.debug("site crawl pages=%s", [page.url for page in pages])
     logger.info(
-        "site crawl homepage=%s discovered=%d selected=%d read=%d skipped=%s chars=%d timed_out=%s",
+        "site crawl homepage=%s pages_discovered=%d pages_selected=%d pages_read=%d "
+        "pages_skipped=%d blocked=%d robots_skipped=%d chars=%d timed_out=%s reasons=%s",
         discovery.homepage,
         discovery.considered,
         len(discovery.pages),
         len(pages),
-        dict(skipped),
+        sum(skipped.values()),
+        skipped.get("blocked", 0),
+        skipped.get("robots", 0),
         len(text),
         timed_out,
+        dict(skipped),
     )
     return CrawlResult(
         homepage=discovery.homepage,

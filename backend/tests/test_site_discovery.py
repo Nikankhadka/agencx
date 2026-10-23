@@ -240,8 +240,13 @@ def test_is_junk_blocks_assets_staging_and_slider_fragments() -> None:
     assert site.is_junk("https://shop.example/sample-menu")
     assert site.is_junk("https://shop.example/images/logo.png")
     assert site.is_junk("https://shop.example/slider-home")
+    assert site.is_junk("https://shop.example/privacy-policy")
+    assert site.is_junk("https://shop.example/terms-and-conditions")
+    assert site.is_junk("https://shop.example/tcs")
+    assert site.is_junk("https://shop.example/wp-admin")
     assert not site.is_junk("https://shop.example/testimonials")
     assert not site.is_junk("https://shop.example/services")
+    assert not site.is_junk("https://shop.example/dental-anxiety")
 
 
 def test_near_duplicate_path_keeps_different_services() -> None:

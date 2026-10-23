@@ -25,7 +25,7 @@ from app.features.business.offering_candidates import normalize_name
 from app.features.business.service import create_offerings_batch
 from app.features.knowledge.models import normalize_sections
 from app.features.knowledge.offering_extraction import extract_offerings
-from app.features.knowledge.structuring import render_sections, structure_document
+from app.features.knowledge.structuring import render_sections, segments, structure_document
 from app.ingestion.chunker import extract_text
 from app.ingestion.pipeline import _replace_chunks, ingest_offerings, process_document
 from app.ingestion.site import CrawlResult, HttpReader, crawl_site
@@ -163,13 +163,21 @@ async def scrape_site(*, url: str) -> CrawlResult:
     local E2E fixture reachable applies to every page, robots.txt and sitemap.
     """
     settings = get_settings()
-    return await crawl_site(
+    crawl = await crawl_site(
         url,
         reader=HttpReader(allowed_targets=_url_fetch_allowlist()),
         max_pages=settings.website_crawl_max_pages,
         max_chars=settings.website_crawl_max_chars,
         concurrency=settings.website_crawl_concurrency,
     )
+    logger.info(
+        "site scrape homepage=%s chars=%d tokens_estimate=%d segments=%d",
+        crawl.homepage,
+        len(crawl.text),
+        (len(crawl.text) + 3) // 4,
+        len(segments(crawl.text)),
+    )
+    return crawl
 
 
 def _url_fetch_allowlist() -> set[AllowedTarget]:

@@ -581,6 +581,165 @@ async def test_a_document_ingested_before_this_screen_is_structured_on_first_vie
 
 
 @pytest.mark.db
+async def test_url_draft_crawls_the_site_into_one_document_with_two_model_calls(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole site lands as one reviewable document, and the 11.5k budget
+    keeps the structure and offering passes to one model call each."""
+    headers = await _signup_tenant_admin(client)
+
+    def page(title: str, paragraphs: list[str], *, nav: bool = True) -> bytes:
+        links = (
+            '<a href="/about">About</a>'
+            '<a href="/services">Services</a>'
+            '<a href="/services/phone-repair">Phone repair</a>'
+            '<a href="/pricing">Pricing</a>'
+            '<a href="/contact">Contact</a>'
+            if nav
+            else ""
+        )
+        body = "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
+        return (
+            f"<html><head><title>{title}</title></head><body>"
+            f"<header><nav>{links}</nav></header><main>{body}</main>"
+            f"</body></html>"
+        ).encode()
+
+    pages = {
+        "https://fixture.test/": page(
+            "Northside Repairs",
+            [
+                "We repair phones and laptops for the whole neighbourhood. "
+                "Walk-ins are welcome, and most screen repairs are finished the "
+                "same day. We confirm the price before any work starts. Parking "
+                "is available behind the shop, and the bus stops directly outside.",
+            ],
+        ),
+        "https://fixture.test/robots.txt": (
+            b"User-agent: *\nDisallow: /private\nSitemap: https://fixture.test/sitemap.xml\n"
+        ),
+        "https://fixture.test/sitemap.xml": (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            b"<url><loc>https://fixture.test/services/phone-repair-austin</loc></url>"
+            b"<url><loc>https://fixture.test/services/phone-repair-boston</loc></url>"
+            b"<url><loc>https://fixture.test/test-page</loc></url>"
+            b"<url><loc>https://fixture.test/blog/post</loc></url>"
+            b"</urlset>"
+        ),
+        "https://fixture.test/about": page(
+            "About",
+            [
+                "Northside Repairs has served the same suburb for fifteen years. "
+                "We are a family business, and every repair carries a ninety day "
+                "warranty. We explain the fault before we start, and we never "
+                "replace a part that does not need replacing. The same technician "
+                "checks the device before and after the repair.",
+            ],
+            nav=False,
+        ),
+        "https://fixture.test/services": page(
+            "Services",
+            [
+                "Screen replacement, battery replacement, charging port repair, "
+                "camera repair and data recovery. Bring the device in and we will "
+                "diagnose it while you wait. Most repairs are ready the same day. "
+                "A laptop repair that needs a part ordered usually takes two to "
+                "three working days, and we call you when it arrives.",
+            ],
+            nav=False,
+        ),
+        "https://fixture.test/services/phone-repair": page(
+            "Phone repair",
+            [
+                "Phone repairs start with a free diagnostic. We replace screens, "
+                "batteries and charging ports, and we clean water damage. Every "
+                "phone repair is tested before you collect it, and the price you "
+                "are quoted is the price you pay.",
+            ],
+            nav=False,
+        ),
+        "https://fixture.test/pricing": page(
+            "Pricing",
+            [
+                "Phone screen replacement from $89. Phone battery replacement from "
+                "$49. Charging port repair from $69. Diagnostic checks are free "
+                "when you go ahead with the repair. Every price is confirmed "
+                "before work starts, and every repair carries a ninety day "
+                "warranty covering the part and the labour.",
+            ],
+            nav=False,
+        ),
+        "https://fixture.test/contact": (
+            b"<html><head><title>Contact</title>"
+            b'<script type="application/ld+json">{"@type":"LocalBusiness",'
+            b'"telephone":"+61 2 5550 1000","openingHours":["Mo-Fr 09:00-18:00"]}'
+            b"</script></head><body><nav>"
+            b'<a href="/about">About</a><a href="/services">Services</a>'
+            b'<a href="/pricing">Pricing</a><a href="/contact">Contact</a></nav><main>'
+            b"<p>Call us on 555-0100 or visit 12 High Street. We are open Monday "
+            b"to Friday from 9am to 6pm, and Saturday from 10am to 2pm. Weekend "
+            b"drop-offs are welcome. Parking is available behind the building, and "
+            b"the train station is a short walk away. Bring the device and any "
+            b"charger or case that belongs with it.</p></main></body></html>"
+        ),
+    }
+    urls_read: list[str] = []
+
+    async def fake_fetch(url: str, **kwargs: Any) -> bytes:
+        urls_read.append(url)
+        try:
+            return pages[url]
+        except KeyError as exc:
+            raise ValueError(f"could not read this URL (HTTP 404) {url}") from exc
+
+    provider = SegmentStructuringFake()
+    original_provider = app.dependency_overrides[get_llm_provider]
+    app.dependency_overrides[get_llm_provider] = lambda: provider
+    monkeypatch.setattr("app.ingestion.site.fetch_page", fake_fetch)
+    try:
+        response = await client.post(
+            "/api/knowledge/drafts/url",
+            headers=headers,
+            json={"url": "https://fixture.test/"},
+        )
+    finally:
+        app.dependency_overrides[get_llm_provider] = original_provider
+
+    assert response.status_code == 201, response.text
+    draft = response.json()
+    assert draft["status"] == "draft"
+    assert draft["sections"]
+    assert provider.inputs, "the draft must run the structuring pass"
+    assert len(provider.inputs) == 2, "one structure call and one offering call"
+
+    # Junk and SEO city duplicates never reach the fetcher; the canonical
+    # service page does, so the city variants are the only ones dropped.
+    assert "https://fixture.test/services/phone-repair" in urls_read
+    assert "https://fixture.test/services/phone-repair-austin" not in urls_read
+    assert "https://fixture.test/services/phone-repair-boston" not in urls_read
+    assert "https://fixture.test/test-page" not in urls_read
+    assert "https://fixture.test/blog/post" not in urls_read
+
+    source = await client.get(f"/api/knowledge/records/{draft['id']}/source", headers=headers)
+    assert source.status_code == 200
+    text = source.json()["text"]
+    assert "Phone screen replacement from $89" in text
+    assert "Monday to Friday from 9am to 6pm" in text
+    assert "Source: https://fixture.test/services" in text
+    assert len(text) <= 11_500
+
+    count = await superuser_conn.fetchval(
+        "select count(*) from documents where id = $1 and doc_type = 'website'",
+        uuid.UUID(draft["id"]),
+    )
+    assert count == 1
+
+
+@pytest.mark.db
 async def test_adding_the_same_link_twice_re_reads_it_in_place(
     client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
