@@ -89,6 +89,10 @@ def _url_failure_code(exc: ValueError) -> str:
     message = str(exc)
     if message.startswith("could not read this URL (HTTP"):
         return "upstream_http"
+    if message.startswith("could not read this URL (timeout)"):
+        return "timeout"
+    if message.startswith("no extractable content"):
+        return "no_content"
     for prefix, code in (
         ("URL resolves to a blocked", "blocked_address"),
         ("URL credentials", "credentials_rejected"),
@@ -96,7 +100,7 @@ def _url_failure_code(exc: ValueError) -> str:
         ("unsupported URL", "scheme_rejected"),
         ("redirect", "redirect_rejected"),
         ("too many redirects", "redirect_limit"),
-        ("URL did not return HTML", "media_type_rejected"),
+        ("URL did not return readable", "media_type_rejected"),
         ("page body exceeds", "body_limit"),
         ("network peer", "peer_mismatch"),
     ):
@@ -149,18 +153,18 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
 async def _scrape_and_draft(
     *, tenant_id: UUID, url: str, provider: LLMProvider
 ) -> tuple[str, str, dict[str, Any] | None]:
-    """Fetch a URL once, then save the fetched source as an unread draft."""
+    """Read a URL once, then save the fetched site as an unread draft."""
     document_id = uuid4()
-    page_text, title = await knowledge_service.scrape_url(url=url)
+    crawl = await knowledge_service.scrape_site(url=url)
     record = await knowledge_service.draft_from_url_text(
         tenant_id=tenant_id,
         document_id=document_id,
         url=url,
-        text=page_text,
-        title=title,
+        text=crawl.text,
+        title=crawl.title,
         provider=provider,
     )
-    return page_text, title, record
+    return crawl.text, crawl.title, record
 
 
 def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:

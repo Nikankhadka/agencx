@@ -23,8 +23,13 @@ import pytest
 import pytest_asyncio
 
 from app.features.onboarding import service as onboarding_service
-from app.features.onboarding.controller import _find_url, response_from_record
+from app.features.onboarding.controller import (
+    _find_url,
+    _url_failure_code,
+    response_from_record,
+)
 from app.features.tenants.slug import suggested_slug, validate_slug
+from app.ingestion.site import CrawlResult
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
@@ -1197,6 +1202,11 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
 # --- URL turn (O-3 site-as-shortcut) ------------------------------------------
 
 
+def test_url_failure_codes_name_timeout_and_thin_content() -> None:
+    assert _url_failure_code(ValueError("could not read this URL (timeout)")) == "timeout"
+    assert _url_failure_code(ValueError("no extractable content at this URL")) == "no_content"
+
+
 class UrlFakeProvider(BaseFakeProvider):
     """Returns a URL-shaped extraction: the page states business_type/services/
     hours. No chat is needed - the URL turn's reply is a server-synthesized
@@ -1230,22 +1240,25 @@ def uploads_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
-    async def fake_fetch(
-        url: str,
-        *,
-        client: httpx.AsyncClient | None = None,
-        **kwargs: Any,
-    ) -> bytes:
-        return html
+def _patch_fetch(monkeypatch: pytest.MonkeyPatch, text: str) -> None:
+    async def fake_crawl(url: str, **kwargs: Any) -> CrawlResult:
+        return CrawlResult(
+            homepage=url,
+            title="Bytefix",
+            text=text,
+            pages=[],
+            discovered=1,
+            selected=1,
+            skipped={},
+            timed_out=False,
+        )
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", fake_crawl)
 
 
-_CANNED_URL_HTML = (
-    b"<html><head><title>Bytefix</title></head>"
-    b"<body><main>Phone repair shop. Screen repairs and batteries. "
-    b"Open weekdays 9 to 6.</main></body></html>"
+_CANNED_URL_TEXT = (
+    "Bytefix is a phone repair shop. Screen repairs and battery replacements "
+    "are available. Open weekdays 9 to 6."
 )
 
 
@@ -1258,7 +1271,7 @@ async def test_url_message_scrapes_ingests_and_reads_back(
     token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
-    _patch_fetch(monkeypatch, _CANNED_URL_HTML)
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
     try:
         body = await _send(client, headers, text="https://bytefix.example.com")
     finally:
@@ -1298,7 +1311,7 @@ async def test_url_message_scrape_failure_falls_back(
     ) -> bytes:
         raise ValueError("no extractable content at this URL")
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fail_fetch)
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", fail_fetch)
     try:
         body = await _send(client, headers, text="https://empty.example.com")
     finally:
@@ -1329,7 +1342,7 @@ async def test_url_message_survives_an_unreachable_host(
     ) -> bytes:
         raise ValueError("could not read this URL (ConnectError)")
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", unreachable)
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", unreachable)
     try:
         body = await _send(client, headers, text="please read https://nope.invalid/")
     finally:
@@ -1347,7 +1360,7 @@ async def test_url_stream_leads_with_the_reading_stamp(
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
-    _patch_fetch(monkeypatch, _CANNED_URL_HTML)
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
     try:
         async with client.stream(
             "POST",

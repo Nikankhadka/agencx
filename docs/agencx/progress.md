@@ -465,6 +465,14 @@ live in the ticket files, not here.
   with the Step 1 runner; the ledger now matches the repo at 38 and both routes
   answer 200. Automation of the hosted migrate step is still open above.
 
+- [x] In-house website ingestion (post-launch, branch `feat/website-crawl`):
+  a pasted URL now crawls 5 to 10 nav-first same-site pages into one
+  11,500-character website document, with one structure call and one offering
+  call, bounded at 10 pages, 3 concurrent reads and a 30 second deadline.
+  Before/after: fixture 1 page / 517 chars -> 5 pages / 3,664; Sydney Dental
+  Care 4,407 -> 11,234 across 9 pages; Phone Clinic 579 -> 4,612 across 5;
+  The Grounds 5,891 -> 11,424 across 5. Decision recorded as D46.
+
 ## Spec status
 
 | Location | Status | Contents |
