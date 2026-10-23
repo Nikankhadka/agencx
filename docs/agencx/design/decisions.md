@@ -1562,3 +1562,40 @@ fast-moving business can tighten it without a deploy.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.
+
+## D46: A pasted URL is read as one bounded, nav-first site document
+
+**Decision.** Website ingestion crawls a small, owner-relevant set of same-site
+pages and composes one `website` document. Discovery reads the homepage once,
+then takes links in this order: the site's own `<nav>`/`<header>` links, the
+sitemaps named by robots.txt plus `/sitemap.xml` and `/sitemap_index.xml`
+(indexes followed two levels deep), and finally ordinary body links. Every
+candidate is normalised, folded to the same site including `www.`, filtered
+through a generic junk blocklist, checked against robots.txt, de-duplicated by
+path within a priority tier, ranked by generic customer-need page names, and
+capped at 10 pages. The pasted URL is always priority 0, even when it is a
+subpath rather than the root.
+
+The crawl fetches and extracts at most 3 pages at once under a 30 second
+deadline. Pricing/menu pages are capped at 6,000 characters and other pages at
+4,000, repeated lines are removed across pages, near-duplicate pages are
+dropped, and the combined document never exceeds 11,500 characters. Each page
+contributes a `## title` heading and a `Source: url` line. The bounds are
+settings (`website_crawl_max_pages`, `website_crawl_max_chars`,
+`website_crawl_concurrency`); nothing about the API shape changes - one URL
+still produces one draft, one structure call and one offerings pass.
+
+**Why.** Reading only the homepage throws away the services, prices and
+opening hours customers ask about, and crawling a whole site turns onboarding
+into an open-ended job. Navigation is the owner's own ranking of what matters;
+sitemaps cover sites without semantic navigation; body links are the last
+resort. 11,500 characters stays below the 12,000-character structuring segment,
+so the turn stays at one structure call. The larger pricing-page cap exists
+because item-and-price lines are denser per character than prose. The deadline
+plus partial-result handling means one slow page cannot hang the owner's turn.
+The selection keywords are generic page names, so nothing branches on a
+tenant's vertical.
+
+**Boundary:** extraction copies prices verbatim and the deterministic money
+guard still governs structuring; no model produces a monetary amount, and
+nothing branches on a tenant's vertical.

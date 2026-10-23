@@ -1,7 +1,7 @@
-"""T-056: fetch a URL and extract its main text for ingestion.
+"""T-056: fetch a URL for ingestion.
 
-Pure fetch + extract - no database access here, so the fetch/extract pieces are
-unit-testable without Postgres. The HTTP fetch is deliberately minimal:
+Pure fetch - no database access here, so the fetch pieces are unit-testable
+without Postgres. The HTTP fetch is deliberately minimal:
 
 - only ``http://``/``https://`` schemes are fetched (anything else raises
   ``ValueError`` before any network I/O);
@@ -28,15 +28,14 @@ pasting the link to its own shop page is not a bot, and the fetch should not
 look like one. This does not defeat protection that fingerprints beyond
 headers; those pages still fail, and now they fail legibly.
 
-HTML extraction removes boilerplate chrome (script/style/nav/header/footer/form)
-and returns the collapsed plain text of what remains, plus the page title.
+HTML extraction here only reads the page title; the readable text comes from
+the crawl's hybrid extractor in ``app.ingestion.extract``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import ipaddress
-import re
 import socket
 from collections.abc import Callable, Collection, Sequence
 from urllib.parse import urljoin, urlparse
@@ -62,10 +61,6 @@ _HEADERS = {
     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "accept-language": "en-AU,en;q=0.9",
 }
-
-# Tag names dropped before text extraction: page chrome, never the content an
-# admin wants their agent to answer from.
-_REMOVED_TAGS = "script, style, noscript, nav, header, footer, form"
 
 # Readable media types. Sitemaps and robots.txt ride the same guarded fetch as
 # pages, so a crawler never needs a second, unguarded HTTP path.
@@ -274,17 +269,6 @@ async def _get_bounded(
         except httpx.HTTPError as exc:
             raise ValueError(f"could not read this URL ({exc.__class__.__name__})") from exc
     raise ValueError("too many redirects")
-
-
-def extract_main_text(html: bytes) -> str:
-    """Plain text of the page with script/style/nav/header/footer/form removed.
-
-    Returns "" when nothing meaningful remains.
-    """
-    tree = HTMLParser(html)
-    for node in tree.css(_REMOVED_TAGS):
-        node.decompose()
-    return re.sub(r"\s+", " ", tree.text(separator=" ", strip=True)).strip()
 
 
 def extract_title(html: bytes) -> str:

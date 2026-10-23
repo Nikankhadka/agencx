@@ -735,6 +735,7 @@ async def crawl_site(
     if len(text) > max_chars:
         text = _truncate(text, max_chars)
     title = homepage_title or pages[0].title
+    logger.debug("site crawl pages=%s", [page.url for page in pages])
     logger.info(
         "site crawl homepage=%s discovered=%d selected=%d read=%d skipped=%s chars=%d timed_out=%s",
         discovery.homepage,

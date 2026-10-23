@@ -1,0 +1,62 @@
+<!doctype html>
+<!--
+  The contact page of the multi-page site fixture. Contact details and opening
+  hours also appear in JSON-LD, the way a small business's site builder usually
+  publishes them, so the extraction pass has both a visible and a structured
+  source to reconcile.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Contact - Northside Repairs</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": "Northside Repairs",
+        "telephone": "+61 2 5550 1000",
+        "email": "hello@northsiderepairs.example",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "12 High Street",
+          "addressLocality": "Northside",
+          "addressRegion": "NSW",
+          "postalCode": "2000",
+          "addressCountry": "AU"
+        },
+        "openingHours": ["Mo-Fr 09:00-18:00", "Sa 10:00-14:00"]
+      }
+    </script>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/fixtures/example-business.html">Home</a>
+        <a href="/fixtures/example-business-services.html">Services</a>
+        <a href="/fixtures/example-business-pricing.html">Pricing</a>
+        <a href="/fixtures/example-business-contact.html">Contact</a>
+      </nav>
+    </header>
+    <main>
+      <h1>Contact</h1>
+      <p>
+        Call us on 555-0100, email hello@northsiderepairs.example, or visit 12
+        High Street. The shop is a short walk from the Northside train station,
+        and there is parking behind the building.
+      </p>
+      <h2>Opening hours</h2>
+      <p>
+        Monday to Friday, 9am to 6pm. Saturday, 10am to 2pm. Closed Sunday and
+        public holidays. Weekend drop-offs are welcome, and we will message you
+        when the repair is ready to collect.
+      </p>
+      <h2>Before you visit</h2>
+      <p>
+        Bring the device and any charger or case that belongs with it. If the
+        repair needs a part we do not keep in stock, we will order it and call
+        you with a collection date.
+      </p>
+    </main>
+    <footer>Northside Repairs, 12 High Street, 555-0100</footer>
+  </body>
+</html>

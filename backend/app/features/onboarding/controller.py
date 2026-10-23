@@ -89,6 +89,10 @@ def _url_failure_code(exc: ValueError) -> str:
     message = str(exc)
     if message.startswith("could not read this URL (HTTP"):
         return "upstream_http"
+    if message.startswith("could not read this URL (timeout)"):
+        return "timeout"
+    if message.startswith("no extractable content"):
+        return "no_content"
     for prefix, code in (
         ("URL resolves to a blocked", "blocked_address"),
         ("URL credentials", "credentials_rejected"),

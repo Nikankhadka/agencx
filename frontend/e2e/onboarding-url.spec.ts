@@ -75,6 +75,7 @@ test("pasting a link reads the site and reads it back", async ({
   });
   expect(docs.ok()).toBe(true);
   const rows = (await docs.json()) as {
+    id: string;
     filename: string;
     doc_type: string;
     status: string;
@@ -86,6 +87,22 @@ test("pasting a link reads the site and reads it back", async ({
   ).toBeTruthy();
   expect(site?.doc_type).toBe("website");
   expect(site?.status).toBe("draft");
+
+  // The stored source is the whole bounded crawl, not just the homepage:
+  // a services-only and a pricing-only line both have to be present, and each
+  // page contributes its own Source line.
+  const source = await request.get(
+    `${BACKEND_URL}/api/knowledge/records/${site?.id}/source`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  expect(source.ok()).toBe(true);
+  const { text } = (await source.json()) as { text: string };
+  expect(text).toContain("Data recovery from phones and laptops");
+  expect(text).toContain("Phone screen replacement from $89");
+  expect(text).toContain(`Source: ${SITE_URL}`);
+  expect(text).toContain(
+    `Source: ${SITE_URL.replace("example-business.html", "example-business-services.html")}`,
+  );
 
   // W-11b: closing the sheet with the X button or Escape must not destroy the
   // owner's in-progress edits - only Discard (covered below) throws the draft

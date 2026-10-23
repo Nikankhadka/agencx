@@ -23,7 +23,11 @@ import pytest
 import pytest_asyncio
 
 from app.features.onboarding import service as onboarding_service
-from app.features.onboarding.controller import _find_url, response_from_record
+from app.features.onboarding.controller import (
+    _find_url,
+    _url_failure_code,
+    response_from_record,
+)
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.ingestion.site import CrawlResult
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
@@ -1196,6 +1200,11 @@ async def test_sse_endpoint_returns_reply(client: httpx.AsyncClient) -> None:
 
 
 # --- URL turn (O-3 site-as-shortcut) ------------------------------------------
+
+
+def test_url_failure_codes_name_timeout_and_thin_content() -> None:
+    assert _url_failure_code(ValueError("could not read this URL (timeout)")) == "timeout"
+    assert _url_failure_code(ValueError("no extractable content at this URL")) == "no_content"
 
 
 class UrlFakeProvider(BaseFakeProvider):

@@ -1,6 +1,6 @@
 """T-056: URL ingestion - fetch/extract unit tests plus service/API ingestion.
 
-Split into unit tests (extract_main_text/extract_title/fetch_page, no Postgres)
+Split into unit tests (extract_title/fetch_page, no Postgres)
 and db-marked tests (service.upload_url + POST /api/knowledge/urls) following the
 test_knowledge_api.py client-fixture pattern. The fetch step is monkeypatched to
 serve a canned page so the tests exercise the real extract/chunk/embed path
@@ -24,7 +24,7 @@ import pytest_asyncio
 
 from app.features.knowledge import service
 from app.ingestion import url as url_ingestion
-from app.ingestion.url import extract_main_text, extract_title, fetch_page
+from app.ingestion.url import extract_title, fetch_page
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
 from app.shared import db
@@ -87,25 +87,6 @@ def _html_response(
 
 
 # --- unit: extraction --------------------------------------------------------
-
-
-def test_extract_main_text_strips_chrome_and_keeps_body() -> None:
-    text = extract_main_text(_CANNED_HTML)
-    assert "We are open weekdays 9 to 5." in text
-    assert "Menu" not in text
-    assert "logo" not in text
-    assert "goodbye" not in text
-    assert "alert('x')" not in text
-    assert "color:red" not in text
-
-
-def test_extract_main_text_empty_when_no_body_content() -> None:
-    assert extract_main_text(b"<html><body><nav>only nav</nav></body></html>") == ""
-
-
-def test_extract_main_text_empty_for_short_or_blank_html() -> None:
-    assert extract_main_text(b"") == ""
-    assert extract_main_text(b"<html></html>") == ""
 
 
 def test_extract_title_returns_stripped_title() -> None:
