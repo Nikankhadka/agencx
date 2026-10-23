@@ -5,6 +5,7 @@ import {
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Icon } from "./Icon";
 
@@ -42,6 +43,8 @@ export interface FieldPillProps {
   type?: "text" | "tel" | "email";
   autoComplete?: string;
   maxLength?: number;
+  /** Focus hook for a widget that owns its own submit or picker. */
+  inputRef?: RefObject<HTMLInputElement | null>;
   "aria-label": string;
   "data-testid"?: string;
 }
@@ -72,10 +75,12 @@ export function FieldPill({
   type = "text",
   autoComplete,
   maxLength,
+  inputRef,
   "aria-label": ariaLabel,
   "data-testid": testId,
 }: FieldPillProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fallbackRef = useRef<HTMLInputElement>(null);
+  const resolvedRef = inputRef ?? fallbackRef;
 
   function submit() {
     if (disabled) return;
@@ -103,7 +108,7 @@ export function FieldPill({
           </div>
         ) : null}
         <input
-          ref={inputRef}
+          ref={resolvedRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}

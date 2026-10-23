@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { PhonePill } from "@/components/ui/PhonePill";
 import { Sheet } from "@/components/ui/Sheet";
 import type { BusinessProfile, ProfileUpdate } from "@/lib/api-schemas";
+import { normalizeStoredPhone } from "@/lib/phone";
 
 export interface ContactSheetProps {
   open: boolean;
@@ -64,6 +65,7 @@ function ContactEditor({
             onChange={setDetail}
             showSubmit={false}
             testId="contact-phone-input"
+            menuPlacement="down"
           />
         ) : (
           <input
@@ -101,7 +103,11 @@ function ContactEditor({
           className="flex-1 rounded-field py-4"
           loading={busy}
           data-testid="contact-save"
-          onClick={() => onSave({ business_contact: detail })}
+          onClick={() =>
+            onSave({
+              business_contact: phoneMode ? normalizeStoredPhone(detail) : detail,
+            })
+          }
         >
           Save
         </Button>

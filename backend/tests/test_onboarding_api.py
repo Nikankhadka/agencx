@@ -442,6 +442,31 @@ async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) ->
     assert labels(states["owner_display_name"]) == ["Yes", "No"]
 
 
+def test_contact_beat_accepts_every_country() -> None:
+    """Phone plausibility is global, not Australia-shaped.
+
+    The pill emits international values ("+61 412 345 678", "+977 981
+    2345678") and a typed answer can carry any dial code. ``_contact_like``
+    counts digits, so this locks in that no region is rejected before the
+    message reaches the model. A tightening here would have to keep free-text
+    addresses acceptable too, which is why the check stays deliberately loose.
+    """
+    contact = beats.BEATS["contact"].valid
+    assert contact is not None
+    for value in (
+        "+61 412 345 678",
+        "+1 (415) 555-0132",
+        "+44 20 7946 0958",
+        "+977 981 2345678",
+        "+49 1512 3456789",
+        "+81 90 1234 5678",
+        "owner@bytefix.dev",
+    ):
+        assert contact(value), value
+    for value in ("hello", "12", "+", ""):
+        assert not contact(value), value
+
+
 async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClient) -> None:
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}

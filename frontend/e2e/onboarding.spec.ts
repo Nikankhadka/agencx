@@ -85,6 +85,96 @@ test("onboarding first message streams a reply", async ({ page, request }) => {
   await expect(page.getByTestId("onboarding-error")).toHaveCount(0);
 });
 
+test("the onboarding phone beat submits a country-coded number", async ({ page, request }) => {
+  const contactInput = {
+    kind: "text",
+    placeholder: "",
+    chips: [{ label: "Phone number", value: "phone", dashed: true, widget: "phone" }],
+    mask: null,
+    cta_label: null,
+    prefix: null,
+    suggest_owner_email: false,
+  };
+  await page.route("**/api/onboarding/state", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        stage: "contact",
+        prompt: "How should customers reach you?",
+        draft: {
+          name: "Ronin",
+          business_name: "Test Repairs",
+          business_type: "Phone repair shop",
+        },
+        completed: false,
+        history: [{ role: "assistant", content: "How should customers reach you?" }],
+        input: contactInput,
+        can_confirm: false,
+        suggested_slug: null,
+        paused_beat: null,
+      }),
+    }),
+  );
+
+  let submitted: unknown = null;
+  await page.route("**/api/onboarding/message/stream", async (route) => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body: [
+        'data: {"type":"reply","text":"Got it."}',
+        `data: ${JSON.stringify({
+          type: "state",
+          stage: "abn",
+          draft: {
+            name: "Ronin",
+            business_name: "Test Repairs",
+            business_type: "Phone repair shop",
+            contact: "+977 981 2345678",
+          },
+          completed: false,
+          input: {
+            kind: "text",
+            placeholder: "",
+            chips: [
+              { label: "Yes", value: "yes", dashed: false, widget: "masked" },
+              { label: "No", value: "no", dashed: false, widget: null },
+            ],
+            mask: null,
+            cta_label: null,
+            prefix: "ABN",
+            suggest_owner_email: false,
+          },
+          can_confirm: false,
+          suggested_slug: null,
+          paused_beat: null,
+        })}`,
+        'data: {"type":"done"}',
+        "",
+      ].join("\n\n"),
+    });
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  await page.getByRole("button", { name: "Phone number" }).click();
+  const phone = page.getByTestId("onboarding-phone-input");
+  await expect(phone).toBeVisible();
+
+  // A country the old six-entry table did not have, selected by search.
+  await page.getByRole("button", { name: /^Country:/ }).click();
+  const search = page.getByTestId("phone-country-search");
+  await search.fill("Nepal");
+  await search.press("ArrowDown");
+  await search.press("Enter");
+  await phone.fill("9812345678");
+
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect
+    .poll(() => submitted)
+    .toEqual({ text: "+977 981 2345678" });
+});
+
 test("team selection and the next question stay on the same server beat", async ({
   page,
   request,

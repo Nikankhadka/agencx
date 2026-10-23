@@ -34,6 +34,16 @@ async function saveContact(page: Page, detail: string) {
   await expect(input).toHaveCount(0);
 }
 
+/** Open the phone pill's country picker, search, and pick the first match. */
+async function selectPhoneCountry(page: Page, name: string) {
+  await page.getByRole("button", { name: /^Country:/ }).click();
+  const search = page.getByTestId("phone-country-search");
+  await expect(search).toBeFocused();
+  await search.fill(name);
+  await search.press("ArrowDown");
+  await search.press("Enter");
+}
+
 test.describe("RF-2 business details", () => {
   test("editing the name shows on the Business page and leaves the public address", async ({
     page,
@@ -93,6 +103,10 @@ test.describe("RF-2 business details", () => {
 
     await page.getByRole("button", { name: /^Business contact\b/ }).click();
     await page.getByTestId("contact-phone-toggle").click();
+    // The default country follows the browser locale, which the runner does
+    // not control; pick Australia explicitly so the assertion is about this
+    // widget, not about en-US.
+    await selectPhoneCountry(page, "Australia");
     const phone = page.getByTestId("contact-phone-input");
     await expect(phone).toBeVisible();
     await expect(page.getByTestId("contact-detail-input")).toHaveCount(0);
@@ -103,11 +117,44 @@ test.describe("RF-2 business details", () => {
     // dev-only Next.js indicator sits over the sheet's bottom-left and would
     // swallow a pointer click on the narrower "Email" button.
     await page.getByTestId("contact-phone-toggle").press("Enter");
-    await expect(page.getByTestId("contact-detail-input")).toHaveValue("+61 0412 345 678");
+    await expect(page.getByTestId("contact-detail-input")).toHaveValue("+61 412 345 678");
     await page.getByTestId("contact-save").click();
 
     await page.goto("/business/page");
-    await expect(page.getByTestId("business-contact")).toHaveText("+61 0412 345 678");
+    await expect(page.getByTestId("business-contact")).toHaveText("+61 412 345 678");
+
+    await page.goto("/business/details");
+    await saveContact(page, original);
+  });
+
+  test("the country picker searches every region and saves a non-AU number", async ({
+    page,
+    request,
+  }) => {
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/details");
+
+    await page.getByRole("button", { name: /^Business contact\b/ }).click();
+    const original = await page.getByTestId("contact-detail-input").inputValue();
+    await page.getByTestId("contact-cancel").click();
+
+    await page.getByRole("button", { name: /^Business contact\b/ }).click();
+    await page.getByTestId("contact-phone-toggle").click();
+
+    // The old table was six countries; the full list is searchable and
+    // keyboard-navigable. ArrowDown highlights the first match, Enter picks it.
+    await selectPhoneCountry(page, "United Kingdom");
+
+    const phone = page.getByTestId("contact-phone-input");
+    await expect(phone).toBeFocused();
+    await phone.fill("07400123456");
+
+    await page.getByTestId("contact-phone-toggle").press("Enter");
+    await expect(page.getByTestId("contact-detail-input")).toHaveValue("+44 7400 123456");
+    await page.getByTestId("contact-save").click();
+
+    await page.goto("/business/page");
+    await expect(page.getByTestId("business-contact")).toHaveText("+44 7400 123456");
 
     await page.goto("/business/details");
     await saveContact(page, original);
