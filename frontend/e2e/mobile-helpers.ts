@@ -36,7 +36,10 @@ export async function expectTapTargets(page: Page, minPx = 44): Promise<void> {
       // screen (Sheet/Modal/Drawer) - untappable by definition, and their
       // sub-pixel geometry at rest is not the geometry users get.
       if (el.closest("[inert]")) return false;
-      return rect.height < min;
+      // Sub-pixel layout at a device scale factor can put a 44px minimum
+      // target at 43.999...; a half-pixel tolerance keeps the rule about real
+      // undersizing rather than renderer rounding.
+      return rect.height < min - 0.5;
     });
     return offenders.map((el) => ({
       tag: el.tagName.toLowerCase(),
