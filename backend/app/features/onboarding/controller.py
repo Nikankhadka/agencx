@@ -96,7 +96,7 @@ def _url_failure_code(exc: ValueError) -> str:
         ("unsupported URL", "scheme_rejected"),
         ("redirect", "redirect_rejected"),
         ("too many redirects", "redirect_limit"),
-        ("URL did not return HTML", "media_type_rejected"),
+        ("URL did not return readable", "media_type_rejected"),
         ("page body exceeds", "body_limit"),
         ("network peer", "peer_mismatch"),
     ):

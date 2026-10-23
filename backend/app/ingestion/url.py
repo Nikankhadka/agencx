@@ -9,8 +9,12 @@ unit-testable without Postgres. The HTTP fetch is deliberately minimal:
 - a 2MB body cap (rejecting, not truncating, oversized pages);
 - redirects followed manually, with every hop validated and bounded;
 - non-2xx responses rejected, so an error page is never ingested as content;
-- DNS answers and connected peers must be globally routable and match; only
-  HTML media types are accepted.
+- DNS answers and connected peers must be globally routable and match;
+- every resolved address is tried before the fetch fails, IPv4 first, because
+  a container with no IPv6 route otherwise fails on the first answer even
+  when the host is reachable;
+- HTML, XML and plain text are accepted, so the same SSRF-guarded fetch can
+  read a sitemap or robots.txt.
 
 Every failure surfaces as ``ValueError`` - see ``_get_bounded``. O-7: the
 message names *why*, including the HTTP status, because the one caller that
@@ -63,6 +67,29 @@ _HEADERS = {
 # admin wants their agent to answer from.
 _REMOVED_TAGS = "script, style, noscript, nav, header, footer, form"
 
+# Readable media types. Sitemaps and robots.txt ride the same guarded fetch as
+# pages, so a crawler never needs a second, unguarded HTTP path.
+_READABLE_MEDIA_TYPES = {
+    "text/html",
+    "application/xhtml+xml",
+    "application/xml",
+    "text/xml",
+    "text/plain",
+}
+
+
+def _ipv4_first(addresses: list[str]) -> list[str]:
+    """IPv4 before IPv6, preserving the resolver's order within each family.
+
+    Most hosts answer with both families. A container with no IPv6 route gets
+    ``ConnectError`` on the first v6 answer even though the same host is
+    reachable over v4, which made a perfectly good site look dead.
+    """
+    return sorted(
+        addresses,
+        key=lambda value: isinstance(ipaddress.ip_address(value), ipaddress.IPv6Address),
+    )
+
 
 def _resolve(host: str, port: int) -> list[str]:
     try:
@@ -112,7 +139,7 @@ async def _public_addresses(
         if (not allow_private and not address.is_global) or address.is_multicast:
             raise ValueError("URL resolves to a blocked network address")
         normalized.append(str(address))
-    return normalized
+    return _ipv4_first(normalized)
 
 
 async def _target(
@@ -177,26 +204,40 @@ async def _get_bounded(
     current = url
     for redirect in range(_MAX_REDIRECTS + 1):
         scheme, host, port, addresses = await _target(current, resolver, allowed_targets)
-        selected = addresses[0]
         parsed = urlparse(current)
-        bound_netloc = f"[{selected}]:{port}" if ":" in selected else f"{selected}:{port}"
-        request_url = parsed._replace(netloc=bound_netloc).geturl()
         headers = {**_HEADERS, "host": parsed.netloc, "connection": "close"}
         extensions = {"sni_hostname": host} if scheme == "https" else {}
         try:
-            request = client.build_request(
-                "GET",
-                request_url,
-                timeout=_TIMEOUT,
-                headers=headers,
-                extensions=extensions,
-            )
-            response = await client.send(request, follow_redirects=False, stream=True)
-            try:
-                _verify_peer(response, selected)
-            except ValueError:
-                await response.aclose()
-                raise
+            response: httpx.Response | None = None
+            last_error: httpx.HTTPError | None = None
+            for selected in addresses:
+                bound_netloc = f"[{selected}]:{port}" if ":" in selected else f"{selected}:{port}"
+                request_url = parsed._replace(netloc=bound_netloc).geturl()
+                try:
+                    request = client.build_request(
+                        "GET",
+                        request_url,
+                        timeout=_TIMEOUT,
+                        headers=headers,
+                        extensions=extensions,
+                    )
+                    response = await client.send(request, follow_redirects=False, stream=True)
+                except httpx.HTTPError as exc:
+                    # One dead address (usually an IPv6 answer with no route)
+                    # must not hide the same host's reachable IPv4 address.
+                    last_error = exc
+                    continue
+                # Every attempt is verified against the address it was bound
+                # to, so a fallback can never bypass the peer check.
+                try:
+                    _verify_peer(response, selected)
+                except ValueError:
+                    await response.aclose()
+                    raise
+                break
+            if response is None:
+                assert last_error is not None
+                raise last_error
             if response.status_code in {301, 302, 303, 307, 308}:
                 try:
                     location = response.headers.get("location")
@@ -213,8 +254,8 @@ async def _get_bounded(
                 content_type = (
                     response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
                 )
-                if content_type not in {"text/html", "application/xhtml+xml"}:
-                    raise ValueError("URL did not return HTML")
+                if content_type not in _READABLE_MEDIA_TYPES:
+                    raise ValueError("URL did not return readable content")
                 length = response.headers.get("content-length")
                 if length is not None and (not length.isdigit() or int(length) > _MAX_BODY_BYTES):
                     raise ValueError("page body exceeds the 2MB fetch limit")

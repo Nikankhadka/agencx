@@ -437,8 +437,8 @@ async def test_fetch_page_checks_and_closes_connected_peer(address: str | None) 
             assert calls == 1
 
 
-@pytest.mark.parametrize("content_type", ["", "application/json", "text/plain"])
-async def test_fetch_page_requires_html_media_type(content_type: str) -> None:
+@pytest.mark.parametrize("content_type", ["", "application/json", "text/csv", "image/png"])
+async def test_fetch_page_rejects_unreadable_media_type(content_type: str) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         headers = {"content-type": content_type} if content_type else {}
         return httpx.Response(
@@ -446,7 +446,7 @@ async def test_fetch_page_requires_html_media_type(content_type: str) -> None:
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(ValueError, match="HTML"):
+        with pytest.raises(ValueError, match="readable content"):
             await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
 
 
@@ -463,6 +463,69 @@ async def test_fetch_page_accepts_html_parameters_and_xhtml() -> None:
                 await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
                 == b"ok"
             )
+
+
+@pytest.mark.parametrize(
+    "media_type", ["application/xml; charset=utf-8", "text/xml", "text/plain; charset=utf-8"]
+)
+async def test_fetch_page_accepts_sitemap_and_robots_media_types(media_type: str) -> None:
+    """A sitemap or robots.txt must ride the same SSRF-guarded fetch, never a
+    second unguarded HTTP path of its own."""
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: _html_response(b"<urlset/>", content_type=media_type)
+        )
+    ) as client:
+        assert (
+            await fetch_page(
+                "http://example.com/sitemap.xml", client=client, resolver=_test_resolver
+            )
+            == b"<urlset/>"
+        )
+
+
+async def test_fetch_page_prefers_ipv4_answers() -> None:
+    seen: list[str] = []
+
+    def resolver(host: str, port: int) -> list[str]:
+        return ["2001:4860:4860::8888", "93.184.216.34"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.host))
+        return _html_response(b"ok")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page("https://dual.example/", client=client, resolver=resolver) == b"ok"
+
+    assert seen == ["93.184.216.34"]
+
+
+async def test_fetch_page_tries_each_resolved_address_before_failing() -> None:
+    seen: list[str] = []
+
+    def resolver(host: str, port: int) -> list[str]:
+        return ["93.184.216.34", "93.184.216.35"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        host = str(request.url.host)
+        seen.append(host)
+        if host == "93.184.216.34":
+            raise httpx.ConnectError("no route to host", request=request)
+        return _html_response(b"ok", address="93.184.216.35")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page("http://example.com/", client=client, resolver=resolver) == b"ok"
+
+    assert seen == ["93.184.216.34", "93.184.216.35"]
+
+
+async def test_fetch_page_reports_when_every_resolved_address_fails() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route to host", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="could not read this URL"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
 
 
 async def test_fetch_page_rejects_declared_and_streamed_oversize() -> None:
