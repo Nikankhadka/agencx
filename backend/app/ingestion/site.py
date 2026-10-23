@@ -33,11 +33,24 @@ from urllib.robotparser import RobotFileParser
 
 from selectolax.parser import HTMLParser
 
+from app.ingestion.extract import (
+    PageBlocked,
+    PageExtraction,
+    dedupe_lines,
+    extract_page,
+    is_near_duplicate,
+    is_pricing_page,
+)
 from app.ingestion.url import AllowedTarget, fetch_page
 
 logger = logging.getLogger("app.ingestion.site")
 
 DEFAULT_MAX_PAGES = 10
+DEFAULT_MAX_CHARS = 11_500
+DEFAULT_CONCURRENCY = 3
+DEFAULT_TIMEOUT_S = 30.0
+_PAGE_MAX_CHARS = 4_000
+_PRICING_PAGE_MAX_CHARS = 6_000
 _MAX_SITEMAPS = 10
 _MAX_SITEMAP_URLS = 1_000
 _MAX_SITEMAP_DEPTH = 2
@@ -550,4 +563,193 @@ async def discover_pages(
         pages=selected,
         considered=len(candidates),
         skipped=dict(skipped),
+    )
+
+
+@dataclass(frozen=True)
+class CrawledPage:
+    url: str
+    title: str
+    chars: int
+
+
+@dataclass(frozen=True)
+class CrawlResult:
+    homepage: str
+    title: str
+    text: str
+    pages: list[CrawledPage]
+    discovered: int
+    selected: int
+    skipped: dict[str, int]
+    timed_out: bool
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Cut at a line or word boundary, never past ``limit``."""
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    for separator in ("\n", " "):
+        trimmed = head.rsplit(separator, 1)[0].strip()
+        if len(trimmed) >= limit // 2:
+            return trimmed
+    return head.strip()
+
+
+def _fit_section(
+    *,
+    title: str,
+    url: str,
+    body: str,
+    remaining: int,
+    needs_separator: bool,
+) -> str | None:
+    """One page's section, clipped to the total budget, or None when it cannot
+    contribute a useful amount."""
+    header = f"## {' '.join(title.split())[:120]}\nSource: {url}\n\n"
+    separator = 2 if needs_separator else 0
+    available = remaining - separator - len(header)
+    if available < 200:
+        return None
+    clipped = _truncate(body, available)
+    if len(clipped) < 200:
+        return None
+    return f"{header}{clipped}"
+
+
+async def crawl_site(
+    url: str,
+    *,
+    reader: WebReader | None = None,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+) -> CrawlResult:
+    """Read a bounded set of pages and combine them into one model-sized document.
+
+    At most ``concurrency`` pages are fetched and extracted at once, each page
+    is capped (6,000 chars for pricing/menu, 4,000 otherwise), repeated lines
+    are removed across pages, and the combined text never exceeds
+    ``max_chars``. The total crawl has a hard deadline so an owner's turn can
+    never hang on a slow site.
+
+    Raises ValueError when no page produced readable content.
+    """
+    reader = reader or HttpReader()
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    try:
+        async with asyncio.timeout(timeout_s):
+            discovery = await discover_pages(url, reader=reader, max_pages=max_pages)
+    except TimeoutError as exc:
+        raise ValueError("could not read this URL (timeout)") from exc
+
+    skipped: Counter[str] = Counter(discovery.skipped)
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async def read(page: DiscoveredPage) -> PageExtraction:
+        async with semaphore:
+            html = (
+                discovery.homepage_html
+                if page.url == discovery.homepage
+                else await reader.read(page.url)
+            )
+            return await asyncio.to_thread(extract_page, html, url=page.url)
+
+    tasks = {page.url: asyncio.create_task(read(page)) for page in discovery.pages}
+    remaining_s = max(0.1, timeout_s - (loop.time() - started))
+    done, pending = await asyncio.wait(tasks.values(), timeout=remaining_s)
+    timed_out = bool(pending)
+    if pending:
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        skipped["timeout"] += len(pending)
+
+    extracted: dict[str, PageExtraction] = {}
+    for page in discovery.pages:
+        task = tasks[page.url]
+        if task not in done:
+            continue
+        try:
+            extracted[page.url] = task.result()
+        except PageBlocked as exc:
+            skipped["blocked"] += 1
+            logger.info("crawl page blocked url=%s reason=%s", page.url, exc)
+        except ValueError as exc:
+            skipped["fetch_failed"] += 1
+            logger.info("crawl page unreadable url=%s reason=%s", page.url, exc)
+        except Exception:  # noqa: BLE001 - one bad page must not lose the site
+            skipped["extract_failed"] += 1
+            logger.exception("crawl page extraction failed url=%s", page.url)
+
+    parts: list[str] = []
+    used = 0
+    pages: list[CrawledPage] = []
+    seen_lines: set[str] = set()
+    fingerprints: list[str] = []
+    homepage_title = ""
+    for page in discovery.pages:
+        extraction = extracted.get(page.url)
+        if extraction is None:
+            continue
+        if page.url == discovery.homepage:
+            homepage_title = extraction.title
+        opening = f"{extraction.title}\n{extraction.text[:600]}"
+        if any(is_near_duplicate(opening, other) for other in fingerprints):
+            skipped["duplicate_content"] += 1
+            continue
+        fingerprints.append(opening)
+        body = dedupe_lines(extraction.text, seen_lines)
+        if not body.strip():
+            skipped["empty"] += 1
+            continue
+        page_cap = _PRICING_PAGE_MAX_CHARS if is_pricing_page(page.url) else _PAGE_MAX_CHARS
+        body = _truncate(body, page_cap)
+        section = _fit_section(
+            title=extraction.title,
+            url=page.url,
+            body=body,
+            remaining=max_chars - used,
+            needs_separator=bool(parts),
+        )
+        if section is None:
+            skipped["budget"] += 1
+            continue
+        used += len(section) + (2 if parts else 0)
+        parts.append(section)
+        pages.append(CrawledPage(url=page.url, title=extraction.title, chars=len(body)))
+
+    if not parts:
+        raise ValueError("no extractable content at this URL")
+
+    text = "\n\n".join(parts)
+    # The budget is applied before the model calls; this assertion is the
+    # invariant, not an estimate.
+    if len(text) > max_chars:
+        text = _truncate(text, max_chars)
+    title = homepage_title or pages[0].title
+    logger.info(
+        "site crawl homepage=%s discovered=%d selected=%d read=%d skipped=%s chars=%d timed_out=%s",
+        discovery.homepage,
+        discovery.considered,
+        len(discovery.pages),
+        len(pages),
+        dict(skipped),
+        len(text),
+        timed_out,
+    )
+    return CrawlResult(
+        homepage=discovery.homepage,
+        title=title,
+        text=text,
+        pages=pages,
+        discovered=discovery.considered,
+        selected=len(discovery.pages),
+        skipped=dict(skipped),
+        timed_out=timed_out,
     )

@@ -38,7 +38,10 @@ _CANNED_HTML = (
     b"<html><head><title>  Acme Hours  </title>"
     b"<script>alert('x')</script><style>nav{color:red}</style></head>"
     b"<body><nav>Menu</nav><header>logo</header>"
-    b"<main><p>We are open weekdays 9 to 5.</p></main>"
+    b"<main><p>We are open weekdays 9 to 5.</p>"
+    b"<p>Call 555-0100 for repairs, battery replacements and screen fixes. "
+    b"We serve the whole neighbourhood and answer questions about stock, "
+    b"warranty and turnaround times. Walk-ins are welcome before noon.</p></main>"
     b"<footer>goodbye</footer></body></html>"
 )
 
@@ -654,7 +657,7 @@ def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
     ) -> bytes:
         return html
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
+    monkeypatch.setattr("app.ingestion.site.fetch_page", fake_fetch)
 
 
 # --- db: service-level -------------------------------------------------------
@@ -692,9 +695,12 @@ async def test_upload_url_ingests_chunks_and_dedupes(
     assert chunk["embedding"].dimensions() == EMBEDDING_DIM
     assert json.loads(chunk["metadata"])["source"] == "Acme Hours"
 
-    # the extracted text landed on disk as {document_id}.txt
+    # the extracted text landed on disk as {document_id}.txt, with the crawl's
+    # section heading and source line preserved
     disk = uploads_tmp / str(tenant_id) / f"{document_id}.txt"
-    assert disk.read_bytes() == b"We are open weekdays 9 to 5."
+    saved = disk.read_bytes()
+    assert b"We are open weekdays 9 to 5." in saved
+    assert b"Source: https://example.com/hours" in saved
 
     # re-pasting the same URL is idempotent: same document, no new chunks.
     again = await service.upload_url(

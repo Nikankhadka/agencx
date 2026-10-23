@@ -28,7 +28,8 @@ from app.features.knowledge.offering_extraction import extract_offerings
 from app.features.knowledge.structuring import render_sections, structure_document
 from app.ingestion.chunker import extract_text
 from app.ingestion.pipeline import _replace_chunks, ingest_offerings, process_document
-from app.ingestion.url import AllowedTarget, extract_main_text, extract_title, fetch_page
+from app.ingestion.site import CrawlResult, HttpReader, crawl_site
+from app.ingestion.url import AllowedTarget
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.flow import normalize_pending_offerings
@@ -148,19 +149,27 @@ async def upload_document(
 
 
 async def scrape_url(*, url: str) -> tuple[str, str]:
-    """Fetch a page and return its (main_text, title). Raises ``ValueError``
-    when the page has no extractable text (or on a bad scheme/oversize body,
-    which ``fetch_page`` surfaces as ``ValueError``)."""
-    allowed_targets = _url_fetch_allowlist()
-    if allowed_targets:
-        html = await fetch_page(url, allowed_targets=allowed_targets)
-    else:
-        html = await fetch_page(url)
-    text = extract_main_text(html)
-    if not text:
-        raise ValueError("no extractable content at this URL")
-    title = extract_title(html) or url
-    return text, title
+    """Read the site at ``url`` and return its (combined_text, title). Raises
+    ``ValueError`` when no page has extractable text."""
+    crawl = await scrape_site(url=url)
+    return crawl.text, crawl.title
+
+
+async def scrape_site(*, url: str) -> CrawlResult:
+    """Read a bounded, nav-first set of pages and combine them into one
+    model-sized document.
+
+    The crawl owns the SSRF-guarded fetch, so the same allowlist that keeps the
+    local E2E fixture reachable applies to every page, robots.txt and sitemap.
+    """
+    settings = get_settings()
+    return await crawl_site(
+        url,
+        reader=HttpReader(allowed_targets=_url_fetch_allowlist()),
+        max_pages=settings.website_crawl_max_pages,
+        max_chars=settings.website_crawl_max_chars,
+        concurrency=settings.website_crawl_concurrency,
+    )
 
 
 def _url_fetch_allowlist() -> set[AllowedTarget]:

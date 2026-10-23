@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     # Empty in every normal environment; this never broadens public URL fetches.
     url_fetch_allowlist: str = ""
 
+    # Website crawl bounds (app/ingestion/site.py). One pasted URL becomes one
+    # structured document, so the character budget stays under the structuring
+    # segment limit (12,000) to keep the turn to one structure call.
+    website_crawl_max_pages: int = 10
+    website_crawl_max_chars: int = 11_500
+    website_crawl_concurrency: int = 3
+
     # Log level for the structured JSON logger (app/observability/logging.py).
     log_level: str = "INFO"
 

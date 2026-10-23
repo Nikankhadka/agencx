@@ -29,6 +29,7 @@ from app.features.knowledge.structuring import (
     render_sections,
     structure_document,
 )
+from app.ingestion.site import CrawlResult
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT
 from app.main import app
@@ -587,15 +588,19 @@ async def test_adding_the_same_link_twice_re_reads_it_in_place(
     changed, so it comes back for review rather than appearing twice."""
     headers = await _signup_tenant_admin(client)
 
-    async def fake_fetch(
-        url: str,
-        *,
-        client: httpx.AsyncClient | None = None,
-        **kwargs: Any,
-    ) -> bytes:
-        return b"<html><body><main>We fix phones. Open weekdays.</main></body></html>"
+    async def fake_crawl(url: str, **kwargs: Any) -> CrawlResult:
+        return CrawlResult(
+            homepage=url,
+            title="Example Repairs",
+            text="We fix phones. Open weekdays 9 to 6. Screen repairs and batteries.",
+            pages=[],
+            discovered=1,
+            selected=1,
+            skipped={},
+            timed_out=False,
+        )
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", fake_crawl)
     first = await client.post(
         "/api/knowledge/drafts/url", headers=headers, json={"url": "https://example.test/"}
     )
