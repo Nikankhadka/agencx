@@ -513,7 +513,9 @@ async def discover_pages(
                 )
             return
         candidates[normalized] = DiscoveredPage(
-            url=normalized, priority=page_priority(normalized), source=source
+            url=normalized,
+            priority=0 if normalized == homepage else page_priority(normalized),
+            source=source,
         )
 
     consider(homepage, "home")

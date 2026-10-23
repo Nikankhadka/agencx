@@ -135,6 +135,23 @@ async def test_discovery_honours_the_page_cap() -> None:
     assert result.skipped["page_cap"] > 0
 
 
+async def test_discovery_keeps_a_pasted_subpath_as_the_home_page() -> None:
+    """A URL that is not the root still names the page the owner meant, so it
+    keeps priority 0 and leads the document instead of ranking as "other"."""
+    pages = {
+        "https://shop.example/landing": (
+            b'<html><body><nav><a href="/about">About</a>'
+            b'<a href="/services">Services</a></nav></body></html>'
+        ),
+        "https://shop.example/about": b"<html><body>About</body></html>",
+        "https://shop.example/services": b"<html><body>Services</body></html>",
+    }
+    result = await discover_pages("https://shop.example/landing", reader=FakeReader(pages))
+
+    assert result.pages[0].url == "https://shop.example/landing"
+    assert result.pages[0].priority == 0
+
+
 async def test_discovery_raises_when_robots_blocks_the_homepage() -> None:
     reader = FakeReader(
         {
