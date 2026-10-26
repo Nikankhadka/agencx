@@ -1,7 +1,18 @@
-import type { Citation } from "@/components/ui/CitationChip";
 import type { QuotePayload } from "@/components/ui/QuoteCard";
 import type { CatalogPayload } from "@/components/ui/CatalogCard";
 import type { PriceSummaryPayload } from "@/components/ui/PriceSummaryCard";
+
+/**
+ * One entry of the backend's `citations` event. The customer surface renders no
+ * chip (the founder ruled that customer text carries no citation markers - they
+ * are stripped at the chat boundary), but the event is still part of the
+ * protocol and stays typed here.
+ */
+export interface Citation {
+  index: number;
+  source: string;
+  snippet: string;
+}
 
 /**
  * The customer-chat SSE protocol, mirroring the events the backend emits in

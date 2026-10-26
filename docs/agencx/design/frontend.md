@@ -374,7 +374,7 @@ Every component takes only semantic tokens. Each lists its required states.
 | `Thread` (O-5) | the ONBOARDING thread idiom, a separate design: `Thread`, `LedeMessage`, `AgentLine` (bare prose), `OwnerBubble` (20px, tip bottom-right), `TypingLine`, `ThreadPill`, `ThreadVeil`. Never merge with `ChatBubble` | static, streaming, pending |
 | `StreamingText` | renders SSE tokens, `aria-live="polite"` | streaming, done, interrupted |
 | `TypingIndicator` | **NEW (P-5):** three pulsing dots (600-800ms) shown while a turn is in flight, sustained through the failover window - never a spinner, never a blank | active |
-| `CitationChip` | retained but no surface renders it - customer answers carry no citation markers (stripped at the chat boundary, see `architecture.md` section 11); deletion is a cleanup follow-up | - |
+
 | `QuoteCard` | renders **pricing-engine output verbatim**; money formatted from integer cents in `src/lib/money.ts` - no arithmetic in components | default, sent |
 | `TraceTree` | collapsible run tree (console only), mono font | loading, error, empty |
 | `EscalationBanner` | in-chat handoff state | active |

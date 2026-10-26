@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type ReactNode,
   type RefObject,
 } from "react";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +13,6 @@ import { Input } from "@/components/ui/Input";
 import { ChatBubble, type ChatRole } from "@/components/ui/ChatBubble";
 import { Chip } from "@/components/ui/Chip";
 import { StreamingText } from "@/components/ui/StreamingText";
-import { CitationChip, type Citation } from "@/components/ui/CitationChip";
 import { QuoteCard, type QuotePayload } from "@/components/ui/QuoteCard";
 import { PriceSummaryCard, type PriceSummaryPayload } from "@/components/ui/PriceSummaryCard";
 import { CatalogCard, type CatalogPayload } from "@/components/ui/CatalogCard";
@@ -105,7 +103,6 @@ interface Message {
   id?: string;
   role: ChatRole;
   text: string;
-  citations?: Citation[];
   quote?: QuotePayload;
   priceSummary?: PriceSummaryPayload;
   catalog?: CatalogPayload;
@@ -120,15 +117,6 @@ interface Message {
 }
 
 const POLL_INTERVAL_MS = 5000;
-
-function renderWithCitations(text: string, citations: Citation[]): ReactNode {
-  const parts = text.split(/(\[\d+\])/g);
-  return parts.map((part, i) => {
-    const match = part.match(/^\[(\d+)\]$/);
-    const citation = match ? citations.find((c) => c.index === Number(match[1])) : undefined;
-    return citation ? <CitationChip key={i} citation={citation} /> : <span key={i}>{part}</span>;
-  });
-}
 
 /**
  * T-011/T-032: the interactive half of the customer surface. The branded
@@ -503,7 +491,9 @@ export function CustomerChat({
         writeSession(conversationKey(slug), event.conversation_id);
         break;
       case "citations":
-        updateMessageById(targetId, () => ({ citations: event.citations }));
+        // The backend still emits this event, but shipped behaviour renders no
+        // chip on any surface (the customer text has its markers stripped at
+        // the chat boundary); nothing to display, so it is ignored.
         break;
       case "contact":
         // RF-10: the preferred display name. Name only - never an email.
@@ -596,7 +586,7 @@ export function CustomerChat({
               streaming={message.streaming ?? false}
               pending={message.streaming === true && message.text === ""}
             >
-              {renderWithCitations(message.text, message.citations ?? [])}
+              {message.text}
             </StreamingText>
             {message.quote ? <QuoteCard quote={message.quote} /> : null}
             {message.priceSummary ? <PriceSummaryCard summary={message.priceSummary} /> : null}
