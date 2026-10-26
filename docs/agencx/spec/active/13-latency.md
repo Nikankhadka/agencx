@@ -157,10 +157,10 @@ validated and the founder says go.
    strips citation markers from every approved token run before the flush and
    before persistence (`app/features/chat/controller.py:71-102`, via
    `app/shared/text.py:42`), so the customer surface renders no chip on either
-   path - `renderWithCitations` only emits a `CitationChip` for a `[n]` that
-   never survives (`frontend/src/app/[slug]/CustomerChat.tsx:117-124`), and
-   `CitationChip` has no rendering surface (`design/frontend.md:377`). Cited-only
-   is the ratified behaviour, with no fallback to all retrieved chunks.
+   path (`design/frontend.md:720`). The dead `renderWithCitations` path and
+   `CitationChip` were deleted in the 2026-10-26 cleanup, after this run.
+   Cited-only is the ratified behaviour, with no fallback to all retrieved
+   chunks.
    Completion rate did not rise and p50s stayed above the revised bands (as
    pre-slice runs in the same window did) - corroboration only. The after-eval
    is case-for-case identical to the baseline on trajectory and injection and
