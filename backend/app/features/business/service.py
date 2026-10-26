@@ -691,41 +691,6 @@ async def delete_cover(*, tenant_id: UUID) -> None:
         )
 
 
-async def write_storefront(*, tenant_id: UUID, about: str | None = None) -> dict[str, Any]:
-    """Merge editable storefront sections into the brand configuration.
-
-    These are small presentation fields, not knowledge. Keeping them together
-    makes the owner page a direct representation of the public page without a
-    separate page-builder schema or drag-and-drop system.
-    """
-    patch: dict[str, Any] = {}
-    if about is not None:
-        patch["about"] = about
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await conn.execute(
-            "update tenant_config set brand = jsonb_set(brand, '{storefront}', "
-            "coalesce(brand->'storefront', '{}'::jsonb) || $2::jsonb, true), updated_at = now() "
-            "where tenant_id = $1",
-            tenant_id,
-            json.dumps(patch),
-        )
-    return await read_storefront_sections(tenant_id=tenant_id)
-
-
-async def read_storefront_sections(*, tenant_id: UUID) -> dict[str, Any]:
-    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        raw = await conn.fetchval(
-            "select brand -> 'storefront' from tenant_config where tenant_id = $1", tenant_id
-        )
-    parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
-    if not isinstance(parsed, dict):
-        return {"about": ""}
-    about = parsed.get("about")
-    return {
-        "about": about.strip() if isinstance(about, str) else "",
-    }
-
-
 def resolve_profile(config: dict[str, Any]) -> dict[str, Any]:
     """The business profile as any presentation surface must read it.
 
@@ -1032,12 +997,6 @@ async def read_public_cover(*, tenant_id: UUID) -> tuple[str, bytes, Any] | None
 # the business identity the owner actually maintains: name, hours, description
 # and contact, stored under the keys the storefront and context package read.
 PROFILE_FIELDS = ("business_name", "hours", "description", "contact", "abn", "gst", "services")
-
-# W-9: how the public assistant sounds. Editable here beside the ABN, but kept
-# at `config->customer_voice` rather than in the profile object, because that is
-# the one shape `app/shared/voice.py` reads and the voice beat's confirm writes.
-VOICE_FIELDS = ("customer_voice_preset", "customer_voice_custom_style")
-EDITABLE_FIELDS = PROFILE_FIELDS + VOICE_FIELDS
 
 
 async def read_profile(*, tenant_id: UUID) -> dict[str, Any]:
