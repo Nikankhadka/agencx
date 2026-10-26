@@ -16,7 +16,7 @@ export interface Citation {
 
 /**
  * The customer-chat SSE protocol, mirroring the events the backend emits in
- * app/api/chat.py (`_sse`) and the agent nodes' stream writer. Previously every
+ * app/features/chat/api.py (`_sse`) and the agent nodes' stream writer. Previously every
  * event was accessed off a bare `JSON.parse` as `any`; this discriminated union
  * types each branch so the chat loop can't silently read a wrong field, and the
  * parser below is the one guarded entry point (a malformed or partial frame
