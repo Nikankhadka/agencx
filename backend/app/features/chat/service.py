@@ -1,5 +1,5 @@
-"""Chat persistence: conversation/message rows, tenant and budget resolution,
-and turn persistence (assistant message, tool_calls, cost_logs).
+"""Chat persistence: conversation/message rows, budget resolution, and turn
+persistence (assistant message, tool_calls, cost_logs).
 
 Moved out of api/chat.py. The ticket-level rules stay in the handler docs:
 nothing is customer-visible until Inspection clears a draft, only limit stops
@@ -17,17 +17,6 @@ from uuid import UUID
 from app.observability.cost import TokenUsage, record_costs
 from app.shared import config, db
 from app.shared.limits import TenantLimits, tenant_over_budget
-
-
-async def resolve_active_tenant(slug: str) -> UUID:
-    """T-005: public tenant lookup - no auth, scope comes from the slug.
-    Raises ValueError when the slug is unknown or not active."""
-    pool = db.get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("select id, status from resolve_tenant_slug($1)", slug)
-    if row is None or row["status"] != "active":
-        raise ValueError("unknown tenant slug")
-    return UUID(str(row["id"]))
 
 
 async def resolve_conversation(

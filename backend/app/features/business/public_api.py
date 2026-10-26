@@ -59,10 +59,9 @@ class StorefrontResponse(BaseModel):
 async def _tenant_id(slug: str) -> UUID:
     """The active tenant behind a public slug, as a UUID.
 
-    ``resolve_active_tenant`` hands back a string because the chat surface only
-    ever passes it on; the reads below bind it as a query parameter against
-    uuid columns, which asyncpg will not coerce, so it is converted here rather
-    than at each call site.
+    The resolver hands back the raw id string; the reads below bind it as a
+    query parameter against uuid columns, which asyncpg will not coerce, so it
+    is converted here rather than at each call site.
     """
     try:
         return UUID(await tenant_service.resolve_active_tenant(slug))

@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.features.chat import controller, service
+from app.features.tenants import service as tenant_service
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
@@ -103,8 +104,8 @@ async def chat(
     reranker: Annotated[Reranker, Depends(get_reranker_dependency)],
 ) -> StreamingResponse:
     try:
-        tenant_id = await service.resolve_active_tenant(body.slug)
-    except ValueError as exc:
+        tenant_id = UUID(await tenant_service.resolve_active_tenant(body.slug))
+    except tenant_service.TenantNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="unknown tenant slug"
         ) from exc
@@ -192,8 +193,8 @@ async def handoff(request: Request, body: HandoffRequest) -> StreamingResponse:
     owner's queue; operational alerts may reference the conversation.
     """
     try:
-        tenant_id = await service.resolve_active_tenant(body.slug)
-    except ValueError as exc:
+        tenant_id = UUID(await tenant_service.resolve_active_tenant(body.slug))
+    except tenant_service.TenantNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="unknown tenant slug"
         ) from exc
@@ -247,8 +248,8 @@ async def get_conversation_messages(
     timestamp poll for only what's new, rather than re-fetching the whole
     history on every 5s tick."""
     try:
-        tenant_id = await service.resolve_active_tenant(slug)
-    except ValueError as exc:
+        tenant_id = UUID(await tenant_service.resolve_active_tenant(slug))
+    except tenant_service.TenantNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="unknown tenant slug"
         ) from exc
