@@ -407,7 +407,7 @@ is the equivalent trap: the request still answers fine (the backend was never
 in this path to fail), so login looks like it works and no code ever arrives.
 
 `UPLOADS_BUCKET` is not optional here either, and unlike those two it fails
-quietly. Left empty, `app/shared/storage.py` selects `LocalStorage` and the
+quietly. Left empty, `backend/app/shared/storage.py` selects `LocalStorage` and the
 container writes uploads to a disk the next request may not see - so onboarding's
 "attach a document" step appears to work and the document is marked failed later.
 Empty is correct only where the filesystem persists, which is local dev and the
@@ -794,7 +794,7 @@ guess, not a measurement.
 
 The founder steps above are external. The code that makes them work is B-4;
 the full delivery record is archived in
-[`10-deploy.md`](../../archive/phase1-complete/10-deploy.md) (branch
+[`10-deploy.md`](../archive/phase1-complete/10-deploy.md) (branch
 `feat/deploy-containers-cicd`). Two of its decisions remain live constraints
 worth stating here:
 

@@ -1599,3 +1599,34 @@ tenant's vertical.
 **Boundary:** extraction copies prices verbatim and the deterministic money
 guard still governs structuring; no model produces a monetary amount, and
 nothing branches on a tenant's vertical.
+
+## D47: A phone number is stored in international human form, and the country table is libphonenumber's
+
+**Decision.** The contact value is stored as an international, grouped number
+with the trunk prefix dropped (`+61 412 345 678`), produced by
+`frontend/src/lib/phone.ts::toInternational` and re-read by
+`parseStoredPhone`. The pill's country list is every region
+`libphonenumber-js/max` knows, not a hand-written set; the picker is
+searchable by name, ISO code or dial code, keyboard-navigable, and defaults to
+the region of the browser's first locale, falling back to `AU` when the locale
+names only a language (`resolveDefaultIso`). A value that is not a phone number
+(email, street address, empty) is returned untouched, so the same field still
+accepts free text. The onboarding contact beat and the Business details contact
+sheet share this one implementation.
+
+Server-side plausibility stays deliberately loose: `beats._contact_like`
+accepts an email-shaped value or six or more digits, so any dial code passes
+without the backend keeping its own region table.
+
+**Why.** The six-entry table meant a customer in Nepal could not enter a
+number at all, and owners who typed a local number had it silently mangled. An
+international grouped form is the one representation that is unambiguous to a
+customer reading it, correct when dialled, and parseable back into
+country plus national number without a second column. Reusing libphonenumber's
+table makes the coverage the library's job instead of a list that grows one
+support ticket at a time. Ownership stays on the client because the server has
+no use for the number's structure - it only needs to know the field is filled.
+
+**Boundary:** this changes presentation and storage format of an existing
+profile field, not the schema (`contact` stays a text column), not the money
+path, and nothing branches on a tenant's vertical.

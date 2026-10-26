@@ -49,7 +49,7 @@ Plans and chat replies follow Tier A, plus:
 - Lead with the finding or the answer. No preamble about what you are about to
   do, no restating the request back.
 - Every file, symbol, or line referenced is a relative markdown link
-  (`[running.md:33](docs/agencx/running.md#L33)`), never a bare backticked path.
+  (`[running.md:33](../running.md#L33)`), never a bare backticked path.
 - A claim about this codebase carries the path and line that proves it. An
   unverified claim is labelled unverified, or is not made.
 - Say what you did not do and why, in the same message as what you did.

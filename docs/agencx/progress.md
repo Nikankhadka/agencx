@@ -395,7 +395,7 @@ live in the ticket files, not here.
   rest unpriced; hours, allergen, ratings and per-category price docs as
   knowledge) and seeded directly, with no onboarding. 44 item photos plus a
   cover live in the owner's Cloudinary under `demo/sabbaba/` (uploaded once by
-  `scripts/seed_sabbaba_images.py`, recorded in `seeds/sabbaba/images.json`);
+  `backend/scripts/seed_sabbaba_images.py`, recorded in `seeds/sabbaba/images.json`);
   items without a reliable photo show the letter tile. The seed stays offline.
   Hosted `sababa` re-seeded 2026-10-08 (96 offerings, 94 rules, 109 embedded chunks; `sababa` only, never `seed_demo`).
 - [x] Sabbaba 2 fast-path demo tenant: a fifth demo tenant (`sababa2`) clones
