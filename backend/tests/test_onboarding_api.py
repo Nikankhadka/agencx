@@ -1862,3 +1862,238 @@ def test_find_url_never_reads_a_price_as_a_link() -> None:
     assert _find_url("we charge 16.50/plate for catering") is None
     assert _find_url("it is 3.5/5 stars") is None
     assert _find_url("email me at sam@shop.example") is None
+
+
+# --- 31: POST /api/onboarding/source/url (read or replace a link) -------------
+
+_SOURCE_URL = "https://bytefix.example.com"
+
+
+async def _seed_website(conn: asyncpg.Connection[Any], tenant_id: uuid.UUID, url: str) -> uuid.UUID:
+    document_id = uuid.uuid4()
+    await conn.execute(
+        "insert into documents (id, tenant_id, filename, doc_type, status) "
+        "values ($1, $2, $3, 'website', 'draft')",
+        document_id,
+        tenant_id,
+        url,
+    )
+    return document_id
+
+
+async def _post_source_url(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    *,
+    url: str = _SOURCE_URL,
+    replace_document_id: uuid.UUID | None = None,
+) -> httpx.Response:
+    payload: dict[str, object] = {"url": url}
+    if replace_document_id is not None:
+        payload["replace_document_id"] = str(replace_document_id)
+    return await client.post("/api/onboarding/source/url", json=payload, headers=headers)
+
+
+async def test_source_url_adds_a_link_and_fills_empty_fields_only(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: `Add a link` is a source, so an owner answer survives it."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(draft={"business_name": "Owner Name"}).to_jsonb(),
+    )
+    probe = ConcurrencyProbe(
+        offerings=_url_offering_payloads(),
+        profile={"business_name": "Site Name", "hours": "Mon-Fri 9-6"},
+        delay=0.0,
+    )
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        response = await _post_source_url(client, headers)
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # The owner's own answer wins; the blank it left is filled from the site.
+    assert body["state"]["draft"]["business_name"] == "Owner Name"
+    assert body["state"]["draft"]["hours"] == "Mon-Fri 9-6"
+    assert [item["name"] for item in body["state"]["offering_candidates"]] == [
+        "Screen repairs",
+        "battery replacements",
+    ]
+    # One website draft, and the response carries that same document.
+    document = body["document"]
+    assert document["doc_type"] == "website"
+    assert document["status"] == "draft"
+    rows = await superuser_conn.fetch(
+        "select id, filename from documents where tenant_id = $1", tenant_id
+    )
+    assert len(rows) == 1
+    assert rows[0]["id"] == uuid.UUID(document["id"])
+    assert rows[0]["filename"] == _SOURCE_URL
+    # The link answered the source stage, and the read-back names what landed.
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+    assistant_msgs = [m["content"] for m in body["state"]["history"] if m["role"] == "assistant"]
+    assert any("Here's what I've got from your site" in m for m in assistant_msgs)
+
+
+async def test_source_url_replaces_a_different_link(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: a replacement swaps the source - the old row is gone."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    old_id = await _seed_website(superuser_conn, tenant_id, "https://old.example.com")
+    probe = ConcurrencyProbe(offerings=_url_offering_payloads(), delay=0.0)
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        response = await _post_source_url(
+            client, headers, url=_SOURCE_URL, replace_document_id=old_id
+        )
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    document = response.json()["document"]
+    assert uuid.UUID(document["id"]) != old_id
+    rows = await superuser_conn.fetch(
+        "select id, filename, doc_type, status from documents where tenant_id = $1",
+        tenant_id,
+    )
+    assert len(rows) == 1
+    assert rows[0]["id"] == uuid.UUID(document["id"])
+    assert rows[0]["filename"] == _SOURCE_URL
+    assert rows[0]["doc_type"] == "website"
+    assert rows[0]["status"] == "draft"
+
+
+async def test_source_url_replacement_overwrites_stated_fields_and_keeps_omitted_ones(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: the new site wins where it speaks, and never clears a field it omits."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    old_id = await _seed_website(superuser_conn, tenant_id, "https://old.example.com")
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft={"business_name": "Owner Name", "hours": "Mon-Fri 9-6"}
+        ).to_jsonb(),
+    )
+    probe = ConcurrencyProbe(
+        offerings=[],
+        profile={"business_name": "Site Name", "business_type": "phone repair shop"},
+        delay=0.0,
+    )
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        response = await _post_source_url(
+            client, headers, url=_SOURCE_URL, replace_document_id=old_id
+        )
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    draft = response.json()["state"]["draft"]
+    assert draft["business_name"] == "Site Name"
+    assert draft["business_type"] == "phone repair shop"
+    assert draft["hours"] == "Mon-Fri 9-6"
+
+
+async def test_source_url_reading_the_same_link_again_stays_in_place(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: the same address is the same source, so nothing is deleted."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    document_id = await _seed_website(superuser_conn, tenant_id, _SOURCE_URL)
+    probe = ConcurrencyProbe(offerings=_url_offering_payloads(), delay=0.0)
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        response = await _post_source_url(client, headers, replace_document_id=document_id)
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    assert uuid.UUID(response.json()["document"]["id"]) == document_id
+    rows = await superuser_conn.fetch("select id from documents where tenant_id = $1", tenant_id)
+    assert [row["id"] for row in rows] == [document_id]
+
+
+async def test_source_url_scrape_failure_leaves_the_source_alone(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: a page we cannot read is a 422, and the old source is untouched."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    old_id = await _seed_website(superuser_conn, tenant_id, "https://keep.example.com")
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(draft={"business_name": "Owner Name"}).to_jsonb(),
+    )
+
+    async def fail_fetch(url: str, **kwargs: Any) -> CrawlResult:
+        raise ValueError("no extractable content at this URL")
+
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", fail_fetch)
+
+    response = await _post_source_url(
+        client, headers, url="https://empty.example.com", replace_document_id=old_id
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "no_content"
+    rows = await superuser_conn.fetch("select id from documents where tenant_id = $1", tenant_id)
+    assert [row["id"] for row in rows] == [old_id]
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["draft"] == {"business_name": "Owner Name"}
+
+
+async def test_source_url_is_conflict_after_onboarding_is_confirmed(
+    client: httpx.AsyncClient,
+) -> None:
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(completed=True).to_jsonb(),
+    )
+    response = await _post_source_url(client, headers)
+    assert response.status_code == 409
+
+
+async def test_source_url_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/onboarding/source/url", json={"url": _SOURCE_URL})
+    assert response.status_code == 401
+
+
+async def test_source_url_rejects_an_empty_or_relative_link(
+    client: httpx.AsyncClient,
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    assert (await _post_source_url(client, headers, url="")).status_code == 422
+    assert (await _post_source_url(client, headers, url="bytefix.example.com")).status_code == 422

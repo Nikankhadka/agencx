@@ -679,3 +679,34 @@ The two suggestions unit seams that need a click ("onSaveSuggestions receives
 nine candidates") are covered by the `onboarding-resume` save-after-paging e2e;
 the markup seams (five rows desktop, three rows phone, the summary copy) are
 the unit tests.
+
+### Slice E - the URL source endpoint
+
+```
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+72 passed in 4.35s
+
+$ docker compose run --rm --no-deps backend ruff check .
+All checks passed!
+$ docker compose run --rm --no-deps backend ruff format --check .
+260 files already formatted
+$ docker compose run --rm --no-deps backend mypy
+Success: no issues found in 256 source files
+$ docker compose run --rm --no-deps backend lint-imports
+Contracts: 3 kept, 0 broken.
+
+$ cd frontend && npm run gen:types && npm run gen:types -- --check
+wrote src/lib/api-types.ts
+api-types.ts is up to date
+```
+
+The eight new endpoint tests cover add-a-link (fill empty only), replacement by a
+different URL, replacement field overwrite versus an omitted field, same-URL
+re-read in place, a scrape failure, a confirmed onboarding (409), missing auth
+(401), and an empty or relative URL (422).
+
+Two branches the ticket does not state, decided here and recorded in
+[api-contract.md](../../design/api-contract.md): a 504 `timeout` when the shared
+`_SOURCE_TURN_TIMEOUT_S` deadline fires after the crawl (it writes nothing, the
+same as the draft-failure path), and `.strip()` on the body's `url` before
+`_absolute_url`, matching the knowledge route's own callers.

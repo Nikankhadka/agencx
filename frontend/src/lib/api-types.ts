@@ -232,6 +232,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/source/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Source Url
+         * @description 31: read one link, or replace a source in place, in one call.
+         *
+         *     A page the site reader cannot read is a 422 naming the failure category and
+         *     writes nothing. A confirmed onboarding is a 409.
+         */
+        post: operations["post_source_url_api_onboarding_source_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/knowledge/{document_id}": {
         parameters: {
             query?: never;
@@ -1835,6 +1858,18 @@ export interface components {
             /** Idempotency Key */
             idempotency_key?: string | null;
         };
+        /** OnboardingSourceUrlRequest */
+        OnboardingSourceUrlRequest: {
+            /** Url */
+            url: string;
+            /** Replace Document Id */
+            replace_document_id?: string | null;
+        };
+        /** OnboardingSourceUrlResponse */
+        OnboardingSourceUrlResponse: {
+            state: components["schemas"]["OnboardingStateResponse"];
+            document: components["schemas"]["KnowledgeRecord"] | null;
+        };
         /** OnboardingStateResponse */
         OnboardingStateResponse: {
             /** Stage */
@@ -2920,6 +2955,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStateResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    post_source_url_api_onboarding_source_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingSourceUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingSourceUrlResponse"];
                 };
             };
             /** @description Validation failed */

@@ -1069,14 +1069,17 @@ def url_readback(draft: dict[str, Any]) -> str:
 
 
 async def prepare_source_profile(
-    *, record: OnboardingRecord, text: str, provider: LLMProvider
+    *, record: OnboardingRecord, text: str, provider: LLMProvider, only_empty: bool = True
 ) -> ProfileDraft | None:
     """The business fields one source states, merged into the draft (29).
 
     One ``extract`` call over a bounded window, merged with ``only_empty``: a
     field the owner already answered is left exactly as they wrote it, so an
-    owner answer wins whichever order the two arrive in. Two things are
-    deliberately absent:
+    owner answer wins whichever order the two arrive in. 31 passes
+    ``only_empty=False`` for a link *replacement*, where the site the owner
+    chose is meant to overwrite the fields it states; a field it does not state
+    is never cleared either way, because ``save_profile`` skips absent values.
+    Two things are deliberately absent:
 
     - ``services`` - the source's menu reaches the draft as reviewed offering
       candidates, not as this call's guess. A model that names it anyway still
@@ -1110,7 +1113,7 @@ async def prepare_source_profile(
     if update.profile is None:
         return None
     before = record.draft.get("services")
-    record.draft = save_profile(record.draft, update.profile, only_empty=True)
+    record.draft = save_profile(record.draft, update.profile, only_empty=only_empty)
     if record.draft.get("services") != before:
         record.services_source = "document"
     return update.profile

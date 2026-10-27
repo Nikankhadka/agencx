@@ -151,5 +151,36 @@ remain private and can be opened later from Home or What you offer.
   offering beside `price_cents`, along with the existing category fields, so
   the card can show the owner's wording when there is no fixed amount.
 
+## Link editing on the review sheet (31)
+
+- `POST /api/onboarding/source/url` is owner-only JSON:
+  `{url, replace_document_id?}` answers `{state: OnboardingStateResponse,
+  document: KnowledgeRecord | null}`. The sheet needs the document's own
+  candidates; the page needs the state, so one call answers both.
+- The crawl goes through the site reader onboarding already uses
+  (`knowledge_service.scrape_site`), never a single-page fetch. A `ValueError`
+  from the reader is `422` with the stable failure category as its detail
+  (`upstream_http`, `timeout`, `no_content`, `blocked_address`, and the rest of
+  `_url_failure_code`); nothing is written and the old source is untouched. A
+  relative or scheme-less URL is `422` from the knowledge module's
+  `_absolute_url`. A confirmed onboarding is `409`.
+- The document draft and the profile read run together under one deadline,
+  exactly as the streamed URL turn does. A draft failure returns `document:
+  null` with the unchanged state and deletes nothing. That deadline firing
+  after the crawl is `504` with detail `timeout`; it writes nothing either.
+- Replace semantics: `replace_document_id` switches the profile merge to
+  `only_empty=False`, so the new site overwrites the fields it states. A field
+  the new site omits keeps its current value in both cases, because
+  `save_profile` never writes an absent value. Without `replace_document_id`
+  the link is an added source and fills empty fields only.
+- The replaced document is deleted only when the resolved document id differs
+  from `replace_document_id` and the new row is a `draft`. The same address is
+  the same source, so a re-read of it updates that row in place and no delete
+  happens.
+- The endpoint does not reconcile offerings. The client reconciles with
+  `reconcileOfferings`, mirroring `reconcile_replacement`, so an owner-edited
+  candidate survives a replacement as `orphaned` and the next batch save
+  persists the surviving list.
+
 No unrelated API redesign, new relational entities, or full pricing schema is
 planned; the broader R-3 schema audit stays separate.
