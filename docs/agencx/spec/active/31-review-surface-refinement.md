@@ -538,3 +538,25 @@ Full-suite gate at the branch tip: `make lint`, `make typecheck`, `make test`,
 ## Blockers
 
 None.
+
+## Evidence
+
+### Slice A - field recipe, spacing, profile rows
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (37 tests)
+ Test Files  2 passed (2)
+      Tests  67 passed (67)
+```

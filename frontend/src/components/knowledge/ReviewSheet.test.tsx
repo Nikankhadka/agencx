@@ -293,6 +293,57 @@ describe("suggestions-only review", () => {
   });
 });
 
+describe("review field recipe (31)", () => {
+  function renderEditable(): string {
+    const workspace: ReviewWorkspace = {
+      id: "ws-1",
+      documents: [
+        {
+          id: "doc-1",
+          filename: "menu.pdf",
+          doc_type: "other",
+          status: "draft",
+          error: null,
+          sections: [],
+        },
+      ],
+      offering_candidates: [
+        {
+          candidate_id: "c-1",
+          name: "Bowl",
+          description: "comes with pita",
+          price_cents: 1200,
+          sources: ["owner"],
+        },
+      ],
+    };
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={workspace}
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("gives every review field the shared field recipe", () => {
+    const html = renderEditable();
+    expect(html).toContain("min-h-11");
+    expect(html).toContain("px-4 py-3 text-body");
+    expect(html).not.toContain("text-field");
+  });
+
+  it("widens the price field to the 96px step", () => {
+    const html = renderEditable();
+    expect(html).toContain('class="w-24 rounded-field');
+    expect(html).not.toContain("w-28");
+  });
+});
+
 describe("pagination copy", () => {
   function renderPagination(page: number, pages: number, count: number): string {
     return renderToStaticMarkup(

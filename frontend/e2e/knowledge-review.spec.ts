@@ -406,6 +406,40 @@ test("priced services lead and the source detail stays closed", async ({ page, r
     "I'll ask next: contact details.",
   );
 
+  // 31: every review field uses the console recipe - 16px text, at least the
+  // 44px floor, and the field radius - and the card stack keeps the 8px step.
+  const fieldFacts = async (label: string) =>
+    sheet.getByLabel(label).evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        fontSize: style.fontSize,
+        height: node.getBoundingClientRect().height,
+        radius: style.borderRadius,
+      };
+    });
+  const fieldRadius = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--radius-field").trim(),
+  );
+  const offeringFacts = await fieldFacts("Offering 1 name");
+  expect(offeringFacts.fontSize).toBe("16px");
+  expect(offeringFacts.height).toBeGreaterThanOrEqual(44);
+  expect(offeringFacts.radius).toBe(fieldRadius);
+  const firstCard = await sheet.locator("article").nth(0).boundingBox();
+  const secondCard = await sheet.locator("article").nth(1).boundingBox();
+  expect(secondCard!.y - (firstCard!.y + firstCard!.height)).toBeCloseTo(8, 0);
+  const introBottom = (await sheet.getByText(/Here's what I found in/).boundingBox())!;
+  const offeringsTop = (await sheet
+    .getByRole("heading", { name: "What you offer" })
+    .locator("..")
+    .boundingBox())!;
+  expect(offeringsTop.y - (introBottom.y + introBottom.height)).toBeCloseTo(16, 0);
+
+  await sheet.getByTestId("review-profile-edit-business_name").click();
+  const profileFacts = await fieldFacts("Business name");
+  expect(profileFacts.fontSize).toBe("16px");
+  expect(profileFacts.height).toBeGreaterThanOrEqual(44);
+  expect(profileFacts.radius).toBe(fieldRadius);
+
   // The structured sections and the source text are not inline by default.
   await expect(sheet.getByText("9 to 5, Monday to Friday")).toHaveCount(0);
   await expect(

@@ -131,7 +131,7 @@ export function CategoryPicker({
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search or create a category"
         aria-label="Search categories"
-        className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
+        className="mt-2 w-full rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text"
       />
       {query.trim() ? (
         <div className="mt-2 rounded-field border border-hairline bg-surface p-2">
