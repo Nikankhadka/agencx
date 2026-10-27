@@ -528,3 +528,21 @@
 - **Gotcha: neither of the review sheet's obvious "open" signals is sound.** The closed `Sheet` still renders `[role="dialog"]` with its header, and `Offering 1 name` inputs only exist for editable rows - above the collapsed page size with no missing price, rows render read-only `h4`s and the input count is 0. Use a footer testid (`onboarding-knowledge-save`) for "open" and the `N retained offerings` paragraph for the count.
 - **Gotcha: the old interview's W-9 read-back keeps the stage unchanged.** A typed answer can come back as "I have X. Is that right?" with Yes/No chips on the same beat, so a driver that waits only for a stage change stalls; any beat-driving harness must confirm the read-back.
 - **Finding: one unexplained backend hang during a real crawl (2026-10-27).** A source turn on `www.thegrounds.com.au` stopped logging after its page fetches; `/health` then timed out for over 15 minutes while the process stayed alive at near-idle CPU, and no `site crawl` line ever arrived. The same crawl succeeded standalone (2.6s) and a container restart cleared it; it did not recur in 12 later runs. One occurrence, not attributable to a branch - flag it if it recurs.
+
+## Merging two stacked tickets (2026-10-27)
+
+### Decisions
+
+- **Decision: a stacked branch is verified by diff equivalence, not by an empty tree diff.** After squashing a stacked pair onto `development` (29 then 30), `git diff development <lower branch>` can never be empty again, because development now carries the upper ticket's work the lower branch never had. The order-independent proof that the lower branch lost nothing is `diff <(git diff lower development) <(git diff lower upper)` - if identical, development is exactly lower plus upper, byte for byte. The "both tree diffs must be empty" check is only valid in the window between the two squashes.
+- **Decision: resolve stacked-ticket doc conflicts by taking the upper branch's whole file, then prove the index equals that branch tip.** `git diff --cached <upper branch tip>` being empty is a stronger statement than reading the conflict hunks: it proves the staged tree is the squash target exactly, so no line from either side was dropped by hand.
+
+### Gotchas
+
+- **Gotcha: an exhausted Gemini free-tier daily quota shows up as an E2E timeout, not a 429 failure.** The turn still succeeds through the OpenRouter failover leg, but takes 80s, past the 60s Playwright test timeout (`settings-knowledge.spec.ts` "a pasted link is read back as sections"). The backend log has the evidence: repeated `429 RESOURCE_EXHAUSTED` with "Generate content requests per day limit exceeded", then `llm primary leg hard rate-limited`, then a 201 at `duration_ms: 80754.7`. Confirm by re-running the single spec; do not treat it as a regression in the ticket under test.
+- **Gotcha: `npm run gen:types -- --check` must run on the host, not the frontend container.** The script shells out to `uv run python -c "... app.openapi()"` in `../backend`, and the frontend image has neither `uv` nor the backend venv, so it dies spawning the child. The host has `uv`, node and `frontend/node_modules`; run it there and expect `api-types.ts is up to date`.
+- **Gotcha: the frontend dev server survives a conflicted merge in its working tree.** Next dev has watched files carrying `<<<<<<<` markers, so wipe `.next` and restart (`make dev-reset`) before E2E rather than trusting hot reload.
+- **Gotcha: `make test-e2e` wants `make seed` as the last data write.** `make check` runs db-marked backend tests that touch the database, so the documented seed-then-check-then-e2e order needs a re-seed before the E2E run, not only at the start.
+
+### Conventions
+
+- **Convention: the closeout sections cite the squash, not the slice commits.** Once a ticket lands as one commit, the slice hashes are unreachable and stale; `## Delivered` names the squash hash and keeps the slice names with one line each. Per-slice hashes stay in evidence files and commit bodies, which are historical by design.
