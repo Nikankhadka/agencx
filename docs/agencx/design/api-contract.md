@@ -177,10 +177,14 @@ remain private and can be opened later from Home or What you offer.
   from `replace_document_id` and the new row is a `draft`. The same address is
   the same source, so a re-read of it updates that row in place and no delete
   happens.
-- The endpoint does not reconcile offerings. The client reconciles with
-  `reconcileOfferings`, mirroring `reconcile_replacement`, so an owner-edited
-  candidate survives a replacement as `orphaned` and the next batch save
-  persists the surviving list.
+- A real replacement also reconciles the record's offerings: the new document's
+  candidates are validated the same way the additive merge validates them, then
+  `reconcile_replacement` keeps what another source or the owner still backs and
+  drops what only the deleted document vouched for. It has no view of the
+  sheet's in-session edits, so it passes no edited ids; the client's own
+  `reconcileOfferings` pass still protects those, and the next batch save
+  persists the surviving list. A same-URL re-read and an added link merge
+  instead, because nothing was replaced.
 
 No unrelated API redesign, new relational entities, or full pricing schema is
 planned; the broader R-3 schema audit stays separate.

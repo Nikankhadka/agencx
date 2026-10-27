@@ -106,6 +106,20 @@ export function replaceLinkConfirm(): ConfirmOptions {
   };
 }
 
+/** 31: which offerings survive a link save. A different URL is a replacement,
+ *  so the review reconciles against the document it replaced. The same URL is
+ *  a re-read of that same row - its candidates are its own, so they merge in
+ *  place and keep the id that names their source. */
+export function reconcileLinkOfferings(
+  previous: ReviewOffering[],
+  record: KnowledgeRecord,
+  replacedDocumentId: string,
+  editedCandidateIds: Set<string>,
+): ReviewOffering[] {
+  if (record.id === replacedDocumentId) return mergeIncomingCandidates(previous, [record]);
+  return reconcileOfferings(previous, record.offering_candidates ?? [], replacedDocumentId, editedCandidateIds);
+}
+
 const CategoryContext = createContext<{
   categories: CategoryOption[];
   createCategory: (name: string) => Promise<CategoryOption>;
@@ -504,7 +518,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
           next.delete(documentId);
           return next;
         });
-        setOfferings((previous) => reconcileOfferings(previous, record.offering_candidates ?? [], documentId, editedIdsRef.current).map(toWorkingOffering));
+        setOfferings((previous) => reconcileLinkOfferings(previous, record, documentId, editedIdsRef.current).map(toWorkingOffering));
         // 31: the site fields it stated win; a field it omitted is absent from
         // the draft, so the value on screen survives.
         setProfileValues((previous) => {

@@ -52,6 +52,7 @@ from app.onboarding.flow import (
     ProfileDraft,
     customer_voice_for,
     merge_offerings,
+    reconcile_replacement,
 )
 from app.onboarding.tools import is_blank, request_finalize, save_profile
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
@@ -297,14 +298,25 @@ async def _checkpoint(tenant_id: UUID, record: OnboardingRecord) -> dict[str, An
     return record_data
 
 
-def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
-    merged = {normalize_name(item.name): item for item in record.offering_candidates}
+def _document_candidates(raw: Any) -> list[PendingOffering]:
+    """Validate one document's raw candidates and stamp them as its own.
+
+    One reader for every door a document's candidates come through, so the
+    replacement reconcile and the additive merge trust the same model.
+    """
+    candidates: list[PendingOffering] = []
     for item in raw if isinstance(raw, list) else []:
         try:
             document = PendingOffering.model_validate(item)
         except (TypeError, ValueError):
             continue
-        document = document.model_copy(update={"sources": ["document"]})
+        candidates.append(document.model_copy(update={"sources": ["document"]}))
+    return candidates
+
+
+def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
+    merged = {normalize_name(item.name): item for item in record.offering_candidates}
+    for document in _document_candidates(raw):
         key = normalize_name(document.name)
         existing = merged.get(key)
         # W-7: the document's price and description win an overlap.
@@ -969,6 +981,8 @@ async def run_source_url(
     cannot read writes nothing at all. The same address re-reads the row it
     already holds (``draft_from_url_text`` targets that filename), so the
     delete only fires when the resolved id differs from the one being replaced.
+    A real replacement also takes the replaced document's offerings with it
+    (``reconcile_replacement``); a re-read in place merges them instead.
     """
     record = await service.load_record(tenant_id=tenant_id)
     onboarding = OnboardingRecord.from_jsonb(record)
@@ -1029,16 +1043,25 @@ async def run_source_url(
             extra={"step": "profile", "error": type(profile).__name__},
         )
 
-    if (
-        replace_document_id is not None
-        and document is not None
-        and UUID(str(document["id"])) != replace_document_id
-        and document.get("status") == "draft"
-    ):
-        await knowledge_service.delete_record(tenant_id=tenant_id, document_id=replace_document_id)
-
     if document:
-        _merge_document_candidates(onboarding, document.get("offering_candidates", []))
+        if (
+            replace_document_id is not None
+            and UUID(str(document["id"])) != replace_document_id
+            and document.get("status") == "draft"
+        ):
+            # A real replacement: the old row goes, and so does what only it
+            # vouched for. W-11's reconcile owns which offerings survive.
+            await knowledge_service.delete_record(
+                tenant_id=tenant_id, document_id=replace_document_id
+            )
+            onboarding.offering_candidates = reconcile_replacement(
+                onboarding.offering_candidates,
+                _document_candidates(document.get("offering_candidates", [])),
+                replaced_document_id=replace_document_id,
+                edited_candidate_ids=set(),
+            )
+        else:
+            _merge_document_candidates(onboarding, document.get("offering_candidates", []))
     onboarding.knowledge_pending = False
     onboarding.history.append({"role": "user", "content": url})
     onboarding.history.append({"role": "assistant", "content": url_readback(onboarding.draft)})

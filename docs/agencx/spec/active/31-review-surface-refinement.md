@@ -745,3 +745,77 @@ outside its own row. The button is now `Add a file` with
 `data-testid="review-add-file"`; the hidden input testid is unchanged. The
 cancel-confirm arm of the replacement is also exercised ("saving a different
 link replaces the source" cancels once and asserts no request ran).
+
+### Review follow-up - the same-URL re-read and the replaced source's offerings
+
+Two defects in the link-replacement path, both keyed off the same distinction:
+the new document's id equals the one being replaced (a same-URL re-read) or it
+does not (a replacement).
+
+1. Frontend: `ReviewDocument.saveLink` always ran
+   `reconcileOfferings(previous, record.offering_candidates ?? [], documentId,
+   editedIdsRef.current)`. Because the endpoint re-reads the same row on a
+   same-URL save, the returned candidates carry that same id as their support,
+   and `reconcileOfferings` strips `replacedDocumentId` from every incoming
+   candidate by design - so a row the re-read added read `From document`, an
+   owner-edited row lost its document support, and an unedited row the re-read
+   no longer matched disappeared. The save now dispatches through
+   `reconcileLinkOfferings` (exported beside `replaceLinkConfirm`):
+   `record.id === replacedDocumentId` refreshes in place with
+   `mergeIncomingCandidates(previous, [record])`; a different id keeps the
+   replacement reconcile. Sections and the sources map are unchanged.
+2. Backend: `run_source_url` merged the new candidates with
+   `_merge_document_candidates` in both cases, so a candidate that only the
+   deleted document backed stayed in `record.offering_candidates`. When the
+   replacement is real (different id, new row a `draft`) it now runs
+   `flow.reconcile_replacement` over the same validated candidates
+   (`_document_candidates`, the validation `_merge_document_candidates` already
+   applied) with `edited_candidate_ids=set()`. The same-URL re-read and an
+   added link keep the additive merge. This supersedes locked decision 12's
+   "the endpoint does not reconcile": it still cannot see the sheet's edits, and
+   the client's pass still protects them, but the record it writes no longer
+   strands the replaced source's offerings.
+
+`.agents/memory.md`'s earlier note that called the same-URL label loss harmless
+and told future work not to fix it was wrong and is corrected; so is
+`design/api-contract.md`'s "the endpoint does not reconcile offerings".
+
+```
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+72 passed in 4.19s
+
+$ docker compose run --rm backend ruff check .
+All checks passed!
+$ docker compose run --rm backend mypy
+Success: no issues found in 256 source files
+
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (53 tests)
+ Test Files  2 passed (2)
+      Tests  83 passed (83)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ 18 passed (21.2s)
+```
+
+The regression tests, each red before its fix: `ReviewSheet.test.tsx` "keeps a
+same-URL re-read in place, so every row keeps its source" (re-read candidate
+keeps `doc-1` in `supporting_document_ids` and labels `From
+bytefix.example.com`; the edited row keeps `["owner", "document"]` and stays
+`supported`) and "drops an unedited row when a different URL replaces the
+source"; `test_onboarding_api.py`'s wrong-URL replacement now asserts the
+persisted `offering_candidates` no longer holds `Battery swap` (backed only by
+the deleted row) and still holds `Owner typed row`, and the same-URL test
+asserts every persisted candidate keeps the document id in
+`supporting_document_ids`.

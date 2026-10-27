@@ -38,6 +38,7 @@ from app.llm.provider import ChatMessage, SchemaT
 from app.main import app
 from app.onboarding import beats
 from app.onboarding.agent import OnboardingRecord
+from app.onboarding.flow import PendingOffering
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.limits import LimitTimeout
@@ -1951,10 +1952,27 @@ async def test_source_url_replaces_a_different_link(
     superuser_conn: asyncpg.Connection[Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """31: a replacement swaps the source - the old row is gone."""
+    """31: a replacement swaps the source - the old row is gone.
+
+    Its offerings go with it: a row only the deleted document backed is not
+    stranded in the review, while the owner's own row survives.
+    """
     token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     old_id = await _seed_website(superuser_conn, tenant_id, "https://old.example.com")
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            offering_candidates=[
+                PendingOffering(
+                    name="Battery swap",
+                    sources=["document"],
+                    supporting_document_ids=[old_id],
+                ),
+                PendingOffering(name="Owner typed row", sources=["owner"]),
+            ]
+        ).to_jsonb(),
+    )
     probe = ConcurrencyProbe(offerings=_url_offering_payloads(), delay=0.0)
     app.dependency_overrides[get_llm_provider] = lambda: probe
     _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
@@ -1977,6 +1995,15 @@ async def test_source_url_replaces_a_different_link(
     assert rows[0]["filename"] == _SOURCE_URL
     assert rows[0]["doc_type"] == "website"
     assert rows[0]["status"] == "draft"
+    # The review's own list loses what only the deleted document vouched for,
+    # and keeps what the owner typed.
+    persisted = await superuser_conn.fetchval(
+        "select config->'onboarding' from tenant_config where tenant_id = $1", tenant_id
+    )
+    names = [item["name"] for item in json.loads(persisted)["offering_candidates"]]
+    assert "Battery swap" not in names
+    assert "Owner typed row" in names
+    assert names == ["Owner typed row", "Screen repairs", "battery replacements"]
 
 
 async def test_source_url_replacement_overwrites_stated_fields_and_keeps_omitted_ones(
@@ -2022,10 +2049,27 @@ async def test_source_url_reading_the_same_link_again_stays_in_place(
     superuser_conn: asyncpg.Connection[Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """31: the same address is the same source, so nothing is deleted."""
+    """31: the same address is the same source, so nothing is deleted.
+
+    The row's offerings are re-read in place too, so they keep the id that
+    names their source instead of losing it to a replacement that never
+    happened.
+    """
     token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     document_id = await _seed_website(superuser_conn, tenant_id, _SOURCE_URL)
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            offering_candidates=[
+                PendingOffering(
+                    name="Phone cases",
+                    sources=["document"],
+                    supporting_document_ids=[document_id],
+                ),
+            ]
+        ).to_jsonb(),
+    )
     probe = ConcurrencyProbe(offerings=_url_offering_payloads(), delay=0.0)
     app.dependency_overrides[get_llm_provider] = lambda: probe
     _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
@@ -2038,6 +2082,17 @@ async def test_source_url_reading_the_same_link_again_stays_in_place(
     assert uuid.UUID(response.json()["document"]["id"]) == document_id
     rows = await superuser_conn.fetch("select id from documents where tenant_id = $1", tenant_id)
     assert [row["id"] for row in rows] == [document_id]
+    persisted = await superuser_conn.fetchval(
+        "select config->'onboarding' from tenant_config where tenant_id = $1", tenant_id
+    )
+    candidates = json.loads(persisted)["offering_candidates"]
+    assert [item["name"] for item in candidates] == [
+        "Phone cases",
+        "Screen repairs",
+        "battery replacements",
+    ]
+    for item in candidates:
+        assert str(document_id) in item["supporting_document_ids"]
 
 
 async def test_source_url_scrape_failure_leaves_the_source_alone(

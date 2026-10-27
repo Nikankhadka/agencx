@@ -8,6 +8,7 @@ import {
   pageForOffering,
   Pagination,
   priceInputUpdate,
+  reconcileLinkOfferings,
   removeOfferingConfirm,
   replaceLinkConfirm,
   profilePatchFor,
@@ -16,6 +17,7 @@ import {
   toWorkingOffering,
   type ReviewProfile,
 } from "./ReviewSheet";
+import { offeringLabel } from "./offerings";
 import type { KnowledgeRecord, ReviewOffering, ReviewWorkspace } from "./types";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 
@@ -944,5 +946,74 @@ describe("link editing (31)", () => {
     expect(html).not.toContain('data-testid="review-add-link"');
     expect(html).not.toContain('data-testid="review-add-file"');
     expect(html).not.toContain('data-testid="review-remove-source"');
+  });
+
+  it("keeps a same-URL re-read in place, so every row keeps its source", () => {
+    // Replacing a link with the same address re-reads the same document row.
+    // Reconciling that row against itself would strip the id that names its
+    // source, so the re-read merges in place instead.
+    const document = record();
+    const previous: ReviewOffering[] = [
+      candidate({
+        candidate_id: "c-1",
+        name: "Screen repairs",
+        sources: ["document"],
+        supporting_document_ids: ["doc-1"],
+      }),
+      candidate({
+        candidate_id: "c-2",
+        name: "Screen protectors",
+        sources: ["owner", "document"],
+        supporting_document_ids: ["doc-1"],
+        support_state: "supported",
+      }),
+    ];
+    const reRead = record({
+      offering_candidates: [
+        candidate({ name: "Screen repairs", sources: ["document"], supporting_document_ids: ["doc-1"] }),
+        candidate({ name: "battery replacements", sources: ["document"], supporting_document_ids: ["doc-1"] }),
+      ],
+    });
+
+    const next = reconcileLinkOfferings(previous, reRead, "doc-1", new Set(["c-2"]));
+
+    expect(next.map((item) => item.name)).toEqual([
+      "Screen repairs",
+      "Screen protectors",
+      "battery replacements",
+    ]);
+    // The row the page added on the re-read still resolves to its source.
+    const added = next.find((item) => item.name === "battery replacements");
+    expect(added?.supporting_document_ids).toContain("doc-1");
+    expect(offeringLabel(added!, [document])).toBe("From bytefix.example.com");
+    // The row the owner edited survives, still backed by the source it names.
+    const edited = next.find((item) => item.name === "Screen protectors");
+    expect(edited?.supporting_document_ids).toContain("doc-1");
+    expect(edited?.sources).toEqual(["owner", "document"]);
+    expect(edited?.support_state).toBe("supported");
+  });
+
+  it("drops an unedited row when a different URL replaces the source", () => {
+    const previous: ReviewOffering[] = [
+      candidate({
+        candidate_id: "c-1",
+        name: "Screen repairs",
+        sources: ["document"],
+        supporting_document_ids: ["doc-1"],
+      }),
+      candidate({ candidate_id: "c-2", name: "Owner typed row", sources: ["owner"] }),
+    ];
+    const replacement = record({
+      id: "doc-2",
+      filename: "https://new.example.com",
+      offering_candidates: [
+        candidate({ name: "Battery replacements", sources: ["document"], supporting_document_ids: ["doc-2"] }),
+      ],
+    });
+
+    const next = reconcileLinkOfferings(previous, replacement, "doc-1", new Set());
+
+    // Nothing else vouches for the old document's row; the owner's own row stays.
+    expect(next.map((item) => item.name)).toEqual(["Owner typed row", "Battery replacements"]);
   });
 });
