@@ -182,4 +182,82 @@ test.describe("Business page actions", () => {
       ),
     ).toBeVisible();
   });
+
+  test("the suggestions sheet asks before removing a suggestion", async ({
+    page,
+    request,
+  }) => {
+    const candidates = [
+      {
+        candidate_id: "c1",
+        name: "Battery swap",
+        description: "",
+        price_cents: null,
+        sources: ["document"],
+        review_status: "pending",
+      },
+      {
+        candidate_id: "c2",
+        name: "Screen repair",
+        description: "",
+        price_cents: null,
+        sources: ["document"],
+        review_status: "pending",
+      },
+    ];
+    let puts = 0;
+
+    await page.route("**/api/onboarding/suggestions*", (route) => {
+      if (route.request().method() === "PUT") {
+        puts += 1;
+        return route.fulfill({ json: { count: 0, candidates: [] } });
+      }
+      return route.fulfill({ json: { count: candidates.length, candidates } });
+    });
+    await page.route("**/api/business/page*", (route) =>
+      route.fulfill({
+        json: {
+          slug: "bytefix",
+          name: "Bytefix Repairs",
+          tagline: "",
+          description: "",
+          business_contact: "",
+          has_cover: false,
+          services: ["Phone repair"],
+          offerings: [
+            {
+              id: "o1",
+              name: "iPhone 11",
+              description: "",
+              price_cents: 24900,
+              category: null,
+              media: null,
+            },
+          ],
+          links: {},
+        },
+      }),
+    );
+
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+    await page.getByRole("button", { name: "Review suggestions" }).click();
+
+    const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "Remove", exact: true }).first().click();
+
+    // 31: nothing is dropped on one click, on this surface either.
+    const confirm = page.getByRole("dialog", { name: "Remove Battery swap?" });
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText("It will not be saved to your catalog.");
+    await confirm.getByRole("button", { name: "Cancel" }).click();
+    await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Battery swap");
+    await expect(sheet.getByLabel("Offering 2 name")).toHaveValue("Screen repair");
+
+    await sheet.getByRole("button", { name: "Remove", exact: true }).first().click();
+    await page.getByTestId("confirm-accept").click();
+    await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Screen repair");
+    expect(puts).toBe(0);
+  });
 });

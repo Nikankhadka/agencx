@@ -137,5 +137,7 @@ test("pasting a link reads the site and reads it back", async ({
   await expect(dialog.getByLabel("Offering 1 name")).toHaveValue(typedName);
 
   await dialog.getByTestId("onboarding-knowledge-discard").click();
+  // 31: the footer asks before it destroys the source.
+  await page.getByTestId("confirm-accept").click();
   await expect(dialog).toBeHidden();
 });

@@ -65,6 +65,34 @@ export function reveal(cardRefs: CardRefs, id: string | null | undefined) {
   revealNode(cardRefs.current.get(id) ?? null);
 }
 
+/** 31: the one removal question, used from both owners of an offering card
+ *  (the review and the suggestions sheet). Fixed copy, and "top" because the
+ *  caller sits inside the sheet's transformed panel. */
+export function removeOfferingConfirm(name: string): ConfirmOptions {
+  return {
+    title: `Remove ${name.trim() || "this offering"}?`,
+    description: "It will not be saved to your catalog.",
+    confirmLabel: "Remove",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
+/** 31: the footer discard question, pluralised from the reviewed source count.
+ *  Same layer rule as the offering removal. */
+export function discardConfirm(count: number): ConfirmOptions {
+  const many = count > 1;
+  return {
+    title: many ? "Discard these sources?" : "Discard this source?",
+    description: many
+      ? "They are deleted, and their details and offerings are not saved."
+      : "It is deleted, and its details and offerings are not saved.",
+    confirmLabel: many ? "Discard sources" : "Discard source",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
 const CategoryContext = createContext<{
   categories: CategoryOption[];
   createCategory: (name: string) => Promise<CategoryOption>;
@@ -172,17 +200,25 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
         busy={busy}
         onSave={onSaveSuggestions}
         onDiscard={onDiscard}
+        confirmRemove={confirmRemove}
       />
     ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} profile={profile} missingRequired={missingRequired} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} confirmRemove={confirmRemove} /> : null}
   </CategoryContext.Provider></Sheet>;
 }
 
-function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void }) {
+function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemove }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
   const [offerings, setOfferings] = useState(() => suggestions.map(toWorkingOffering));
   const cardRefs = useRef(new Map<string, HTMLInputElement>());
 
   function updateOffering(id: string, update: Partial<WorkingOffering>) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
+  }
+
+  async function removeOffering(id: string) {
+    const target = offerings.find((item) => item.candidate_id === id);
+    if (!target) return;
+    if (confirmRemove && !(await confirmRemove(removeOfferingConfirm(target.name)))) return;
+    setOfferings((previous) => previous.filter((item) => item.candidate_id !== id));
   }
 
   async function save() {
@@ -193,7 +229,7 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggesti
     <div className="min-h-0 flex-1 overflow-y-auto pb-4">
       <p className="text-meta text-ink-a40">These private drafts never reach customers until you save them.</p>
       <div className="mt-4 flex flex-col gap-2">
-        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={(id) => setOfferings((previous) => previous.filter((item) => item.candidate_id !== id))} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
+        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
       </div>
     </div>
     <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3">
@@ -275,9 +311,10 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     editedIdsRef.current.add(id);
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
   }
-  function removeOffering(id: string) {
+  async function removeOffering(id: string) {
     const index = offerings.findIndex((item) => item.candidate_id === id);
     if (index < 0) return;
+    if (confirmRemove && !(await confirmRemove(removeOfferingConfirm(offerings[index].name)))) return;
     // 31: focus follows what the removal revealed - the next row, else the
     // one above, else the action that adds one back.
     const survivor = offerings[index + 1] ?? offerings[index - 1];
@@ -320,6 +357,15 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     setOfferings((previous) => previous.filter((item) => item.candidate_id !== removed.candidate_id).map((item) => item.candidate_id !== retained.candidate_id ? item : { ...retained, price_cents: price, priceText: formatPrice(price), priceWording: "", description: retained.description || removed.description, sources: [...new Set([...retained.sources, ...removed.sources])], source_references: [...(retained.source_references ?? []), ...(removed.source_references ?? [])], possibleMatches: [...new Set([...retained.possibleMatches, ...removed.possibleMatches])].filter((id) => id !== retained.candidate_id && id !== removed.candidate_id), dirty: true }));
     setCombine(null);
   }
+  /** 31: the footer asks before it destroys anything, and names what goes. */
+  async function handleDiscard() {
+    if (confirmRemove) {
+      const confirmed = await confirmRemove(discardConfirm(workspace.documents.length));
+      if (!confirmed) return;
+    }
+    onDiscard();
+  }
+
   async function save() {
     if (duplicateIds.length) {
       const target = offerings.find((item) => duplicateIds.includes(item.candidate_id));
@@ -504,7 +550,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     </div>
     {combine ? <CombinePreview combine={combine} offerings={offerings} onPrice={(price) => setCombine({ ...combine, price })} onCancel={() => setCombine(null)} onConfirm={applyCombine} /> : null}
     {priceConflict ? <p role="alert" className="mt-3 rounded-card bg-warning-subtle p-3 text-meta text-text">{priceConflict}</p> : null}
-    <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3"><Button className="flex-1" loading={busy} onClick={save} data-testid={onboarding ? "onboarding-knowledge-save" : "knowledge-save"}>{onboarding ? "Use this information" : priceConflict ? "Confirm price changes" : firstDocument?.status === "draft" ? "Save it" : "Save changes"}</Button><button type="button" onClick={onDiscard} disabled={busy} className={`px-3 ${TEXT_PRESS} text-action font-medium text-ink-a40`} data-testid={onboarding ? "onboarding-knowledge-discard" : "knowledge-discard"}>{onboarding ? "Discard" : firstDocument?.status === "draft" ? "Discard draft" : "Remove source"}</button></footer>
+    <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3"><Button className="flex-1" loading={busy} onClick={save} data-testid={onboarding ? "onboarding-knowledge-save" : "knowledge-save"}>{onboarding ? "Use this information" : priceConflict ? "Confirm price changes" : firstDocument?.status === "draft" ? "Save it" : "Save changes"}</Button><button type="button" onClick={() => void handleDiscard()} disabled={busy} className={`px-3 ${TEXT_PRESS} text-action font-medium text-ink-a40`} data-testid={onboarding ? "onboarding-knowledge-discard" : "knowledge-discard"}>{onboarding ? (workspace.documents.length > 1 ? "Discard sources" : "Discard source") : firstDocument?.status === "draft" ? "Discard draft" : "Remove source"}</button></footer>
   </div>;
 }
 

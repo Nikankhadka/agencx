@@ -206,6 +206,8 @@ test("discarding a knowledge review opens the confirm step with a non-empty addr
   const dialog = page.getByRole("dialog", { name: "Review your information" });
   await expect(dialog).toBeVisible();
   await dialog.getByTestId("onboarding-knowledge-discard").click();
+  // 31: the footer asks before it destroys the source.
+  await page.getByTestId("confirm-accept").click();
 
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("onboarding-confirm")).toBeVisible();
@@ -256,6 +258,7 @@ test("a discard does not offer go-live when the server still wants a beat", asyn
   const dialog = page.getByRole("dialog", { name: "Review your information" });
   await expect(dialog).toBeVisible();
   await dialog.getByTestId("onboarding-knowledge-discard").click();
+  await page.getByTestId("confirm-accept").click();
 
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("onboarding-confirm")).toHaveCount(0);

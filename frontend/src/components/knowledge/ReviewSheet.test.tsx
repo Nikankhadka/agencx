@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  discardConfirm,
   insertOwnerOffering,
   offeringPage,
   offeringPageCount,
   pageForOffering,
   Pagination,
   priceInputUpdate,
+  removeOfferingConfirm,
   profilePatchFor,
   ReviewSheet,
   toPendingOffering,
@@ -405,6 +407,99 @@ describe("collapsed categories (31)", () => {
   });
 });
 
+describe("removal confirmations (31)", () => {
+  it("pins the offering removal copy, tone and layer", () => {
+    expect(removeOfferingConfirm("Screen repair")).toEqual({
+      title: "Remove Screen repair?",
+      description: "It will not be saved to your catalog.",
+      confirmLabel: "Remove",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("names one source or several when the footer discard is used", () => {
+    expect(discardConfirm(1)).toMatchObject({
+      title: "Discard this source?",
+      description: "It is deleted, and its details and offerings are not saved.",
+      confirmLabel: "Discard source",
+      tone: "danger",
+      layer: "top",
+    });
+    expect(discardConfirm(2)).toMatchObject({
+      title: "Discard these sources?",
+      description: "They are deleted, and their details and offerings are not saved.",
+      confirmLabel: "Discard sources",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("labels the onboarding footer by the number of reviewed sources", () => {
+    const one = renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{
+          id: "ws-1",
+          documents: [
+            {
+              id: "doc-1",
+              filename: "menu.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+          ],
+          offering_candidates: [],
+        }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+    expect(one).toContain(">Discard source</button>");
+
+    const two = renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{
+          id: "ws-1",
+          documents: [
+            {
+              id: "doc-1",
+              filename: "menu.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+            {
+              id: "doc-2",
+              filename: "hours.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+          ],
+          offering_candidates: [],
+        }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+    expect(two).toContain(">Discard sources</button>");
+  });
+});
+
 describe("pagination copy", () => {
   function renderPagination(page: number, pages: number, count: number): string {
     return renderToStaticMarkup(
@@ -488,7 +583,7 @@ describe("review workspace clarity", () => {
     // draft is discarded and a saved source is removed.
     expect(renderClarity(workspace("draft"))).toContain(">Discard draft</button>");
     expect(renderClarity(workspace("ready"))).toContain(">Remove source</button>");
-    expect(renderClarity(workspace("draft"), true)).toContain(">Discard</button>");
+    expect(renderClarity(workspace("draft"), true)).toContain(">Discard source</button>");
   });
 
   it("renders the sections in DOM order matching the visual order", () => {

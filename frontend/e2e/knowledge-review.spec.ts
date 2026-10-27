@@ -411,6 +411,129 @@ test("the category picker stays collapsed until its trigger is used", async ({ p
   await expect(trigger).toBeFocused();
 });
 
+test("removing an offering asks first, above the sheet, and cancel keeps it", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([
+    draftRecord({
+      id: "draft-1",
+      filename: "menu.txt",
+      offering_candidates: [offeringCandidate("Menu item A", "draft-1", { price_cents: 1000 })],
+    }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Menu item A");
+
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Remove Menu item A?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText("It will not be saved to your catalog.");
+  // 31: the dialog is the page-level one, painted above the sheet's panel.
+  const overlayZ = await confirm.evaluate(
+    (node) => getComputedStyle(node.parentElement!).zIndex,
+  );
+  expect(overlayZ).toBe("60");
+
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Menu item A");
+
+  // The last row of all: confirming removes it and focus lands on the action
+  // that can add one back.
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveCount(0);
+  await expect(sheet.getByText("No offerings yet.")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Add offering" })).toBeFocused();
+});
+
+test("removing a middle offering focuses the next row", async ({ page, request }) => {
+  const candidates = Array.from({ length: 3 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Remove", exact: true }).nth(1).click();
+  await page.getByTestId("confirm-accept").click();
+
+  // 31: the survivor moves up into the removed row and takes focus.
+  await expect(sheet.getByLabel("Offering 2 name")).toHaveValue("Item 3");
+  await expect(sheet.getByLabel("Offering 2 name")).toBeFocused();
+});
+
+test("removing the only row on the last page focuses the row above", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 6 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Review all 6 offerings" }).click();
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
+
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect(sheet.getByLabel("Offering 5 name")).toHaveValue("Item 5");
+  await expect(sheet.getByLabel("Offering 5 name")).toBeFocused();
+});
+
+test("discarding from the footer asks, and cancel leaves the review open", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([draftRecord({ id: "draft-1", filename: "menu.txt" })]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  await sheet.getByTestId("onboarding-knowledge-discard").click();
+  const confirm = page.getByRole("dialog", { name: "Discard this source?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText(
+    "It is deleted, and its details and offerings are not saved.",
+  );
+  await expect(confirm.getByTestId("confirm-accept")).toHaveText("Discard source");
+
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(sheet).toBeVisible();
+  expect(records.deleteCount()).toBe(0);
+
+  await sheet.getByTestId("onboarding-knowledge-discard").click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(sheet).toBeHidden();
+  expect(records.deletedIds()).toEqual(["draft-1"]);
+});
+
 test("priced services lead and the source detail stays closed", async ({ page, request }) => {
   const candidates = Array.from({ length: 6 }, (_, i) =>
     offeringCandidate(`Item ${i + 1}`, "draft-1", {

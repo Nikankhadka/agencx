@@ -602,3 +602,42 @@ Note on the test seams: this repo has no jsdom (memory, 2026-10-03), so
 "calls its handler" cannot be unit-tested from static markup. The unit tests
 assert the closed/open markup and the trigger copy; the handler wiring is
 covered by the e2e above (Next, Previous, Add offering, Review all, Done).
+
+### Slice C - removal and discard confirmations
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (43 tests)
+ Test Files  2 passed (2)
+      Tests  73 passed (73)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ removing an offering asks first, above the sheet, and cancel keeps it
+ ✓ removing a middle offering focuses the next row
+ ✓ removing the only row on the last page focuses the row above
+ ✓ discarding from the footer asks, and cancel leaves the review open
+ (plus the 10 specs from slice B)
+ 14 passed (18.1s)
+
+$ ... npm run test:e2e -- e2e/onboarding-go-live.spec.ts e2e/onboarding-url.spec.ts \
+    e2e/settings-knowledge.spec.ts e2e/business-page-actions.spec.ts e2e/onboarding-resume.spec.ts
+ 21 passed, 1 failed - onboarding-url.spec.ts "pasting a link reads the site and reads it back"
+```
+
+`onboarding-url.spec.ts` is blocked by unrelated uncommitted work in the tree:
+`backend/app/onboarding/beats.py` removes the owner-name Skip chip that spec
+clicks at line 56, before it ever reaches the discard at line 139. Re-run with
+that file parked also failed earlier, in `loginInChat` (live mail round trip).
+The discard path it covers is the same one verified above and in
+`settings-knowledge.spec.ts`.

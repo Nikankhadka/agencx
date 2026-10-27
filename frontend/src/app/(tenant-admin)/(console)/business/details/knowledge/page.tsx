@@ -550,6 +550,7 @@ export default function KnowledgePage() {
         onDiscard={() => {
           void discardWorkspace();
         }}
+        confirmRemove={confirm}
       />
       {confirmDialog}
     </main>
