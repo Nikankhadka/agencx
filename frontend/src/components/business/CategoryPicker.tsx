@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 
 export interface CategoryOption {
@@ -17,6 +17,9 @@ interface Props {
   onChange: (selectedIds: string[], primaryId: string | null) => void;
   onCreate: (name: string) => Promise<CategoryOption>;
   label?: string;
+  /** 31: focus the search field on mount - the review's collapsed picker is
+   *  opened by a trigger, so the owner lands in the field they came for. */
+  focusSearch?: boolean;
 }
 
 export function normalizedCategoryName(value: string) {
@@ -40,7 +43,9 @@ export function CategoryPicker({
   onChange,
   onCreate,
   label = "Categories",
+  focusSearch = false,
 }: Props) {
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -127,6 +132,8 @@ export function CategoryPicker({
         <p className="mt-2 text-meta text-ink-a40">No category selected.</p>
       )}
       <input
+        ref={searchRef}
+        autoFocus={focusSearch}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search or create a category"

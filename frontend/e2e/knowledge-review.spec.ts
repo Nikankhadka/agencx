@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 import {
   MIDDLE_DOT,
@@ -31,6 +31,15 @@ const SEVEN_NAMES = [...FIVE_NAMES, "extra6.txt", "extra7.txt"];
 
 function dialog(page: Page) {
   return page.getByRole("dialog", { name: "Review your information" });
+}
+
+/** 31: a revealed field must actually be on screen, not just focused. */
+async function expectInViewport(locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = locator.page().viewportSize()!;
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
 }
 
 test("uploads five files three at a time and opens one combined review", async ({
@@ -369,6 +378,39 @@ test("batch publish keeps one failing document reviewable until it saves", async
   await expect(page.getByTestId("onboarding-ready-card")).toHaveCount(0);
 });
 
+test("the category picker stays collapsed until its trigger is used", async ({ page, request }) => {
+  const store = recordsStore([
+    draftRecord({
+      id: "draft-1",
+      filename: "menu.txt",
+      offering_candidates: [offeringCandidate("Menu item A", "draft-1", { price_cents: 1000 })],
+    }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  // 31: one trigger, no picker in the DOM.
+  const trigger = sheet.getByTestId("review-category-trigger");
+  await expect(trigger).toHaveText("Add category");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const search = sheet.getByLabel("Search categories");
+  await expect(search).toBeFocused();
+  await expectInViewport(search);
+
+  await sheet.getByTestId("review-category-done").click();
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test("priced services lead and the source detail stays closed", async ({ page, request }) => {
   const candidates = Array.from({ length: 6 }, (_, i) =>
     offeringCandidate(`Item ${i + 1}`, "draft-1", {
@@ -492,18 +534,27 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   await reviewAll.click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 1-5 of 12 offerings")).toBeVisible();
+  // 31: expanding lands focus on the row it revealed.
+  await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
 
   await sheet.getByRole("button", { name: "Next" }).click();
   await expect(sheet.getByText("Page 2 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 6-10 of 12 offerings")).toBeVisible();
+  // 31: paging moves focus to the first row of the new page and scrolls it in.
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 6 name"));
 
   await sheet.getByRole("button", { name: "Next" }).click();
   await expect(sheet.getByText("Page 3 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 11-12 of 12 offerings")).toBeVisible();
+  await expect(sheet.getByLabel("Offering 11 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 11 name"));
 
   await sheet.getByRole("button", { name: "Previous" }).click();
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
   await sheet.getByRole("button", { name: "Previous" }).click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
+  await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
 
   // Typing in an offering never changes the page.
   await sheet.getByLabel("Offering 1 name").fill("Renamed item");
@@ -517,6 +568,7 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   await addOffering.click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
   await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 1 name"));
   await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("");
 
   // Escape closes the sheet; the ready card is the way back in. Focus is

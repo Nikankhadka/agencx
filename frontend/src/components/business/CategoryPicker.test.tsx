@@ -41,4 +41,32 @@ describe("CategoryPicker", () => {
       normalizedCategoryName("screen care / repairs"),
     );
   });
+
+  it("focuses the search field only when asked to", () => {
+    // 31: the review opens the picker behind a trigger, so focus belongs in
+    // the search field; the Business page's always-open picker keeps today's
+    // behaviour (no autofocus) and stays exactly as it was.
+    const idle = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[]}
+        selectedIds={[]}
+        primaryId={null}
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+      />,
+    );
+    expect(idle).not.toMatch(/<input[^>]*autofocus/i);
+
+    const focused = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[]}
+        selectedIds={[]}
+        primaryId={null}
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+        focusSearch
+      />,
+    );
+    expect(focused).toMatch(/<input[^>]*autofocus/i);
+  });
 });

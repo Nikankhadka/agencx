@@ -344,6 +344,67 @@ describe("review field recipe (31)", () => {
   });
 });
 
+describe("collapsed categories (31)", () => {
+  function renderCard(overrides: Partial<ReviewOffering> = {}): string {
+    const workspace: ReviewWorkspace = {
+      id: "ws-1",
+      documents: [
+        {
+          id: "doc-1",
+          filename: "menu.pdf",
+          doc_type: "other",
+          status: "draft",
+          error: null,
+          sections: [],
+        },
+      ],
+      offering_candidates: [
+        {
+          candidate_id: "c-1",
+          name: "Bowl",
+          description: "",
+          price_cents: 1200,
+          sources: ["owner"],
+          ...overrides,
+        },
+      ],
+    };
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={workspace}
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("keeps a card with no category collapsed behind one trigger", () => {
+    const html = renderCard();
+    expect(html).toContain('data-testid="review-category-trigger"');
+    expect(html).toContain(">Add category</button>");
+    expect(html).toContain('aria-expanded="false"');
+    // Closed means the picker is not in the DOM at all, not merely hidden.
+    expect(html).not.toContain("Search or create a category");
+  });
+
+  it("labels a card that already has categories by its count", () => {
+    const html = renderCard({ category_ids: ["a", "b"], primary_category_id: "a" });
+    expect(html).toContain(">Categories (2)</button>");
+    expect(html).toContain('aria-expanded="false"');
+  });
+
+  it("keeps the suggested category out of the collapsed card", () => {
+    // 31: the line moved inside the expanded region, so a closed card is one
+    // row shorter than the ticket-29 render.
+    const html = renderCard({ proposed_category: "Coffee" });
+    expect(html).not.toContain("Suggested category");
+  });
+});
+
 describe("pagination copy", () => {
   function renderPagination(page: number, pages: number, count: number): string {
     return renderToStaticMarkup(

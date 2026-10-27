@@ -560,3 +560,45 @@ $ docker compose run --rm --no-deps frontend npx vitest run src/components/knowl
  Test Files  2 passed (2)
       Tests  67 passed (67)
 ```
+
+### Slice B - collapsed categories and focus movement
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge src/components/business
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/business/CategoryPicker.test.tsx (4 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (40 tests)
+ Test Files  3 passed (3)
+      Tests  74 passed (74)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ uploads five files three at a time and opens one combined review
+ ✓ caps the batch at five files
+ ✓ a stored failure stays in Knowledge and never joins the review
+ ✓ the ready card persists and reopens with edits intact
+ ✓ replace is safe when the upload fails
+ ✓ a successful replace reconciles offering provenance
+ ✓ batch publish keeps one failing document reviewable until it saves
+ ✓ the category picker stays collapsed until its trigger is used
+ ✓ priced services lead and the source detail stays closed
+ ✓ pagination and toolbar keep review stable while typing
+ 10 passed (14.3s)
+
+$ ... npm run test:e2e -- e2e/knowledge-review-mobile.spec.ts
+ 6 passed (10.9s)
+```
+
+Note on the test seams: this repo has no jsdom (memory, 2026-10-03), so
+"calls its handler" cannot be unit-tested from static markup. The unit tests
+assert the closed/open markup and the trigger copy; the handler wiring is
+covered by the e2e above (Next, Previous, Add offering, Review all, Done).

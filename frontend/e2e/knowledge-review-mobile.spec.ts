@@ -151,6 +151,36 @@ test("the pagination shows two rows after expanding", async ({ page, request }) 
   await expectNoHorizontalOverflow(page);
 });
 
+test("the collapsed list keeps three cards and one category trigger each", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 3 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  for (const [index, name] of ["Item 1", "Item 2", "Item 3"].entries()) {
+    await expect(sheet.getByLabel(`Offering ${index + 1} name`)).toHaveValue(name);
+  }
+  // 31: the phone keeps the same quiet card - one collapsed trigger each, no
+  // open picker taking a third of the screen.
+  await expect(sheet.getByTestId("review-category-trigger")).toHaveCount(3);
+  await expect(sheet.getByTestId("review-category-trigger").first()).toHaveText(
+    "Add category",
+  );
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
 test("the ready card stacks the button under the heading", async ({ page, request }) => {
   const store = recordsStore([draftRecord()]);
   await stubOnboardingState(page);

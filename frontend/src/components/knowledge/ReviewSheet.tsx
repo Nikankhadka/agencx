@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS } from "@/lib/onboarding";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +41,29 @@ const TEXT_PRESS = "transition-colors duration-(--duration-fast) hover:underline
 /** 31: the review's one field recipe - 16/24 text on the 44px floor, matching
  *  the console's own controls rather than the 18/25 sheet-field role. */
 export const FIELD = "rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text";
+
+type CardRefs = { current: Map<string, HTMLInputElement> };
+
+/** 31: ask for a reveal after the render that produced the node - expanding
+ *  from read-only to editable replaces the content, so the request is applied
+ *  from an effect rather than from the click handler. */
+type RevealRequest = { id: string } | { add: true };
+
+/** 31: the one focus helper. After the revealed node is laid out, focus it
+ *  (unless the reveal is a scroll-only one) and bring it into view by the
+ *  nearest edge, so paging and expanding never leave the keyboard behind. */
+function revealNode(node: HTMLElement | null, focus = true) {
+  if (!node) return;
+  requestAnimationFrame(() => {
+    if (focus) node.focus();
+    node.scrollIntoView({ block: "nearest" });
+  });
+}
+
+export function reveal(cardRefs: CardRefs, id: string | null | undefined) {
+  if (!id) return;
+  revealNode(cardRefs.current.get(id) ?? null);
+}
 
 const CategoryContext = createContext<{
   categories: CategoryOption[];
@@ -156,6 +179,7 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
 
 function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void }) {
   const [offerings, setOfferings] = useState(() => suggestions.map(toWorkingOffering));
+  const cardRefs = useRef(new Map<string, HTMLInputElement>());
 
   function updateOffering(id: string, update: Partial<WorkingOffering>) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
@@ -169,7 +193,7 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggesti
     <div className="min-h-0 flex-1 overflow-y-auto pb-4">
       <p className="text-meta text-ink-a40">These private drafts never reach customers until you save them.</p>
       <div className="mt-4 flex flex-col gap-2">
-        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={() => undefined} onChange={updateOffering} onRemove={(id) => setOfferings((previous) => previous.filter((item) => item.candidate_id !== id))} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
+        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={(id) => setOfferings((previous) => previous.filter((item) => item.candidate_id !== id))} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
       </div>
     </div>
     <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3">
@@ -210,11 +234,18 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   const [replacingSource, setReplacingSource] = useState<string | null>(null);
   const [addingSources, setAddingSources] = useState(false);
   const cardRefs = useRef(new Map<string, HTMLInputElement>());
+  const [revealRequest, setRevealRequest] = useState<RevealRequest | null>(null);
   // W-11c: every user edit/add/combine marks the row dirty (and enters this
   // ref) so a later replace orphans it instead of silently dropping it.
   const editedIdsRef = useRef(new Set<string>());
+  const addOfferingRef = useRef<HTMLButtonElement>(null);
   const addFileRef = useRef<HTMLInputElement>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!revealRequest) return;
+    if ("id" in revealRequest) reveal(cardRefs, revealRequest.id);
+    else revealNode(addOfferingRef.current);
+  }, [revealRequest]);
   const pages = offeringPageCount(offerings.length);
   const currentPage = Math.min(page, pages - 1);
   const allFit = offerings.length <= collapsedLimit;
@@ -244,7 +275,22 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     editedIdsRef.current.add(id);
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
   }
-  function removeOffering(id: string) { setOfferings((previous) => previous.filter((item) => item.candidate_id !== id)); }
+  function removeOffering(id: string) {
+    const index = offerings.findIndex((item) => item.candidate_id === id);
+    if (index < 0) return;
+    // 31: focus follows what the removal revealed - the next row, else the
+    // one above, else the action that adds one back.
+    const survivor = offerings[index + 1] ?? offerings[index - 1];
+    const next = offerings.filter((item) => item.candidate_id !== id);
+    setOfferings(next);
+    if (!survivor) {
+      setPage(0);
+      setRevealRequest({ add: true });
+      return;
+    }
+    setPage(pageForOffering(next.indexOf(survivor)));
+    setRevealRequest({ id: survivor.candidate_id });
+  }
   function addOffering() {
     const candidate_id = `owner_${crypto.randomUUID()}`;
     editedIdsRef.current.add(candidate_id);
@@ -255,7 +301,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
       const next = insertOwnerOffering(previous, { candidate_id, name: "", description: "", price_cents: null, sources: ["owner"] as ("owner" | "document")[], source_references: [], priceText: "", priceWording: "", priceOptions: [], priceNote: "", possibleMatches: [], support_state: "supported" as const, dirty: true });
       setExpanded(true); setPage(next.page); return next.list;
     });
-    requestAnimationFrame(() => cardRefs.current.get(candidate_id)?.focus());
+    setRevealRequest({ id: candidate_id });
   }
   function keepBoth(left: string, right: string) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === left || item.candidate_id === right ? { ...item, possibleMatches: item.possibleMatches.filter((id) => id !== left && id !== right) } : item));
@@ -277,7 +323,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   async function save() {
     if (duplicateIds.length) {
       const target = offerings.find((item) => duplicateIds.includes(item.candidate_id));
-      if (target) { setExpanded(true); setPage(Math.floor(offerings.indexOf(target) / PAGE_SIZE)); requestAnimationFrame(() => cardRefs.current.get(target.candidate_id)?.focus()); }
+      if (target) { setExpanded(true); setPage(Math.floor(offerings.indexOf(target) / PAGE_SIZE)); setRevealRequest({ id: target.candidate_id }); }
       return;
     }
     const documents = workspace.documents.map((doc) => ({ document_id: doc.id, sections: sectionsFor(doc.id, doc) }));
@@ -374,6 +420,13 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
       : `Here's what I found in ${sourceLabel(firstDocument)}. Review it before you use it.`
     : `From ${labels}. Your assistant answers from the reviewed facts below.`;
 
+  function gotoPage(next: number) {
+    const clamped = Math.min(Math.max(next, 0), pages - 1);
+    setPage(clamped);
+    const first = offeringPage(offerings, clamped)[0];
+    if (first) setRevealRequest({ id: first.candidate_id });
+  }
+
   const profileRows = PROFILE_ROWS.map((row) => ({
     ...row,
     value: (profileValues[row.key] ?? "").trim(),
@@ -389,10 +442,10 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
       {pricesMissing ? <p role="status" data-testid="review-missing-prices" className="mt-3 rounded-field bg-warning-subtle p-3 text-meta text-text">{'No prices found here. Add a price, or write it your way, like "from $30".'}</p> : null}
       {offerings.length === 0 ? <p className="mt-3 rounded-field bg-surface-container p-3 text-prose text-text">No offerings yet.</p> : null}
       <div className="mt-3 flex flex-col gap-2">{visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={workspace.documents} position={(expanded ? currentPage * PAGE_SIZE : 0) + index + 1} all={offerings} editing={rowsEditable} inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={keepBoth} onCombine={(left, right) => setCombine({ left, right, price: null })} />)}</div>
-      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={setPage} /> : null}
+      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={gotoPage} /> : null}
       <div className="mt-3 flex items-center justify-between">
-        {showReviewAll ? <button type="button" onClick={() => { setExpanded(true); setPage(0); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length} offerings</button> : <span />}
-        <button type="button" onClick={addOffering} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Add offering</button>
+        {showReviewAll ? <button type="button" onClick={() => { setExpanded(true); setPage(0); setRevealRequest({ id: offerings[0].candidate_id }); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length} offerings</button> : <span />}
+        <button ref={addOfferingRef} type="button" onClick={addOffering} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Add offering</button>
       </div>
       {duplicateIds.length ? <p role="alert" className="mt-2 text-meta text-danger">Two retained offerings have the same name. Go to the highlighted offering to correct it.</p> : null}
     </section>
@@ -480,23 +533,40 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
 
 function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
   const { categories, createCategory } = useContext(CategoryContext);
+  // 31: one trigger and one picker per card, collapsed until asked for. The
+  // state is local so a card knows nothing about the sheet's own layout.
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const selectedIds = offering.category_ids ?? [];
+  useEffect(() => {
+    if (!open) return;
+    // Scroll-only: `focusSearch` puts focus in the field the owner came for.
+    revealNode(pickerRef.current, false);
+  }, [open]);
   async function acceptSuggestion() {
     const suggestion = offering.proposed_category?.trim();
     if (!suggestion) return;
     const match = categories.find((category) => category.name.trim().toLocaleLowerCase() === suggestion.toLocaleLowerCase());
     const category = match ?? await createCategory(suggestion);
-    const ids = [...new Set([...(offering.category_ids ?? []), category.id])];
+    const ids = [...new Set([...selectedIds, category.id])];
     onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
   }
   return <div className="mt-3">
-    {offering.proposed_category ? <p className="mb-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
-    <CategoryPicker
-      categories={categories}
-      selectedIds={offering.category_ids ?? []}
-      primaryId={offering.primary_category_id ?? null}
-      onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
-      onCreate={createCategory}
-    />
+    <button ref={triggerRef} type="button" aria-expanded={open} aria-controls={panelId} data-testid="review-category-trigger" onClick={() => setOpen((current) => !current)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>
+    {open ? <div id={panelId} ref={pickerRef}>
+      {offering.proposed_category ? <p className="mt-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
+      <CategoryPicker
+        focusSearch
+        categories={categories}
+        selectedIds={selectedIds}
+        primaryId={offering.primary_category_id ?? null}
+        onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
+        onCreate={createCategory}
+      />
+      <button type="button" data-testid="review-category-done" onClick={() => { setOpen(false); triggerRef.current?.focus(); }} className={`${TEXT_PRESS} mt-2 text-action font-medium text-accent-active`}>Done</button>
+    </div> : null}
   </div>;
 }
 
