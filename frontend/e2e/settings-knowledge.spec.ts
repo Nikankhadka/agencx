@@ -61,6 +61,9 @@ test("a pasted link is read back as sections, then saved", async ({
   // The review sheet opens with the page processed into readable sections.
   const sheet = page.getByRole("dialog", { name: "Read this back" });
   await expect(sheet).toBeVisible({ timeout: 90_000 });
+  // 29: the structured sections sit behind "More about what I read", closed by
+  // default.
+  await sheet.getByTestId("review-more-about-source").click();
   await sheet.getByRole("button", { name: "Edit" }).first().click();
   const sections = sheet.getByRole("textbox", { name: /details/ });
   await expect(sections.first()).toBeVisible();

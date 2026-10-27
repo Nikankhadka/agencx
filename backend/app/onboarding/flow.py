@@ -158,6 +158,11 @@ class PendingOffering(BaseModel):
     candidate_id: str = Field(default="", max_length=80)
     description: str = Field(default="", max_length=2000)
     price_cents: int | None = Field(default=None, ge=0)
+    # 29: the owner's own price words when the price is not a flat amount
+    # ("from $30", "market price"). A second shape for the same slot, never a
+    # companion to ``price_cents`` - RF-4's mutual exclusion now holds at the
+    # draft layer as well as the API.
+    pricing_wording: str = Field(default="", max_length=120)
     sources: list[Literal["owner", "document"]] = Field(default_factory=list, validate_default=True)
     source_references: list[SourceReference] = Field(default_factory=list)
     # W-11: the documents this candidate depends on. Empty for an owner-typed
@@ -183,6 +188,9 @@ class PendingOffering(BaseModel):
     # W-6: the competing amounts when two sources price one item differently.
     # The owner picks; nothing here decides for them.
     price_options: list[int] = Field(default_factory=list)
+    # 29: the competing owner wordings for that same slot. Kept separate from
+    # ``price_options`` - cents stay integers, words stay words.
+    wording_options: list[str] = Field(default_factory=list)
     # Normalization provenance. These fields are additive so old onboarding and
     # document drafts remain readable through pydantic defaults.
     source_wording: str = Field(default="", max_length=2000)
@@ -221,6 +229,12 @@ class PendingOffering(BaseModel):
     @field_serializer("primary_category_id")
     def _serialize_primary_category_id(self, value: UUID | None) -> str | None:
         return str(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def _price_or_wording(self) -> PendingOffering:
+        if self.price_cents is not None and self.pricing_wording:
+            raise ValueError("choose either a fixed price or pricing wording, not both")
+        return self
 
     @model_validator(mode="after")
     def _default_candidate_id(self) -> PendingOffering:
@@ -312,9 +326,15 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
     pair = (existing, incoming)
     document = next((item for item in pair if "document" in item.sources), None)
     preferred: tuple[PendingOffering, ...] = ((document,) if document else ()) + pair
-    price_cents = next(
-        (item.price_cents for item in preferred if item.price_cents is not None), None
+    # The price slot has two shapes: integer cents or the owner's wording. The
+    # preferred candidate's whole price story wins, so a document's "from $30"
+    # is not paired with the other side's fixed cents.
+    price_story = next(
+        (item for item in preferred if item.price_cents is not None or item.pricing_wording),
+        None,
     )
+    price_cents = price_story.price_cents if price_story is not None else None
+    pricing_wording = price_story.pricing_wording if price_story is not None else ""
     description = next((item.description for item in preferred if item.description), "")
     sources = list(dict.fromkeys([*existing.sources, *incoming.sources]))
     supporting_document_ids = list(
@@ -323,6 +343,10 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
     name = document.name if document else existing.name
     offered = [item.price_cents for item in pair if item.price_cents is not None]
     conflicting = sorted({*offered, *existing.price_options, *incoming.price_options})
+    offered_wordings = [item.pricing_wording for item in pair if item.pricing_wording]
+    conflicting_wordings = sorted(
+        {*offered_wordings, *existing.wording_options, *incoming.wording_options}
+    )
     confirmed_categories = list(
         dict.fromkeys([*(existing.category_ids or []), *(incoming.category_ids or [])])
     )
@@ -335,6 +359,7 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
         candidate_id=document.candidate_id if document else existing.candidate_id,
         description=description,
         price_cents=price_cents,
+        pricing_wording=pricing_wording,
         sources=sources,
         supporting_document_ids=supporting_document_ids,
         source_references=list(
@@ -344,9 +369,15 @@ def merge_offerings(existing: PendingOffering, incoming: PendingOffering) -> Pen
             }.values()
         ),
         price_note=next((item.price_note for item in preferred if item.price_note), ""),
-        needs_review=existing.needs_review or incoming.needs_review,
+        needs_review=(
+            existing.needs_review
+            or incoming.needs_review
+            or len(conflicting) > 1
+            or len(conflicting_wordings) > 1
+        ),
         possible_matches=sorted({*existing.possible_matches, *incoming.possible_matches}),
         price_options=conflicting if len(conflicting) > 1 else [],
+        wording_options=conflicting_wordings if len(conflicting_wordings) > 1 else [],
         source_wording=next((item.source_wording for item in preferred if item.source_wording), ""),
         proposed_category=next(
             (item.proposed_category for item in preferred if item.proposed_category), ""

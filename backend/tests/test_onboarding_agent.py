@@ -20,16 +20,16 @@ from app.onboarding import beats
 from app.onboarding.agent import (
     _COPILOT,
     _EXTRACT_PROMPT,
-    _KNOWLEDGE_OFFER,
     Directive,
     OnboardingRecord,
     _ack,
     _activation_summary,
-    _completion_reply,
     _echo,
     _usable,
+    apply_skip_word,
     confirm_pending_name,
     decline_knowledge,
+    prepare_source_profile,
     prepare_turn,
     prepare_url_turn,
     progress,
@@ -142,6 +142,50 @@ def test_save_profile_only_accepts_an_abn_or_an_explicit_no() -> None:
 
     save_profile(draft, ProfileDraft(abn=beats.NO_ABN))
     assert draft["abn"] == beats.NO_ABN
+
+
+def test_save_profile_only_empty_fills_blanks_and_keeps_owner_answers() -> None:
+    """29: a source fills only what the owner has not answered."""
+    draft: dict[str, Any] = {"business_name": "Bytefix", "hours": ""}
+
+    result = save_profile(
+        draft,
+        ProfileDraft(business_name="Bytefix Repairs", hours="Mon-Fri 9-6", abn="51 824 753 556"),
+        only_empty=True,
+    )
+
+    assert result["business_name"] == "Bytefix"
+    assert result["hours"] == "Mon-Fri 9-6"
+    # The 11-digit normalisation and the NO_ABN sentinel are unchanged.
+    assert result["abn"] == "51824753556"
+
+
+def test_save_profile_only_empty_treats_blank_values_as_empty() -> None:
+    """29: a whitespace string, an empty list, and a list of blanks carry
+    nothing, so the source may fill them - while a real owner answer still
+    wins."""
+    draft: dict[str, Any] = {
+        "business_type": "   ",
+        "hours": "",
+        "services": ["  ", "\t"],
+        "contact": "555-0100",
+    }
+
+    result = save_profile(
+        draft,
+        ProfileDraft(
+            business_type="phone repair shop",
+            hours="Mon-Fri 9-6",
+            services=["screen repairs", "battery replacements"],
+            contact="555-0199",
+        ),
+        only_empty=True,
+    )
+
+    assert result["business_type"] == "phone repair shop"
+    assert result["hours"] == "Mon-Fri 9-6"
+    assert result["services"] == ["screen repairs", "battery replacements"]
+    assert result["contact"] == "555-0100"
 
 
 # --- completeness gate ---------------------------------------------------------
@@ -786,6 +830,82 @@ async def test_prepare_url_turn_records_url_not_page_text() -> None:
 
 
 @pytest.mark.asyncio
+async def test_prepare_url_turn_never_marks_services_as_the_owners() -> None:
+    """29: a source turn is never an owner answer. Whatever it does to
+    ``services``, ``services_source`` may only read "document" (the source
+    supplied it) or "" (it did not) - never "owner", which is what makes the
+    review's sync leave a typed list alone."""
+    provider = _ExtractFake(updates=[{"profile": {"services": "screen repairs"}}])
+    record = OnboardingRecord()
+
+    await prepare_url_turn(
+        url="https://bytefix.example.com",
+        page_text="Bytefix Repairs. Screen repairs.",
+        record=record,
+        provider=provider,
+    )
+
+    assert record.services_source in {"", "document"}
+
+
+@pytest.mark.asyncio
+async def test_owner_answered_services_first_then_a_source_keeps_the_owner_list() -> None:
+    """29 acceptance 3: the source fills only what is empty. The owner's own
+    services wording survives the read, and the source never claims the field
+    it did not write."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"services": "screen repairs", "business_type": "phone repair shop"}}]
+    )
+    record = OnboardingRecord(
+        draft={"services": ["Owner cut $30"]},
+        services_source="owner",
+    )
+
+    await prepare_url_turn(
+        url="https://bytefix.example.com",
+        page_text="Bytefix Repairs. Screen repairs. Phone repair shop.",
+        record=record,
+        provider=provider,
+    )
+
+    assert record.draft["services"] == ["Owner cut $30"]
+    assert record.draft["business_type"] == "phone repair shop"
+    assert record.services_source == "owner"
+
+
+@pytest.mark.asyncio
+async def test_prepare_source_profile_fills_only_blanks_and_writes_abn_only_when_found() -> None:
+    """29: the source merge is additive, and an ABN lands only when the page
+    really stated one - a value that is not 11 digits is not an ABN."""
+    provider = _ExtractFake(
+        updates=[
+            {
+                "profile": {
+                    "business_name": "Bytefix Repairs",
+                    "hours": "Mon-Fri 9-6",
+                    "abn": "not a number",
+                }
+            }
+        ]
+    )
+    record = OnboardingRecord(draft={"business_name": "Bytefix", "hours": "  "})
+
+    await prepare_source_profile(
+        record=record, text="Bytefix Repairs. Open weekdays 9 to 6.", provider=provider
+    )
+
+    assert record.draft["business_name"] == "Bytefix"
+    assert record.draft["hours"] == "Mon-Fri 9-6"
+    assert "abn" not in record.draft
+
+    found = _ExtractFake(updates=[{"profile": {"abn": "51 824 753 556"}}])
+    await prepare_source_profile(
+        record=record, text="Bytefix Repairs. ABN 51 824 753 556.", provider=found
+    )
+    assert record.draft["abn"] == "51824753556"
+
+
+@pytest.mark.asyncio
 async def test_prepare_url_turn_reads_back_nothing_when_page_has_no_fields() -> None:
     provider = _ExtractFake(updates=[{"profile": None}])
     record = OnboardingRecord()
@@ -863,34 +983,182 @@ def test_the_copilot_contract_is_sectioned_and_states_every_prohibition() -> Non
     assert "Never name a trade" in _COPILOT
     # conventions.md 1 (observation 4 of the reproduction).
     assert "Never use an em dash" in _COPILOT
-    assert "becomes a reference" in _KNOWLEDGE_OFFER
-    # 20: the offer names the chip the composer now shows.
-    assert "Skip for now" in _KNOWLEDGE_OFFER
+
+
+# --- 29: source-first flow inversion -------------------------------------------
+
+
+def test_a_fresh_record_starts_on_the_name_with_the_source_stage_pending() -> None:
+    """29: the source ask waits second, so it is pending from the first turn -
+    but the locked flow still asks the owner's name first."""
+    record = OnboardingRecord.from_jsonb({})
+
+    assert record.knowledge_pending is True
+    assert progress(record)[0] == "owner_display_name"
+    # A record already past the ask never reopens it.
+    assert OnboardingRecord.from_jsonb({"completed": True}).knowledge_pending is False
+
+
+def test_the_source_stage_is_asked_before_the_business_name_beat() -> None:
+    """29: name -> source -> beats. The literal "move the check above
+    next_beat" would ask the source before the name, so this is the guard
+    against that simplification."""
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, knowledge_pending=True)
+
+    stage, spec, can_confirm = progress(record)
+
+    assert (stage, can_confirm) == ("knowledge", False)
+    assert spec is beats.KNOWLEDGE_INPUT
+
+
+def test_declining_the_source_stage_restores_the_original_beat_order() -> None:
+    """29 acceptance 7: with the source declined, the interview is the one it
+    was before - the same eight beats, in the same order."""
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, knowledge_pending=True)
+    declined = decline_knowledge(record)
+
+    assert declined.endswith(beats.BEATS["business_name"].ask)
+    seen: list[str] = []
+    while (stage := progress(record)[0]) != "confirm":
+        assert stage in beats.BEATS, f"{stage} is not a beat"
+        seen.append(stage)
+        record.draft[stage] = _complete_draft()[stage]
+
+    assert seen == [beat.key for beat in beats.BEAT_ORDER[1:]]
+    assert progress(record)[2] is True
+
+
+def test_skip_words_are_recognised_however_the_owner_types_them() -> None:
+    assert beats.SKIP_WORDS == {"skip", "skip for now", "no thanks", "none", "later"}
+    for text in ("skip", "Skip.", "  SKIP  ", "skip  for now", "No thanks.", "later"):
+        assert beats.is_skip_word(text), text
+    for text in ("skipping", "Nikan", "skip everything", ""):
+        assert not beats.is_skip_word(text), text
+
+
+def test_skipping_the_name_writes_nothing_to_the_draft_and_asks_for_the_source() -> None:
+    """29: "skip" must never become the owner's name, and the name is the one
+    beat ahead of the source stage."""
+    record = OnboardingRecord.from_jsonb({})
+
+    reply = apply_skip_word(record)
+
+    assert reply is not None
+    assert "owner_display_name" not in record.draft
+    assert record.skipped == ["owner_display_name"]
+    assert progress(record)[0] == "knowledge"
+    # The next line is the source ask, not the business-name question.
+    assert beats.BEATS["business_name"].ask not in reply
+    assert "website" in reply.casefold()
+
+
+def test_a_skip_word_on_another_beat_is_an_ordinary_answer() -> None:
+    """Only the name and the source stage resolve a skip word; "none" is a
+    normal answer on every other beat."""
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, knowledge_pending=False)
+
+    assert apply_skip_word(record) is None
+    assert record.skipped == []
+
+
+def test_skipping_the_name_discards_an_unconfirmed_proposal() -> None:
+    record = OnboardingRecord(
+        pending_name={"target": "owner_display_name", "raw": "sababa", "proposal": "sababa"},
+        knowledge_pending=True,
+    )
+
+    reply = apply_skip_word(record)
+
+    assert reply is not None
+    assert record.pending_name is None
+    assert "owner_display_name" not in record.draft
+    assert record.skipped == ["owner_display_name"]
+
+
+@pytest.mark.asyncio
+async def test_a_non_skip_word_at_the_name_still_goes_through_extraction() -> None:
+    """29: skipping is a closed vocabulary - "Sam" is a name, not a skip."""
+    provider = _ExtractFake(
+        updates=[{"profile": {"owner_display_name": "Sam"}, "answered_asked": True}],
+        replies=["Noted."],
+    )
+    record = OnboardingRecord.from_jsonb({})
+
+    plan = await prepare_turn(admin_message="Sam", record=record, provider=provider)
+
+    assert len(provider.extract_inputs) == 1
+    assert plan.record.pending_name is not None
+    assert plan.record.pending_name["proposal"] == "Sam"
+
+
+@pytest.mark.asyncio
+async def test_a_pasted_link_answers_the_source_stage() -> None:
+    """29: a link is the source answer wherever the stage sits now."""
+    provider = _ExtractFake(updates=[{}])
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, knowledge_pending=True)
+
+    plan = await prepare_url_turn(
+        url="https://bytefix.test",
+        page_text="Bytefix repairs phones.",
+        record=record,
+        provider=provider,
+    )
+
+    assert plan.record.knowledge_pending is False
+    assert progress(plan.record)[0] == "business_name"
+
+
+@pytest.mark.asyncio
+async def test_completing_every_beat_in_one_message_still_asks_for_the_source() -> None:
+    """29: the source stage is second, so a message that fills the whole profile
+    must not jump straight to confirm - the stage keeps its own line."""
+    draft = _complete_draft()
+    del draft["contact"]
+    provider = _ExtractFake(updates=[{"profile": {"contact": "555-0100"}}], replies=[])
+    record = OnboardingRecord(draft=draft, knowledge_pending=True)
+
+    plan = await prepare_turn(admin_message="call us on 555-0100", record=record, provider=provider)
+
+    assert plan.summary is not None
+    assert "website" in plan.summary.casefold()
+    assert "ready to go live" not in plan.summary
+    assert plan.record.knowledge_pending is True
 
 
 def test_declining_knowledge_closes_the_ask_and_returns_the_summary() -> None:
-    """20: the Skip chip's deterministic door - no model call on this path."""
-    record = OnboardingRecord(draft=_complete_draft())
-    # First call opens the ask; the owner is now looking at the chip.
-    offer = _completion_reply(record)
+    """20/29: the Skip chip's deterministic door - no model call on this path.
+    With every field captured, declining the source stage lands on the
+    activation summary, and that summary never re-offers the source."""
+    record = OnboardingRecord(draft=_complete_draft(), knowledge_pending=True)
     assert record.knowledge_pending is True
-    assert "Skip for now" in offer
 
     reply = decline_knowledge(record)
 
     assert record.knowledge_pending is False
-    # The same activation summary the typed "skip" lands on, and no offer again.
     assert "ready to go live" in reply
+    assert "website" not in reply.casefold()
     assert "Skip for now" not in reply
+    assert "becomes a reference" not in reply
 
 
 def test_declining_knowledge_that_was_never_asked_is_refused() -> None:
     """A closed ask cannot be closed twice - the controller turns this into a
     409 rather than silently re-running the completion reply."""
-    record = OnboardingRecord(draft=_complete_draft())
-    assert record.knowledge_pending is False
+    record = OnboardingRecord(draft=_complete_draft(), knowledge_pending=False)
     with pytest.raises(ValueError):
         decline_knowledge(record)
+
+
+def test_services_source_round_trips_beside_knowledge_pending() -> None:
+    record = OnboardingRecord(services_source="owner")
+
+    restored = OnboardingRecord.from_jsonb(record.to_jsonb())
+
+    assert restored.services_source == "owner"
+    # An older row predates the field, and absence means neither spoke yet.
+    assert OnboardingRecord.from_jsonb({"version": 4}).services_source == ""
+    junk = OnboardingRecord.from_jsonb({"version": 4, "services_source": "junk"})
+    assert junk.services_source == ""
 
 
 def test_onboarding_beats_use_soft_prototype_aligned_questions() -> None:
@@ -1191,16 +1459,27 @@ def test_ack_keeps_the_statement_and_drops_a_trailing_question() -> None:
     assert _ack("What's your name?") == ""
 
 
-def test_no_beat_offers_a_skip_chip_and_the_knowledge_ask_does() -> None:
-    """20: the chip leaves the interview and survives only on the knowledge ask.
+def test_only_the_name_beat_and_the_knowledge_ask_offer_a_skip_chip() -> None:
+    """20/29: two skips survive, and they are the two the flow needs.
 
-    Every optional beat resolves itself - by its default, or by dropping to
-    `skipped` on the two-ask cap - so a button adds nothing. Knowledge is not a
-    beat and never gates go-live, so declining it stays one tap.
+    The knowledge ask never gates go-live, so declining it stays one tap. 29
+    adds the owner's own name: it is the beat straight before the source ask,
+    so a one-tap Skip there is the shortest road to "just read my site" - and
+    the same chip is the no-source path's first step. Every other beat resolves
+    itself (its default, or `skipped` on the two-ask cap), so a button adds
+    nothing there.
     """
+    name_chips = [
+        (chip.label, chip.value, chip.dashed)
+        for chip in beats.input_spec(beats.BEATS["owner_display_name"]).chips
+    ]
+    assert name_chips == [("Skip", "skip", True)]
+
     for beat in beats.BEAT_ORDER:
+        if beat.key == "owner_display_name":
+            continue
         labels = [chip.label for chip in beats.input_spec(beat).chips]
-        assert "Skip for now" not in labels, f"{beat.key} still offers a skip chip"
+        assert "Skip" not in labels, f"{beat.key} still offers a skip chip"
 
     knowledge_chips = [(chip.label, chip.value) for chip in beats.KNOWLEDGE_INPUT.chips]
     assert knowledge_chips == [("Skip for now", "skip")]

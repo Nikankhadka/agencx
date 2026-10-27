@@ -30,7 +30,8 @@ function dialog(page: Page) {
 
 test("five files settle into the review sheet at phone width", async ({ page, request }) => {
   const store = recordsStore([]);
-  await stubOnboardingState(page, { stage: "knowledge" });
+  // 29: the "+" is on every text stage, so this is an ordinary beat.
+  await stubOnboardingState(page);
   await stubRecords(page, store);
   let nextId = 1;
   await stubUpload(page, store, {
@@ -68,7 +69,7 @@ test("the toolbar puts Review all and Add offering below the collapsed list", as
   request,
 }) => {
   const candidates = Array.from({ length: 12 }, (_, i) =>
-    offeringCandidate(`Item ${i + 1}`, "draft-1"),
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
   );
   const store = recordsStore([
     draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
@@ -81,8 +82,8 @@ test("the toolbar puts Review all and Add offering below the collapsed list", as
   const sheet = dialog(page);
   await expect(sheet).toBeVisible();
 
-  // Collapsed on a phone: the first three cards render read-only, then both
-  // actions sit below them.
+  // Fully priced, so the list keeps the compact collapsed default on a phone:
+  // the first three cards render read-only, then both actions sit below them.
   for (const name of ["Item 1", "Item 2", "Item 3"]) {
     await expect(sheet.getByText(name, { exact: true })).toBeVisible();
   }
@@ -99,9 +100,32 @@ test("the toolbar puts Review all and Add offering below the collapsed list", as
   await expectNoHorizontalOverflow(page);
 });
 
+test("a missing price opens the priced list with the banner", async ({ page, request }) => {
+  const candidates = Array.from({ length: 6 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", {
+      price_cents: i === 5 ? null : 1000,
+    }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByTestId("review-missing-prices")).toBeVisible();
+  // Expanded means the fourth row (past the phone's three-row cap) renders.
+  await expect(sheet.getByLabel("Offering 4 name")).toHaveValue("Item 4");
+  await expect(sheet.getByLabel("Offering 4 price")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("the pagination shows two rows after expanding", async ({ page, request }) => {
   const candidates = Array.from({ length: 12 }, (_, i) =>
-    offeringCandidate(`Item ${i + 1}`, "draft-1"),
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
   );
   const store = recordsStore([
     draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),

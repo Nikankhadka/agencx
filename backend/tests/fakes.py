@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -121,3 +122,74 @@ class ToolAwareFakeProvider(BaseFakeProvider):
 class ZeroEmbedder(Embedder):
     async def embed(self, texts: list[str]) -> list[list[float]]:
         return [[0.0] * EMBEDDING_DIM for _ in texts]
+
+
+class ConcurrencyProbe(BaseFakeProvider):
+    """An extract() double that answers every schema and records overlap (29).
+
+    It spends ``delay`` inside each call and counts how many calls are in
+    flight at once, so two passes meant to run together overlap while a serial
+    implementation peaks at one. Answers are keyed by schema: offerings,
+    profile, or (anything else) the structuring pass.
+    """
+
+    def __init__(
+        self,
+        *,
+        offerings: list[dict[str, str]] | None = None,
+        profile: dict[str, str] | None = None,
+        delay: float = 0.05,
+    ) -> None:
+        self.offerings = list(offerings or [])
+        self.profile = dict(profile or {})
+        self.delay = delay
+        self.in_flight = 0
+        self.max_in_flight = 0
+        self.events: list[tuple[str, int, str]] = []
+
+    @staticmethod
+    def _kind(schema: type[SchemaT]) -> str:
+        if "offerings" in schema.model_fields:
+            return "offerings"
+        if "profile" in schema.model_fields:
+            return "profile"
+        return "structure"
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        kind = self._kind(schema)
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        self.events.append(("start", self.in_flight, kind))
+        try:
+            await asyncio.sleep(self.delay)
+            return schema.model_validate(self._payload(kind, user_input))
+        finally:
+            self.in_flight -= 1
+            self.events.append(("finish", self.in_flight, kind))
+
+    def _payload(self, kind: str, user_input: str) -> dict[str, object]:
+        if kind == "offerings":
+            visible = [
+                item
+                for item in self.offerings
+                if not item.get("price_block") or f"[{item['price_block']}]" in user_input
+            ]
+            return {"offerings": visible}
+        if kind == "profile":
+            return {"profile": self.profile}
+        return {"about": "A phone and laptop repair shop."}
+
+    def _first(self, event: str, kind: str) -> int:
+        return next(
+            index
+            for index, entry in enumerate(self.events)
+            if entry[0] == event and entry[2] == kind
+        )
+
+    def started(self, kind: str) -> int:
+        return self._first("start", kind)
+
+    def finished(self, kind: str) -> int:
+        return self._first("finish", kind)

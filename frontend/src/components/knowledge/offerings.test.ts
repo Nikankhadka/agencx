@@ -85,6 +85,54 @@ describe("withCombinedOfferings ordering", () => {
   });
 });
 
+describe("folded spelling variants", () => {
+  it("merges accent and case variants, keeps the owner's spelling, and unions sources", () => {
+    const owner: PendingOffering = {
+      name: "Açaí Bowl",
+      description: "",
+      price_cents: null,
+      sources: ["owner"],
+    };
+    const docs = [
+      record({
+        id: "d1",
+        offering_candidates: [
+          offering({
+            name: "ACAI BOWL",
+            sources: ["document"],
+            supporting_document_ids: ["d1"],
+          }),
+        ],
+      }),
+    ];
+
+    const result = withCombinedOfferings(docs, [owner]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Açaí Bowl");
+    expect(result[0].sources).toEqual(["owner", "document"]);
+    expect(result[0].supporting_document_ids).toEqual(["d1"]);
+  });
+
+  it("folds punctuation when matching an incoming candidate", () => {
+    const existing = [offering({ name: "Wash & Blowdry", candidate_id: "c1" })];
+    const records = [
+      record({
+        id: "d1",
+        offering_candidates: [
+          offering({ name: "wash && blowdry.", supporting_document_ids: ["d1"] }),
+        ],
+      }),
+    ];
+
+    const result = mergeIncomingCandidates(existing, records);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Wash & Blowdry");
+    expect(result[0].supporting_document_ids).toEqual(["d1"]);
+  });
+});
+
 describe("mergeOffering precedence", () => {
   it("lets the document win name, price and description over an owner row", () => {
     const owner = offering({

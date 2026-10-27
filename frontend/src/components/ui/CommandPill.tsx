@@ -100,9 +100,10 @@ export function CommandPill({
       ].join(" ")}
     >
       {/* `.pill-plus`: a 22px hit box around an 18px glyph. Hidden (not just
-          disabled) when nothing is wired to it - only the document-upload
-          beat passes onAttach, and a dimmed plus on every other step reads as
-          an affordance that just doesn't work yet. */}
+          disabled) when nothing is wired to it - the composer passes onAttach
+          for every text widget now (29: a source can arrive at any of them),
+          and a dimmed plus where nothing is wired reads as an affordance that
+          just doesn't work yet. */}
       {field || !onAttach ? null : (
         <button
           type="button"

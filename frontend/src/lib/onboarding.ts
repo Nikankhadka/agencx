@@ -84,10 +84,15 @@ export interface OnboardingState {
   pending_confirmation?: PendingConfirmation | null;
   skipped?: string[];
   revision?: number;
+  /** 29: required beats the source did not find, in beat order. */
+  missing_required?: string[];
   offering_candidates?: {
     name: string;
     description: string;
     price_cents: number | null;
+    pricing_wording?: string;
+    /** 29: competing wordings the server merged, so a save still sees them. */
+    wording_options?: string[];
     sources: ("owner" | "document")[];
   }[];
 }
@@ -109,6 +114,7 @@ export type OnboardingStreamEvent =
       pending_confirmation?: PendingConfirmation | null;
       skipped?: string[];
       revision?: number;
+      missing_required?: string[];
       offering_candidates?: OnboardingState["offering_candidates"];
     }
   | { type: "done" }
@@ -212,4 +218,44 @@ export function describeUpload(filename: string): UploadVerdict {
     accepted: false,
     message: `I can't read ${filename || "that file"}. A PDF, a document, or a link to the page works.`,
   };
+}
+
+/**
+ * Where one attached file goes, and what that door does with it (29).
+ *
+ * The source stage is the only stage that reads the file *and* the business
+ * profile out of it: `POST /api/onboarding/source` merges the profile blanks,
+ * records the document, and answers onboarding state instead of a draft
+ * record. Every other stage keeps the plain knowledge drafts batch, one record
+ * per file. The stage key is still the backend's own (`"knowledge"` is the
+ * source ask - `progress()` in app/onboarding/agent.py), because renaming it
+ * would break every stored checkpoint.
+ */
+export interface UploadTarget {
+  endpoint: string;
+  /** True only for the source stage: this upload also merges the profile. */
+  mergesProfile: boolean;
+}
+
+const SOURCE_STAGE = "knowledge";
+
+// 29: the source ask is second, straight after the owner's name. A file
+// attached while that name is being asked is the owner answering the source
+// stage early, so it takes the same door - otherwise the file becomes a
+// reviewable draft and the source ask still arrives after it.
+const SOURCE_STAGES = new Set([SOURCE_STAGE, "owner_display_name"]);
+
+const SOURCE_TARGET: UploadTarget = {
+  endpoint: "/api/onboarding/source",
+  mergesProfile: true,
+};
+
+/** The plain drafts door, for the review sheet's own Add source and Replace. */
+export const KNOWLEDGE_DRAFTS_TARGET: UploadTarget = {
+  endpoint: "/api/knowledge/drafts/upload",
+  mergesProfile: false,
+};
+
+export function uploadTargetForStage(stage: string): UploadTarget {
+  return SOURCE_STAGES.has(stage) ? SOURCE_TARGET : KNOWLEDGE_DRAFTS_TARGET;
 }

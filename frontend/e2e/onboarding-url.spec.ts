@@ -50,6 +50,14 @@ test("pasting a link reads the site and reads it back", async ({
   const before = await readBack.count();
 
   const composer = page.getByTestId("onboarding-composer");
+  // 29: the source ask is second, so the name beat comes first. Skip it (the
+  // chip the name beat now carries) to land on the source stage, whose own
+  // placeholder is the proof the composer moved.
+  await composer.getByTestId("onboarding-chip-skip").click();
+  await expect(composer.getByRole("textbox")).toHaveAttribute(
+    "placeholder",
+    /Paste a link or attach a file/,
+  );
   await composer.getByRole("textbox").fill(SITE_URL);
   await composer.getByRole("button", { name: "Send" }).click();
 
@@ -75,6 +83,7 @@ test("pasting a link reads the site and reads it back", async ({
   });
   expect(docs.ok()).toBe(true);
   const rows = (await docs.json()) as {
+    id: string;
     filename: string;
     doc_type: string;
     status: string;
@@ -87,6 +96,22 @@ test("pasting a link reads the site and reads it back", async ({
   expect(site?.doc_type).toBe("website");
   expect(site?.status).toBe("draft");
 
+  // The stored source is the whole bounded crawl, not just the homepage:
+  // a services-only and a pricing-only line both have to be present, and each
+  // page contributes its own Source line.
+  const source = await request.get(
+    `${BACKEND_URL}/api/knowledge/records/${site?.id}/source`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  expect(source.ok()).toBe(true);
+  const { text } = (await source.json()) as { text: string };
+  expect(text).toContain("Data recovery from phones and laptops");
+  expect(text).toContain("Phone screen replacement from $89");
+  expect(text).toContain(`Source: ${SITE_URL}`);
+  expect(text).toContain(
+    `Source: ${SITE_URL.replace("example-business.html", "example-business-services.html")}`,
+  );
+
   // W-11b: closing the sheet with the X button or Escape must not destroy the
   // owner's in-progress edits - only Discard (covered below) throws the draft
   // away. Prove it with a value nothing but the owner's own typing produced,
@@ -94,7 +119,10 @@ test("pasting a link reads the site and reads it back", async ({
   // fails this assertion instead of passing it by accident.
   const dialog = page.getByRole("dialog", { name: "Review your information" });
   await dialog.getByRole("button", { name: "Add offering" }).click();
-  const nameField = dialog.getByLabel(/name$/i).last();
+  // The new owner row takes focus; the extracted rows are editable too, so
+  // "the last name field" is not necessarily the one the owner just added.
+  const nameField = dialog.locator("input:focus");
+  await expect(nameField).toHaveAttribute("aria-label", /name$/i);
   const typedName = `Test offering ${Date.now()}`;
   await nameField.fill(typedName);
   await expect(nameField).toHaveValue(typedName);
@@ -106,7 +134,7 @@ test("pasting a link reads the site and reads it back", async ({
 
   await page.getByTestId("onboarding-reopen-review").click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel(/name$/i).last()).toHaveValue(typedName);
+  await expect(dialog.getByLabel("Offering 1 name")).toHaveValue(typedName);
 
   await dialog.getByTestId("onboarding-knowledge-discard").click();
   await expect(dialog).toBeHidden();

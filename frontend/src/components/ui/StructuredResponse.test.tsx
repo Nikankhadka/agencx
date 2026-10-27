@@ -4,6 +4,8 @@ import { CatalogCard, type CatalogPayload } from "./CatalogCard";
 import { PriceSummaryCard, type PriceSummaryPayload } from "./PriceSummaryCard";
 import { StructuredResponse } from "./StructuredResponse";
 
+const SLUG = "bytefix";
+
 /**
  * W-9 box 4 (slice 1.3): the owner's transcript views
  * (`(tenant-admin)/(console)/chats/[id]/page.tsx` and
@@ -13,6 +15,10 @@ import { StructuredResponse } from "./StructuredResponse";
  * holds only if this dispatcher renders the exact same markup as the card
  * component would given that payload's inner field directly - these tests
  * pin that, plus the "nothing for anything else" half of the contract.
+ *
+ * Ticket 30: the tenant slug is a prop, not a payload field, so the restored
+ * card keeps working. The owner detail payload carries no slug, so an owner
+ * transcript gets the bounded card without the page link.
  */
 describe("StructuredResponse", () => {
   it("renders a persisted price_summary payload identically to PriceSummaryCard", () => {
@@ -61,10 +67,51 @@ describe("StructuredResponse", () => {
     };
     const response = { type: "catalog", catalog };
 
-    const viaDispatch = renderToStaticMarkup(<StructuredResponse response={response} />);
-    const viaCardDirectly = renderToStaticMarkup(<CatalogCard catalog={catalog} />);
+    const viaDispatch = renderToStaticMarkup(
+      <StructuredResponse response={response} slug={SLUG} />,
+    );
+    const viaCardDirectly = renderToStaticMarkup(
+      <CatalogCard catalog={catalog} slug={SLUG} />,
+    );
 
     expect(viaDispatch).toBe(viaCardDirectly);
+  });
+
+  it("carries the catalog page link through when a slug is known", () => {
+    const catalog: CatalogPayload = {
+      offerings: Array.from({ length: 24 }, (_, i) => ({
+        id: `item-${i}`,
+        name: `Dish ${i}`,
+        description: "",
+        category: "Plates",
+        price_cents: 1000,
+      })),
+    };
+
+    const html = renderToStaticMarkup(
+      <StructuredResponse response={{ type: "catalog", catalog }} slug={SLUG} />,
+    );
+
+    expect(html).toContain("View all 24 offerings");
+    expect(html).toContain('href="/bytefix#offerings"');
+  });
+
+  it("renders a bounded catalog without a link when no slug is available", () => {
+    const catalog: CatalogPayload = {
+      offerings: Array.from({ length: 24 }, (_, i) => ({
+        id: `item-${i}`,
+        name: `Dish ${i}`,
+        description: "",
+        category: "Plates",
+        price_cents: 1000,
+      })),
+    };
+
+    const html = renderToStaticMarkup(<StructuredResponse response={{ type: "catalog", catalog }} />);
+
+    expect(html).toContain("Dish 4");
+    expect(html).toContain("+19 more");
+    expect(html).not.toContain("View all");
   });
 
   it("renders nothing for an unknown response type", () => {

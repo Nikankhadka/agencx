@@ -18,11 +18,11 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.features.knowledge.api import KnowledgeRecord
+from app.features.knowledge.api import KnowledgeRecord, _reject_upload
 from app.features.knowledge.models import KnowledgeSection
 from app.features.onboarding import controller
 from app.features.tenants.slug import validate_slug
@@ -30,7 +30,12 @@ from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
 from app.onboarding.beats import InputSpec
-from app.onboarding.flow import CorrectionTarget, FieldCorrection, PendingOffering
+from app.onboarding.flow import (
+    CorrectionTarget,
+    FieldCorrection,
+    PendingOffering,
+    ProfileDraft,
+)
 from app.shared import auth
 from app.shared.errors import request_id
 from app.shared.limits import LimitTimeout
@@ -55,6 +60,9 @@ class OnboardingStateResponse(BaseModel):
     pending_confirmation: dict[str, str] | None = None
     skipped: list[str] = Field(default_factory=list)
     revision: int = 0
+    # 29: required beats the source did not find, in beat order. The review
+    # sheet renders one note; it never renders empty rows.
+    missing_required: list[str] = Field(default_factory=list)
 
 
 class OnboardingSuggestionsResponse(BaseModel):
@@ -139,6 +147,20 @@ class OnboardingKnowledgeBatchRequest(BaseModel):
     documents: list[OnboardingKnowledgeBatchDocument] = Field(min_length=1, max_length=5)
     offerings: list[PendingOffering] = Field(default_factory=list)
     accept_price_changes: bool = False
+    # 29: business-details edits made on the review sheet, saved with the batch.
+    # ProfileDraft is the field authority, so a key it does not know is a 422
+    # rather than a silent drop.
+    profile: dict[str, str] | None = None
+
+    @field_validator("profile")
+    @classmethod
+    def _known_profile_fields(cls, profile: dict[str, str] | None) -> dict[str, str] | None:
+        if profile is None:
+            return None
+        unknown = sorted(set(profile) - set(ProfileDraft.model_fields))
+        if unknown:
+            raise ValueError(f"unknown profile fields: {', '.join(unknown)}")
+        return profile
 
     @field_validator("documents")
     @classmethod
@@ -210,6 +232,7 @@ async def save_onboarding_knowledge_batch(
         offerings=body.offerings,
         accept_price_changes=body.accept_price_changes,
         embedder=embedder,
+        profile=body.profile,
     )
     return OnboardingKnowledgeBatchResponse(
         published=published,
@@ -219,6 +242,31 @@ async def save_onboarding_knowledge_batch(
         ],
         offering_candidates=offerings,
     )
+
+
+@router.post("/source", response_model=OnboardingStateResponse)
+async def post_source(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    file: Annotated[UploadFile, File()],
+) -> OnboardingStateResponse:
+    """29: a file answers the source stage.
+
+    Same validation edge as every other upload - the allowlist, the size cap
+    and the empty-file check all come from ``_reject_upload`` so this door
+    cannot drift from the Knowledge screen's. One read of the file fills the
+    profile blanks and returns the reviewed candidates as onboarding state.
+    """
+    body = await file.read()
+    ext = _reject_upload(file, body, "other")
+    record_data = await controller.run_source_upload(
+        tenant_id=admin.tenant_id,
+        filename=file.filename or "",
+        body=body,
+        extension=ext,
+        provider=provider,
+    )
+    return OnboardingStateResponse(**controller.response_from_record(record_data))
 
 
 @router.put("/knowledge/{document_id}", response_model=OnboardingKnowledgeResponse)

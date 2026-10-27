@@ -107,6 +107,8 @@ test("saving a knowledge review opens the confirm step with a non-empty address"
   // can_confirm is already true server-side, but a pending draft forces the
   // client to show the review sheet first (page.tsx's mount handler) - the
   // recorded implementation evidence for this ticket's review-save path.
+  // 29: the confirm step after the save comes from this state read, not from
+  // the client assuming a successful save makes the interview finishable.
   await mockState(page, confirmReadyState());
   await mockRecords(page, [draftRecord]);
   // W-11c: onboarding saves go through the batch endpoint now - the response
@@ -133,6 +135,62 @@ test("saving a knowledge review opens the confirm step with a non-empty address"
   await expect(page.getByTestId("onboarding-public-slug")).toHaveValue(SUGGESTED_SLUG);
 });
 
+test("a review save takes the next step from the server, not from the save", async ({
+  page,
+  request,
+}) => {
+  // 29: the source can leave required beats unasked, so a published review is
+  // not the same thing as a finishable interview. The server keeps
+  // can_confirm false and the composer moves to the next beat; the go-live
+  // block must not appear just because the save succeeded.
+  const businessTypeInput = {
+    kind: "text",
+    placeholder: "",
+    chips: [],
+    mask: null,
+    cta_label: null,
+    prefix: null,
+    suggest_owner_email: false,
+  };
+  let saved = false;
+  await page.route("**/api/onboarding/state", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        saved
+          ? confirmReadyState({
+              stage: "business_type",
+              prompt: "In a few words, what kind of business is it?",
+              input: businessTypeInput,
+              can_confirm: false,
+            })
+          : confirmReadyState(),
+      ),
+    }),
+  );
+  await mockRecords(page, [draftRecord]);
+  await page.route("**/api/onboarding/knowledge/batch", (route) => {
+    saved = true;
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ published: ["draft-1"], failed: [], offering_candidates: [] }),
+    });
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const dialog = page.getByRole("dialog", { name: "Review your information" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("onboarding-knowledge-save").click();
+
+  await expect(page.getByTestId("onboarding-knowledge-save")).toHaveCount(0);
+  await expect(page.getByTestId("onboarding-confirm")).toHaveCount(0);
+  // The next beat is what the owner gets instead: the composer is back.
+  await expect(
+    page.getByTestId("onboarding-composer").getByRole("textbox"),
+  ).toBeVisible();
+});
+
 test("discarding a knowledge review opens the confirm step with a non-empty address", async ({
   page,
   request,
@@ -152,6 +210,59 @@ test("discarding a knowledge review opens the confirm step with a non-empty addr
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("onboarding-confirm")).toBeVisible();
   await expect(page.getByTestId("onboarding-public-slug")).toHaveValue(SUGGESTED_SLUG);
+});
+
+test("a discard does not offer go-live when the server still wants a beat", async ({
+  page,
+  request,
+}) => {
+  // 29: the review can open at the source stage, before the profile beats. A
+  // discard there deletes the draft and says nothing about whether the
+  // interview is finishable, so confirm has to come from a fresh state read.
+  // The old client flag would show Confirm and then 409 on the click.
+  const businessTypeInput = {
+    kind: "text",
+    placeholder: "",
+    chips: [],
+    mask: null,
+    cta_label: null,
+    prefix: null,
+    suggest_owner_email: false,
+  };
+  let discarded = false;
+  await page.route("**/api/onboarding/state", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        discarded
+          ? confirmReadyState({
+              stage: "business_type",
+              prompt: "In a few words, what kind of business is it?",
+              input: businessTypeInput,
+              can_confirm: false,
+            })
+          : confirmReadyState(),
+      ),
+    }),
+  );
+  await mockRecords(page, [draftRecord]);
+  await page.route("**/api/knowledge/records/*", (route) => {
+    discarded = true;
+    return route.fulfill({ status: 204, body: "" });
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const dialog = page.getByRole("dialog", { name: "Review your information" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("onboarding-knowledge-discard").click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("onboarding-confirm")).toHaveCount(0);
+  // The server's next beat is what the owner gets instead.
+  await expect(
+    page.getByTestId("onboarding-composer").getByRole("textbox"),
+  ).toBeVisible();
 });
 
 test("a shape violation blocks submission with a field error and issues no confirm request", async ({

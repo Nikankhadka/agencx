@@ -1562,3 +1562,137 @@ fast-moving business can tighten it without a deploy.
 
 **Boundary:** no monetary amount is produced or altered, and nothing branches
 on a tenant's vertical.
+
+## D46: A pasted URL is read as one bounded, nav-first site document
+
+**Decision.** Website ingestion crawls a small, owner-relevant set of same-site
+pages and composes one `website` document. Discovery reads the homepage once,
+then takes links in this order: the site's own `<nav>`/`<header>` links, the
+sitemaps named by robots.txt plus `/sitemap.xml` and `/sitemap_index.xml`
+(indexes followed two levels deep), and finally ordinary body links. Every
+candidate is normalised, folded to the same site including `www.`, filtered
+through a generic junk blocklist, checked against robots.txt, de-duplicated by
+path within a priority tier, ranked by generic customer-need page names, and
+capped at 10 pages. The pasted URL is always priority 0, even when it is a
+subpath rather than the root.
+
+The crawl fetches and extracts at most 3 pages at once under a 30 second
+deadline. Pricing/menu pages are capped at 6,000 characters and other pages at
+4,000, repeated lines are removed across pages, near-duplicate pages are
+dropped, and the combined document never exceeds 11,500 characters. Each page
+contributes a `## title` heading and a `Source: url` line. The bounds are
+settings (`website_crawl_max_pages`, `website_crawl_max_chars`,
+`website_crawl_concurrency`); nothing about the API shape changes - one URL
+still produces one draft, one structure call and one offerings pass.
+
+**Why.** Reading only the homepage throws away the services, prices and
+opening hours customers ask about, and crawling a whole site turns onboarding
+into an open-ended job. Navigation is the owner's own ranking of what matters;
+sitemaps cover sites without semantic navigation; body links are the last
+resort. 11,500 characters stays below the 12,000-character structuring segment,
+so the turn stays at one structure call. The larger pricing-page cap exists
+because item-and-price lines are denser per character than prose. The deadline
+plus partial-result handling means one slow page cannot hang the owner's turn.
+The selection keywords are generic page names, so nothing branches on a
+tenant's vertical.
+
+**Boundary:** extraction copies prices verbatim and the deterministic money
+guard still governs structuring; no model produces a monetary amount, and
+nothing branches on a tenant's vertical.
+
+## D47: Onboarding runs name -> source -> review -> beats -> confirm
+
+**Decision.** The interview asks for the owner's name, then for a website or a
+document, then opens a priced review, then asks only the required beats the
+source did not answer, then runs the existing optional beats, then confirms.
+The source stage reuses the shipped `knowledge_pending` flag and the `knowledge`
+wire key rather than renaming either component. Owner answers always win: the
+source merge is `only_empty`, and `services` is filled from approved candidates
+only when the owner did not type it. The review opens in price-editing mode
+when a price is missing, takes one price field that accepts either a flat amount
+(cents) or the owner's own wording, and missing prices warn but never block
+go-live. The optional beats keep their previous behaviour.
+
+**Why.** An owner should see the setup assistant do work on their own material
+before answering eight questions, and the review is the one place where the
+owner can check the services and prices the assistant will use. Writing the
+source into empty fields only keeps a typed answer authoritative across a
+re-scrape. Reusing the existing flag and wire key avoids a second knowledge
+concept in the state machine and the client.
+
+**Boundary:** the source stage is not a required beat and never gates go-live;
+nothing branches on a tenant's vertical, and the source cannot overwrite an
+owner answer.
+
+## D48: A pasted URL is one bounded, offerings-first hybrid crawl
+
+**Decision.** Discovery reads the homepage once, then takes the owner's own
+`<nav>`/`<header>` links and ordinary body links, ranking a page by its path
+tokens unioned with the anchor text the owner wrote. The sitemap is a fallback,
+not a step: it is fetched only when nav and body name no offerings-tier page,
+and again inside the crawl when discovery hit the page cap and the result is
+thin. The crawl reads at most six pages at once under a 10-second deadline,
+still selects 10 pages and 11,500 characters, stops as soon as the page or
+character budget is satisfied, and cancels reads that can no longer contribute.
+The thin-result fallback ranks sitemap-sourced candidates by path depth before
+tier and selects at most two from one first path segment. Per-page caps stay
+4,000 characters, 6,000 on a pricing/menu page. D46's three concurrent reads,
+30-second deadline and eager sitemap ordering are superseded.
+
+**Why.** Offerings-first ordering is what the review and the assistant are
+built from, and the owner's anchor text is often a better page name than the
+path. Reading six at once removes the serial wait without widening the document
+budget, and the early exit means a complete document never waits for a slow
+sibling. Depth-first plus a per-path cap stops a sitemap that lists one page per
+item from spending the whole budget on siblings, while a flat sitemap keeps its
+tier order.
+
+**Boundary:** the selection keywords are generic page names, nothing branches
+on a tenant's vertical, and the deterministic money guard still governs what
+reaches the model.
+
+## D49: Pricing wording travels with the offering and stays display-only
+
+**Decision.** `PendingOffering.pricing_wording` is a second shape for the price
+slot, mutually exclusive with `price_cents` at the draft layer as well as at the
+API (RF-4). It rides the candidate through the merge and conflict check, the
+publish/reconcile path, catalog chunks, `recommend_items`, and the
+`show_catalog` payload. The assistant context selects it, prints it verbatim in
+the price position when there is no fixed amount, and keeps it inside
+`owner_material`, which is what lets the money guard reconcile an
+owner-authored figure. The pricing engine never reads it.
+
+**Why.** A customer should hear the owner's own price words ("from $30",
+"market price") when there is no flat amount, without a model turning them into
+a number. Keeping the wording in `owner_material` puts it on the allowed side of
+the money guard by the same rule as a profile field, rather than adding a new
+exception to the gate.
+
+**Boundary:** the wording is display-only and produces no monetary amount;
+cents stay integers in `price_options`, and words stay words in
+`wording_options`.
+
+## D50: A small chat catalog reads in full; a large one hands off to the business page
+
+**Decision.** The chat catalog card renders every offering when the payload
+holds 20 or fewer, in its category order, with no `+N more` line and no page
+link. Above 20 it keeps the five-rows-per-category cap and the per-category
+`+N more` line, and adds one `View all N offerings` link to `/{slug}#offerings`
+in a new tab. The storefront catalog region carries `id="offerings"` in both its
+compact and mature layouts. The tenant slug is a component prop threaded from
+the customer chat, not a catalog payload field, so a restored transcript card
+resolves it from the route. Tool guidance tells the model to call `show_catalog`
+for a full-list request, never repeat the catalog in prose, and point a bounded
+card at the business page.
+
+**Why.** A 14-item menu is short enough to read in chat, and capping it hides
+information the customer asked for. A 96-item menu cannot fill the thread, and
+the storefront already renders it whole with search and categories, so the card
+is the summary and the page is the full list. Keeping the slug out of the
+payload means the persisted `metadata.response` stays a pure view of the
+assistant's data and a restored card does not depend on server-side tenant
+resolution.
+
+**Boundary:** no virtualised or paginated chat list, no per-category deep links,
+and no payload shape change. An owner transcript renders the bounded card
+without the link because `ConversationDetail` carries no tenant slug.

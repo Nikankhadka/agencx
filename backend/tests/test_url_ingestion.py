@@ -1,6 +1,6 @@
 """T-056: URL ingestion - fetch/extract unit tests plus service/API ingestion.
 
-Split into unit tests (extract_main_text/extract_title/fetch_page, no Postgres)
+Split into unit tests (extract_title/fetch_page, no Postgres)
 and db-marked tests (service.upload_url + POST /api/knowledge/urls) following the
 test_knowledge_api.py client-fixture pattern. The fetch step is monkeypatched to
 serve a canned page so the tests exercise the real extract/chunk/embed path
@@ -24,13 +24,13 @@ import pytest_asyncio
 
 from app.features.knowledge import service
 from app.ingestion import url as url_ingestion
-from app.ingestion.url import extract_main_text, extract_title, fetch_page
+from app.ingestion.url import extract_title, fetch_page
 from app.llm.dependency import get_embedder_dependency
 from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ConcurrencyProbe, ZeroEmbedder
 
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
@@ -38,7 +38,10 @@ _CANNED_HTML = (
     b"<html><head><title>  Acme Hours  </title>"
     b"<script>alert('x')</script><style>nav{color:red}</style></head>"
     b"<body><nav>Menu</nav><header>logo</header>"
-    b"<main><p>We are open weekdays 9 to 5.</p></main>"
+    b"<main><p>We are open weekdays 9 to 5.</p>"
+    b"<p>Call 555-0100 for repairs, battery replacements and screen fixes. "
+    b"We serve the whole neighbourhood and answer questions about stock, "
+    b"warranty and turnaround times. Walk-ins are welcome before noon.</p></main>"
     b"<footer>goodbye</footer></body></html>"
 )
 
@@ -84,25 +87,6 @@ def _html_response(
 
 
 # --- unit: extraction --------------------------------------------------------
-
-
-def test_extract_main_text_strips_chrome_and_keeps_body() -> None:
-    text = extract_main_text(_CANNED_HTML)
-    assert "We are open weekdays 9 to 5." in text
-    assert "Menu" not in text
-    assert "logo" not in text
-    assert "goodbye" not in text
-    assert "alert('x')" not in text
-    assert "color:red" not in text
-
-
-def test_extract_main_text_empty_when_no_body_content() -> None:
-    assert extract_main_text(b"<html><body><nav>only nav</nav></body></html>") == ""
-
-
-def test_extract_main_text_empty_for_short_or_blank_html() -> None:
-    assert extract_main_text(b"") == ""
-    assert extract_main_text(b"<html></html>") == ""
 
 
 def test_extract_title_returns_stripped_title() -> None:
@@ -437,8 +421,8 @@ async def test_fetch_page_checks_and_closes_connected_peer(address: str | None) 
             assert calls == 1
 
 
-@pytest.mark.parametrize("content_type", ["", "application/json", "text/plain"])
-async def test_fetch_page_requires_html_media_type(content_type: str) -> None:
+@pytest.mark.parametrize("content_type", ["", "application/json", "text/csv", "image/png"])
+async def test_fetch_page_rejects_unreadable_media_type(content_type: str) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         headers = {"content-type": content_type} if content_type else {}
         return httpx.Response(
@@ -446,7 +430,7 @@ async def test_fetch_page_requires_html_media_type(content_type: str) -> None:
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(ValueError, match="HTML"):
+        with pytest.raises(ValueError, match="readable content"):
             await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
 
 
@@ -463,6 +447,69 @@ async def test_fetch_page_accepts_html_parameters_and_xhtml() -> None:
                 await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
                 == b"ok"
             )
+
+
+@pytest.mark.parametrize(
+    "media_type", ["application/xml; charset=utf-8", "text/xml", "text/plain; charset=utf-8"]
+)
+async def test_fetch_page_accepts_sitemap_and_robots_media_types(media_type: str) -> None:
+    """A sitemap or robots.txt must ride the same SSRF-guarded fetch, never a
+    second unguarded HTTP path of its own."""
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: _html_response(b"<urlset/>", content_type=media_type)
+        )
+    ) as client:
+        assert (
+            await fetch_page(
+                "http://example.com/sitemap.xml", client=client, resolver=_test_resolver
+            )
+            == b"<urlset/>"
+        )
+
+
+async def test_fetch_page_prefers_ipv4_answers() -> None:
+    seen: list[str] = []
+
+    def resolver(host: str, port: int) -> list[str]:
+        return ["2001:4860:4860::8888", "93.184.216.34"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.host))
+        return _html_response(b"ok")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page("https://dual.example/", client=client, resolver=resolver) == b"ok"
+
+    assert seen == ["93.184.216.34"]
+
+
+async def test_fetch_page_tries_each_resolved_address_before_failing() -> None:
+    seen: list[str] = []
+
+    def resolver(host: str, port: int) -> list[str]:
+        return ["93.184.216.34", "93.184.216.35"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        host = str(request.url.host)
+        seen.append(host)
+        if host == "93.184.216.34":
+            raise httpx.ConnectError("no route to host", request=request)
+        return _html_response(b"ok", address="93.184.216.35")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await fetch_page("http://example.com/", client=client, resolver=resolver) == b"ok"
+
+    assert seen == ["93.184.216.34", "93.184.216.35"]
+
+
+async def test_fetch_page_reports_when_every_resolved_address_fails() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route to host", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError, match="could not read this URL"):
+            await fetch_page("http://example.com/", client=client, resolver=_test_resolver)
 
 
 async def test_fetch_page_rejects_declared_and_streamed_oversize() -> None:
@@ -591,7 +638,7 @@ def _patch_fetch(monkeypatch: pytest.MonkeyPatch, html: bytes) -> None:
     ) -> bytes:
         return html
 
-    monkeypatch.setattr("app.features.knowledge.service.fetch_page", fake_fetch)
+    monkeypatch.setattr("app.ingestion.site.fetch_page", fake_fetch)
 
 
 # --- db: service-level -------------------------------------------------------
@@ -629,9 +676,12 @@ async def test_upload_url_ingests_chunks_and_dedupes(
     assert chunk["embedding"].dimensions() == EMBEDDING_DIM
     assert json.loads(chunk["metadata"])["source"] == "Acme Hours"
 
-    # the extracted text landed on disk as {document_id}.txt
+    # the extracted text landed on disk as {document_id}.txt, with the crawl's
+    # section heading and source line preserved
     disk = uploads_tmp / str(tenant_id) / f"{document_id}.txt"
-    assert disk.read_bytes() == b"We are open weekdays 9 to 5."
+    saved = disk.read_bytes()
+    assert b"We are open weekdays 9 to 5." in saved
+    assert b"Source: https://example.com/hours" in saved
 
     # re-pasting the same URL is idempotent: same document, no new chunks.
     again = await service.upload_url(
@@ -709,3 +759,25 @@ async def test_ingest_url_requires_auth(
 ) -> None:
     response = await client.post("/api/knowledge/urls", json={"url": "https://example.com/"})
     assert response.status_code == 401
+
+
+# --- 29: the draft's two model passes run together ---------------------------
+
+_PROBE_SOURCE = "Screen replacement $89.\nBattery replacement $49.\n"
+
+
+async def test_structure_and_offerings_run_concurrently() -> None:
+    """29: the draft pipeline reads one document twice - once for readable
+    sections, once for offerings - and neither pass needs the other's result.
+    A fake provider counts how many ``extract`` calls are in flight, so a
+    serial implementation (the shape this replaces) shows at most one."""
+    provider = ConcurrencyProbe(
+        offerings=[{"name_quote": "Screen replacement", "price_block": "b0"}]
+    )
+
+    await service._draft_sections_and_extraction(
+        _PROBE_SOURCE.encode("utf-8"), ".txt", provider=provider, document_id=uuid.uuid4()
+    )
+
+    assert provider.max_in_flight >= 2
+    assert provider.started("offerings") < provider.finished("structure")

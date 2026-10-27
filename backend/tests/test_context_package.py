@@ -83,7 +83,9 @@ async def _seed_tenant(
     *,
     contents: tuple[str, ...] = ("We are open weekdays 9-5.",),
     profile: dict[str, str] | None = None,
-    offerings: tuple[tuple[str, str, int | None], ...] = (),
+    offerings: tuple[
+        tuple[str, str, int | None] | tuple[str, str, int | None, str | None], ...
+    ] = (),
 ) -> uuid.UUID:
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Package Test Co') returning id",
@@ -121,15 +123,18 @@ async def _seed_tenant(
                 [0.0] * EMBEDDING_DIM,
                 json.dumps({"source": "faq.md", "chunk_index": index, "kind": "prose"}),
             )
-    for position, (name, description, price_cents) in enumerate(offerings):
+    for position, offering in enumerate(offerings):
+        name, description, price_cents = offering[:3]
+        pricing_wording = offering[3] if len(offering) > 3 else None
         await conn.execute(
             "insert into offerings "
-            "(tenant_id, name, description, price_cents, position) "
-            "values ($1, $2, $3, $4, $5)",
+            "(tenant_id, name, description, price_cents, pricing_wording, position) "
+            "values ($1, $2, $3, $4, $5, $6)",
             tenant_id,
             name,
             description,
             price_cents,
+            pricing_wording,
             position,
         )
     return tenant_id
@@ -205,6 +210,57 @@ async def test_package_carries_active_offerings_in_storefront_order(
         f"- [catalog_id={package.offerings[1].id}] Pita bowls: Choose your filling"
     )
     assert package.owner_material().endswith(package.offerings_text())
+
+
+async def test_offerings_print_owner_wording_in_the_price_position(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """29 slice C: a worded price reaches the assistant verbatim, in the slot a
+    fixed price would occupy, and inside the owner material the money gate
+    treats as an allowed source (C-1)."""
+    tenant_id = await _seed_tenant(
+        superuser_conn,
+        contents=(),
+        offerings=(("Catering box", "Feeds 15", None, "from $12 a head"),),
+    )
+
+    async with db.tenant_context(tenant_id, "customer") as conn:
+        package = await build_package(conn, tenant_id)
+
+    offering = package.offerings[0]
+    assert offering.pricing_wording == "from $12 a head"
+    assert (
+        f"- [catalog_id={offering.id}] Catering box: Feeds 15 (from $12 a head)"
+        in package.offerings_text()
+    )
+    assert "from $12 a head" in package.owner_material()
+
+
+async def test_a_96_item_menu_with_wordings_still_fits_the_inline_budget(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """The demo budget is 5,500 catalog tokens (`.env.example`). The full Sabbaba
+    menu is 96 items; carrying a wording on every row must not push it out."""
+    tenant_id = await _seed_tenant(superuser_conn, contents=())
+    for position in range(96):
+        await superuser_conn.execute(
+            "insert into offerings "
+            "(tenant_id, name, description, price_cents, pricing_wording, position) "
+            "values ($1, $2, $3, null, $4, $5)",
+            tenant_id,
+            f"Menu item {position + 1}",
+            "House made",
+            "market price",
+            position,
+        )
+
+    with _catalog_inline_cap(5500):
+        async with db.tenant_context(tenant_id, "customer") as conn:
+            package = await build_package(conn, tenant_id)
+
+    assert len(package.offerings) == 96
+    assert package.catalog_inline is True
+    assert package.offerings_text().count("(market price)") == 96
 
 
 async def test_hybrid_package_also_carries_active_offerings(

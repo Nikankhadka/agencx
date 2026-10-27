@@ -143,7 +143,18 @@ def chunk_document(body: bytes, ext: str, *, source: str) -> list[Chunk]:
     return chunk_prose(extract_text(body, ext), source=source)
 
 
-def chunk_catalog_item(item_id: str, name: str, description: str, price_cents: int | None) -> Chunk:
-    price_part = f" (${price_cents / 100:.2f})" if price_cents is not None else ""
+def chunk_catalog_item(
+    item_id: str,
+    name: str,
+    description: str,
+    price_cents: int | None,
+    pricing_wording: str | None = None,
+) -> Chunk:
+    if price_cents is not None:
+        price_part = f" (${price_cents / 100:.2f})"
+    elif pricing_wording:
+        price_part = f" ({pricing_wording})"
+    else:
+        price_part = ""
     content = f"{name}: {description}{price_part}" if description else f"{name}{price_part}"
     return Chunk(content=content, metadata={"kind": "catalog_item", "catalog_item_id": item_id})

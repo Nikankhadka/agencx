@@ -47,118 +47,13 @@ live in the ticket files, not here.
 ## What is next
 
 - [x] Latency workstream (ticket [13-latency.md](spec/active/13-latency.md),
-  post-launch): merged 2026-10-23 - slices 1-6 and the coalesced-burst follow-on at `d544ce5`, evidence tip `fcc7efa`; slice 7 deferred. Slice 1, the instrument - `make latency` drives real turns with one
-  model pinned and writes the 15-key per-turn record (`cached_input_tokens` added
-  by slice 5); the noise floor and model
-  matrix are in
-  [evidence/latency-2026-10](evidence/latency-2026-10/report.md). Slice 2, the
-  draft output cap (`llm_max_tokens_draft` 4096) - measured mechanism-inert
-  ([report-slice-2.md](evidence/latency-2026-10/report-slice-2.md)). Slice 3,
-  the discarded agent call - **implemented, measured, through its after-eval:
-  PASS on the mechanism**. The tool result now carries the chunks, so a grounded
-  tool turn's prose is the draft and the draft node is skipped; measured at
-  `2ac8247` the evidence is the mechanism - `agent grounded tool answer` fired 8
-  times, only on the hybrid tenant's tool turns, and only the new branch logs it
-  - plus the fast tenants' completed counts not moving (p50 delta 0, sababa2's
-  0.00 band held). The hybrid tenant's single completed turn ran 3 model calls
-  against 4 (n=1, 0.50 from one baseline p50 and 1.0 from the other). Run 1's
-  grounded knowledge turn was rejected by inspection and redrafted through the
-  draft node (the retry edge still works); seven of the eight grounded turns went
-  straight through. The citations event narrows to the cited chunks, but the
-  customer surface is unchanged: citation markers are stripped from every
-  approved token run before the flush and persistence
-  (`controller.py:71-102`), so no chip renders on either path. Cited-only is
-  founder-ratified (2026-10-19, no fallback to all retrieved chunks).
-  After-eval with the
-  baseline pins: counts 45/41/30, trajectory and injection case-for-case
-  identical to the baseline, generation faithfulness 0.7475 -> 0.7163,
-  citation_faithfulness 0.3207 -> 0.3692, answer_relevancy 0.7356 -> 0.8025. The
-  eval cannot reach the branch (`_tools_for` never offers the retrieval tools on
-  the fast path, `agent_node.py:604-605`), and the -0.0311 faithfulness drift is
-  NOT noise - the identical-code repeat spread is +0.0019 - so `run_gate` fails
-  that key by 0.001; founder ruling 2026-10-19 accepted it as a provider level
-  shift and closed it, with the 0.03 tolerance unchanged and no reclassification
-  as noise
-  ([report-slice-3.md](evidence/latency-2026-10/report-slice-3.md),
-  [data/eval-noise-repeat.md](evidence/latency-2026-10/data/eval-noise-repeat.md),
-  [design-slice-3.md](evidence/latency-2026-10/design-slice-3.md),
-  [eval-after-slice3-env.txt](evidence/latency-2026-10/data/eval-after-slice3-env.txt)).
-  Slice 4, parallelize the retrieval steps - **implemented, measured: PASS
-  structurally, no-measurable-effect on the clock**. `sparse_search` now starts
-  first and the embedding runs beside it, with dense awaited only once the
-  embedding is in hand and sparse has landed (one connection, one operation at a
-  time; the RLS context is on the caller's connection). Measured at `040a473`:
-  the documented band rule has no sample (completed hybrid turns that ran
-  `retrieve()`: 1/0/0/0/0/0 across six runs),
-  the fallback band for `search_ms` is 2.52 ms, and both runs' hybrid `search_ms`
-  p50 fell (1.9-2.7 -> 1.25 / 1.15) - but `rerank_ms`, untouched by this slice,
-  also steps over its own band once, and the overlap can only ever save the
-  sparse query's own duration (median 0.38 ms). No scored eval: the change is
-  output-preserving and both eval tenants are fast-path, so `retrieve()` never
-  runs there; the deterministic gate that does call it passes unchanged
-  (recall@5 1.000, MRR 0.911, nDCG@5 0.934)
-  ([report-slice-4.md](evidence/latency-2026-10/report-slice-4.md),
-  [data/slice4-bands.md](evidence/latency-2026-10/data/slice4-bands.md)).
-  **The cumulative comparison for slices 1-4 is built and merged-ready, pending
-  the 5-7 decisions and the merge go**: baseline (slice-1 runs) vs stack tip per
-  tenant - hybrid provider
-  calls p50 4.0 -> 3.0, sababa2's 0.00 band held exactly, completion inside every
-  tenant's own spread, no `total_ms` claim (provider drift exceeds the bands), the
-  hybrid input up to 16.2k from slice 3's chunk re-send - plus the eval trio
-  (trajectory and injection case-identical; generation FAIL by 0.001, accepted as
-  a provider level shift by founder ruling 2026-10-19, tolerance unchanged)
-  ([report-cumulative.md](evidence/latency-2026-10/report-cumulative.md),
-  [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md)).
-  **Slice 5, prompt caching (a stable prompt prefix) - implemented, measured,
-  gate PASS, the cache proven, and NO clock claim.** The per-request spotlight
-  nonce is retired for ONE fixed 16-hex delimiter, so the prompt prefix is
-  byte-identical across calls and the provider can cache it (ruling recorded
-  2026-10-20 by the supervisor under the founder's delegation of 2026-10-19 - the
-  fixed token is public by design, and the enforcement is `escape_delimiters`,
-  now case/whitespace/invisible/full-width tolerant and emitting a non-forgeable
-  `escaped` marker, plus the standing instruction plus Inspection, with the
-  injection gate guarding the decision). Code landed `7613091`; review hardening
-  and the measured tip `d99ca54`. Injection gate PASS: 29/30 = 0.967 >= 0.9667,
-  the same single leak (`direct-policy-invent-01`), both delimiter-forgery cases
-  held (row `513cec2f`). Cache reads proven by non-zero `cached_input_tokens` in
-  both runs - run 1 (cold) 6/15 turns, 29,056 of 140,884 input tokens (20.6%);
-  run 2 (warm) 14/15 turns, 109,184 of 169,219 (64.5%); turn 1 of every tenant is
-  always cold; per-tenant cached totals 5,376 -> 27,904 (bytefix), 12,288 ->
-  60,672 (sababa2), 11,392 -> 20,608 (sababa). No clock claim: 10/15 turns per
-  run hit the 10 s turn budget and are censored out, so the completed samples are
-  thin (bytefix 1/5 and 2/5, sababa2 1/5 and 2/5, sababa 0/5 both runs).
-  Generation (45 cases, row `e8ab818f`) faithfulness 0.7628, answer_relevancy
-  0.8124, citation_faithfulness 0.3737, refusal 0.000 - the faithfulness rise
-  (+0.0465 against the slice-3 after row) is OUTSIDE the +0.0019 identical-code
-  spread, an upward between-window shift with no mechanism in a delimiter-byte
-  change, so it is not a regression and is not attributed to slice 5, while
-  answer_relevancy (+0.0099) and citation (+0.0045) sit inside theirs.
-  Trajectory (41 cases, row `6219ba04`) tool_correctness 0.6098 (25/41), persona
-  1.000, step_efficiency 0.9677; the identical-code repeat (row `302b9a94`) gives
-  0.6341 (26/41) / 1.000 / 0.9797, so the -0.0244 delta IS the same-code spread
-  (the one flipped case is `knowledge-price-match-01`, flaky) and it sits inside
-  `run_gate`'s -0.03
-  ([report-slice-5.md](evidence/latency-2026-10/report-slice-5.md),
-  [data/slice5-cache.md](evidence/latency-2026-10/data/slice5-cache.md)).
-  **Slice 6 (paid-tier A/B across the matrix) is implemented, measured, and
-  CLOSED WITH NO WINNER**: the cache-adjusted cost model shipped (`2004617`),
-  the OpenRouter matrix ran twice at that commit and is heavily censored
-  (13/15, 14/15, 12/15, 14/15 turns), ling's trajectory cannot run because its
-  providers reject structured outputs (Novita 400, retry upstream with no
-  choices) so no tool-correctness row exists, and the production primary Google
-  gemini-3.5-flash-lite was added (`5a4578a`, no published price) with 10/15
-  turns completed in a good window then 2/15 under 429s. No latency or
-  correctness ranking is supportable. The cumulative package for slices 1-6 is
-  [report-cumulative.md](evidence/latency-2026-10/report-cumulative.md) with raw
-  tables in
-  [data/cumulative.md](evidence/latency-2026-10/data/cumulative.md).
-  **Slice 7 (streaming with inspection off the critical path) stays deferred and
-  needs the founder to reopen scope.** The merge checklist is in
-  [13-latency.md](spec/active/13-latency.md#merge-readiness-slices-1-4).
-  Follow-on burst coalescing shipped in the composer: a message submitted while
-  a reply is in flight is queued and the burst is sent as one combined turn
-  (68-77% faster than serial in
-  [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)).
+  post-launch): merged 2026-10-23 - slices 1-6 and burst coalescing at `d544ce5`,
+  evidence tip `fcc7efa`; slice 7 deferred. One command (`make latency`) measures a
+  real turn against a measured noise floor. Slice 2 was inert, slice 3 passed on the
+  mechanism, slices 4-5 had no clock effect (the cache is proven), and slice 6 closed
+  with no winner - the matrix is too censored to rank. The founder's 10% bar is met by
+  the coalesced burst, 68-77% faster than serial turns. Details and evidence links:
+  [13-latency.md](spec/active/13-latency.md).
 - [ ] Production hardening (ticket 22, T-022 to T-033): per-IP rate limit and
   a 2000-character chat cap (T-022, built, ADR D32) and CI hygiene (T-023,
   built), Sentry on both surfaces (T-024 and T-025, built, ADR D33),
@@ -465,6 +360,41 @@ live in the ticket files, not here.
   with the Step 1 runner; the ledger now matches the repo at 38 and both routes
   answer 200. Automation of the hosted migrate step is still open above.
 
+- [x] In-house website ingestion (post-launch, branch `feat/website-crawl`):
+  a pasted URL now crawls 5 to 10 nav-first same-site pages into one
+  11,500-character website document, with one structure call and one offering
+  call, bounded at 10 pages, 3 concurrent reads and a 30 second deadline.
+  Before/after: fixture 1 page / 517 chars -> 5 pages / 3,664; Sydney Dental
+  Care 4,407 -> 11,234 across 9 pages; Phone Clinic 579 -> 4,612 across 5;
+  The Grounds 5,891 -> 11,424 across 5. Decision recorded as D46.
+- [x] Source-first onboarding (ticket 29): name -> website/document -> review ->
+  missing required beats -> optional beats -> confirm, with a priced review
+  sheet, owner wording in the assistant context, and a faster 10-page crawl.
+  Six feature commits (`65ef878`, `b8d8b19`, `3e9dd7c`, `ef70289`, `7556f67`,
+  `ab335b3`) plus three fixes (`492d167`, `a29cc31`, `68885f6`). The interview
+  asks for a source second; the review leads with priced services and saves the
+  business details; a worded price reaches the assistant as owner material; and
+  the crawl reads six pages at once under a 10s deadline with a thin-result
+  sitemap fallback. Probe: fixture 145ms against 461ms, python.org the same six
+  pages and 11,468 characters, The Grounds 1,882ms against 6,281ms at 99.97% of
+  the legacy text. Open risks: client-rendered-nav sites recover only part of
+  the legacy text (nandos 7,657 of 11,484 characters, 66.7%, short of the 90%
+  bar) and the 5s p50 target was not measured end to end, only crawl wall time.
+  Status `Active - awaiting review`. See
+  [29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md).
+- [x] Chat catalog for large menus (ticket 30): 20 or fewer offerings render in
+  full in category order; above 20 the card keeps five rows per category, the
+  `+N more` line, and adds one `View all N offerings` link to
+  `/{slug}#offerings` in a new tab. The storefront catalog region carries the
+  `#offerings` anchor in both its compact and mature layouts, the slug is a
+  prop on the card rather than a payload field so a restored card keeps working,
+  and the tool guidance tells the assistant to call `show_catalog` for a
+  full-list request without repeating the catalog in prose. Landed as
+  `6b90bcc` on `feat/30-chat-catalog-full-list`, stacked deliberately on
+  ticket 29's branch because slice C is not merged yet. Status
+  `Active - awaiting review`. See
+  [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
+
 ## Spec status
 
 | Location | Status | Contents |
@@ -472,6 +402,8 @@ live in the ticket files, not here.
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, slices 1-6 and coalescing merged at d544ce5; slice 7 deferred` | Latency instrument and model matrix, slices 1-6 merged at `d544ce5` and slice 7 deferred (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge is closed; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 68-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) Merged to development and staging on 2026-10-23; make ci green at the tip (1514 backend, 373 frontend); the founder's 10% bar is met by the coalesced burst (68-77% faster), with no single-turn clock claim. |
+| [spec/active/29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md) | `Active - awaiting review` | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D) |
+| [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - awaiting review` | Chat catalog boundary at 20 offerings plus the business-page link |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

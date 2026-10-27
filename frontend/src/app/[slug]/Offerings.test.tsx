@@ -79,6 +79,26 @@ describe("Offerings row media", () => {
   });
 });
 
+describe("Offerings catalog anchor", () => {
+  it("exposes #offerings on a mature catalog region", () => {
+    const html = catalogHtml(
+      Array.from({ length: 7 }, (_, index) =>
+        offering({ id: String(index + 1), name: `Item ${index + 1}`, category: "Repairs" }),
+      ),
+    );
+
+    expect(html).toContain('data-testid="browse-offerings"');
+    expect(html).toContain('id="offerings"');
+  });
+
+  it("exposes the same anchor on a compact catalog region", () => {
+    const html = catalogHtml([offering({ id: "1", name: "Coffee" })]);
+
+    expect(html).toContain('data-testid="compact-offerings"');
+    expect(html).toContain('id="offerings"');
+  });
+});
+
 describe("Offerings catalog density", () => {
   it("uses one compact region and no category navigation for up to six offerings", () => {
     const html = catalogHtml([

@@ -27,11 +27,14 @@ import {
 import {
   describeUpload,
   foldReply,
+  KNOWLEDGE_DRAFTS_TARGET,
   parseOnboardingEvent,
+  uploadTargetForStage,
   type InputSpec,
   type OnboardingDraft,
   type OnboardingState,
   type PendingConfirmation,
+  type UploadTarget,
 } from "@/lib/onboarding";
 import { slugShapeError } from "@/lib/slug";
 import { BeatComposer } from "./components/BeatComposer";
@@ -67,7 +70,16 @@ interface StateFields {
   pending_confirmation?: PendingConfirmation | null;
   skipped?: string[];
   revision?: number;
+  missing_required?: string[];
   offering_candidates?: PendingOffering[];
+}
+
+/** What one attach batch produced (29). */
+interface UploadBatch {
+  /** Accepted draft records, in input order - the drafts door only. */
+  accepted: KnowledgeRecord[];
+  /** At least one file got through, so there may be something to review. */
+  landed: boolean;
 }
 
 /**
@@ -101,9 +113,15 @@ const GO_LIVE_LINE =
  * The prototype's `.proc-txt` line while a pasted link is being fetched. The
  * backend leads its URL turn with `progress: reading_site` precisely so this
  * covers the scrape, the ingest and the extraction.
+ *
+ * 29: the source turn names its two later stages too - finding the services
+ * and building the review - so the owner is never looking at an unnamed wait
+ * after the site has been read.
  */
 const PROCESSING_COPY: Record<string, string> = {
   reading_site: "Reading your site\u2026",
+  finding_services: "Finding your services\u2026",
+  review: "Waiting for your review\u2026",
 };
 
 /**
@@ -180,6 +198,7 @@ function toPendingOfferings(
     candidate_id: candidate.candidate_id,
     description: candidate.description,
     price_cents: candidate.price_cents ?? null,
+    pricing_wording: candidate.pricing_wording,
     sources: candidate.sources ?? ["document"],
     source_references: candidate.source_references?.map((reference) => ({
       ...reference,
@@ -191,6 +210,7 @@ function toPendingOfferings(
     needs_review: candidate.needs_review,
     possible_matches: candidate.possible_matches,
     price_options: candidate.price_options,
+    wording_options: candidate.wording_options,
   }));
 }
 
@@ -245,6 +265,10 @@ export default function OnboardingPage() {
   // read back for reassurance (not editable - it was captured during the
   // interview), so the page holds the value but no input state for it.
   const [businessName, setBusinessName] = useState("");
+  // 29: the review reads the captured profile and the required beats the
+  // source left empty. Both come from the same state response.
+  const [profile, setProfile] = useState<OnboardingDraft>({});
+  const [missingRequired, setMissingRequired] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -269,6 +293,8 @@ export default function OnboardingPage() {
     setPausedBeat(fields.paused_beat);
     setPendingConfirmation(fields.pending_confirmation ?? null);
     setOwnerOfferings(fields.offering_candidates ?? []);
+    setProfile(fields.draft);
+    setMissingRequired(fields.missing_required ?? []);
     setBusinessName((current) => current || fields.draft.business_name || "");
     // W-4 US-1/US-2: unconditional, every time - see the `suggestedSlug`
     // declaration above for why this alone is enough for every confirm-
@@ -542,15 +568,25 @@ export default function OnboardingPage() {
   }
 
   /**
-   * W-11c: the shared upload core behind the composer's "+" and the review
-   * sheet's Add source and Replace paths. A batch caps at five files, uploaded
-   * three at a time; every file gets its own stamp up front and settles to
-   * "· ready" or "· failed". Returns the accepted draft records in input order.
-   * A stored failure (a 201 with status "failed") is never returned - the file
-   * is kept in Knowledge for retry, and never joins drafts or the workspace.
-   * Callers own the busy state and the follow-up drafts/workspace surgery.
+   * W-11c/29: the shared upload core behind the composer's "+", the source
+   * stage, and the review sheet's Add source and Replace paths. A batch caps at
+   * five files, uploaded three at a time; every file gets its own stamp up
+   * front and settles to "· ready" or "· failed".
+   *
+   * `target` picks the door (see `uploadTargetForStage` in lib/onboarding.ts).
+   * The source stage's endpoint also reads the business profile out of the same
+   * file and answers onboarding state rather than a record, so it contributes
+   * no accepted records - its review is rebuilt from the server's own state
+   * after the batch. Every other stage keeps the drafts endpoint and returns
+   * the stored record for the caller to fold in. A stored failure (a 201 with
+   * status "failed") is never returned - the file is kept in Knowledge for
+   * retry, and never joins drafts or the workspace. Callers own the busy state
+   * and the follow-up drafts/workspace surgery.
    */
-  async function uploadDrafts(files: File[]): Promise<KnowledgeRecord[]> {
+  async function uploadDrafts(
+    files: File[],
+    target: UploadTarget,
+  ): Promise<UploadBatch> {
     // W-11c: a batch caps at five files - the first five are processed, the
     // rest are turned away in one line.
     const batch = files.slice(0, MAX_BATCH_FILES);
@@ -586,6 +622,7 @@ export default function OnboardingPage() {
       ]);
     }
     const accepted: KnowledgeRecord[] = [];
+    let landed = 0;
     const results = await runBounded(
       queue.map((entry) => () => uploadOne(entry)),
       MAX_CONCURRENT_UPLOADS,
@@ -613,7 +650,7 @@ export default function OnboardingPage() {
         ]);
       }
     }
-    return accepted;
+    return { accepted, landed: landed > 0 };
 
     async function uploadOne(entry: {
       file: File;
@@ -621,15 +658,20 @@ export default function OnboardingPage() {
     }): Promise<KnowledgeRecord | null> {
       const form = new FormData();
       form.append("file", entry.file);
-      form.append("doc_type", "other");
-      const draft = await apiFetch<KnowledgeRecord>(
-        "/api/knowledge/drafts/upload",
+      // The drafts door files the upload under a doc type; the source door
+      // derives its own from the extension, so it is not sent there.
+      if (!target.mergesProfile) form.append("doc_type", "other");
+      const response = await apiFetch<KnowledgeRecord | OnboardingState>(
+        target.endpoint,
         {
           method: "POST",
           body: form,
         },
       );
-      if (draft.status === "failed") {
+      // 29: only the drafts door answers a record. The source door's reply is
+      // onboarding state, and the caller reads its review back separately.
+      const draft = target.mergesProfile ? null : (response as KnowledgeRecord);
+      if (draft?.status === "failed") {
         // W-11a: a 201 that parks a failed draft - the file is kept so the
         // owner can retry it from Knowledge. It is not a reviewable draft, so
         // it never joins drafts or the workspace.
@@ -646,6 +688,7 @@ export default function OnboardingPage() {
         ]);
         return null;
       }
+      landed += 1;
       updateById(entry.stampId, {
         text: `${entry.file.name} \u00b7 ready`,
         pending: false,
@@ -676,7 +719,14 @@ export default function OnboardingPage() {
     setError(null);
     setBusy(true);
     try {
-      const accepted = await uploadDrafts(files);
+      const target = uploadTargetForStage(stage);
+      const { accepted, landed } = await uploadDrafts(files, target);
+      // 29: the source stage's door reads the profile too, so its review is
+      // read back from the server rather than assembled from returned records.
+      if (target.mergesProfile) {
+        if (landed) await refreshSourceReview();
+        return;
+      }
       if (accepted.length > 0) {
         setCanConfirm(false);
         // W-11c: one rebuild after everything settles - never per draft. The
@@ -697,6 +747,42 @@ export default function OnboardingPage() {
   }
 
   /**
+   * 29: the file path into the review. The source endpoint answers onboarding
+   * state, and the server owns both what is reviewable and whether the
+   * interview can move on, so this re-reads both before deciding anything:
+   * pending drafts are the review's contents, and `can_confirm` is never
+   * assumed. With a draft in hand it opens the sheet exactly as the URL turn
+   * does (`sendText`), carrying the workspace id over so the sheet never
+   * remounts. With nothing to review - a file that could not be read, or one
+   * the source found no services in - the sheet stays shut and the server's
+   * read-back is the feedback, since no other surface would ever show it.
+   */
+  async function refreshSourceReview() {
+    try {
+      const state = await apiFetch<OnboardingState>("/api/onboarding/state");
+      applyStateFields(state);
+      const records = await apiFetch<KnowledgeRecord[]>("/api/knowledge/records");
+      const pending = records.filter((record) => record.status === "draft");
+      setDrafts(pending);
+      if (!pending[0]) {
+        setMessages(historyToMessages(state.history));
+        return;
+      }
+      setCanConfirm(false);
+      setWorkspace(
+        buildWorkspace(
+          pending,
+          state.offering_candidates ?? [],
+          workspace?.id ?? pending[0].id,
+        ),
+      );
+      setOpen(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Something went wrong");
+    }
+  }
+
+  /**
    * W-11c: Add source from inside the review sheet. Same upload core as the
    * composer, then the workspace grows by the accepted records (id stable -
    * W-11b) and the sheet merges their candidates into its own list.
@@ -707,7 +793,9 @@ export default function OnboardingPage() {
     setReviewError(null);
     setBusy(true);
     try {
-      const accepted = await uploadDrafts(files);
+      // Inside the review, a source is always a plain draft - the profile was
+      // merged when the source stage was answered, not again per added file.
+      const { accepted } = await uploadDrafts(files, KNOWLEDGE_DRAFTS_TARGET);
       if (accepted.length > 0) {
         setCanConfirm(false);
         setDrafts((previous) => [...previous, ...accepted]);
@@ -742,7 +830,7 @@ export default function OnboardingPage() {
     setReviewError(null);
     setBusy(true);
     try {
-      const accepted = await uploadDrafts([file]);
+      const { accepted } = await uploadDrafts([file], KNOWLEDGE_DRAFTS_TARGET);
       const uploaded = accepted[0];
       if (!uploaded) return null;
       try {
@@ -806,7 +894,9 @@ export default function OnboardingPage() {
       if (remaining.length === 0) {
         setWorkspace(null);
         setOpen(false);
-        setCanConfirm(true);
+        // W-11c/29: removing the source says nothing about whether the
+        // interview is finishable - only the server's state can answer that.
+        await refreshConfirm();
       } else {
         setWorkspace({ ...workspace, documents: remaining });
       }
@@ -816,6 +906,21 @@ export default function OnboardingPage() {
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * 29: confirm is the server's call, never the client's assumption. Publishing
+   * a review says nothing about whether the interview is finishable - the
+   * source may still leave required beats to ask - so the state is re-read and
+   * `can_confirm` comes from the server. A failed re-read does not undo the
+   * save, so it is not reported as one.
+   */
+  async function refreshConfirm() {
+    try {
+      applyStateFields(await apiFetch<OnboardingState>("/api/onboarding/state"));
+    } catch {
+      setError("Saved. Reload the page to finish setting up.");
     }
   }
 
@@ -836,6 +941,7 @@ export default function OnboardingPage() {
     documents: { document_id: string; sections: KnowledgeSection[] }[],
     offerings: PendingOffering[],
     acceptPriceChanges = false,
+    profilePatch?: Record<string, string>,
   ): Promise<PendingOffering[] | null> {
     if (!workspace) return null;
     setReviewError(null);
@@ -849,6 +955,9 @@ export default function OnboardingPage() {
             documents,
             offerings,
             accept_price_changes: acceptPriceChanges,
+            ...(profilePatch && Object.keys(profilePatch).length
+              ? { profile: profilePatch }
+              : {}),
           }),
         },
       );
@@ -872,7 +981,7 @@ export default function OnboardingPage() {
           // batch as done rather than leaving an empty sheet behind.
           setWorkspace(null);
           setOpen(false);
-          setCanConfirm(true);
+          await refreshConfirm();
           return candidates;
         }
         const errors: Record<string, string> = {};
@@ -894,7 +1003,7 @@ export default function OnboardingPage() {
       setDrafts([]);
       setWorkspace(null);
       setOpen(false);
-      setCanConfirm(true);
+      await refreshConfirm();
       return candidates;
     } catch (err) {
       // A network-level failure - the batch never ran, nothing published.
@@ -930,7 +1039,9 @@ export default function OnboardingPage() {
       );
       setWorkspace(null);
       setOpen(false);
-      setCanConfirm(true);
+      // 29: a discard at the source stage leaves required beats unasked, so
+      // go-live is the server's call, never the discard's.
+      await refreshConfirm();
     } catch (err) {
       setReviewError(
         err instanceof ApiError
@@ -1138,7 +1249,7 @@ export default function OnboardingPage() {
               onStop={handleStop}
               ownerEmail={user?.email ?? null}
               pendingConfirmation={pendingConfirmation}
-              onFiles={stage === "knowledge" ? (files) => void uploadFiles(files) : undefined}
+              onFiles={(files) => void uploadFiles(files)}
             />
           ) : null}
 
@@ -1156,16 +1267,6 @@ export default function OnboardingPage() {
           >
             {error ?? ""}
           </p>
-          {/* Onboarding half of the privacy disclosure (15-document-review.md,
-              "Privacy disclosure") - unconditional, shortened per founder
-              request to one sentence, no vendor name. The fuller disclosure
-              stays on Business > Knowledge, which has room for it. */}
-          <p
-            data-testid="onboarding-privacy-disclosure"
-            className="mt-2 text-meta text-ink-a40"
-          >
-            {"Your documents stay private to your business, and nothing answers customers until you review and save it."}
-          </p>
         </Container>
       </div>
       <ReviewSheet
@@ -1174,12 +1275,14 @@ export default function OnboardingPage() {
         busy={busy}
         priceConflict={reviewError}
         onboarding
+        profile={profile}
+        missingRequired={missingRequired}
         onClose={() => {
           setReviewError(null);
           setOpen(false);
         }}
-        onSave={(documents, offerings, acceptPriceChanges) =>
-          saveKnowledge(documents, offerings, acceptPriceChanges)
+        onSave={(documents, offerings, acceptPriceChanges, profilePatch) =>
+          saveKnowledge(documents, offerings, acceptPriceChanges, profilePatch)
         }
         onDiscard={() => void discardKnowledge()}
         onAddSource={(files) => addSources(files)}

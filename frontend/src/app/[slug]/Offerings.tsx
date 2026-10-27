@@ -253,6 +253,7 @@ export function Offerings({
     return (
       <div
         ref={rootRef}
+        id="offerings"
         data-testid="compact-offerings"
         className="w-full border-t border-hairline"
       >
@@ -294,7 +295,12 @@ export function Offerings({
   }
 
   return (
-    <div ref={rootRef} data-testid="browse-offerings" className="w-full border-t border-hairline">
+    <div
+      ref={rootRef}
+      id="offerings"
+      data-testid="browse-offerings"
+      className="w-full border-t border-hairline"
+    >
       <div className="mx-auto max-w-5xl px-gutter pt-6 pb-3 lg:pb-0">{searchUi}</div>
       {visible.length === 0 ? (
         <p

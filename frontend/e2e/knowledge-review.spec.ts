@@ -4,6 +4,7 @@ import {
   MIDDLE_DOT,
   draftRecord,
   offeringCandidate,
+  onboardingState,
   recordsStore,
   stubBatch,
   stubOnboardingState,
@@ -25,9 +26,6 @@ import {
  * tests assert against.
  */
 
-const PRIVACY_LINE =
-  "Your documents stay private to your business, and nothing answers customers until you review and save it.";
-
 const FIVE_NAMES = ["menu.txt", "hours.txt", "policies.txt", "notes.txt", "faq.txt"];
 const SEVEN_NAMES = [...FIVE_NAMES, "extra6.txt", "extra7.txt"];
 
@@ -40,7 +38,9 @@ test("uploads five files three at a time and opens one combined review", async (
   request,
 }) => {
   const store = recordsStore([]);
-  await stubOnboardingState(page, { stage: "knowledge" });
+  // 29: the "+" is on every text stage, so this exercises the plain drafts
+  // batch from an ordinary beat - the source stage has its own endpoint.
+  await stubOnboardingState(page);
   await stubRecords(page, store);
   let nextId = 1;
   const upload = await stubUpload(page, store, {
@@ -77,15 +77,11 @@ test("uploads five files three at a time and opens one combined review", async (
   for (const name of FIVE_NAMES) {
     await expect(sheet.getByText(name, { exact: true })).toBeVisible();
   }
-
-  const disclosure = page.getByTestId("onboarding-privacy-disclosure");
-  await expect(disclosure).toHaveText(PRIVACY_LINE);
-  await expect(disclosure).not.toContainText(/Google|OpenAI|Anthropic|Groq|OpenRouter|Z\.ai/);
 });
 
 test("caps the batch at five files", async ({ page, request }) => {
   const store = recordsStore([]);
-  await stubOnboardingState(page, { stage: "knowledge" });
+  await stubOnboardingState(page);
   await stubRecords(page, store);
   let nextId = 1;
   const upload = await stubUpload(page, store, {
@@ -120,7 +116,7 @@ test("a stored failure stays in Knowledge and never joins the review", async ({
   request,
 }) => {
   const store = recordsStore([]);
-  await stubOnboardingState(page, { stage: "knowledge" });
+  await stubOnboardingState(page);
   const records = await stubRecords(page, store);
   await stubUpload(page, store, {
     recordFor: (filename) =>
@@ -195,7 +191,14 @@ test("the ready card persists and reopens with edits intact", async ({ page, req
   // keydown handler - the key goes to whatever has focus.
   await expect(sheet.getByRole("button", { name: "Close" })).toBeFocused();
 
-  await sheet.getByRole("button", { name: "Edit" }).click();
+  // 29: the structured sections sit behind "More about what I read", closed
+  // by default. Open the disclosure, then the section's own editor.
+  await sheet.getByTestId("review-more-about-source").click();
+  await sheet
+    .getByRole("heading", { name: "Hours", exact: true })
+    .locator("..")
+    .getByRole("button", { name: "Edit" })
+    .click();
   const edited = "9 to 5, Monday to Friday, closed Sundays";
   const details = sheet.getByLabel("Hours details");
   await details.fill(edited);
@@ -351,7 +354,12 @@ test("batch publish keeps one failing document reviewable until it saves", async
   await expect(page.getByTestId("onboarding-confirm")).toHaveCount(0);
 
   // A second save that publishes everything clears the workspace and opens
-  // the confirm step.
+  // the confirm step. 29: that step is the server's call now - the client
+  // re-reads state after a save instead of assuming a published review makes
+  // the interview finishable - so the stub has to say so.
+  await page.route("**/api/onboarding/state", (route) =>
+    route.fulfill({ json: onboardingState({ can_confirm: true }) }),
+  );
   batch.setResponse({ published: ["draft-1", "draft-2"], failed: [], offering_candidates: [] });
   await sheet.getByTestId("onboarding-knowledge-save").click();
 
@@ -361,9 +369,62 @@ test("batch publish keeps one failing document reviewable until it saves", async
   await expect(page.getByTestId("onboarding-ready-card")).toHaveCount(0);
 });
 
+test("priced services lead and the source detail stays closed", async ({ page, request }) => {
+  const candidates = Array.from({ length: 6 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", {
+      price_cents: i === 5 ? null : 1000,
+    }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page, {
+    draft: { business_name: "Test Repairs", business_type: "phone repair shop" },
+    missing_required: ["contact details"],
+  });
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  // 29: one missing price opens the list in edit mode on first paint and shows
+  // the warning above the rows.
+  await expect(sheet.getByRole("heading", { name: "What you offer" })).toBeVisible();
+  await expect(sheet.getByTestId("review-missing-prices")).toHaveText(
+    'No prices found here. Add a price, or write it your way, like "from $30".',
+  );
+  await expect(sheet.getByLabel("Offering 1 price")).toBeVisible();
+  await expect(sheet.getByText("Page 1 of 2")).toBeVisible();
+
+  // The business details the source found sit between the services and the
+  // source line; the required gap is one note, not an empty row.
+  await expect(sheet.getByTestId("review-profile-business_name")).toBeVisible();
+  await expect(sheet.getByTestId("review-more-about-source")).toBeVisible();
+  await expect(sheet.getByTestId("review-missing-required")).toHaveText(
+    "I'll ask next: contact details.",
+  );
+
+  // The structured sections and the source text are not inline by default.
+  await expect(sheet.getByText("9 to 5, Monday to Friday")).toHaveCount(0);
+  await expect(
+    sheet.getByText("Original extracted source. It does not answer customers."),
+  ).toHaveCount(0);
+
+  await sheet.getByTestId("review-more-about-source").click();
+  await expect(sheet.getByText("9 to 5, Monday to Friday")).toBeVisible();
+  await expect(
+    sheet.getByText("Original extracted source. It does not answer customers."),
+  ).toHaveCount(0);
+});
+
 test("pagination and toolbar keep review stable while typing", async ({ page, request }) => {
+  // Priced on purpose: a fully priced catalog keeps the collapsed default, so
+  // this spec still exercises the review-all path. The missing-price open
+  // behaviour has its own spec below.
   const candidates = Array.from({ length: 12 }, (_, i) =>
-    offeringCandidate(`Item ${i + 1}`, "draft-1"),
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
   );
   const store = recordsStore([
     draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),

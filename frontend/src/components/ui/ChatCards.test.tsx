@@ -83,7 +83,7 @@ function firstHeading(html: string): { className: string; text: string } {
 }
 
 const rendered = {
-  Catalog: renderToStaticMarkup(<CatalogCard catalog={catalog} />),
+  Catalog: renderToStaticMarkup(<CatalogCard catalog={catalog} slug="bytefix" />),
   "Price summary": renderToStaticMarkup(<PriceSummaryCard summary={summary} />),
   Quote: renderToStaticMarkup(<QuoteCard quote={quote} />),
 };

@@ -49,8 +49,11 @@ def _initial_state(message: str) -> AgentState:
     }
 
 
+CatalogItem = tuple[str, str, int | None] | tuple[str, str, int | None, str | None]
+
+
 async def _seed_catalog(
-    conn: asyncpg.Connection[Any], items: list[tuple[str, str, int | None]]
+    conn: asyncpg.Connection[Any], items: list[CatalogItem]
 ) -> tuple[uuid.UUID, list[uuid.UUID]]:
     tenant_id: uuid.UUID = await conn.fetchval(
         "insert into tenants (slug, name) values ($1, 'Recommend Test Co') returning id",
@@ -63,17 +66,20 @@ async def _seed_catalog(
         tenant_id,
     )
     item_ids = []
-    for name, description, price_cents in items:
+    for item in items:
+        name, description, price_cents = item[:3]
+        pricing_wording = item[3] if len(item) > 3 else None
         item_id: uuid.UUID = await conn.fetchval(
-            "insert into offerings (tenant_id, name, description, price_cents) "
-            "values ($1, $2, $3, $4) returning id",
+            "insert into offerings (tenant_id, name, description, price_cents, pricing_wording) "
+            "values ($1, $2, $3, $4, $5) returning id",
             tenant_id,
             name,
             description,
             price_cents,
+            pricing_wording,
         )
         item_ids.append(item_id)
-        chunk = chunk_catalog_item(str(item_id), name, description, price_cents)
+        chunk = chunk_catalog_item(str(item_id), name, description, price_cents, pricing_wording)
         await conn.execute(
             "insert into knowledge_chunks (tenant_id, document_id, content, embedding, metadata) "
             "values ($1, $2, $3, $4, $5)",
@@ -144,6 +150,64 @@ async def test_recommendation_price_comes_from_db_column(
     )
     final_state = await graph.ainvoke(_initial_state("I need something durable"), context=context)
     assert final_state["selections"][0]["price_cents"] == 4900
+
+
+async def test_recommendation_returns_the_owners_pricing_wording(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    """29 slice C: the item the model picks carries the owner's words, so the
+    reply can quote them instead of inventing a figure."""
+    tenant_id, _item_ids = await _seed_catalog(
+        superuser_conn,
+        [("Catering box", "Feeds 15", None, "from $12 a head")],
+    )
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=_recommendation_provider(),
+        embedder=ZeroEmbedder(),
+        reranker=PassthroughReranker(),
+    )
+    final_state = await graph.ainvoke(_initial_state("I need something durable"), context=context)
+
+    selection = final_state["selections"][0]
+    assert selection["price_cents"] is None
+    assert selection["pricing_wording"] == "from $12 a head"
+
+
+async def test_show_catalog_carries_the_wording_for_every_offering(
+    superuser_conn: asyncpg.Connection[Any],
+) -> None:
+    tenant_id, _item_ids = await _seed_catalog(
+        superuser_conn,
+        [
+            ("Catering box", "Feeds 15", None, "from $12 a head"),
+            ("Item Two", "A priced gadget", 2900),
+        ],
+    )
+    provider = ToolAwareFakeProvider(
+        tool_call_sequence=[
+            ToolTurn(tool_calls=[ToolCall(id="call_catalog", name="show_catalog", args={})]),
+            ToolTurn(text="ok", tool_calls=[]),
+        ],
+        stream_text="Here is the menu.",
+        extract_route="recommendation",
+    )
+    graph = build_graph()
+    context = GraphContext(
+        tenant_id=tenant_id,
+        provider=provider,
+        embedder=ZeroEmbedder(),
+        reranker=PassthroughReranker(),
+    )
+    final_state = await graph.ainvoke(_initial_state("show me everything"), context=context)
+
+    offerings = final_state["response"]["catalog"]["offerings"]
+    assert len(offerings) == 2
+    by_name = {offering["name"]: offering for offering in offerings}
+    assert by_name["Catering box"]["pricing_wording"] == "from $12 a head"
+    assert by_name["Item Two"]["pricing_wording"] is None
+    assert all("pricing_wording" in offering for offering in offerings)
 
 
 async def test_recommendation_refuses_when_catalog_is_empty(

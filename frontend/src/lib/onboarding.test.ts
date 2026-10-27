@@ -4,6 +4,7 @@ import {
   describeUpload,
   foldReply,
   parseOnboardingEvent,
+  uploadTargetForStage,
 } from "./onboarding";
 
 describe("parseOnboardingEvent", () => {
@@ -98,5 +99,44 @@ describe("describeUpload", () => {
 
   it("handles a file with no extension", () => {
     expect(describeUpload("prices").accepted).toBe(false);
+  });
+});
+
+describe("uploadTargetForStage", () => {
+  it("sends a file attached at the source stage to the source endpoint", () => {
+    expect(uploadTargetForStage("knowledge")).toEqual({
+      endpoint: "/api/onboarding/source",
+      mergesProfile: true,
+    });
+  });
+
+  it("treats the name question as the source stage, because the source is next", () => {
+    // 29: the source ask sits immediately after the owner's name. A file
+    // attached while the name is on screen is an answer to the source, not a
+    // reviewable draft that leaves the source ask still pending.
+    expect(uploadTargetForStage("owner_display_name")).toEqual({
+      endpoint: "/api/onboarding/source",
+      mergesProfile: true,
+    });
+  });
+
+  it("keeps every other text stage on the knowledge drafts batch", () => {
+    for (const stage of [
+      "business_name",
+      "business_type",
+      "headcount",
+      "hours",
+      "services",
+      "contact",
+      "abn",
+      "gst",
+      "confirm",
+      "",
+    ]) {
+      expect(uploadTargetForStage(stage)).toEqual({
+        endpoint: "/api/knowledge/drafts/upload",
+        mergesProfile: false,
+      });
+    }
   });
 });

@@ -31,8 +31,8 @@ Guardrails: scan_input, price echo check, bounded history. Off-topic/meta
 questions are answered in one line then gently redirected - no escalating
 firmness, and they never burn one of a beat's two asks.
 State: {version: 4, draft, history, off_topic_count, completed,
-knowledge_pending, offering_candidates, skipped, deferred, ask_beat,
-ask_count, paused_beat, pending_name} in jsonb.
+knowledge_pending, services_source, offering_candidates, skipped, deferred,
+ask_beat, ask_count, paused_beat, pending_name} in jsonb.
 """
 
 from __future__ import annotations
@@ -252,6 +252,11 @@ _V3_BEAT, _V4_BEAT = "name", "owner_display_name"
 # business one becomes the public identity and the page address.
 _NAME_FIELDS = ("owner_display_name", "business_name")
 
+# 29: the owner's name is the one beat that outranks the source stage, because
+# the locked flow asks for it first. Named here rather than read from
+# BEAT_ORDER so the ordering rule reads as a rule.
+_NAME_BEAT = "owner_display_name"
+
 # The beat whose answer no model ever writes - not the extractor, not the reply
 # model. How a business sounds to its customers is the owner's own choice.
 _VOICE_BEAT = "customer_voice_preset"
@@ -329,11 +334,15 @@ class OnboardingRecord:
     history: list[dict[str, str]] = field(default_factory=list)
     off_topic_count: int = 0
     completed: bool = False
-    # O-3 follow-up: the optional website/documents ask is pending until the
-    # owner answers it (paste a link, attach a file, tap Skip for now, or say
-    # "skip"). It never gates go-live - confirm still requires only the seven
-    # profile fields.
+    # 29: the source ask is the second stage. `from_jsonb` opens it for a new
+    # record - the only place a record is actually created in the app - so the
+    # dataclass default is the field's absent meaning: a record built directly
+    # (a test fixture, a record already past the stage) is not waiting on it.
     knowledge_pending: bool = False
+    # 29: who filled ``draft["services"]``. A typed answer is the owner's own
+    # wording and the review must never replace it; a document's approved
+    # offering names may fill an empty one. Empty means neither has spoken yet.
+    services_source: Literal["", "owner", "document"] = ""
     offering_candidates: list[PendingOffering] = field(default_factory=list)
     # W-2's two-pass cursor and ask counter. ``skipped`` beats are gone for
     # good; ``deferred`` ones are required beats held back to pass two.
@@ -382,7 +391,11 @@ class OnboardingRecord:
                 history=raw.get("history", []),
                 off_topic_count=raw.get("off_topic_count", 0),
                 completed=raw.get("completed", False),
-                knowledge_pending=raw.get("knowledge_pending", False),
+                # 29: an absent flag means the row predates the source-first
+                # change. An interview still in flight takes the new order; a
+                # completed one is already past the ask and must not reopen it.
+                knowledge_pending=raw.get("knowledge_pending", not raw.get("completed", False)),
+                services_source=_load_services_source(raw.get("services_source")),
                 offering_candidates=_load_offerings(raw.get("offering_candidates", [])),
                 # W-2's fields read through a default rather than forcing a
                 # version bump: absence is indistinguishable from "fresh", and
@@ -413,6 +426,10 @@ class OnboardingRecord:
             history=[],
             off_topic_count=0,
             completed=raw.get("completed", False),
+            # 29: a brand-new record starts with the source stage pending, so
+            # the second question is asked without anything having set a flag.
+            # A completed pre-v3 record is already past the ask, as above.
+            knowledge_pending=not raw.get("completed", False),
             offering_candidates=[],
             revision=int(raw.get("revision", 0) or 0),
             last_action_key=str(raw.get("last_action_key")) if raw.get("last_action_key") else None,
@@ -448,6 +465,7 @@ class OnboardingRecord:
             "off_topic_count": self.off_topic_count,
             "completed": self.completed,
             "knowledge_pending": self.knowledge_pending,
+            "services_source": self.services_source,
             "offering_candidates": [item.model_dump() for item in self.offering_candidates],
             "skipped": self.skipped,
             "deferred": self.deferred,
@@ -459,6 +477,11 @@ class OnboardingRecord:
             "last_action_key": self.last_action_key,
             "last_action_fingerprint": self.last_action_fingerprint,
         }
+
+
+def _load_services_source(raw: Any) -> Literal["", "owner", "document"]:
+    """Read who filled ``services``; anything unrecognised means nobody has."""
+    return raw if raw in ("owner", "document") else ""
 
 
 def _load_pending_name(raw: Any) -> dict[str, str] | None:
@@ -685,14 +708,15 @@ def _activation_summary(draft: dict[str, Any]) -> str:
     return f"{intro} Hit confirm to publish it."
 
 
-# The optional website/documents ask (founder request): asked once when the
-# profile completes, never a gate. Skipping is one word, and the same offer
-# names the Settings > Knowledge fallback so knowledge can always wait.
-_KNOWLEDGE_OFFER = (
-    " Do you have a website or any documents - a menu, price list, or FAQs? "
-    "You can paste a link, attach a file, or tap Skip for now. Anything you save "
-    "becomes a reference I can use when answering your customers, and you can "
-    "add more any time from Settings."
+# The source stage's own line (29). It used to be a post-interview offer
+# appended to the activation summary; it is now the second question of the
+# interview, so it is spoken once by `selection_reply` when the stage opens and
+# is never part of the go-live summary. The Skip chip on the composer declines
+# it, and the Settings fallback keeps knowledge optional.
+_SOURCE_ASK = (
+    "Do you have a website or any documents - a menu, price list, or FAQs? "
+    "Paste a link or attach a file, or tap Skip for now. You can add more any "
+    "time from Settings."
 )
 
 
@@ -703,30 +727,49 @@ _GENERIC_REJECT = "I didn't quite catch that."
 
 
 def _completion_reply(record: OnboardingRecord) -> str:
-    """The server-synthesized reply once the seven fields are captured.
+    """The activation summary, once every profile field is captured.
 
-    First call fires the website/documents offer and opens the ``knowledge``
-    stage; every later call is the activation summary, so the offer never
-    repeats and "skip" (or a pasted link, cleared by ``prepare_url_turn``)
-    advances the owner to confirm.
+    29: the source ask moved to the front of the interview, so there is nothing
+    left to offer here - the summary clears the flag and says only that the
+    assistant is ready to go live.
     """
-    if not record.knowledge_pending:
-        record.knowledge_pending = True
-        return _activation_summary(record.draft) + _KNOWLEDGE_OFFER
     record.knowledge_pending = False
     return _activation_summary(record.draft)
 
 
 def decline_knowledge(record: OnboardingRecord) -> str:
-    """Close the knowledge ask from its Skip chip, with no model call (20).
+    """Close the source stage from its Skip chip, with no model call (20).
 
-    The typed "skip" reaches the same place through the extractor; this is the
-    chip's deterministic door to it. ``_completion_reply`` owns clearing the
-    flag and composing the activation summary, so the two paths cannot drift.
+    The typed "skip" reaches the same place through `apply_skip_word`; this is
+    the chip's deterministic door to it. 29: the source stage now sits second,
+    so declining it hands the owner the next profile beat instead of the
+    activation summary - declining the source is not finishing the interview.
     """
     if not record.knowledge_pending:
-        raise ValueError("there is no knowledge ask waiting to be answered")
-    return _completion_reply(record)
+        raise ValueError("there is no source ask waiting to be answered")
+    record.knowledge_pending = False
+    return selection_reply(record, "No problem.")
+
+
+def apply_skip_word(record: OnboardingRecord) -> str | None:
+    """Answer the current stage with a skip word, deterministically.
+
+    Returns the server-owned reply, or None when the interview is on a beat
+    that has no Skip answer. 29 gives the owner's own name a Skip, and the
+    source stage keeps the one the old offer accepted; both resolve here so the
+    typed path and the chip cannot drift. No model call, and the skipped value
+    is recorded in ``skipped`` - "skip" must never be written to the draft.
+    """
+    stage, _input, _can_confirm = progress(record)
+    if stage == _NAME_BEAT:
+        if _NAME_BEAT not in record.skipped:
+            record.skipped.append(_NAME_BEAT)
+        # An unconfirmed proposal is discarded with the name it belongs to.
+        record.pending_name = None
+        return selection_reply(record, "No problem.")
+    if stage == "knowledge":
+        return decline_knowledge(record)
+    return None
 
 
 def selection_reply(record: OnboardingRecord, ack: str = "Got it.") -> str:
@@ -734,12 +777,14 @@ def selection_reply(record: OnboardingRecord, ack: str = "Got it.") -> str:
 
     ``ack`` is what the server says about the answer just applied; a confirmed
     name passes its own read-back so the owner sees the spelling that was saved.
+    The next line comes from ``progress``'s own ordering, so the reply can never
+    announce a different stage from the one the composer is showing.
     """
     nxt = _advance(record)
     if nxt is None:
-        # The go-live line stands alone (W-7 pinned that screen's copy), and no
-        # name beat is ever the last one, so nothing is left unread-back here.
         record.ask_beat, record.ask_count = "", 0
+        if record.knowledge_pending:
+            return f"{ack} {_SOURCE_ASK}".strip()
         return _completion_reply(record)
     # The server emitted this question, so its cursor must agree before the
     # owner's next typed answer is extracted and validated.
@@ -751,8 +796,12 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     """The interview's (stage, composer widget, can-confirm) triple.
 
     The single source both ``_state_event`` and ``response_from_record`` read,
-    so the SSE state and the REST state never disagree. A completed profile
-    passes through the optional ``knowledge`` stage before ``confirm``.
+    so the SSE state and the REST state never disagree.
+
+    29 locks the order: name -> source -> review -> beats -> confirm. The source
+    stage is therefore second, which is why the ``knowledge_pending`` check is
+    NOT hoisted above ``next_beat`` - done literally it would ask for the source
+    before the name and invert the flow. ``_advance`` carries that rule.
     """
     if record.paused_beat:
         return "paused", None, False
@@ -760,7 +809,7 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     # confirmation chip in the composer instead of the beat's own chips.
     if record.pending_name:
         return record.pending_name["target"], beats.NAME_CONFIRM_INPUT, False
-    nxt = beats.next_beat(record.draft, record.skipped, record.deferred)
+    nxt = _advance(record)
     if nxt is not None:
         return nxt.key, beats.input_spec(nxt), False
     if record.knowledge_pending:
@@ -769,13 +818,22 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
 
 
 def _advance(record: OnboardingRecord) -> beats.Beat | None:
-    """The beat to ask now, against this record's skipped and deferred keys.
+    """The beat to ask now, or None when the source stage or confirm is next.
 
     ``deferred`` is never cleared: once pass one runs out of beats,
     ``next_beat`` falls through to the deferred ones on its own, and keeping
     the list is what lets the caller tell a second ask from a final one.
+
+    29: while the source stage is pending, no profile beat is asked - except the
+    owner's own name, the one beat ahead of it. A None here therefore means
+    "source if ``knowledge_pending``, else confirm", and ``progress`` says
+    which. Do not "simplify" this by moving the flag check above ``next_beat``:
+    that inverts the locked flow.
     """
-    return beats.next_beat(record.draft, record.skipped, record.deferred)
+    nxt = beats.next_beat(record.draft, record.skipped, record.deferred)
+    if nxt is None or nxt.key == _NAME_BEAT:
+        return nxt
+    return None if record.knowledge_pending else nxt
 
 
 def _resolve(record: OnboardingRecord, beat: beats.Beat, admin_message: str) -> str:
@@ -972,24 +1030,27 @@ def _extraction_input(
 _URL_EXTRACT_CHARS = 4000
 
 _URL_EXTRACT_PROMPT = (
-    "You are extracting business information from a website a small-business "
-    "owner just linked during onboarding. Read the page text and fill any of "
-    "these fields the page states: business_name, business_type, services, "
-    "hours. Fill only what the page actually says - never invent a value, and "
-    "leave a field empty when the page does not mention it. Copy any price or "
-    "other amount exactly as the page states it: never round it, convert it, or "
-    "work one out. Set off_topic=false."
+    "You are extracting business information from a website or a document a "
+    "small-business owner just shared during onboarding. Read the text and fill "
+    "any of these fields it states: business_name, business_type, hours, "
+    "contact, abn. Fill only what the text actually says - never invent a "
+    "value, and leave a field empty when it does not mention it. Copy any price "
+    "or other amount exactly as the text states it: never round it, convert it, "
+    "or work one out. Set off_topic=false."
 )
 
 # O-3: the fields a homepage reliably states, read back to the owner for
 # confirmation. The owner's own name, headcount and contact stay
 # conversationally asked (a page rarely states them cleanly). W-9 adds the
 # business name: a page states it, and a value the owner never sees read back
-# is a value they cannot correct (US-6).
+# is a value they cannot correct (US-6). 29 keeps `services` in the read-back
+# even though the prompt no longer fills it: by then it may hold the names the
+# document's approved offerings supplied, and that is still what the owner is
+# confirming.
 _URL_READBACK_FIELDS = ("business_name", "business_type", "services", "hours")
 
 
-def _url_readback(draft: dict[str, Any]) -> str:
+def url_readback(draft: dict[str, Any]) -> str:
     parts = [
         f"{field.replace('_', ' ')}: {_readable(draft[field])}"
         for field in _URL_READBACK_FIELDS
@@ -1007,15 +1068,64 @@ def _url_readback(draft: dict[str, Any]) -> str:
     )
 
 
+async def prepare_source_profile(
+    *, record: OnboardingRecord, text: str, provider: LLMProvider
+) -> ProfileDraft | None:
+    """The business fields one source states, merged into the draft (29).
+
+    One ``extract`` call over a bounded window, merged with ``only_empty``: a
+    field the owner already answered is left exactly as they wrote it, so an
+    owner answer wins whichever order the two arrive in. Two things are
+    deliberately absent:
+
+    - ``services`` - the source's menu reaches the draft as reviewed offering
+      candidates, not as this call's guess. A model that names it anyway still
+      cannot replace an owner's list, and a list it does supply is marked as
+      the document's so the review may keep it.
+    - the reply - the caller decides what to say, because a URL turn reads back
+      what landed and the upload turn has its own state to return.
+
+    Returns the profile the model stated, or None when it stated nothing.
+    A provider failure is swallowed here too: this read is an optional
+    enrichment of a source turn, and the document is the turn's real payload.
+    Letting it raise would cost the caller the candidates it already has (and,
+    on the upload path, turn a stored file into a 500) - so the one seam that
+    both callers share takes the loss, logs it, and returns None.
+    """
+    scan_input(text)
+    try:
+        update = await provider.extract(
+            system_prompt=_URL_EXTRACT_PROMPT,
+            user_input=_extraction_input(record, text[:_URL_EXTRACT_CHARS]),
+            schema=DraftUpdate,
+        )
+    except Exception as exc:
+        # LimitTimeout is not a TimeoutError, so callers cannot be trusted to
+        # catch this by type - the stage owns its failure.
+        logger.warning(
+            "onboarding source profile failed",
+            extra={"step": "profile", "error": type(exc).__name__},
+        )
+        return None
+    if update.profile is None:
+        return None
+    before = record.draft.get("services")
+    record.draft = save_profile(record.draft, update.profile, only_empty=True)
+    if record.draft.get("services") != before:
+        record.services_source = "document"
+    return update.profile
+
+
 async def prepare_url_turn(
     *, url: str, page_text: str, record: OnboardingRecord, provider: LLMProvider
 ) -> TurnPlan:
     """The site-as-shortcut half of a URL turn (O-3).
 
-    Extracts profile fields from the scraped page text (bounded to a window),
-    merges them into the draft, and returns a server-synthesized read-back so
-    the owner can confirm or correct. The URL - never the full page text - is
-    recorded as the user message.
+    Reads the profile fields the page states, merges them over the blanks only,
+    and returns a server-synthesized read-back so the owner can confirm or
+    correct. The URL - never the full page text - is recorded as the user
+    message. 29 keeps this shape for the non-streamed turn; the streamed turn
+    runs the same read alongside the document draft instead.
     """
     if record.completed:
         return TurnPlan(
@@ -1023,22 +1133,14 @@ async def prepare_url_turn(
             summary="Onboarding is already complete.",
             reply_msgs=None,
         )
-    scan_input(page_text)
-    update = await provider.extract(
-        system_prompt=_URL_EXTRACT_PROMPT,
-        user_input=_extraction_input(record, page_text[:_URL_EXTRACT_CHARS]),
-        schema=DraftUpdate,
-    )
-    if update.profile is not None:
-        record.draft = save_profile(record.draft, update.profile)
-    # A link pasted once the profile is complete is the owner's answer to the
-    # website ask - it satisfies the offer the same way "skip" does.
-    if beats.next_beat(record.draft, record.skipped, record.deferred) is None:
-        record.knowledge_pending = False
+    await prepare_source_profile(record=record, text=page_text, provider=provider)
+    # 29: a link pasted anywhere is the owner's answer to the source stage, so
+    # it closes that stage wherever it sits in the interview.
+    record.knowledge_pending = False
     record.history.append({"role": "user", "content": url})
     return TurnPlan(
         record=record,
-        summary=_url_readback(record.draft),
+        summary=url_readback(record.draft),
         reply_msgs=None,
     )
 
@@ -1124,6 +1226,12 @@ async def prepare_turn(
             record.draft["services"] = [item.name for item in record.offering_candidates]
     corrected, clarification = _apply_corrections(record, update.corrections or [])
     acknowledged.extend(corrected)
+    # 29: services the owner stated are their own wording, and the review's
+    # document sync must never replace it. Any route that changed the field
+    # from an owner turn - a typed beat answer, offering names, a correction -
+    # marks it here.
+    if record.draft.get("services") and record.draft.get("services") != before.get("services"):
+        record.services_source = "owner"
 
     # W-9: the voice beat is server-owned end to end. Its chips answer it
     # through `apply_selection` with no model call at all, and a typed answer -
@@ -1323,7 +1431,9 @@ async def prepare_turn(
     if nxt is None:
         return TurnPlan(
             record=record,
-            summary=_completion_reply(record),
+            # 29: while the source stage is open, completion must not clear its
+            # flag and skip the second question - the stage keeps its own line.
+            summary=_SOURCE_ASK if record.knowledge_pending else _completion_reply(record),
             reply_msgs=None,
             off_topic=off_topic,
         )

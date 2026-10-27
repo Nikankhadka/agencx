@@ -11,6 +11,7 @@ pattern.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -22,10 +23,14 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.onboarding import service as onboarding_service
 from app.ingestion import pipeline
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import SchemaT
 from app.main import app
+from app.onboarding.agent import OnboardingRecord
+from app.onboarding.flow import ProfileDraft
+from app.onboarding.tools import save_profile
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.storage import get_storage
@@ -246,6 +251,46 @@ async def test_price_conflict_fails_only_that_document_unless_accepted(
     accepted_body = accepted.json()
     assert accepted_body["failed"] == []
     assert accepted_body["published"] == [draft["id"]]
+
+
+async def test_wording_conflict_fails_that_document_until_accepted(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    """29 slice C: two owner wordings for one item are a price conflict too."""
+    headers = await _signup_tenant_admin(client)
+    draft = await _upload_draft(client, headers)
+
+    payload = {
+        "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+        "offerings": [
+            {
+                "name": "Catering box",
+                "price_cents": None,
+                "pricing_wording": "from $12 a head",
+                "wording_options": ["from $12 a head", "market price"],
+                "supporting_document_ids": [draft["id"]],
+            }
+        ],
+    }
+
+    rejected = await client.put("/api/onboarding/knowledge/batch", headers=headers, json=payload)
+    assert rejected.status_code == 200, rejected.text
+    body = rejected.json()
+    assert body["published"] == []
+    assert len(body["failed"]) == 1
+    assert body["failed"][0]["document_id"] == draft["id"]
+    message = body["failed"][0]["error"]
+    assert "multiple prices found" in message
+    assert "from $12 a head" in message and "market price" in message
+
+    accepted = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={**payload, "accept_price_changes": True},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["published"] == [draft["id"]]
+    assert accepted.json()["failed"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -599,3 +644,202 @@ async def test_overlapping_batches_publish_a_draft_only_once(
     assert embed_calls == 1
     record = await client.get(f"/api/knowledge/records/{draft['id']}", headers=headers)
     assert record.json()["status"] == "ready"
+
+
+# ---------------------------------------------------------------------------
+# 29: the review's approved names answer the services beat, unless the owner
+# typed services themselves.
+# ---------------------------------------------------------------------------
+
+
+async def _signup_with_tenant(client: httpx.AsyncClient) -> tuple[dict[str, str], uuid.UUID]:
+    token = _make_token(uuid.uuid4())
+    response = await client.post(
+        "/api/tenants",
+        json={"slug": f"services-{uuid.uuid4().hex[:8]}", "name": "Services Test Co"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 201, response.text
+    return (
+        {"Authorization": f"Bearer {token}"},
+        uuid.UUID(response.json()["tenant_id"]),
+    )
+
+
+async def test_approved_offering_names_fill_an_empty_services_beat(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    headers, _tenant_id = await _signup_with_tenant(client)
+    draft = await _upload_draft(client, headers)
+
+    response = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={
+            "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+            "offerings": [
+                {"name": "Screen replacement", "supporting_document_ids": [draft["id"]]},
+                {"name": "Battery replacement", "supporting_document_ids": [draft["id"]]},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    # Submission order, and the owner never typed this list.
+    assert state.json()["draft"]["services"] == ["Screen replacement", "Battery replacement"]
+
+
+async def test_owner_typed_services_survive_the_review(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    headers, tenant_id = await _signup_with_tenant(client)
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft={"services": ["Owner cut, $30"]}, services_source="owner"
+        ).to_jsonb(),
+    )
+    draft = await _upload_draft(client, headers)
+
+    response = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={
+            "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+            "offerings": [
+                {"name": "Screen replacement", "supporting_document_ids": [draft["id"]]},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    # Owner wording always wins, whatever order the source and the answer arrive.
+    assert state.json()["draft"]["services"] == ["Owner cut, $30"]
+
+
+def test_only_empty_never_overwrites_a_field_the_owner_answered() -> None:
+    """29: a source merge fills blanks only; the `abn` normalisation still runs
+    on the values it does write."""
+    draft: dict[str, Any] = {"business_name": "Bytefix", "hours": ""}
+
+    save_profile(
+        draft,
+        ProfileDraft(
+            business_name="Bytefix Repairs",
+            hours="Mon-Fri 9-6",
+            abn="51 824 753 556",
+        ),
+        only_empty=True,
+    )
+
+    assert draft["business_name"] == "Bytefix"
+    assert draft["hours"] == "Mon-Fri 9-6"
+    assert draft["abn"] == "51824753556"
+
+
+async def test_profile_patch_persists_through_both_jsonb_copies(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    """29: the review's business-details edits are saved with the batch.
+
+    The profile lives in two places - ``config->profile`` and
+    ``config->onboarding.draft`` - and both must move together, exactly as
+    ``write_profile`` does after go-live. ``abn`` keeps its digit normalisation.
+    """
+    headers, tenant_id = await _signup_with_tenant(client)
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(draft={"business_name": "Old Name"}).to_jsonb(),
+    )
+    draft = await _upload_draft(client, headers)
+
+    response = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={
+            "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+            "profile": {
+                "business_name": "Bytefix Repairs",
+                "business_type": "phone repair shop",
+                "hours": "Mon-Fri 9-6",
+                "contact": "hi@bytefix.dev",
+                "abn": "51 824 753 556",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        row = await conn.fetchrow(
+            "select config->'profile' as profile, config->'onboarding'->'draft' as draft "
+            "from tenant_config where tenant_id = $1",
+            tenant_id,
+        )
+    assert row is not None
+    profile = json.loads(row["profile"])
+    record_draft = json.loads(row["draft"])
+    expected = {
+        "business_name": "Bytefix Repairs",
+        "business_type": "phone repair shop",
+        "hours": "Mon-Fri 9-6",
+        "contact": "hi@bytefix.dev",
+        "abn": "51824753556",
+    }
+    assert profile == expected
+    assert {key: record_draft[key] for key in expected} == expected
+
+
+async def test_profile_patch_rejects_an_unknown_key(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    headers, _tenant_id = await _signup_with_tenant(client)
+    draft = await _upload_draft(client, headers)
+
+    response = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={
+            "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+            "profile": {"nickname": "Byte"},
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert "unknown profile fields" in response.text
+
+
+async def test_services_typed_before_the_source_stage_are_never_synced_over(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    """29: a record that predates `services_source` carries "" even though the
+    owner typed the list. Only "owner" marks a value, so the sync must also
+    leave a legacy non-empty list alone rather than reading "" as unclaimed."""
+    headers, tenant_id = await _signup_with_tenant(client)
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            # Exactly what an in-flight interview from before this ticket holds.
+            draft={"services": ["Haircut", "Beard trim"]},
+            services_source="",
+        ).to_jsonb(),
+    )
+    draft = await _upload_draft(client, headers)
+
+    response = await client.put(
+        "/api/onboarding/knowledge/batch",
+        headers=headers,
+        json={
+            "documents": [{"document_id": draft["id"], "sections": draft["sections"]}],
+            "offerings": [
+                {"name": "Screen replacement", "supporting_document_ids": [draft["id"]]},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+    assert state.json()["draft"]["services"] == ["Haircut", "Beard trim"]
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["services_source"] == ""
