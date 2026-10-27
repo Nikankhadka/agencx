@@ -406,6 +406,11 @@ describe("collapsed categories (31)", () => {
     const html = renderCard();
     expect(html).toContain('data-testid="review-category-trigger"');
     expect(html).toContain(">Add category</button>");
+    // The trigger sits below the description: the owner names, prices and
+    // describes the offering before filing it.
+    expect(html.indexOf("Offering 1 description")).toBeLessThan(
+      html.indexOf("review-category-trigger"),
+    );
     expect(html).toContain('aria-expanded="false"');
     // 31: a closed trigger names no panel, because no panel is rendered.
     expect(html).not.toContain("aria-controls");
