@@ -260,17 +260,25 @@ export default function KnowledgePage() {
   }
 
   /**
-   * The sheet footer asks before it removes a document that already has a
-   * saved version, reusing the row-level confirmation (title, description,
-   * confirm label, and "Removed" toast). A draft never answered anything, so
-   * dropping it is not destructive and skips the question. The saved-source
-   * path passes `layer: "top"` so the dialog paints above the sheet, which
-   * otherwise sits at the same z.
+   * The sheet footer asks before it removes anything here. A saved source
+   * reuses the row-level confirmation (title, description, confirm label, and
+   * "Removed" toast); a draft asks in the same voice, naming the draft and the
+   * fact that it never answered customers. Both pass `layer: "top"` so the
+   * dialog paints above the sheet, which otherwise sits at the same z.
+   * Cancelling either dialog changes nothing and leaves the sheet open.
    */
   async function discardWorkspace() {
     const document = workspace?.documents[0];
     if (!document) return;
     if (document.status === "draft") {
+      const confirmed = await confirm({
+        title: `Discard ${sourceLabel(document)}?`,
+        description: "It was never saved, so it never answered customers.",
+        confirmLabel: "Discard draft",
+        tone: "danger",
+        layer: "top",
+      });
+      if (!confirmed) return;
       dropWorkspace();
       return;
     }

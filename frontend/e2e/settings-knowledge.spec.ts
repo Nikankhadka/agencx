@@ -259,8 +259,8 @@ test("the closed review sheet stays fully off-screen on desktop", async ({
 });
 
 /**
- * Removing a saved document from the review sheet asks first - a draft never
- * answered anything and skips the question. Fully mocked: the saved record
+ * Removing a saved document from the review sheet asks first, and so does
+ * discarding a draft that never answered anything. Fully mocked: the saved record
  * carries sections, so opening it never fetches, and the confirm paints above
  * the sheet it came from.
  *
@@ -309,4 +309,50 @@ test("removing a saved document from the sheet asks first, escape leaves it alon
   expect(records.deleteCount()).toBe(1);
   expect(records.deletedIds()).toEqual(["saved-1"]);
   await expect(page.locator("article").filter({ hasText: "hours.txt" })).toHaveCount(0);
+});
+
+/**
+ * 31: discarding an unsaved draft is the one remaining single-click destroy on
+ * this surface, so the page's own confirm now guards it. Same dialog as the
+ * saved-source path: Escape asks nothing of the backend and leaves the review
+ * open, accepting deletes exactly once. Fully mocked - the draft carries
+ * sections, so opening the sheet never fetches.
+ */
+test("discarding a draft from the sheet asks first, escape leaves it alone", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([draftRecord({ id: "draft-1", filename: "notes.txt" })]);
+  const records = await stubRecords(page, store);
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  await page.goto("/business/details/knowledge");
+
+  const draft = page.getByTestId("knowledge-draft").filter({ hasText: "notes.txt" });
+  await expect(draft).toBeVisible();
+  await draft.click();
+
+  const sheet = page.getByRole("dialog", { name: "Read this back" });
+  await expect(sheet).toBeVisible();
+  const discard = page.getByTestId("knowledge-discard");
+  await expect(discard).toHaveText("Discard draft");
+
+  // The question names the draft and states why it is safe to drop; Escape
+  // cancels without a request and the review stays open.
+  await discard.click();
+  const confirmDialog = page.getByRole("dialog", { name: "Discard notes.txt?" });
+  await expect(confirmDialog).toBeVisible();
+  await expect(confirmDialog).toContainText("It was never saved, so it never answered customers.");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("confirm-accept")).toHaveCount(0);
+  expect(records.deleteCount()).toBe(0);
+  await expect(sheet).toBeVisible();
+
+  // Accepting deletes the draft exactly once and says so.
+  await discard.click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(page.getByText("Draft discarded", { exact: true })).toBeVisible();
+  expect(records.deleteCount()).toBe(1);
+  expect(records.deletedIds()).toEqual(["draft-1"]);
+  await expect(page.getByTestId("knowledge-draft")).toHaveCount(0);
+  await expect(sheet).toHaveCount(0);
 });

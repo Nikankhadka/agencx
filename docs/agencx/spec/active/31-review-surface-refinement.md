@@ -540,7 +540,7 @@ Full-suite gate at the branch tip: `make lint`, `make typecheck`, `make test`,
 
 | Flag | Default taken |
 |---|---|
-| The footer discard `confirmRemove` is injected on the Business > Knowledge sheet, but that page's own `discardWorkspace` already asks before removing a saved source | The sheet-level footer confirm is onboarding-only, so Business > Knowledge asks exactly once (through its own dialog) and keeps its pre-ticket behaviour: a saved source confirms, a draft drops directly. Offering removal and source removal still confirm there. This corrects the earlier "confirmed everywhere" default, which asked twice and made the two specs click twice |
+| The footer discard `confirmRemove` is injected on the Business > Knowledge sheet, but that page's own `discardWorkspace` already asks before removing a source | The sheet-level footer confirm is onboarding-only, so Business > Knowledge asks exactly once through its own dialog on both paths: a saved source as `Remove <label>?`, an unsaved draft as `Discard <label>?` ("It was never saved, so it never answered customers."). Offering removal and source removal still confirm there. This corrects the earlier "confirmed everywhere" default, which asked twice and made the two specs click twice, and the interim draft-drops-directly default, which left the one single-click destroy on that surface |
 | `px-4 py-3 text-body` renders 48px tall, so `min-h-11` (44px) is a floor that never binds. A 44px field exactly would need `py-2` | Keep `py-3` (the system recipe's padding) and the 44px floor |
 | `text-body` on form controls departs from the 18/25 `text-field` role that `frontend.md` 4.4 names for sheet fields; `text-field` itself stays for the contact and profile sheets | Treated as a founder ruling for the review surface only, recorded in 4.6 |
 | A replacement never clears a field the new site omits, per the request | Kept as stated; clearing is a separate ask |
@@ -924,3 +924,65 @@ $ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobi
 chip that the uncommitted `backend/app/onboarding/beats.py` revert removes,
 before it reaches the discard this ticket changes. The same discard path is
 covered by `settings-knowledge.spec.ts` and `knowledge-review.spec.ts` above.
+
+### Review fix - the Business draft discard asks first
+
+`business/details/knowledge/page.tsx`'s `discardWorkspace` dropped an unsaved
+draft on the first click, while the saved-source path asked through the page's
+own `confirm`. The sheet's footer confirm is deliberately onboarding-only, so
+this was the one remaining single-click destroy on that surface. It now asks
+through the same `confirm`, `layer: "top"`, with `Discard <label>?` / "It was
+never saved, so it never answered customers." / `Discard draft`; a cancel
+returns before `dropWorkspace`, so nothing is deleted and the sheet stays open.
+No second dialog, no `window.confirm`, no sheet change. This supersedes the
+Slice C contract line that says the page "drops a draft directly".
+
+Proof, in `settings-knowledge.spec.ts`: "discarding a draft from the sheet asks
+first, escape leaves it alone", reusing the file's existing `draftRecord`,
+`recordsStore` and `stubRecords` fixtures with no new stack. Red before the
+fix, failing at the missing dialog after the click had already deleted the
+draft; green after. It asserts the dialog copy, Escape with
+`records.deleteCount() === 0` and the sheet still open, then one accept, one
+`Draft discarded` toast, `deleteCount() === 1`, and the row and sheet gone.
+
+```
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts -g "discarding a draft"
+  ✘  1 ... discarding a draft from the sheet asks first, escape leaves it alone
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: 'Discard notes.txt?' })
+    Error: element(s) not found          # red: the click deleted with no dialog
+  1 failed
+
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts -g "discarding a draft"
+  ✓  1 ... discarding a draft from the sheet asks first, escape leaves it alone (2.0s)
+  1 passed (2.4s)
+
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts
+  ✓ a pasted link is read back as sections, then saved
+  ✓ a failed source retries into a draft
+  ✓ replace succeeds and is safe on failure
+  ✓ the closed review sheet stays fully off-screen on desktop
+  ✓ removing a saved document from the sheet asks first, escape leaves it alone
+  ✓ discarding a draft from the sheet asks first, escape leaves it alone
+  6 passed (13.0s)
+
+$ make lint
+> eslint
+(no output - clean)
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+All checks passed!
+Contracts: 3 kept, 0 broken.
+
+$ make typecheck
+> tsc --noEmit
+(no output - clean)
+Success: no issues found in 256 source files
+
+$ make test
+ Test Files  43 passed (43)
+      Tests  428 passed (428)
+============================ 1633 passed in 43.23s =============================
+
+$ cd frontend && npm run gen:types -- --check
+api-types.ts is up to date
+```
