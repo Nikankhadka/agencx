@@ -382,7 +382,18 @@ live in the ticket files, not here.
   bar) and the 5s p50 target was not measured end to end, only crawl wall time.
   Status `Active - awaiting review`. See
   [29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md).
-- [ ] Chat catalog for large menus (ticket 30): up to 20 offerings render in full, above 20 the card stays bounded and links to `/{slug}#offerings`. Depends on ticket 29 Slice C. See [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
+- [x] Chat catalog for large menus (ticket 30): 20 or fewer offerings render in
+  full in category order; above 20 the card keeps five rows per category, the
+  `+N more` line, and adds one `View all N offerings` link to
+  `/{slug}#offerings` in a new tab. The storefront catalog region carries the
+  `#offerings` anchor in both its compact and mature layouts, the slug is a
+  prop on the card rather than a payload field so a restored card keeps working,
+  and the tool guidance tells the assistant to call `show_catalog` for a
+  full-list request without repeating the catalog in prose. Landed as
+  `6b90bcc` on `feat/30-chat-catalog-full-list`, stacked deliberately on
+  ticket 29's branch because slice C is not merged yet. Status
+  `Active - awaiting review`. See
+  [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
 
 ## Spec status
 
@@ -392,7 +403,7 @@ live in the ticket files, not here.
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, slices 1-6 and coalescing merged at d544ce5; slice 7 deferred` | Latency instrument and model matrix, slices 1-6 merged at `d544ce5` and slice 7 deferred (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge is closed; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 68-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) Merged to development and staging on 2026-10-23; make ci green at the tip (1514 backend, 373 frontend); the founder's 10% bar is met by the coalesced burst (68-77% faster), with no single-turn clock claim. |
 | [spec/active/29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md) | `Active - awaiting review` | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D) |
-| [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - todo` | Chat catalog boundary at 20 offerings plus the business-page link |
+| [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - awaiting review` | Chat catalog boundary at 20 offerings plus the business-page link |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

@@ -600,7 +600,7 @@ export function CustomerChat({
             </StreamingText>
             {message.quote ? <QuoteCard quote={message.quote} /> : null}
             {message.priceSummary ? <PriceSummaryCard summary={message.priceSummary} /> : null}
-            {message.catalog ? <CatalogCard catalog={message.catalog} /> : null}
+            {message.catalog ? <CatalogCard catalog={message.catalog} slug={slug} /> : null}
             {message.error && message.retry ? (
               <button
                 type="button"

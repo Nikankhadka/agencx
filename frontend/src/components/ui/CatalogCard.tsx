@@ -18,12 +18,14 @@ export interface CatalogPayload {
 
 /**
  * The card is a view of the catalog, not the catalog: a 96-item shop would
- * otherwise fill the chat. Each category shows its first rows and a "+N more"
- * line; the assistant can still name any item in its text.
+ * otherwise fill the chat. A small menu reads in full; above the full-list
+ * limit each category shows its first rows and a "+N more" line, and the card
+ * hands the rest to the business page.
  */
 export const CATALOG_CARD_ROWS_PER_CATEGORY = 5;
+export const CATALOG_CARD_FULL_LIST_LIMIT = 20;
 
-export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
+export function CatalogCard({ catalog, slug }: { catalog: CatalogPayload; slug: string }) {
   const groups: Array<[string, CatalogOffering[]]> = [];
   for (const offering of catalog.offerings) {
     const headings = offering.categories?.length
@@ -36,6 +38,8 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
     }
   }
 
+  const bounded = catalog.offerings.length > CATALOG_CARD_FULL_LIST_LIMIT;
+
   return (
     <Card aria-label="Catalog" className="mt-2 w-full max-w-[520px]">
       <h3 className="mb-3 text-body font-semibold text-text">Current offerings</h3>
@@ -46,23 +50,25 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
               {heading}
             </h4>
             <ul>
-              {offerings.slice(0, CATALOG_CARD_ROWS_PER_CATEGORY).map((offering) => (
-                <li key={offering.id} className="border-b border-hairline py-2 last:border-0">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-medium text-text">{offering.name}</span>
-                    <span className="shrink-0 tabular-nums text-body-sm text-text">
-                      {offering.price_cents !== null
-                        ? formatCents(offering.price_cents)
-                        : offering.pricing_wording?.trim() || "Price not listed"}
-                    </span>
-                  </div>
-                  {offering.description ? (
-                    <p className="mt-1 text-body-sm text-text-secondary">{offering.description}</p>
-                  ) : null}
-                </li>
-              ))}
+              {(bounded ? offerings.slice(0, CATALOG_CARD_ROWS_PER_CATEGORY) : offerings).map(
+                (offering) => (
+                  <li key={offering.id} className="border-b border-hairline py-2 last:border-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-medium text-text">{offering.name}</span>
+                      <span className="shrink-0 tabular-nums text-body-sm text-text">
+                        {offering.price_cents !== null
+                          ? formatCents(offering.price_cents)
+                          : offering.pricing_wording?.trim() || "Price not listed"}
+                      </span>
+                    </div>
+                    {offering.description ? (
+                      <p className="mt-1 text-body-sm text-text-secondary">{offering.description}</p>
+                    ) : null}
+                  </li>
+                ),
+              )}
             </ul>
-            {offerings.length > CATALOG_CARD_ROWS_PER_CATEGORY ? (
+            {bounded && offerings.length > CATALOG_CARD_ROWS_PER_CATEGORY ? (
               <p className="pt-2 text-footnote text-text-secondary">
                 +{offerings.length - CATALOG_CARD_ROWS_PER_CATEGORY} more
               </p>
@@ -70,6 +76,16 @@ export function CatalogCard({ catalog }: { catalog: CatalogPayload }) {
           </section>
         ))}
       </div>
+      {bounded && slug ? (
+        <a
+          href={`/${slug}#offerings`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-block text-footnote font-medium text-accent-active transition-colors duration-(--duration-fast) hover:underline active:opacity-60"
+        >
+          View all {catalog.offerings.length} offerings
+        </a>
+      ) : null}
     </Card>
   );
 }

@@ -1,11 +1,12 @@
 # 30: Chat catalog for large menus
 
-**Status:** Active - todo.
+**Status:** Active - awaiting review.
 **Phase 1 area:** Customer chat, storefront catalog.
 
 Depends on ticket 29 Slice C, which carries `pricing_wording` in the
-`show_catalog` payload and in `recommend_items`. Branch
-`feat/30-chat-catalog-full-list` off `development` after 29 merges.
+`show_catalog` payload and in `recommend_items`. Delivered on
+`feat/30-chat-catalog-full-list`, stacked deliberately on
+`feat/29-source-first-onboarding` because ticket 29 is not merged yet.
 
 ## Intent
 
@@ -104,4 +105,35 @@ make test-e2e
 
 ## Blockers
 
-- Ticket 29 Slice C must land first for `pricing_wording` in the payload.
+None. Ticket 29 Slice C provides `pricing_wording`; this branch is stacked on
+`feat/29-source-first-onboarding` until that ticket merges.
+
+## Verification
+
+Run at the branch tip on 2026-10-27.
+
+| Surface | Command | Result |
+|---|---|---|
+| Frontend lint | `docker compose run --rm --no-deps frontend npm run lint` | clean |
+| Token guard | `docker compose run --rm --no-deps frontend npm run check:tokens` | OK (no raw colour values outside `theme.css`; spacing and type on the canonical scale) |
+| Frontend types | `docker compose run --rm --no-deps frontend npm run typecheck` | `tsc --noEmit` clean |
+| Frontend tests | `docker compose run --rm --no-deps frontend npm run test` | 43 files, 404 tests passed |
+| Frontend build | `docker compose run --rm --no-deps frontend npm run build` | green |
+| Backend tests | `docker compose run --rm backend pytest tests/test_recommendation_agent.py -q` | 7 passed |
+| Backend lint and format | `docker compose run --rm --no-deps backend ruff check app/agents/agent_node.py` and `ruff format --check` | clean, already formatted |
+| End to end | `make test-e2e` | 257 passed, 0 failed (6.3m) |
+
+Acceptance evidence:
+
+| # | Scenario | Evidence |
+|---|---|---|
+| 1 | 14 offerings | `CatalogCard.test.tsx` renders all 14 with no `+N more` and no link; `e2e/chat-catalog-large.spec.ts` shows 14 rows and no link |
+| 2 | 96 offerings | `CatalogCard.test.tsx` shows five rows, `+91 more`, and `View all 96 offerings` with `href="/bytefix#offerings"`, `target="_blank"`, `rel="noreferrer"`; the E2E pins the same link |
+| 3 | The link lands | `Offerings.test.tsx` pins `id="offerings"` in both catalog layouts; the E2E navigates to `/{slug}#offerings` and finds the region |
+| 4 | 200 offerings | `CatalogCard.test.tsx` counts 20 rendered rows (five in each of four categories) |
+| 5 | Wording-only offering | `CatalogCard.test.tsx` renders the owner's wording verbatim with no `$` and no "Price not listed" |
+
+## Delivered
+
+`6b90bcc` - the catalog boundary, the page link, the `#offerings` anchor, the
+slug prop, and the tool guidance.

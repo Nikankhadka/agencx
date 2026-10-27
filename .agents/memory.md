@@ -103,6 +103,14 @@
 
 ### Frontend
 
+- **The chat catalog page link is customer-surface only** (2026-10-27, D50):
+  `CatalogCard` takes the tenant `slug` as a prop, never a payload field, so a
+  card restored from `metadata.response` keeps working. Above 20 offerings it
+  renders `View all N offerings` to `/{slug}#offerings`. The owner transcript's
+  `StructuredResponse` receives no slug because `ConversationDetail` carries
+  none, and adding one would be a payload shape change - so an owner thread
+  shows the bounded card without the link. Do not reintroduce a payload `slug`
+  or guess a link target in the owner console.
 - **Next.js 16 has breaking changes** vs training data. Read `frontend/node_modules/next/dist/docs/` before writing frontend code. `middleware.ts` is deprecated -> `proxy.ts`.
 - **Route groups don't segment URLs**: `(customer)/page.tsx` and `(platform)/page.tsx` collide at `/`. Use proxy.ts rewrite into separate segment directories.
 - **`check:tokens` flags hex-looking patterns** (3-8 hex chars after `#`). Avoid hex-shaped anchor ids (`#added`, `#deface`) - use word anchors (`#faq-billing`).
@@ -503,3 +511,20 @@
 - **Gotcha: `asyncio.to_thread` cancellation ends the await, not the CPU work.** Cancelling a page task after the budget is met stops the crawl waiting on it, but an `extract_page` already running in the thread pool finishes in the background. That is fine for latency and memory here; do not assume cancellation freed the thread.
 - **Convention: a cancelled-at-budget page is not a `budget` skip.** `test_crawl_keeps_the_total_document_below_the_budget` asserted `skipped["budget"] >= 1` because the old crawl read pages it could not fit. It now asserts the cap and the absence of a timeout, because those pages are never fetched.
 
+
+## Source-first onboarding, latency evidence (2026-10-27)
+
+- **Decision: a timing probe times each `extract` call itself.** The shipped draft records `offerings_ms` only after the structure pass is awaited, so under concurrency that number can absorb structure's wait; `structure_ms` is accurate but `offerings_ms` is "time until it was read", not call duration. `scripts/source_timing_probe.py` wraps the provider and sums per-call durations, which is what the serial-sum-versus-longest-path claim needs.
+- **Gotcha: `_draft_sections_and_extraction(extract_profile=...)` folds the profile into the draft's wall time.** It awaits `profile_task` before returning, which is the upload path's shape. The URL turn gathers the draft and the profile read separately, so a faithful URL-turn measurement gathers too; passing the callback would make `draft_ms` look like the whole processing block.
+- **Gotcha: warming with the new crawl does not warm the fixture's legacy sitemap routes.** `next dev` compiles `robots.txt`/`sitemap.xml` on their first request, so the first legacy crawl can cost 4-11s even after a new-shape warm; `runs=3` medians absorb it, a `runs=1` comparison does not. The evidence file records the cold run rather than hiding it.
+- **Convention: measurement scripts may import private shipped seams on purpose** (`crawl_probe._run`, `_StageFailure`, `_draft_sections_and_extraction`). Reuse of the exact shipped composition is the point, and `scripts/` is outside mypy's file list and the import-linter contracts, so no application boundary is weakened.
+
+## Source-first onboarding, whole-path measurement (2026-10-27)
+
+- **Decision: the source-to-review measurement is one opt-in Playwright spec plus an in-page probe, not app instrumentation.** `frontend/e2e/source-latency.spec.ts` stamps `t0` with a capture-phase click listener (runs before React's handler) and the first progress copy and first offering row with a `requestAnimationFrame` loop, so all three share `performance.now()` and the run pairs with the server's own `total_ms`. Every test skips unless `SOURCE_LATENCY` is set, so `make test-e2e` and CI are untouched. Measured: 10,713ms old against 4,661ms new on The Grounds (-56.5%), render 30-59ms on both. Table, verdict and threats in `docs/agencx/evidence/onboarding-source-2026-10/e2e-side-by-side.md`.
+- **Gotcha: the old URL turn's read-back reply is deterministic too, so the old/new gap is not the model prose.** The pre-ticket `prepare_url_turn` returns a `summary`, so `reply_ms` is ~0ms on `development` as well (measured at 0.0-0.1ms). The whole win is `crawl` (about 4x on the real site) plus the serial `structure + offerings + profile` paying the sum where the new path pays `max(draft, profile)`. Do not attribute the delta to the read-back stream.
+- **Gotcha: a worktree measurement needs its own timing log, and the branch pair can share one compose project.** `development` emits no `onboarding source timing` line, so the throwaway worktree carried a measurement-only `try/finally` logging the same keys (never committed, reverted with `git worktree remove --force`). Reusing one compose project name across the two checkouts is safe when lockfiles, images and migrations match - only the `.next` volume must be wiped between blocks (`find /app/.next -mindepth 1 -delete`), or the dev server serves the other branch's compile.
+- **Gotcha: a worktree has no `node_modules`, and the symlink belongs at the worktree root.** Node resolves `@playwright/test` upward from `playwright.config.ts`, so `<worktree>/node_modules -> <repo>/frontend/node_modules` works; putting it at `frontend/node_modules` can fail because the Docker VM holds that directory open.
+- **Gotcha: neither of the review sheet's obvious "open" signals is sound.** The closed `Sheet` still renders `[role="dialog"]` with its header, and `Offering 1 name` inputs only exist for editable rows - above the collapsed page size with no missing price, rows render read-only `h4`s and the input count is 0. Use a footer testid (`onboarding-knowledge-save`) for "open" and the `N retained offerings` paragraph for the count.
+- **Gotcha: the old interview's W-9 read-back keeps the stage unchanged.** A typed answer can come back as "I have X. Is that right?" with Yes/No chips on the same beat, so a driver that waits only for a stage change stalls; any beat-driving harness must confirm the read-back.
+- **Finding: one unexplained backend hang during a real crawl (2026-10-27).** A source turn on `www.thegrounds.com.au` stopped logging after its page fetches; `/health` then timed out for over 15 minutes while the process stayed alive at near-idle CPU, and no `site crawl` line ever arrived. The same crawl succeeded standalone (2.6s) and a container restart cleared it; it did not recur in 12 later runs. One occurrence, not attributable to a branch - flag it if it recurs.

@@ -1671,3 +1671,28 @@ exception to the gate.
 **Boundary:** the wording is display-only and produces no monetary amount;
 cents stay integers in `price_options`, and words stay words in
 `wording_options`.
+
+## D50: A small chat catalog reads in full; a large one hands off to the business page
+
+**Decision.** The chat catalog card renders every offering when the payload
+holds 20 or fewer, in its category order, with no `+N more` line and no page
+link. Above 20 it keeps the five-rows-per-category cap and the per-category
+`+N more` line, and adds one `View all N offerings` link to `/{slug}#offerings`
+in a new tab. The storefront catalog region carries `id="offerings"` in both its
+compact and mature layouts. The tenant slug is a component prop threaded from
+the customer chat, not a catalog payload field, so a restored transcript card
+resolves it from the route. Tool guidance tells the model to call `show_catalog`
+for a full-list request, never repeat the catalog in prose, and point a bounded
+card at the business page.
+
+**Why.** A 14-item menu is short enough to read in chat, and capping it hides
+information the customer asked for. A 96-item menu cannot fill the thread, and
+the storefront already renders it whole with search and categories, so the card
+is the summary and the page is the full list. Keeping the slug out of the
+payload means the persisted `metadata.response` stays a pure view of the
+assistant's data and a restored card does not depend on server-side tenant
+resolution.
+
+**Boundary:** no virtualised or paginated chat list, no per-category deep links,
+and no payload shape change. An owner transcript renders the bounded card
+without the link because `ConversationDetail` carries no tenant slug.

@@ -689,10 +689,16 @@ is one compact row per document with Replace, Remove, and one "Add another
 source". A review save re-reads `/api/onboarding/state`, so the server decides
 `can_confirm` rather than the screen assuming it.
 
-The chat catalog card remains the pre-29 shape: at most five rows per category
-with a `+N more` line. The 20-offering full-list boundary and the
-`View all N offerings` link to `/{slug}#offerings` are ticket 30 and are not
-shipped here.
+The chat catalog card reads a small menu in full: 20 or fewer offerings render
+every row in its category order, with no cap line and no page link. Above 20 the
+card stays bounded at five rows per category with a `+N more` line, and one
+`View all N offerings` link opens `/{slug}#offerings` in a new tab to the
+storefront catalog region, which carries that anchor in both its compact and
+mature layouts. The tenant slug is a prop rather than a payload field, so a
+restored card keeps working; an owner transcript, whose detail payload carries
+no slug, renders the bounded card without the link. Tool guidance tells the
+model to call `show_catalog` for a full-list request, never repeat the catalog
+in prose, and point a bounded card at the business page.
 
 ### S3 - Public page (anonymous, per-tenant slug)
 
