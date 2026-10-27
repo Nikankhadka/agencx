@@ -2095,6 +2095,52 @@ async def test_source_url_reading_the_same_link_again_stays_in_place(
         assert str(document_id) in item["supporting_document_ids"]
 
 
+async def test_source_url_a_missing_draft_leaves_the_source_stage_open(
+    client: httpx.AsyncClient,
+    superuser_conn: asyncpg.Connection[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """31: no draft means no source, so the stage does not advance.
+
+    `draft_from_url_text` answers None when it cannot produce a row at all.
+    Treating that as success cleared `knowledge_pending` and appended the
+    "here is what I found" read-back with nothing behind it.
+    """
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft={"business_name": "Owner Name"}, knowledge_pending=True
+        ).to_jsonb(),
+    )
+    before = await onboarding_service.load_record(tenant_id=tenant_id)
+
+    async def no_draft(**kwargs: Any) -> None:
+        return None
+
+    app.dependency_overrides[get_llm_provider] = lambda: ConcurrencyProbe(
+        offerings=[], delay=0.0
+    )
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    monkeypatch.setattr(
+        "app.features.onboarding.controller.knowledge_service.draft_from_url_text",
+        no_draft,
+    )
+    try:
+        response = await _post_source_url(client, headers)
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["document"] is None
+    after = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert after["knowledge_pending"] is True
+    assert after["history"] == before["history"]
+    rows = await superuser_conn.fetch("select id from documents where tenant_id = $1", tenant_id)
+    assert rows == []
+
+
 async def test_source_url_scrape_failure_leaves_the_source_alone(
     client: httpx.AsyncClient,
     uploads_tmp: Path,

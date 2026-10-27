@@ -120,6 +120,28 @@ export function reconcileLinkOfferings(
   return reconcileOfferings(previous, record.offering_candidates ?? [], replacedDocumentId, editedCandidateIds);
 }
 
+/** 31: one link save at a time. The slot is claimed before the confirm opens,
+ *  because `useConfirm` keeps a single pending entry: a second save asked while
+ *  that dialog is up would replace the first promise and leave it unresolved.
+ *  The handler releases the slot in its `finally`, so a cancel frees it too. */
+export function claimLinkSave(slot: { current: boolean }): boolean {
+  if (slot.current) return false;
+  slot.current = true;
+  return true;
+}
+
+/** 31: the category trigger names its panel only while that panel is in the
+ *  DOM - an `aria-controls` pointing at nothing tells a screen reader less
+ *  than no attribute at all. `aria-expanded` stays in both states. */
+export function categoryTriggerAria(
+  open: boolean,
+  panelId: string,
+): { "aria-expanded": boolean; "aria-controls"?: string } {
+  return open
+    ? { "aria-expanded": true, "aria-controls": panelId }
+    : { "aria-expanded": false };
+}
+
 const CategoryContext = createContext<{
   categories: CategoryOption[];
   createCategory: (name: string) => Promise<CategoryOption>;
@@ -336,6 +358,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   const [linkEditor, setLinkEditor] = useState<{ documentId: string | null } | null>(null);
   const [linkValue, setLinkValue] = useState("");
   const [linkPending, setLinkPending] = useState(false);
+  const linkSaveRef = useRef(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkOpenerRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -423,9 +446,12 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     setOfferings((previous) => previous.filter((item) => item.candidate_id !== removed.candidate_id).map((item) => item.candidate_id !== retained.candidate_id ? item : { ...retained, price_cents: price, priceText: formatPrice(price), priceWording: "", description: retained.description || removed.description, sources: [...new Set([...retained.sources, ...removed.sources])], source_references: [...(retained.source_references ?? []), ...(removed.source_references ?? [])], possibleMatches: [...new Set([...retained.possibleMatches, ...removed.possibleMatches])].filter((id) => id !== retained.candidate_id && id !== removed.candidate_id), dirty: true }));
     setCombine(null);
   }
-  /** 31: the footer asks before it destroys anything, and names what goes. */
+  /** 31: the footer asks before it destroys anything, and names what goes.
+   *  Onboarding owns the question. The Business > Knowledge page already asks
+   *  through its own record removal for a saved source, and a draft there is
+   *  not destructive, so a sheet-level question would ask twice. */
   async function handleDiscard() {
-    if (confirmRemove) {
+    if (onboarding && confirmRemove) {
       const confirmed = await confirmRemove(discardConfirm(workspace.documents.length));
       if (!confirmed) return;
     }
@@ -498,12 +524,16 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     const editor = linkEditor;
     const trimmed = linkValue.trim();
     const documentId = editor?.documentId ?? null;
-    if (!editor || !trimmed || linkPending) return;
-    if (documentId !== null) {
-      if (confirmRemove && !(await confirmRemove(replaceLinkConfirm()))) return;
-      if (!onReplaceLink) return;
-      setLinkPending(true);
-      try {
+    if (!editor || !trimmed) return;
+    // 31: claim the slot before the confirm opens, so an impatient second Save
+    // never reaches the endpoint (see claimLinkSave). Every path below releases
+    // it, cancel included.
+    if (!claimLinkSave(linkSaveRef)) return;
+    setLinkPending(true);
+    try {
+      if (documentId !== null) {
+        if (!onReplaceLink) return;
+        if (confirmRemove && !(await confirmRemove(replaceLinkConfirm()))) return;
         const result = await onReplaceLink(documentId, trimmed);
         if (!result) return;
         const { record, draft } = result;
@@ -529,20 +559,20 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
           return next;
         });
         setLinkEditor(null);
-      } finally {
-        setLinkPending(false);
+        // 31: a same-URL re-read keeps this row, so its opener is still the
+        // control the owner came from and focus goes back to it. A replacement
+        // swapped the row out; that node is gone, and focus is left alone.
+        if (record.id === documentId) revealNode(linkOpenerRef.current);
+        return;
       }
-      return;
-    }
-    if (!onAddLink) return;
-    setLinkPending(true);
-    try {
+      if (!onAddLink) return;
       const records = await onAddLink(trimmed);
       if (records.length > 0) {
         adoptRecords(records);
         setLinkEditor(null);
       }
     } finally {
+      linkSaveRef.current = false;
       setLinkPending(false);
     }
   }
@@ -762,7 +792,7 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
     onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
   }
   return <div className="mt-3">
-    <button ref={triggerRef} type="button" aria-expanded={open} aria-controls={panelId} data-testid="review-category-trigger" onClick={() => setOpen((current) => !current)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>
+    <button ref={triggerRef} type="button" {...categoryTriggerAria(open, panelId)} data-testid="review-category-trigger" onClick={() => setOpen((current) => !current)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>
     {open ? <div id={panelId} ref={pickerRef}>
       {offering.proposed_category ? <p className="mt-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
       <CategoryPicker

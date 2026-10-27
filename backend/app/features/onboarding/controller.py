@@ -1037,6 +1037,13 @@ async def run_source_url(
             extra={"step": "draft", "error": type(document).__name__},
         )
         return {"state": onboarding.to_jsonb(), "document": None}
+    if document is None:
+        # 31: no draft means no source. Clearing the stage here would advance
+        # the interview past a source that does not exist, and the read-back
+        # would name fields nothing backs. Nothing was written, so nothing is
+        # deleted and no history lands.
+        logger.warning("onboarding source url draft returned nothing", extra={"step": "draft"})
+        return {"state": onboarding.to_jsonb(), "document": None}
     if isinstance(profile, BaseException):
         logger.warning(
             "onboarding source url profile failed",

@@ -34,13 +34,32 @@ function dialog(page: Page) {
   return page.getByRole("dialog", { name: "Review your information" });
 }
 
-/** 31: a revealed field must actually be on screen, not just focused. */
+/** 31: a revealed field must actually be on screen, not just focused. The
+ *  window alone is not enough - the sheet's own panel clips its content with
+ *  `overflow-y-auto`, so a field scrolled out of that panel still passes a
+ *  window-only check. Measure the nearest scrollable ancestor too. */
 async function expectInViewport(locator: Locator) {
   const box = await locator.boundingBox();
   const viewport = locator.page().viewportSize()!;
   expect(box).not.toBeNull();
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+
+  const panel = await locator.evaluate((node) => {
+    let parent = node.parentElement;
+    while (parent) {
+      const style = getComputedStyle(parent);
+      if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) {
+        const rect = parent.getBoundingClientRect();
+        return { found: true, top: rect.top, bottom: rect.bottom };
+      }
+      parent = parent.parentElement;
+    }
+    return { found: false, top: 0, bottom: window.innerHeight };
+  });
+  expect(panel.found).toBe(true);
+  expect(box!.y).toBeGreaterThanOrEqual(panel.top);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(panel.bottom);
 }
 
 test("uploads five files three at a time and opens one combined review", async ({
@@ -399,10 +418,16 @@ test("the category picker stays collapsed until its trigger is used", async ({ p
   const trigger = sheet.getByTestId("review-category-trigger");
   await expect(trigger).toHaveText("Add category");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  // A closed trigger must not name a panel that is not there.
+  await expect(trigger).not.toHaveAttribute("aria-controls", /.+/);
   await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
 
   await trigger.click();
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  // The open trigger's aria-controls resolves to the panel it just rendered.
+  const panelId = await trigger.getAttribute("aria-controls");
+  expect(panelId).toBeTruthy();
+  await expect(page.locator(`[id="${panelId}"]`)).toHaveCount(1);
   const search = sheet.getByLabel("Search categories");
   await expect(search).toBeFocused();
   await expectInViewport(search);
@@ -773,6 +798,8 @@ test("saving the same link re-reads one source in place", async ({ page, request
   expect(records.deletedIds()).toHaveLength(0);
   await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
   await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  // 31: the row survived, so focus goes back to the control that opened it.
+  await expect(sheet.getByTestId("review-edit-link")).toBeFocused();
 });
 
 test("saving a different link replaces the source", async ({ page, request }) => {
@@ -822,6 +849,11 @@ test("saving a different link replaces the source", async ({ page, request }) =>
   await expect(sheet.getByText("new.example.com", { exact: true })).toBeVisible();
   expect(records.deletedIds()).toEqual(["site-1"]);
   expect(store.records.map((record) => record.id)).toEqual(["site-2"]);
+  // 31: the row was replaced, so its old opener is gone and focus is not moved
+  // to the new row's control on its own.
+  expect(
+    await sheet.getByTestId("review-edit-link").evaluate((node) => node === document.activeElement),
+  ).toBe(false);
 });
 
 test("add a link adds a second source and focuses the editor", async ({ page, request }) => {

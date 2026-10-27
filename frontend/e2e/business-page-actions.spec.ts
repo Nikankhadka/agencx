@@ -8,7 +8,7 @@
  * session and the page shell still come from the running stack.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 
 const BYTEFIX = DEMO_USERS.find((u) => u.email === "owner@bytefix.dev")!;
@@ -27,6 +27,51 @@ const PROFILE = {
   customer_voice_preset: "warm_casual",
   customer_voice_custom_style: "",
 };
+
+/** Nine pending suggestions, the fixture both pagination cases page through. */
+function nineSuggestions() {
+  return Array.from({ length: 9 }, (_, index) => ({
+    candidate_id: `c${index + 1}`,
+    name: `Suggestion ${index + 1}`,
+    description: "",
+    price_cents: null,
+    sources: ["document"],
+    review_status: "pending",
+  }));
+}
+
+/** The suggestions route plus a non-empty catalog page, so the review button
+ *  renders. Shared by the desktop and phone paging cases. */
+async function stubSuggestionsPage(page: Page) {
+  const candidates = nineSuggestions();
+  await page.route("**/api/onboarding/suggestions*", (route) =>
+    route.fulfill({ json: { count: candidates.length, candidates } }),
+  );
+  await page.route("**/api/business/page*", (route) =>
+    route.fulfill({
+      json: {
+        slug: "bytefix",
+        name: "Bytefix Repairs",
+        tagline: "",
+        description: "",
+        business_contact: "",
+        has_cover: false,
+        services: [],
+        offerings: [
+          {
+            id: "o1",
+            name: "iPhone 11",
+            description: "",
+            price_cents: 24900,
+            category: null,
+            media: null,
+          },
+        ],
+        links: {},
+      },
+    }),
+  );
+}
 
 test.describe("Business page actions", () => {
   test("editing services from the empty overview saves and refetches the page", async ({
@@ -267,42 +312,7 @@ test.describe("Business page actions", () => {
   }) => {
     // Exactly the lg breakpoint the sheet pages at.
     await page.setViewportSize({ width: 1024, height: 768 });
-    const candidates = Array.from({ length: 9 }, (_, index) => ({
-      candidate_id: `c${index + 1}`,
-      name: `Suggestion ${index + 1}`,
-      description: "",
-      price_cents: null,
-      sources: ["document"],
-      review_status: "pending",
-    }));
-
-    await page.route("**/api/onboarding/suggestions*", (route) =>
-      route.fulfill({ json: { count: candidates.length, candidates } }),
-    );
-    await page.route("**/api/business/page*", (route) =>
-      route.fulfill({
-        json: {
-          slug: "bytefix",
-          name: "Bytefix Repairs",
-          tagline: "",
-          description: "",
-          business_contact: "",
-          has_cover: false,
-          services: [],
-          offerings: [
-            {
-              id: "o1",
-              name: "iPhone 11",
-              description: "",
-              price_cents: 24900,
-              category: null,
-              media: null,
-            },
-          ],
-          links: {},
-        },
-      }),
-    );
+    await stubSuggestionsPage(page);
 
     await loginAsTenantAdmin(page, request, BYTEFIX);
     await page.goto("/business/page");
@@ -318,5 +328,33 @@ test.describe("Business page actions", () => {
     // 31: paging focuses and scrolls to the first suggestion on the new page.
     await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
     await expect(sheet.getByLabel("Offering 9 name")).toBeVisible();
+  });
+
+  test("the suggestions sheet pages three at a time on a phone", async ({
+    page,
+    request,
+  }) => {
+    // A phone width the CSS media query reads as below lg - the same setup and
+    // stubs as the desktop case, so this is the browser truth behind the
+    // mocked-hook unit test rather than a second fixture.
+    await page.setViewportSize({ width: 360, height: 740 });
+    await stubSuggestionsPage(page);
+
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+    await page.getByRole("button", { name: "Review suggestions" }).click();
+
+    const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+    await expect(sheet.getByText("Showing 1-3 of 9 suggestions")).toBeVisible();
+    await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 3 name")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 4 name")).toHaveCount(0);
+
+    await sheet.getByRole("button", { name: "Next" }).click();
+    await expect(sheet.getByText("Showing 4-6 of 9 suggestions")).toBeVisible();
+    await expect(sheet.getByText("Page 2 of 3")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 4 name")).toBeFocused();
+    await expect(sheet.getByLabel("Offering 6 name")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 7 name")).toHaveCount(0);
   });
 });

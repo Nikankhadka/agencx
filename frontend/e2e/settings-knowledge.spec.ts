@@ -290,11 +290,10 @@ test("removing a saved document from the sheet asks first, escape leaves it alon
   await expect(discard).toHaveText("Remove source");
 
   // Escape asks nothing of the backend and leaves the sheet open. The dialog
-  // pins the copy: it names the source and states the consequence.
+  // pins the copy: it names the source and states the consequence. The page's
+  // own record removal owns the one dialog here - the sheet footer does not
+  // ask on this surface, so one click would delete, not confirm twice.
   await discard.click();
-  // 31: the sheet footer asks first, then the page's own record removal asks.
-  await page.getByTestId("confirm-accept").click();
-  await expect(page.getByTestId("confirm-accept")).toBeVisible();
   const confirmDialog = page.getByRole("dialog", { name: "Remove hours.txt?" });
   await expect(confirmDialog).toBeVisible();
   await expect(confirmDialog).toContainText("Its reviewed facts stop answering customers.");
@@ -305,7 +304,6 @@ test("removing a saved document from the sheet asks first, escape leaves it alon
 
   // Accepting removes the record exactly once and says so.
   await discard.click();
-  await page.getByTestId("confirm-accept").click();
   await page.getByTestId("confirm-accept").click();
   await expect(page.getByText("Removed", { exact: true })).toBeVisible();
   expect(records.deleteCount()).toBe(1);

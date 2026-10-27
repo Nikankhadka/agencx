@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  categoryTriggerAria,
+  claimLinkSave,
   discardConfirm,
   insertOwnerOffering,
   offeringPage,
@@ -405,8 +407,18 @@ describe("collapsed categories (31)", () => {
     expect(html).toContain('data-testid="review-category-trigger"');
     expect(html).toContain(">Add category</button>");
     expect(html).toContain('aria-expanded="false"');
+    // 31: a closed trigger names no panel, because no panel is rendered.
+    expect(html).not.toContain("aria-controls");
     // Closed means the picker is not in the DOM at all, not merely hidden.
     expect(html).not.toContain("Search or create a category");
+  });
+
+  it("names its panel only while that panel is rendered", () => {
+    expect(categoryTriggerAria(false, "panel-1")).toEqual({ "aria-expanded": false });
+    expect(categoryTriggerAria(true, "panel-1")).toEqual({
+      "aria-expanded": true,
+      "aria-controls": "panel-1",
+    });
   });
 
   it("labels a card that already has categories by its count", () => {
@@ -913,6 +925,18 @@ describe("link editing (31)", () => {
       tone: "danger",
       layer: "top",
     });
+  });
+
+  it("lets only one link save hold the slot at a time", () => {
+    // 31: the slot is claimed before the confirm opens. useConfirm keeps one
+    // pending entry, so a second save asked while it is open would replace the
+    // first and leave its promise unresolved - it must never reach the
+    // endpoint. The release on cancel is what lets the retry below work.
+    const slot = { current: false };
+    expect(claimLinkSave(slot)).toBe(true);
+    expect(claimLinkSave(slot)).toBe(false);
+    slot.current = false;
+    expect(claimLinkSave(slot)).toBe(true);
   });
 
   it("gives a URL row an inline edit and keeps the file picker off it", () => {

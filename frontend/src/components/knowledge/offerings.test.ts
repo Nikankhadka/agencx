@@ -6,6 +6,7 @@ import {
   offeringLabel,
   reconcileAfterSave,
   reconcileOfferings,
+  replaceDocument,
   withCombinedOfferings,
 } from "./offerings";
 import type { KnowledgeRecord, PendingOffering, ReviewOffering } from "./types";
@@ -465,5 +466,34 @@ describe("buildWorkspace", () => {
     );
     expect(ws.id).toBe("stable-id");
     expect(ws.offering_candidates.map((item) => item.name)).toEqual(["Tea", "Bowl"]);
+  });
+});
+
+describe("replaceDocument", () => {
+  it("swaps a source for the record it became, at the same position", () => {
+    const next = replaceDocument(
+      [record({ id: "a" }), record({ id: "b" })],
+      "a",
+      record({ id: "c", filename: "new.txt" }),
+    );
+    expect(next.map((doc) => doc.id)).toEqual(["c", "b"]);
+    expect(next[0].filename).toBe("new.txt");
+  });
+
+  it("keeps one row when the replacement already exists in the review", () => {
+    // 31: the server keys a link by its address, so editing A to B's URL
+    // answers B's existing row. A naive map would list B twice.
+    const next = replaceDocument(
+      [record({ id: "a" }), record({ id: "b", filename: "b.example.com" })],
+      "a",
+      record({ id: "b", filename: "b.example.com" }),
+    );
+    expect(next.map((doc) => doc.id)).toEqual(["b"]);
+    expect(next[0].filename).toBe("b.example.com");
+  });
+
+  it("leaves the list alone for a document it does not hold", () => {
+    const documents = [record({ id: "a" })];
+    expect(replaceDocument(documents, "missing", record({ id: "b" }))).toBe(documents);
   });
 });

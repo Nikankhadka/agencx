@@ -44,7 +44,7 @@ import {
   type PendingOffering,
   type ReviewWorkspace,
 } from "@/components/knowledge/types";
-import { buildWorkspace } from "@/components/knowledge/offerings";
+import { buildWorkspace, replaceDocument } from "@/components/knowledge/offerings";
 import { ReviewSheet } from "@/components/knowledge/ReviewSheet";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
@@ -907,15 +907,11 @@ export default function OnboardingPage() {
       applyStateFields(body.state);
       // A draft is always reviewable, so confirm stays blocked until it saves.
       setCanConfirm(false);
-      setDrafts((previous) =>
-        previous.map((doc) => (doc.id === documentId ? record : doc)),
-      );
+      setDrafts((previous) => replaceDocument(previous, documentId, record));
       setWorkspace((previous) =>
         previous
           ? buildWorkspace(
-              previous.documents.map((doc) =>
-                doc.id === documentId ? record : doc,
-              ),
+              replaceDocument(previous.documents, documentId, record),
               ownerOfferings,
               previous.id,
             )
