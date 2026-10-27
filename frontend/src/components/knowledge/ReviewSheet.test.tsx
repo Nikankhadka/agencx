@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   discardConfirm,
@@ -16,6 +16,19 @@ import {
   type ReviewProfile,
 } from "./ReviewSheet";
 import type { KnowledgeRecord, ReviewOffering, ReviewWorkspace } from "./types";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+
+// The repo has no jsdom (memory, 2026-10-03), so the media-query branch is
+// selected by mocking the hook - spreading the real module so DESKTOP_QUERY
+// survives the mock.
+vi.mock("@/lib/useMediaQuery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/useMediaQuery")>()),
+  useMediaQuery: vi.fn(() => false),
+}));
+
+afterEach(() => {
+  vi.mocked(useMediaQuery).mockReturnValue(false);
+});
 
 /**
  * W-6. What the owner is shown about a price is a product decision, not a
@@ -497,6 +510,64 @@ describe("removal confirmations (31)", () => {
       />,
     );
     expect(two).toContain(">Discard sources</button>");
+  });
+});
+
+describe("suggestions pagination (31)", () => {
+  function nineSuggestions(): ReviewOffering[] {
+    return Array.from({ length: 9 }, (_, index) => ({
+      candidate_id: `cand-${index + 1}`,
+      name: `Suggestion ${index + 1}`,
+      description: "",
+      price_cents: null,
+      sources: ["document"] as const,
+      review_status: "pending" as const,
+    }));
+  }
+
+  function renderNine(): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={null}
+        suggestions={nineSuggestions()}
+        suggestionsOnly
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onSaveSuggestions={async () => {}}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  function renderedNames(html: string): number {
+    return (html.match(/aria-label="Offering \d+ name"/g) ?? []).length;
+  }
+
+  it("shows five suggestions a page on the desktop branch", () => {
+    vi.mocked(useMediaQuery).mockReturnValue(true);
+    const html = renderNine();
+    expect(renderedNames(html)).toBe(5);
+    expect(html).toContain("Page 1 of 2");
+    expect(html).toContain("Showing 1-5 of 9 suggestions");
+  });
+
+  it("shows three suggestions a page on the phone branch", () => {
+    const html = renderNine();
+    expect(renderedNames(html)).toBe(3);
+    expect(html).toContain("Page 1 of 3");
+    expect(html).toContain("Showing 1-3 of 9 suggestions");
+  });
+
+  it("keeps the review's own pagination copy by default", () => {
+    // 31: pageSize and noun are opt-in; the review's five-a-page offerings
+    // wording is unchanged.
+    const html = renderToStaticMarkup(
+      <Pagination page={0} pages={2} count={9} onPage={() => {}} />,
+    );
+    expect(html).toContain("Showing 1-5 of 9 offerings");
   });
 });
 

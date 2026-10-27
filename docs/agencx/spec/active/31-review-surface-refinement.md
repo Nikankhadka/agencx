@@ -641,3 +641,41 @@ clicks at line 56, before it ever reaches the discard at line 139. Re-run with
 that file parked also failed earlier, in `loginInChat` (live mail round trip).
 The discard path it covers is the same one verified above and in
 `settings-knowledge.spec.ts`.
+
+### Slice D - suggestions pagination at 5 and 3
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (46 tests)
+ Test Files  2 passed (2)
+      Tests  76 passed (76)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/business-page-actions.spec.ts
+ ✓ the suggestions sheet asks before removing a suggestion
+ ✓ the suggestions sheet pages five at a time on desktop
+ 4 passed (6.5s)
+
+$ ... npm run test:e2e -- e2e/onboarding-resume.spec.ts
+ ✓ the Home suggestions sheet asks before removing a suggestion
+ ✓ paging the suggestions sheet still sends every candidate on save
+ 5 passed (7.2s)
+
+$ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobile.spec.ts
+ 20 passed (28.8s)
+```
+
+The two suggestions unit seams that need a click ("onSaveSuggestions receives
+nine candidates") are covered by the `onboarding-resume` save-after-paging e2e;
+the markup seams (five rows desktop, three rows phone, the summary copy) are
+the unit tests.

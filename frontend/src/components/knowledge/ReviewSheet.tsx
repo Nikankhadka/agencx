@@ -207,8 +207,26 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
 }
 
 function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemove }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const pageSize = desktop ? PAGE_SIZE : COLLAPSED_MOBILE;
   const [offerings, setOfferings] = useState(() => suggestions.map(toWorkingOffering));
+  const [page, setPage] = useState(0);
+  const [revealRequest, setRevealRequest] = useState<{ id: string } | null>(null);
   const cardRefs = useRef(new Map<string, HTMLInputElement>());
+  const pages = offeringPageCount(offerings.length, pageSize);
+  const currentPage = Math.min(page, pages - 1);
+  const visible = offeringPage(offerings, currentPage, pageSize);
+  useEffect(() => {
+    if (!revealRequest) return;
+    reveal(cardRefs, revealRequest.id);
+  }, [revealRequest]);
+
+  function gotoPage(nextPage: number) {
+    const clamped = Math.min(Math.max(nextPage, 0), pages - 1);
+    setPage(clamped);
+    const first = offeringPage(offerings, clamped, pageSize)[0];
+    if (first) setRevealRequest({ id: first.candidate_id });
+  }
 
   function updateOffering(id: string, update: Partial<WorkingOffering>) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
@@ -218,7 +236,10 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemov
     const target = offerings.find((item) => item.candidate_id === id);
     if (!target) return;
     if (confirmRemove && !(await confirmRemove(removeOfferingConfirm(target.name)))) return;
-    setOfferings((previous) => previous.filter((item) => item.candidate_id !== id));
+    const next = offerings.filter((item) => item.candidate_id !== id);
+    setOfferings(next);
+    // 31: a page that no longer exists falls back to the first one.
+    if (page > offeringPageCount(next.length, pageSize) - 1) setPage(0);
   }
 
   async function save() {
@@ -229,8 +250,9 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemov
     <div className="min-h-0 flex-1 overflow-y-auto pb-4">
       <p className="text-meta text-ink-a40">These private drafts never reach customers until you save them.</p>
       <div className="mt-4 flex flex-col gap-2">
-        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
+        {visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={currentPage * pageSize + index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
       </div>
+      {pages > 1 ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={gotoPage} pageSize={pageSize} noun="suggestions" /> : null}
     </div>
     <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3">
       <Button className="flex-1" loading={busy} onClick={() => void save()} data-testid="suggestions-save">Save suggestions</Button>
@@ -622,9 +644,9 @@ export function KnowledgeDocument({ sections, editingSection = null, onEdit, onC
 
 function FormattedBody({ body }: { body: string }) { return <div className="mt-2 whitespace-pre-line break-words text-prose text-text">{body.split("\n").map((line, index) => line.startsWith("- ") || line.startsWith("• ") ? <div key={index} className="pl-4 before:mr-2 before:content-['•']">{line.slice(2)}</div> : <p key={index} className={line ? "" : "h-3"}>{line}</p>)}</div>; }
 function CombinePreview({ combine, offerings, onPrice, onCancel, onConfirm }: { combine: { left: string; right: string; price: number | null }; offerings: WorkingOffering[]; onPrice: (price: number) => void; onCancel: () => void; onConfirm: () => void }) { const pair = offerings.filter((item) => item.candidate_id === combine.left || item.candidate_id === combine.right); const retained = pair.find((item) => item.sources.includes("owner")) ?? pair[0]; const prices = [...new Set(pair.map((item) => item.price_cents).filter((price): price is number => price != null))]; if (!retained) return null; return <section className="mt-3 rounded-card border border-text bg-surface p-3"><h3 className="text-row-label font-medium text-text">Combine offerings</h3><p className="mt-1 text-meta text-text">This keeps {retained.name}, {retained.description || "the available description"}, and {prices.length > 1 ? "the price you choose" : retained.priceText || retained.priceWording || "no price"}. Source evidence is combined.</p>{prices.length > 1 ? <div className="mt-2"><p className="text-meta text-text">Choose the retained price.</p>{prices.map((price) => <button key={price} type="button" onClick={() => onPrice(price)} className={`mr-2 mt-2 rounded-full border px-3 py-1 text-action transition-colors duration-(--duration-fast) hover:bg-surface-container ${combine.price === price ? "border-text bg-surface text-text" : "border-border text-text"}`}>{formatPrice(price)}</button>)}</div> : null}<div className="mt-3 flex gap-3"><button type="button" onClick={onConfirm} disabled={prices.length > 1 && combine.price == null} className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-50`}>Confirm combine</button><button type="button" onClick={onCancel} className={`${TEXT_PRESS} text-action text-ink-a40`}>Cancel</button></div></section>; }
-export function Pagination({ page, pages, count, onPage }: { page: number; pages: number; count: number; onPage: (page: number) => void }) { return <div className="mt-4 flex flex-col gap-2 text-meta text-text"><div className="flex items-center justify-between"><button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Previous</button><span>Page {page + 1} of {pages}</span><button type="button" disabled={page === pages - 1} onClick={() => onPage(page + 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Next</button></div><p className="text-center">Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, count)} of {count} offerings</p></div>; }
-export function offeringPageCount(count: number) { return Math.max(1, Math.ceil(count / PAGE_SIZE)); }
-export function offeringPage<T>(offerings: T[], page: number) { return offerings.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE); }
+export function Pagination({ page, pages, count, onPage, pageSize = PAGE_SIZE, noun = "offerings" }: { page: number; pages: number; count: number; onPage: (page: number) => void; pageSize?: number; noun?: string }) { return <div className="mt-4 flex flex-col gap-2 text-meta text-text"><div className="flex items-center justify-between"><button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Previous</button><span>Page {page + 1} of {pages}</span><button type="button" disabled={page === pages - 1} onClick={() => onPage(page + 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Next</button></div><p className="text-center">Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, count)} of {count} {noun}</p></div>; }
+export function offeringPageCount(count: number, pageSize = PAGE_SIZE) { return Math.max(1, Math.ceil(count / pageSize)); }
+export function offeringPage<T>(offerings: T[], page: number, pageSize = PAGE_SIZE) { return offerings.slice(page * pageSize, page * pageSize + pageSize); }
 export function pageForOffering(index: number) { return Math.max(0, Math.floor(index / PAGE_SIZE)); }
 /** W-11c: where a fresh owner row lands - right after the last owner-source
  *  row, or at the top of the list when there is none - and the page that

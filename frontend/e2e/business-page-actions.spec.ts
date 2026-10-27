@@ -260,4 +260,63 @@ test.describe("Business page actions", () => {
     await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Screen repair");
     expect(puts).toBe(0);
   });
+
+  test("the suggestions sheet pages five at a time on desktop", async ({
+    page,
+    request,
+  }) => {
+    // Exactly the lg breakpoint the sheet pages at.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const candidates = Array.from({ length: 9 }, (_, index) => ({
+      candidate_id: `c${index + 1}`,
+      name: `Suggestion ${index + 1}`,
+      description: "",
+      price_cents: null,
+      sources: ["document"],
+      review_status: "pending",
+    }));
+
+    await page.route("**/api/onboarding/suggestions*", (route) =>
+      route.fulfill({ json: { count: candidates.length, candidates } }),
+    );
+    await page.route("**/api/business/page*", (route) =>
+      route.fulfill({
+        json: {
+          slug: "bytefix",
+          name: "Bytefix Repairs",
+          tagline: "",
+          description: "",
+          business_contact: "",
+          has_cover: false,
+          services: [],
+          offerings: [
+            {
+              id: "o1",
+              name: "iPhone 11",
+              description: "",
+              price_cents: 24900,
+              category: null,
+              media: null,
+            },
+          ],
+          links: {},
+        },
+      }),
+    );
+
+    await loginAsTenantAdmin(page, request, BYTEFIX);
+    await page.goto("/business/page");
+    await page.getByRole("button", { name: "Review suggestions" }).click();
+
+    const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+    await expect(sheet.getByText("Showing 1-5 of 9 suggestions")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 5 name")).toBeVisible();
+    await expect(sheet.getByLabel("Offering 6 name")).toHaveCount(0);
+
+    await sheet.getByRole("button", { name: "Next" }).click();
+    await expect(sheet.getByText("Showing 6-9 of 9 suggestions")).toBeVisible();
+    // 31: paging focuses and scrolls to the first suggestion on the new page.
+    await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
+    await expect(sheet.getByLabel("Offering 9 name")).toBeVisible();
+  });
 });

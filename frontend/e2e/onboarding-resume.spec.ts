@@ -250,3 +250,42 @@ test("the Home suggestions sheet asks before removing a suggestion", async ({
   await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Battery swap");
   expect(puts).toBe(0);
 });
+
+test("paging the suggestions sheet still sends every candidate on save", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 9 }, (_, index) => ({
+    candidate_id: `cand-${index + 1}`,
+    name: `Suggestion ${index + 1}`,
+    description: "",
+    price_cents: null,
+    sources: ["document"],
+    review_status: "pending",
+  }));
+  let published: { candidates: { name: string; review_status?: string }[] } | null = null;
+  await page.route("**/api/onboarding/suggestions", (route) => {
+    if (route.request().method() === "PUT") {
+      published = JSON.parse(route.request().postData() ?? "{}");
+      return route.fulfill({ json: { count: 0, candidates: [] } });
+    }
+    return route.fulfill({ json: { count: candidates.length, candidates } });
+  });
+
+  await loginAsTenantAdmin(page, request, BYTEFIX);
+  await page.goto("/home");
+  await page.getByRole("button", { name: "Review suggestions" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+  await expect(sheet.getByText("Showing 1-5 of 9 suggestions")).toBeVisible();
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await expect(sheet.getByText("Showing 6-9 of 9 suggestions")).toBeVisible();
+
+  // 31: the save is the whole list, never the visible page.
+  await page.getByTestId("suggestions-save").click();
+  await expect.poll(() => published).not.toBeNull();
+  expect(published!.candidates.map((item) => item.name)).toEqual(
+    candidates.map((item) => item.name),
+  );
+  expect(published!.candidates.every((item) => item.review_status === "approved")).toBe(true);
+});
