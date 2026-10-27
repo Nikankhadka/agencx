@@ -447,9 +447,9 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     setCombine(null);
   }
   /** 31: the footer asks before it destroys anything, and names what goes.
-   *  Onboarding owns the question. The Business > Knowledge page already asks
-   *  through its own record removal for a saved source, and a draft there is
-   *  not destructive, so a sheet-level question would ask twice. */
+   *  Onboarding owns the question. The Business > Knowledge page asks through
+   *  its own confirm for both a saved source and a draft, so a sheet-level
+   *  question would ask twice. */
   async function handleDiscard() {
     if (onboarding && confirmRemove) {
       const confirmed = await confirmRemove(discardConfirm(workspace.documents.length));
