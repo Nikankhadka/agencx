@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  categoryTriggerAria,
   claimLinkSave,
   discardConfirm,
   insertOwnerOffering,
@@ -416,14 +415,6 @@ describe("collapsed categories (31)", () => {
     expect(html).not.toContain("aria-controls");
     // Closed means the picker is not in the DOM at all, not merely hidden.
     expect(html).not.toContain("Search or create a category");
-  });
-
-  it("names its panel only while that panel is rendered", () => {
-    expect(categoryTriggerAria(false, "panel-1")).toEqual({ "aria-expanded": false });
-    expect(categoryTriggerAria(true, "panel-1")).toEqual({
-      "aria-expanded": true,
-      "aria-controls": "panel-1",
-    });
   });
 
   it("labels a card that already has categories by its count", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 
 export interface CategoryOption {
@@ -24,6 +24,8 @@ interface Props {
    *  duplicate heading and the onboarding hint are dropped there. The
    *  Business form keeps both: it has no panel to name the group. */
   compact?: boolean;
+  /** 31: a control rendered beside the search field - the review's Done. */
+  action?: ReactNode;
 }
 
 export function normalizedCategoryName(value: string) {
@@ -49,6 +51,7 @@ export function CategoryPicker({
   label = "Categories",
   focusSearch = false,
   compact = false,
+  action,
 }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -153,15 +156,18 @@ export function CategoryPicker({
           })}
         </ul>
       ) : null}
-      <input
-        ref={searchRef}
-        autoFocus={focusSearch}
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search or create a category"
-        aria-label="Search categories"
-        className="mt-2 w-full rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text"
-      />
+      <div className={action ? "mt-2 flex items-center gap-2" : undefined}>
+        <input
+          ref={searchRef}
+          autoFocus={focusSearch}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search or create a category"
+          aria-label="Search categories"
+          className={`${action ? "min-w-0 flex-1" : "mt-2 w-full"} rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text`}
+        />
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {query.trim() ? (
         <div
           className={

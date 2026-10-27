@@ -398,7 +398,7 @@ test("batch publish keeps one failing document reviewable until it saves", async
   await expect(page.getByTestId("onboarding-ready-card")).toHaveCount(0);
 });
 
-test("the category picker stays collapsed until its trigger is used", async ({ page, request }) => {
+test("the category panel replaces its trigger, and both exits return", async ({ page, request }) => {
   const store = recordsStore([
     draftRecord({
       id: "draft-1",
@@ -418,20 +418,38 @@ test("the category picker stays collapsed until its trigger is used", async ({ p
   const trigger = sheet.getByTestId("review-category-trigger");
   await expect(trigger).toHaveText("Add category");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
-  // A closed trigger must not name a panel that is not there.
-  await expect(trigger).not.toHaveAttribute("aria-controls", /.+/);
   await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
 
   await trigger.click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  // The open trigger's aria-controls resolves to the panel it just rendered.
-  const panelId = await trigger.getAttribute("aria-controls");
-  expect(panelId).toBeTruthy();
-  await expect(page.locator(`[id="${panelId}"]`)).toHaveCount(1);
+  // The panel replaces the trigger: one add control, not two.
+  await expect(trigger).toHaveCount(0);
   const search = sheet.getByLabel("Search categories");
   await expect(search).toBeFocused();
   await expectInViewport(search);
 
+  const done = sheet.getByTestId("review-category-done");
+  const cancel = sheet.getByTestId("review-category-cancel");
+  await expect(done).toBeVisible();
+  await expect(cancel).toBeVisible();
+  // Done sits beside the field; Cancel sits above it, at the top right.
+  const searchBox = (await search.boundingBox())!;
+  const doneBox = (await done.boundingBox())!;
+  const cancelBox = (await cancel.boundingBox())!;
+  expect(
+    Math.abs(searchBox.y + searchBox.height / 2 - (doneBox.y + doneBox.height / 2)),
+  ).toBeLessThan(2);
+  expect(doneBox.x).toBeGreaterThan(searchBox.x + searchBox.width);
+  expect(cancelBox.y).toBeLessThan(searchBox.y);
+  expect(cancelBox.x).toBeGreaterThan(searchBox.x + searchBox.width / 2);
+
+  // Cancel goes back to the previous view and restores focus.
+  await cancel.click();
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  // Done is the other exit and returns focus the same way.
+  await trigger.click();
   await sheet.getByTestId("review-category-done").click();
   await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
   await expect(trigger).toBeFocused();

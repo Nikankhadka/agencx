@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS } from "@/lib/onboarding";
 import { Button } from "@/components/ui/Button";
@@ -129,18 +129,6 @@ export function claimLinkSave(slot: { current: boolean }): boolean {
   if (slot.current) return false;
   slot.current = true;
   return true;
-}
-
-/** 31: the category trigger names its panel only while that panel is in the
- *  DOM - an `aria-controls` pointing at nothing tells a screen reader less
- *  than no attribute at all. `aria-expanded` stays in both states. */
-export function categoryTriggerAria(
-  open: boolean,
-  panelId: string,
-): { "aria-expanded": boolean; "aria-controls"?: string } {
-  return open
-    ? { "aria-expanded": true, "aria-controls": panelId }
-    : { "aria-expanded": false };
 }
 
 const CategoryContext = createContext<{
@@ -772,14 +760,12 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
 
 function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
   const { categories, createCategory } = useContext(CategoryContext);
-  // 31: one trigger and one picker per card, collapsed until asked for. The
-  // state is local so a card knows nothing about the sheet's own layout. The
-  // open panel is one quiet group - suggestion, chips, search, Done - with no
-  // second heading and no instructional copy; the trigger already names it.
+  // 31: one trigger and one picker per card. Opening replaces the trigger, so
+  // the panel owns its exits: Done beside the search field, Cancel at the top
+  // right. Both return to the trigger view.
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const panelId = useId();
   const selectedIds = offering.category_ids ?? [];
   const proposed = offering.proposed_category?.trim() ?? "";
   // The suggestion is a shortcut to add; once it is in the selection it would
@@ -796,6 +782,12 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
     // Scroll-only: `focusSearch` puts focus in the field the owner came for.
     revealNode(pickerRef.current, false);
   }, [open]);
+  function closePanel() {
+    setOpen(false);
+    // The trigger is unmounted while the panel is open, so it is only back in
+    // the DOM after the next frame - focus it then.
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }
   async function acceptSuggestion() {
     const suggestion = offering.proposed_category?.trim();
     if (!suggestion) return;
@@ -805,8 +797,10 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
     onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
   }
   return <div className="mt-3">
-    <button ref={triggerRef} type="button" {...categoryTriggerAria(open, panelId)} data-testid="review-category-trigger" onClick={() => setOpen((current) => !current)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>
-    {open ? <div id={panelId} ref={pickerRef} className="mt-2 rounded-lg bg-surface-sunken p-3">
+    {open ? <div ref={pickerRef} className="rounded-lg bg-surface-sunken p-3">
+      <div className="flex justify-end">
+        <button type="button" onClick={closePanel} data-testid="review-category-cancel" className={`min-h-11 px-1 text-action font-medium text-text-secondary ${TEXT_PRESS}`}>Cancel</button>
+      </div>
       {proposed && !suggestionTaken ? <div className="flex min-h-11 items-center gap-2">
         <span className="shrink-0 text-meta text-text-secondary">Suggested</span>
         <button type="button" onClick={() => void acceptSuggestion()} aria-label={`Use suggested category ${proposed}`} className="flex min-h-11 min-w-0 items-center gap-1 rounded-full border border-border bg-surface px-3 text-body-sm font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-surface-container active:opacity-60">
@@ -817,16 +811,14 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
       <CategoryPicker
         compact
         focusSearch
+        action={<Button type="button" variant="secondary" onClick={closePanel} data-testid="review-category-done">Done</Button>}
         categories={categories}
         selectedIds={selectedIds}
         primaryId={offering.primary_category_id ?? null}
         onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
         onCreate={createCategory}
       />
-      <div className="mt-2 flex justify-end">
-        <button type="button" data-testid="review-category-done" onClick={() => { setOpen(false); triggerRef.current?.focus(); }} className={`min-h-11 px-1 text-action font-medium text-text-secondary ${TEXT_PRESS}`}>Done</button>
-      </div>
-    </div> : null}
+    </div> : <button ref={triggerRef} type="button" aria-expanded={false} data-testid="review-category-trigger" onClick={() => setOpen(true)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>}
   </div>;
 }
 

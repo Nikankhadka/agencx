@@ -46,8 +46,8 @@ Interaction vocabulary comes from the console prototype
 | # | Decision |
 |---|---|
 | 1 | The collapse state is component-local to `ReviewCategoryControl` (one picker per card, one trigger per card). There is no sheet-level category control. |
-| 2 | Closed label: `Add category` when `category_ids` is empty, `Categories (N)` when it is not, N = `category_ids.length`. The trigger carries `aria-expanded` and `aria-controls`. |
-| 3 | Opening focuses the picker's search field; `Done` collapses and returns focus to the trigger. `CategoryPicker` gains `focusSearch?: boolean` (default false) that puts `autoFocus` on its search input, the same mechanism `ProfileRow` already uses. |
+| 2 | Closed label: `Add category` when `category_ids` is empty, `Categories (N)` when it is not, N = `category_ids.length`. The trigger renders only while the panel is collapsed and carries `aria-expanded="false"`; the open panel replaces it, so the trigger names no `aria-controls` target. |
+| 3 | Opening replaces the trigger with the panel and focuses the search field. `Done` sits beside that field, `Cancel` at the panel's top right; both collapse and return focus to the trigger. `CategoryPicker` gains `focusSearch?: boolean` (default false) that puts `autoFocus` on its search input, the same mechanism `ProfileRow` already uses, and `action?: ReactNode` for the control beside that input. |
 | 4 | The suggested-category line moves inside the expanded region, so a closed card is one row shorter than today. |
 | 5 | "The same site reader" is `knowledge_service.scrape_site` (`features/knowledge/service.py:160`), which crawls through `crawl_site` (`ingestion/site.py:1065`). `fetch_page` is never called directly. |
 | 6 | The link editor renders under the source row, inside the same bordered container (label and actions stay visible). It never replaces the row. |
@@ -71,7 +71,7 @@ Interaction vocabulary comes from the console prototype
 | The profile row's input is the tightest control on the sheet | `ReviewSheet.tsx:458` | Same recipe as the offering rows |
 | Card stack gap is 12px; the offerings section opens at 20px; later sections at 32px | `ReviewSheet.tsx:387`, `:382`, `:167`, `:398`, `:406` | `gap-2`, `mt-4`, later sections `mt-6` |
 | The price input is 112px wide | `ReviewSheet.tsx:471` | `w-24` (96px) |
-| `CategoryPicker` renders open on every card, with no trigger and no Done; its search input is never focused on open | `ReviewSheet.tsx:489`; `CategoryPicker.tsx:96-135` | Collapsed trigger, Done, focus on open |
+| `CategoryPicker` renders open on every card, with no trigger and no Done; its search input is never focused on open | `ReviewSheet.tsx:489`; `CategoryPicker.tsx:96-135` | Collapsed trigger that the open panel replaces; Done beside the field, Cancel at the top right, focus on open |
 | The suggested-category line sits above the picker and adds height to every card | `ReviewSheet.tsx:488` | Inside the expanded region |
 | Removing an offering drops the row immediately on both surfaces | `ReviewSheet.tsx:243` (review), `:168` (suggestions) | Confirmed through `confirmRemove`, `layer: "top"` |
 | Removing a *source* already confirms through the injected `confirmRemove` | `ReviewSheet.tsx:345-357` | Unchanged; the same dialog now also guards the footer discard |
@@ -97,15 +97,15 @@ Interaction vocabulary comes from the console prototype
 | 2 | Spacing is measured | Card-to-card gap is 8px, the offerings section starts 16px below the intro, later sections 24px |
 | 3 | A card with no category is closed | One `Add category` button, no picker in the DOM, card height unchanged by the suggested-category line |
 | 4 | A card with two categories is closed | One `Categories (2)` button, `aria-expanded="false"` |
-| 5 | The trigger is clicked | The picker renders, its search field has focus and is in view, the suggested-category line is inside the expanded area |
-| 6 | `Done` is clicked | The picker leaves the DOM and focus returns to the trigger |
+| 5 | The trigger is clicked | The trigger leaves the DOM; the picker renders, its search field has focus and is in view, `Done` sits beside that field, `Cancel` at the panel's top right, and the suggested-category line is inside the panel |
+| 6 | `Done` or `Cancel` is clicked | The picker leaves the DOM, the trigger returns, and focus is on the trigger |
 | 7 | An offering's `Remove` is clicked | The dialog reads `Remove <name>?` / `It will not be saved to your catalog.` and paints above the sheet; confirm removes the row, cancel keeps it |
 | 8 | The same removal is reached from the Home suggestions sheet | Same dialog, same copy, same above-sheet layer |
 | 9 | The footer discard is clicked | The dialog names what is deleted; confirm deletes every reviewed source, cancel keeps them all and leaves the review open |
 | 10 | `Next` is clicked on page 1 | The page changes and the first offering name on page 2 has focus and is scrolled into view; `Previous` behaves the same |
 | 11 | The only row on the last page is removed | Focus lands on the previous row; removing a middle row focuses the next one; removing the last row of all focuses `Add offering` |
 | 12 | `Add offering` / `Review all` / category open / link editor open | Focus lands on the revealed field and that field is in view |
-| 13 | Every cancel path is exercised | Focus returns to the control that opened it: category `Done` to the trigger, link `Cancel` to `Edit link` or `Add a link`, dialog cancel to the opener |
+| 13 | Every cancel path is exercised | Focus returns to the control that opened it: category `Done` or `Cancel` to the trigger, link `Cancel` to `Edit link` or `Add a link`, dialog cancel to the opener |
 | 14 | A URL row's `Edit link` is clicked, `Cancel` is clicked | The editor closes; the document count, the source label, the review and the interview stage are all unchanged, and no request was made |
 | 15 | The link editor is saved with the same URL | The site is read again into the same document id; no new row, no delete |
 | 16 | The link editor is saved with a different URL | The new site is crawled, the old document is gone, the new one is listed, and the old document's offerings that the owner never edited are gone from the review |
@@ -181,17 +181,20 @@ lands on what just appeared.
 
 **Technical contract**
 
-- `CategoryPicker` gains `focusSearch?: boolean` (default `false`) and an
-  internal `searchRef`; the search input gets `autoFocus={focusSearch}`. Nothing
-  else changes, so `business/components/OfferingsList.tsx:680` keeps today's
-  behaviour.
-- `ReviewCategoryControl` gains `open`, `triggerRef`, `pickerRef`:
-  the closed state is one button (`data-testid="review-category-trigger"`,
-  `aria-expanded`, `aria-controls`, label per locked decision 2); the open state
-  renders the suggestion line, then `CategoryPicker focusSearch`, wrapped in a
-  `div ref={pickerRef}`, then `Done` (`data-testid="review-category-done"`).
-  Opening runs `reveal`-style scroll on `pickerRef`; `Done` calls
-  `setOpen(false)` then `triggerRef.current?.focus()`.
+- `CategoryPicker` gains `focusSearch?: boolean` (default `false`), an
+  internal `searchRef`, and `action?: ReactNode`: the search input gets
+  `autoFocus={focusSearch}`, and `action` renders in a flex row beside it while
+  the input takes `flex-1`. Without `action` the input keeps `w-full`, so
+  `business/components/OfferingsList.tsx:680` keeps today's behaviour.
+- `ReviewCategoryControl` owns `open`, `triggerRef`, `pickerRef`. Collapsed
+  renders only the trigger (`data-testid="review-category-trigger"`,
+  `aria-expanded="false"`, label per locked decision 2). Open renders one
+  `div ref={pickerRef}` holding `Cancel` (`data-testid="review-category-cancel"`,
+  top right), the suggestion pill, then `CategoryPicker compact focusSearch`
+  with `action={<Done/>}` (`data-testid="review-category-done"`) beside the
+  field. Opening runs `reveal`-style scroll on `pickerRef`; Done and Cancel
+  close through one handler that sets `open` false and focuses the trigger on
+  the next frame, when the collapsed view has remounted it.
 - `reveal(refs, id)` is a module-level helper in `ReviewSheet.tsx` per locked
   decision 16. `addOffering` (`:254`) and the duplicate jump (`:276`) switch to
   it.
@@ -217,11 +220,13 @@ lands on what just appeared.
   calls its handler with the neighbouring page and the default copy is
   unchanged.
 - `CategoryPicker.test.tsx` - `focusSearch` marks the search field
-  `autofocus`; the default render does not.
+  `autofocus`; the default render does not; compact drops the duplicate legend
+  and the hint; the primary chip carries a check, not a per-chip word.
 - `frontend/e2e/knowledge-review.spec.ts` - `Review all` then `Next`: the
   first name on page 2 is focused and inside the viewport; `Add offering`
   focuses and reveals the new row; a closed card shows `Add category`, opening
-  focuses the search field, `Done` returns focus to the trigger.
+  replaces it with the panel, `Done` sits beside the search field and `Cancel`
+  at the top right, and each exit returns focus to the trigger.
 - `frontend/e2e/knowledge-review-mobile.spec.ts` - the collapsed list keeps
   three cards and the same trigger copy at 360px.
 
@@ -842,14 +847,15 @@ jsdom, so click behaviour is proved in the browser and the pure logic in vitest.
    `settings-knowledge.spec.ts` "removing a saved document from the sheet asks
    first, escape leaves it alone" - one `confirm-accept` click, Escape cancels
    with `records.deleteCount() === 0`, a second click deletes exactly once.
-2. **`aria-controls` never names an absent node.** `categoryTriggerAria` keeps
-   `aria-expanded` in both states and emits `aria-controls` only while the panel
-   renders. Proof: unit, `ReviewSheet.test.tsx` "keeps a card with no category
-   collapsed behind one trigger" (closed markup has no `aria-controls`) and
-   "names its panel only while that panel is rendered" (helper mapping); E2E,
-   `knowledge-review.spec.ts` "the category picker stays collapsed until its
-   trigger is used" reads the open trigger's `aria-controls` and asserts exactly
-   one node carries that id.
+2. **The trigger never names an absent node.** The trigger is mounted only
+   while the panel is collapsed, so it carries `aria-expanded="false"` and no
+   `aria-controls`; the open panel owns its own Cancel and Done. Proof: unit,
+   `ReviewSheet.test.tsx` "keeps a card with no category collapsed behind one
+   trigger" (closed markup has no `aria-controls`); E2E,
+   `knowledge-review.spec.ts` "the category panel replaces its trigger, and both
+   exits return" asserts the trigger leaves the DOM on open, Done sits beside
+   the search field, Cancel at the top right, and both exits restore the trigger
+   and its focus.
 3. **A double Save cannot reach the endpoint.** `claimLinkSave` claims the slot
    before the confirm opens and the handler releases it in `finally`;
    `linkPending` is set before the confirm. Proof: unit, "lets only one link save
