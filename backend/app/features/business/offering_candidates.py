@@ -19,8 +19,16 @@ import unicodedata
 
 
 def normalize_name(value: str) -> str:
-    """Return the equality key used for every offering boundary."""
-    normalized = unicodedata.normalize("NFKC", value).strip().casefold()
+    """Return the equality key used for every offering boundary.
+
+    29: a source can spell the same service with or without its diacritics -
+    "Açaí Bowl" and "Acai Bowl" are one offering, not a duplicate prompt. The
+    key therefore decomposes compatibility forms, drops combining marks, folds
+    case, and treats punctuation as a word break.
+    """
+    normalized = unicodedata.normalize("NFKD", value)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.strip().casefold()
     normalized = "".join(
         " " if unicodedata.category(char).startswith("P") else char for char in normalized
     )

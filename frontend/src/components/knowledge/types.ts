@@ -15,6 +15,9 @@ export interface PendingOffering {
   name: string;
   description: string;
   price_cents: number | null;
+  /** 29: the owner's own price words when the value is not a flat amount
+   *  ("from $30"). Mutually exclusive with a non-null price_cents. */
+  pricing_wording?: string;
   sources: ("owner" | "document")[];
   source_references?: SourceReference[];
   /** W-11: the documents this candidate depends on. Empty for an owner-typed
@@ -34,6 +37,8 @@ export interface PendingOffering {
   possible_matches?: string[];
   /** W-6: competing amounts when two sources price one item differently. */
   price_options?: number[];
+  /** 29: competing owner wordings for that same price slot. */
+  wording_options?: string[];
   source_wording?: string;
   proposed_category?: string;
   /** Null/undefined preserves catalog memberships; [] explicitly clears them. */

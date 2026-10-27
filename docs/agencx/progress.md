@@ -367,6 +367,22 @@ live in the ticket files, not here.
   Before/after: fixture 1 page / 517 chars -> 5 pages / 3,664; Sydney Dental
   Care 4,407 -> 11,234 across 9 pages; Phone Clinic 579 -> 4,612 across 5;
   The Grounds 5,891 -> 11,424 across 5. Decision recorded as D46.
+- [x] Source-first onboarding (ticket 29): name -> website/document -> review ->
+  missing required beats -> optional beats -> confirm, with a priced review
+  sheet, owner wording in the assistant context, and a faster 10-page crawl.
+  Six feature commits (`65ef878`, `b8d8b19`, `3e9dd7c`, `ef70289`, `7556f67`,
+  `ab335b3`) plus three fixes (`492d167`, `a29cc31`, `68885f6`). The interview
+  asks for a source second; the review leads with priced services and saves the
+  business details; a worded price reaches the assistant as owner material; and
+  the crawl reads six pages at once under a 10s deadline with a thin-result
+  sitemap fallback. Probe: fixture 145ms against 461ms, python.org the same six
+  pages and 11,468 characters, The Grounds 1,882ms against 6,281ms at 99.97% of
+  the legacy text. Open risks: client-rendered-nav sites recover only part of
+  the legacy text (nandos 7,657 of 11,484 characters, 66.7%, short of the 90%
+  bar) and the 5s p50 target was not measured end to end, only crawl wall time.
+  Status `Active - awaiting review`. See
+  [29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md).
+- [ ] Chat catalog for large menus (ticket 30): up to 20 offerings render in full, above 20 the card stays bounded and links to `/{slug}#offerings`. Depends on ticket 29 Slice C. See [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
 
 ## Spec status
 
@@ -375,6 +391,8 @@ live in the ticket files, not here.
 | [spec/active/08-deferred.md](spec/active/08-deferred.md) | `Deferred - Phase 2` | B-2, D-1, D-3 |
 | [spec/active/12-refinement.md](spec/active/12-refinement.md) | `Active - todo` | R-3, R-4 remainder, R-5 remainder (RF-1 through RF-18 delivered and archived) |
 | [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, slices 1-6 and coalescing merged at d544ce5; slice 7 deferred` | Latency instrument and model matrix, slices 1-6 merged at `d544ce5` and slice 7 deferred (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge is closed; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 68-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) Merged to development and staging on 2026-10-23; make ci green at the tip (1514 backend, 373 frontend); the founder's 10% bar is met by the coalesced burst (68-77% faster), with no single-turn clock claim. |
+| [spec/active/29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md) | `Active - awaiting review` | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D) |
+| [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - todo` | Chat catalog boundary at 20 offerings plus the business-page link |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

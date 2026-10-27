@@ -6,11 +6,12 @@ owner's customers actually ask about, so ingestion discovers a small set of
 high-signal pages before it sends anything to a model.
 
 Discovery is deliberately cheap and bounded. It reads the homepage once, takes
-the links the site's own navigation and header offer, then falls back to the
-sitemap and finally to ordinary body links. Every URL is normalised, kept on
-the same site, filtered through a junk blocklist, checked against robots.txt,
-de-duplicated by path, ranked by what a customer usually needs, and capped.
-Fetching those pages is crawl_site's job in the same module.
+the links the site's own navigation and header offer, then ordinary body links,
+and only falls back to the sitemap when neither names a page that sells
+something. Every URL is normalised, kept on the same site, filtered through a
+junk blocklist, checked against robots.txt, de-duplicated by path, ranked by
+what a customer usually needs, and capped. Fetching those pages is crawl_site's
+job in the same module.
 
 The WebReader seam exists so a later optional per-page fallback (a rendering
 reader) can be slotted in without changing discovery, extraction, or the
@@ -31,7 +32,7 @@ from typing import Protocol
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
-from selectolax.parser import HTMLParser
+from selectolax.parser import HTMLParser, Node
 
 from app.ingestion.extract import (
     PageBlocked,
@@ -47,18 +48,55 @@ logger = logging.getLogger("app.ingestion.site")
 
 DEFAULT_MAX_PAGES = 10
 DEFAULT_MAX_CHARS = 11_500
-DEFAULT_CONCURRENCY = 3
-DEFAULT_TIMEOUT_S = 30.0
+DEFAULT_CONCURRENCY = 6
+DEFAULT_TIMEOUT_S = 10.0
 _PAGE_MAX_CHARS = 4_000
 _PRICING_PAGE_MAX_CHARS = 6_000
 _MAX_SITEMAPS = 10
 _MAX_SITEMAP_URLS = 1_000
 _MAX_SITEMAP_DEPTH = 2
+# A sitemap that lists one page per item can otherwise fill the whole page
+# budget with siblings under a single first path segment.
+_SITEMAP_PREFIX_CAP = 2
 
 # Generic page names, in the order a customer usually needs them. A path token
-# matching a group's keywords gives that page its priority. Nothing here names
-# a trade, so tenant two onboards by config alone.
+# or an anchor-text token matching a group's keywords gives that page its
+# priority. Nothing here names a trade, so tenant two onboards by config alone.
+# What the business sells comes first: the review and the assistant are built
+# from those pages, and every page spent on about-us copy is a page not read
+# for a menu or a price.
 _PRIORITY_KEYWORDS: tuple[set[str], ...] = (
+    {
+        "services",
+        "service",
+        "treatments",
+        "menu",
+        "menus",
+        "pricing",
+        "prices",
+        "price",
+        "rates",
+        "what",
+        "repairs",
+    },
+    {"about", "story", "team", "who", "mission"},
+    {
+        "contact",
+        "location",
+        "locations",
+        "hours",
+        "opening",
+        "find",
+        "visit",
+        "directions",
+    },
+    {"faq", "faqs", "questions", "answers"},
+    {"policies", "policy", "shipping", "returns", "warranty", "payment", "refunds"},
+    {"booking", "book", "appointment", "appointments", "schedule", "reserve", "enquire"},
+)
+
+# The pre-29 table, kept only for the probe's comparison run.
+_LEGACY_PRIORITY_KEYWORDS: tuple[set[str], ...] = (
     {"about", "story", "team", "who", "mission"},
     {"services", "service", "treatments", "treatment", "solutions", "repairs", "what"},
     {"pricing", "prices", "price", "rates", "rate", "menu", "menus", "cost", "costs", "quote"},
@@ -159,11 +197,17 @@ _TRACKING_PARAMS = {
     "source",
 }
 
-_SOURCE_RANK = {"home": 0, "nav": 1, "sitemap": 2, "body": 3}
+_SOURCE_RANK = {"home": 0, "nav": 1, "body": 2, "sitemap": 3}
 
-# A page's path is near-identical to one already selected when its token sets
-# overlap this much under the same first segment. Cheap and conservative: the
-# content-level check in extract.py is the one that catches city duplicates.
+# The pre-29 ordering, kept only for the probe's comparison run: the sitemap was
+# a step of its own before body links, and it was always fetched.
+_LEGACY_SOURCE_RANK = {"home": 0, "nav": 1, "sitemap": 2, "body": 3}
+
+# A page's path names the same page as one already selected when one token set
+# sits inside the other (a city variant of the same page) or when the sets
+# overlap this much, under the same first segment and the same depth. Cheap and
+# conservative: the content-level check in extract.py is the one that catches
+# city duplicates.
 _PATH_DUPLICATE_THRESHOLD = 0.7
 
 
@@ -203,6 +247,11 @@ class DiscoveryResult:
     pages: list[DiscoveredPage]
     considered: int
     skipped: dict[str, int]
+    # Used by the crawl's thin-result fallback: the sitemap is fetched only
+    # after the nav/body read proves too small, so discovery cannot return the
+    # URLs it deliberately did not fetch.
+    robots_text: str = ""
+    sitemap_checked: bool = False
 
 
 def normalize_url(value: str, *, base: str | None = None) -> str | None:
@@ -254,13 +303,38 @@ def site_key(url: str) -> str:
     return host.removeprefix("www.")
 
 
-def page_priority(url: str) -> int:
-    """The generic customer-need tier of a page, 0 (home) through 99 (other)."""
+def _keyword_tokens(*values: str) -> set[str]:
+    """Casefolded word tokens from paths, URLs and anchor text."""
+    return {
+        token for value in values for token in re.split(r"[^a-z0-9]+", value.casefold()) if token
+    }
+
+
+def page_priority(url: str, label: str = "") -> int:
+    """The generic customer-need tier of a page, 0 (home) through 99 (other).
+
+    ``label`` is the anchor text the owner wrote for the link. A page named
+    after the business rather than the need - ``/our-work``, ``/what-we-do`` -
+    still ranks by what the owner called it, so the path tokens and the label
+    tokens are unioned.
+    """
     path = urlsplit(url).path
     if path in {"", "/"}:
         return 0
-    tokens = {token for token in re.split(r"[/_.-]+", path.casefold()) if token}
+    tokens = _keyword_tokens(path, label)
     for priority, keywords in enumerate(_PRIORITY_KEYWORDS, start=1):
+        if tokens & keywords:
+            return priority
+    return 99
+
+
+def _legacy_page_priority(url: str) -> int:
+    """Pre-29 ranking, path tokens only - probe comparison only."""
+    path = urlsplit(url).path
+    if path in {"", "/"}:
+        return 0
+    tokens = _keyword_tokens(path)
+    for priority, keywords in enumerate(_LEGACY_PRIORITY_KEYWORDS, start=1):
         if tokens & keywords:
             return priority
     return 99
@@ -287,23 +361,33 @@ def is_junk(url: str) -> bool:
     return False
 
 
-def extract_links(html: bytes, base_url: str) -> tuple[list[str], list[str]]:
-    """(navigation links, other body links) in document order.
+def _link_label(anchor: Node) -> str:
+    """The anchor's visible text, whitespace collapsed so it tokenises cleanly."""
+    return " ".join(anchor.text(separator=" ", strip=True).split())
+
+
+def extract_links(
+    html: bytes, base_url: str
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """(navigation links, other body links) in document order, each as
+    ``(url, anchor label)``.
 
     Navigation and header links come first because they are the site owner's
     own idea of what matters. Body links are a fallback for sites that never
-    use those elements, not the first frontier.
+    use those elements, not the first frontier. The label travels with the URL
+    because it is the owner's own words for the page: a site that names the
+    page ``/our-work`` still writes "Services" in the menu.
     """
     tree = HTMLParser(html)
-    navigation: list[str] = []
+    navigation: list[tuple[str, str]] = []
     seen_navigation: set[str] = set()
     for anchor in tree.css("nav a[href], header a[href]"):
         href = (anchor.attributes.get("href") or "").strip()
         url = normalize_url(href, base=base_url)
         if url is not None and url not in seen_navigation:
             seen_navigation.add(url)
-            navigation.append(url)
-    body: list[str] = []
+            navigation.append((url, _link_label(anchor)))
+    body: list[tuple[str, str]] = []
     seen_body: set[str] = set()
     for anchor in tree.css("a[href]"):
         href = (anchor.attributes.get("href") or "").strip()
@@ -311,7 +395,7 @@ def extract_links(html: bytes, base_url: str) -> tuple[list[str], list[str]]:
         if url is None or url in seen_navigation or url in seen_body:
             continue
         seen_body.add(url)
-        body.append(url)
+        body.append((url, _link_label(anchor)))
     return navigation, body
 
 
@@ -460,12 +544,127 @@ def _near_duplicate_path(url: str, selected: Iterable[str]) -> bool:
         if not intersection:
             continue
         union = len(tokens | other_tokens)
-        containment = intersection / min(len(tokens), len(other_tokens))
-        # Containment catches the city variant whose extra token would
-        # otherwise dilute plain Jaccard below the threshold.
-        if max(intersection / union, containment) >= _PATH_DUPLICATE_THRESHOLD:
+        # A city variant is the same page plus a qualifier, so one token set
+        # sits inside the other. A shared directory prefix is not a duplicate:
+        # /offers/x-services and /offers/x-pricing are two pages of one site.
+        subset = intersection == min(len(tokens), len(other_tokens))
+        if subset or intersection / union >= _PATH_DUPLICATE_THRESHOLD:
             return True
     return False
+
+
+def _page_offers(candidate: str, label: str, homepage: str) -> bool:
+    """True when a linked page is a same-site, readable page that sells."""
+    normalized = normalize_url(candidate, base=homepage)
+    if normalized is None:
+        return False
+    if site_key(normalized) != site_key(homepage) or is_junk(normalized):
+        return False
+    return page_priority(normalized, label) == 1
+
+
+def _consider_link(
+    link: str,
+    *,
+    source: str,
+    label: str,
+    homepage: str,
+    robots: RobotFileParser | None,
+    source_rank: dict[str, int],
+    legacy_discovery: bool,
+    candidates: dict[str, DiscoveredPage],
+    skipped: Counter[str],
+) -> None:
+    """Filter one link and merge it into the candidate set."""
+    normalized = normalize_url(link, base=homepage)
+    if normalized is None:
+        skipped["invalid_url"] += 1
+        return
+    if site_key(normalized) != site_key(homepage):
+        skipped["other_site"] += 1
+        return
+    if is_junk(normalized):
+        skipped["junk"] += 1
+        return
+    if robots is not None and not robots.can_fetch("*", normalized):
+        skipped["robots"] += 1
+        return
+    existing = candidates.get(normalized)
+    if existing is not None:
+        if source_rank[source] < source_rank[existing.source]:
+            candidates[normalized] = DiscoveredPage(
+                url=normalized,
+                priority=existing.priority,
+                source=source,
+            )
+        return
+    if normalized == homepage:
+        priority = 0
+    elif legacy_discovery:
+        priority = _legacy_page_priority(normalized)
+    else:
+        priority = page_priority(normalized, label)
+    candidates[normalized] = DiscoveredPage(
+        url=normalized,
+        priority=priority,
+        source=source,
+    )
+
+
+def _rank_pages(
+    candidates: dict[str, DiscoveredPage],
+    *,
+    source_rank: dict[str, int],
+    max_pages: int,
+    sitemap_depth_first: bool = False,
+) -> tuple[list[DiscoveredPage], Counter[str]]:
+    """Rank candidates and keep the bounded, near-duplicate-free selection.
+
+    ``sitemap_depth_first`` is the thin-result fallback: a sitemap-sourced
+    candidate is ranked by path depth before its tier, so a deep item page
+    cannot outrank a shallow page of the same site. Untiered nav/body pages
+    still come last. A flat sitemap has one depth, so its tier order is
+    unchanged. Selected sitemap pages are also capped per first path segment,
+    because a sitemap that lists one page per item can otherwise fill every
+    remaining slot with siblings.
+    """
+    skipped: Counter[str] = Counter()
+
+    def rank_key(page: DiscoveredPage) -> tuple[int, int, int, int, int, str]:
+        path = urlsplit(page.url).path
+        depth = path.count("/")
+        if sitemap_depth_first and page.source == "sitemap":
+            return (depth, page.priority, source_rank[page.source], depth, len(page.url), page.url)
+        return (page.priority, source_rank[page.source], 0, depth, len(page.url), page.url)
+
+    ranked = sorted(candidates.values(), key=rank_key)
+    selected: list[DiscoveredPage] = []
+    selected_by_priority: dict[int, list[str]] = {}
+    selected_prefixes: Counter[str] = Counter()
+    for page in ranked:
+        if len(selected) >= max_pages:
+            skipped["page_cap"] += 1
+            continue
+        prefix = urlsplit(page.url).path.strip("/").split("/", 1)[0].casefold()
+        if (
+            sitemap_depth_first
+            and page.source == "sitemap"
+            and selected_prefixes[prefix] >= _SITEMAP_PREFIX_CAP
+        ):
+            skipped["prefix_cap"] += 1
+            continue
+        # Only compare within a tier: a phone-repair page and its prices page
+        # share most of their path but serve different customer needs.
+        if page.priority != 0 and _near_duplicate_path(
+            page.url, selected_by_priority.get(page.priority, [])
+        ):
+            skipped["duplicate_path"] += 1
+            continue
+        selected.append(page)
+        selected_by_priority.setdefault(page.priority, []).append(page.url)
+        if page.source == "sitemap":
+            selected_prefixes[prefix] += 1
+    return selected, skipped
 
 
 async def discover_pages(
@@ -473,12 +672,22 @@ async def discover_pages(
     *,
     reader: WebReader | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
+    legacy_discovery: bool = False,
 ) -> DiscoveryResult:
     """Discover the bounded, ranked set of pages worth reading for ``url``.
 
     Raises ValueError when the homepage itself is unfetchable or robots.txt
     forbids reading it - both are owner-facing fetch failures, never a crawl
     that silently returns nothing.
+
+    ``legacy_discovery`` restores the pre-29 selection exactly (eager sitemap,
+    sitemap before body, path-only priorities) so the probe can put both
+    selections on the same URL. It exists only for that comparison.
+
+    ponytail: one flag, probe-only, no per-behaviour switches. Ceiling: two
+    ranking paths to keep honest while the evidence table is open. Delete this
+    branch, ``_LEGACY_*`` tables and the ``legacy_discovery`` parameters once
+    the table in ``docs/agencx/evidence/onboarding-source-2026-10/`` is filed.
     """
     reader = reader or HttpReader()
     homepage = normalize_url(url)
@@ -491,73 +700,51 @@ async def discover_pages(
         raise ValueError("this site's robots.txt does not allow it to be read")
 
     navigation, body = extract_links(homepage_html, homepage)
-    sitemap_pages = await _sitemap_urls(reader, homepage, robots_text)
+    source_rank = _LEGACY_SOURCE_RANK if legacy_discovery else _SOURCE_RANK
+    sitemap_checked = False
+
+    if legacy_discovery:
+        sitemap_pages = await _sitemap_urls(reader, homepage, robots_text)
+        sitemap_checked = True
+        feed: list[tuple[str, str, str]] = [
+            (homepage, "home", ""),
+            *((link, "nav", label) for link, label in navigation),
+            *((link, "sitemap", "") for link in sitemap_pages),
+            *((link, "body", label) for link, label in body),
+        ]
+    else:
+        # The sitemap is a fallback, not a step. When the owner's own menu
+        # already names a page that sells something, the sitemap can only add
+        # latency to a turn that already has what it came for. A result that
+        # turns out too thin is handled by the crawl, which can still fall
+        # back after seeing the pages.
+        offers = any(_page_offers(link, label, homepage) for link, label in (*navigation, *body))
+        sitemap_pages = [] if offers else await _sitemap_urls(reader, homepage, robots_text)
+        sitemap_checked = not offers
+        feed = [
+            (homepage, "home", ""),
+            *((link, "nav", label) for link, label in navigation),
+            *((link, "body", label) for link, label in body),
+            *((link, "sitemap", "") for link in sitemap_pages),
+        ]
 
     skipped: Counter[str] = Counter()
     candidates: dict[str, DiscoveredPage] = {}
-
-    def consider(link: str, source: str) -> None:
-        normalized = normalize_url(link, base=homepage)
-        if normalized is None:
-            skipped["invalid_url"] += 1
-            return
-        if site_key(normalized) != site_key(homepage):
-            skipped["other_site"] += 1
-            return
-        if is_junk(normalized):
-            skipped["junk"] += 1
-            return
-        if robots is not None and not robots.can_fetch("*", normalized):
-            skipped["robots"] += 1
-            return
-        existing = candidates.get(normalized)
-        if existing is not None:
-            if _SOURCE_RANK[source] < _SOURCE_RANK[existing.source]:
-                candidates[normalized] = DiscoveredPage(
-                    url=normalized,
-                    priority=existing.priority,
-                    source=source,
-                )
-            return
-        candidates[normalized] = DiscoveredPage(
-            url=normalized,
-            priority=0 if normalized == homepage else page_priority(normalized),
+    for link, source, label in feed:
+        _consider_link(
+            link,
             source=source,
+            label=label,
+            homepage=homepage,
+            robots=robots,
+            source_rank=source_rank,
+            legacy_discovery=legacy_discovery,
+            candidates=candidates,
+            skipped=skipped,
         )
 
-    consider(homepage, "home")
-    for link in navigation:
-        consider(link, "nav")
-    for link in sitemap_pages:
-        consider(link, "sitemap")
-    for link in body:
-        consider(link, "body")
-
-    ranked = sorted(
-        candidates.values(),
-        key=lambda page: (
-            page.priority,
-            _SOURCE_RANK[page.source],
-            urlsplit(page.url).path.count("/"),
-            len(page.url),
-            page.url,
-        ),
-    )
-    selected: list[DiscoveredPage] = []
-    selected_by_priority: dict[int, list[str]] = {}
-    for page in ranked:
-        if len(selected) >= max_pages:
-            skipped["page_cap"] += 1
-            continue
-        # Only compare within a tier: a phone-repair page and its prices page
-        # share most of their path but serve different customer needs.
-        if page.priority != 0 and _near_duplicate_path(
-            page.url, selected_by_priority.get(page.priority, [])
-        ):
-            skipped["duplicate_path"] += 1
-            continue
-        selected.append(page)
-        selected_by_priority.setdefault(page.priority, []).append(page.url)
+    selected, select_skipped = _rank_pages(candidates, source_rank=source_rank, max_pages=max_pages)
+    skipped.update(select_skipped)
 
     logger.info(
         "site discovered homepage=%s considered=%d selected=%d skipped=%s",
@@ -572,6 +759,8 @@ async def discover_pages(
         pages=selected,
         considered=len(candidates),
         skipped=dict(skipped),
+        robots_text=robots_text,
+        sitemap_checked=sitemap_checked,
     )
 
 
@@ -629,93 +818,57 @@ def _fit_section(
     return f"{header}{clipped}"
 
 
-async def crawl_site(
-    url: str,
+_MIN_SECTION_BODY = 200
+# The shortest possible section header: "## " + an empty title + "\nSource: "
+# + the URL + "\n\n". A title only makes it longer, so this is the optimistic
+# bound used to decide that no in-flight page can still fit.
+_HEADER_MIN_CHARS = len("## ") + len("\nSource: ") + 2
+
+
+@dataclass(frozen=True)
+class _Document:
+    text: str
+    used: int
+    pages: list[CrawledPage]
+    title: str
+    duplicates: int
+    empty: int
+    budget: int
+
+
+def _assemble(
+    pages: list[DiscoveredPage],
+    extracted: dict[str, PageExtraction],
     *,
-    reader: WebReader | None = None,
-    max_pages: int = DEFAULT_MAX_PAGES,
-    max_chars: int = DEFAULT_MAX_CHARS,
-    concurrency: int = DEFAULT_CONCURRENCY,
-    timeout_s: float = DEFAULT_TIMEOUT_S,
-) -> CrawlResult:
-    """Read a bounded set of pages and combine them into one model-sized document.
+    max_chars: int,
+    homepage: str,
+) -> _Document:
+    """Combine whichever of ``pages`` have been read into one document.
 
-    At most ``concurrency`` pages are fetched and extracted at once, each page
-    is capped (6,000 chars for pricing/menu, 4,000 otherwise), repeated lines
-    are removed across pages, and the combined text never exceeds
-    ``max_chars``. The total crawl has a hard deadline so an owner's turn can
-    never hang on a slow site.
-
-    Raises ValueError when no page produced readable content.
+    Pure enough to run after every completed fetch: the caller passes the
+    settled prefix, so a slow higher-ranked page cannot be skipped over.
     """
-    reader = reader or HttpReader()
-    loop = asyncio.get_running_loop()
-    started = loop.time()
-    try:
-        async with asyncio.timeout(timeout_s):
-            discovery = await discover_pages(url, reader=reader, max_pages=max_pages)
-    except TimeoutError as exc:
-        raise ValueError("could not read this URL (timeout)") from exc
-
-    skipped: Counter[str] = Counter(discovery.skipped)
-    semaphore = asyncio.Semaphore(max(1, concurrency))
-
-    async def read(page: DiscoveredPage) -> PageExtraction:
-        async with semaphore:
-            html = (
-                discovery.homepage_html
-                if page.url == discovery.homepage
-                else await reader.read(page.url)
-            )
-            return await asyncio.to_thread(extract_page, html, url=page.url)
-
-    tasks = {page.url: asyncio.create_task(read(page)) for page in discovery.pages}
-    remaining_s = max(0.1, timeout_s - (loop.time() - started))
-    done, pending = await asyncio.wait(tasks.values(), timeout=remaining_s)
-    timed_out = bool(pending)
-    if pending:
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
-        skipped["timeout"] += len(pending)
-
-    extracted: dict[str, PageExtraction] = {}
-    for page in discovery.pages:
-        task = tasks[page.url]
-        if task not in done:
-            continue
-        try:
-            extracted[page.url] = task.result()
-        except PageBlocked as exc:
-            skipped["blocked"] += 1
-            logger.info("crawl page blocked url=%s reason=%s", page.url, exc)
-        except ValueError as exc:
-            skipped["fetch_failed"] += 1
-            logger.info("crawl page unreadable url=%s reason=%s", page.url, exc)
-        except Exception:  # noqa: BLE001 - one bad page must not lose the site
-            skipped["extract_failed"] += 1
-            logger.exception("crawl page extraction failed url=%s", page.url)
-
     parts: list[str] = []
     used = 0
-    pages: list[CrawledPage] = []
+    crawled: list[CrawledPage] = []
     seen_lines: set[str] = set()
     fingerprints: list[str] = []
-    homepage_title = ""
-    for page in discovery.pages:
+    title = ""
+    duplicates = empty = budget = 0
+    for page in pages:
         extraction = extracted.get(page.url)
         if extraction is None:
             continue
-        if page.url == discovery.homepage:
-            homepage_title = extraction.title
+        if page.url == homepage:
+            title = extraction.title
         opening = f"{extraction.title}\n{extraction.text[:600]}"
         if any(is_near_duplicate(opening, other) for other in fingerprints):
-            skipped["duplicate_content"] += 1
+            duplicates += 1
             continue
         fingerprints.append(opening)
         body = dedupe_lines(extraction.text, seen_lines)
         if not body.strip():
-            skipped["empty"] += 1
+            empty += 1
             continue
         page_cap = _PRICING_PAGE_MAX_CHARS if is_pricing_page(page.url) else _PAGE_MAX_CHARS
         body = _truncate(body, page_cap)
@@ -727,29 +880,309 @@ async def crawl_site(
             needs_separator=bool(parts),
         )
         if section is None:
-            skipped["budget"] += 1
+            budget += 1
             continue
         used += len(section) + (2 if parts else 0)
         parts.append(section)
-        pages.append(CrawledPage(url=page.url, title=extraction.title, chars=len(body)))
+        crawled.append(CrawledPage(url=page.url, title=extraction.title, chars=len(body)))
+    return _Document(
+        text="\n\n".join(parts),
+        used=used,
+        pages=crawled,
+        title=title,
+        duplicates=duplicates,
+        empty=empty,
+        budget=budget,
+    )
 
-    if not parts:
+
+def _settled_prefix(
+    selected: list[DiscoveredPage],
+    extracted: dict[str, PageExtraction],
+    in_flight: set[str],
+) -> list[DiscoveredPage]:
+    """The pages that can be placed before an earlier in-flight page lands."""
+    ready: list[DiscoveredPage] = []
+    for page in selected:
+        if page.url in extracted:
+            ready.append(page)
+        elif page.url in in_flight:
+            break
+    return ready
+
+
+def _budget_satisfied(
+    document: _Document,
+    *,
+    in_flight: set[str],
+    max_chars: int,
+    max_pages: int,
+) -> bool:
+    """True when no in-flight page can add a useful section."""
+    if document.used >= max_chars or len(document.pages) >= max_pages:
+        return True
+    if not in_flight:
+        return True
+    remaining = max_chars - document.used
+    shortest_url = min(len(url) for url in in_flight)
+    return remaining - 2 - _HEADER_MIN_CHARS - shortest_url < _MIN_SECTION_BODY
+
+
+async def _pump(
+    pages: list[DiscoveredPage],
+    *,
+    selected: list[DiscoveredPage],
+    reader: WebReader,
+    homepage: str,
+    homepage_html: bytes,
+    extracted: dict[str, PageExtraction],
+    fetched: set[str],
+    skipped: Counter[str],
+    semaphore: asyncio.Semaphore,
+    max_chars: int,
+    max_pages: int,
+    deadline: float,
+    stop_early: bool,
+) -> bool:
+    """Read ``pages`` concurrently and fold completions into the document.
+
+    Returns True when the deadline cancelled in-flight reads. A read cancelled
+    because the budget is already satisfied is deliberately not counted: it
+    never started, so it is neither a failure nor a skip reason.
+    """
+    loop = asyncio.get_running_loop()
+
+    async def read(page: DiscoveredPage) -> PageExtraction:
+        async with semaphore:
+            html = homepage_html if page.url == homepage else await reader.read(page.url)
+            return await asyncio.to_thread(extract_page, html, url=page.url)
+
+    tasks: dict[asyncio.Task[PageExtraction], str] = {
+        asyncio.create_task(read(page)): page.url for page in pages if page.url not in fetched
+    }
+    pending = set(tasks)
+    timed_out = False
+    while pending:
+        in_flight = {tasks[task] for task in pending}
+        document = _assemble(
+            _settled_prefix(selected, extracted, in_flight),
+            extracted,
+            max_chars=max_chars,
+            homepage=homepage,
+        )
+        if stop_early and _budget_satisfied(
+            document, in_flight=in_flight, max_chars=max_chars, max_pages=max_pages
+        ):
+            break
+        remaining_s = deadline - loop.time()
+        if remaining_s <= 0:
+            timed_out = True
+            break
+        done, pending = await asyncio.wait(
+            pending, timeout=remaining_s, return_when=asyncio.FIRST_COMPLETED
+        )
+        if not done:
+            timed_out = True
+            break
+        for task in done:
+            url = tasks[task]
+            fetched.add(url)
+            try:
+                extracted[url] = task.result()
+            except asyncio.CancelledError:
+                continue
+            except PageBlocked as exc:
+                skipped["blocked"] += 1
+                logger.info("crawl page blocked url=%s reason=%s", url, exc)
+            except ValueError as exc:
+                skipped["fetch_failed"] += 1
+                logger.info("crawl page unreadable url=%s reason=%s", url, exc)
+            except Exception:  # noqa: BLE001 - one bad page must not lose the site
+                skipped["extract_failed"] += 1
+                logger.exception("crawl page extraction failed url=%s", url)
+
+    if pending:
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        if timed_out:
+            skipped["timeout"] += len(pending)
+    return timed_out
+
+
+def _parse_robots(text: str) -> RobotFileParser | None:
+    if not text:
+        return None
+    parser = RobotFileParser()
+    parser.parse(text.splitlines())
+    return parser
+
+
+def _is_thin(
+    document: _Document,
+    selected: list[DiscoveredPage],
+    extracted: dict[str, PageExtraction],
+    *,
+    max_chars: int,
+) -> bool:
+    """True when the nav/body read is not worth trusting as the whole site."""
+    offerings_read = any(page.priority == 1 and page.url in extracted for page in selected)
+    return not offerings_read or document.used * 10 < max_chars * 6
+
+
+async def _expand_from_sitemaps(
+    discovery: DiscoveryResult,
+    *,
+    reader: WebReader,
+    max_pages: int,
+) -> tuple[list[DiscoveredPage], Counter[str]]:
+    """Re-rank the nav/body selection together with the sitemap pages."""
+    robots = _parse_robots(discovery.robots_text)
+    candidates = {page.url: page for page in discovery.pages}
+    skipped: Counter[str] = Counter()
+    for link in await _sitemap_urls(reader, discovery.homepage, discovery.robots_text):
+        _consider_link(
+            link,
+            source="sitemap",
+            label="",
+            homepage=discovery.homepage,
+            robots=robots,
+            source_rank=_SOURCE_RANK,
+            legacy_discovery=False,
+            candidates=candidates,
+            skipped=skipped,
+        )
+    selected, select_skipped = _rank_pages(
+        candidates,
+        source_rank=_SOURCE_RANK,
+        max_pages=max_pages,
+        sitemap_depth_first=True,
+    )
+    skipped.update(select_skipped)
+    return selected, skipped
+
+
+async def crawl_site(
+    url: str,
+    *,
+    reader: WebReader | None = None,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+    legacy_discovery: bool = False,
+) -> CrawlResult:
+    """Read a bounded set of pages and combine them into one model-sized document.
+
+    At most ``concurrency`` pages are fetched and extracted at once, each page
+    is capped (6,000 chars for pricing/menu, 4,000 otherwise), repeated lines
+    are removed across pages, and the combined text never exceeds
+    ``max_chars``. The crawl consumes reads as they complete and stops as soon
+    as the page or character budget is full, so a slow sibling cannot stretch
+    a turn once the document is complete. The total crawl has a hard deadline.
+
+    ``legacy_discovery`` is the probe's comparison switch; see
+    ``discover_pages``. It also keeps the pre-29 wait-for-every-read shape so
+    the probe compares the new crawl with the old one, not with itself.
+
+    Raises ValueError when no page produced readable content.
+    """
+    reader = reader or HttpReader()
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    deadline = started + timeout_s
+    try:
+        async with asyncio.timeout(timeout_s):
+            discovery = await discover_pages(
+                url,
+                reader=reader,
+                max_pages=max_pages,
+                legacy_discovery=legacy_discovery,
+            )
+    except TimeoutError as exc:
+        raise ValueError("could not read this URL (timeout)") from exc
+
+    skipped: Counter[str] = Counter(discovery.skipped)
+    extracted: dict[str, PageExtraction] = {}
+    fetched: set[str] = set()
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    selected = discovery.pages
+
+    async def pump(pages: list[DiscoveredPage], *, stop_early: bool) -> bool:
+        return await _pump(
+            pages,
+            selected=selected,
+            reader=reader,
+            homepage=discovery.homepage,
+            homepage_html=discovery.homepage_html,
+            extracted=extracted,
+            fetched=fetched,
+            skipped=skipped,
+            semaphore=semaphore,
+            max_chars=max_chars,
+            max_pages=max_pages,
+            deadline=deadline,
+            stop_early=stop_early,
+        )
+
+    if legacy_discovery:
+        timed_out = await pump(selected, stop_early=False)
+    else:
+        # Tiered pages first: the untiered body tail is the first thing to
+        # replace if the result turns out thin, so it is not read until the
+        # sitemap fallback has had its chance.
+        timed_out = await pump([page for page in selected if page.priority != 99], stop_early=True)
+        if not timed_out:
+            document = _assemble(
+                selected, extracted, max_chars=max_chars, homepage=discovery.homepage
+            )
+            # The fallback protects coverage on a site with more pages than the
+            # budget: if discovery never hit the cap it already read every page
+            # the nav and body offered, and a sitemap would only add latency.
+            if (
+                len(discovery.pages) >= max_pages
+                and _is_thin(document, selected, extracted, max_chars=max_chars)
+                and not discovery.sitemap_checked
+            ):
+                selected, sitemap_skipped = await _expand_from_sitemaps(
+                    discovery, reader=reader, max_pages=max_pages
+                )
+                skipped.update(sitemap_skipped)
+                document = _assemble(
+                    selected, extracted, max_chars=max_chars, homepage=discovery.homepage
+                )
+            slots = max(0, max_pages - len(fetched))
+            unread = [page for page in selected if page.url not in fetched][:slots]
+            if unread and not _budget_satisfied(
+                document,
+                in_flight={page.url for page in unread},
+                max_chars=max_chars,
+                max_pages=max_pages,
+            ):
+                timed_out = await pump(unread, stop_early=True)
+
+    document = _assemble(selected, extracted, max_chars=max_chars, homepage=discovery.homepage)
+    skipped["duplicate_content"] += document.duplicates
+    skipped["empty"] += document.empty
+    skipped["budget"] += document.budget
+
+    if not document.pages:
         raise ValueError("no extractable content at this URL")
 
-    text = "\n\n".join(parts)
+    text = document.text
     # The budget is applied before the model calls; this assertion is the
     # invariant, not an estimate.
     if len(text) > max_chars:
         text = _truncate(text, max_chars)
-    title = homepage_title or pages[0].title
-    logger.debug("site crawl pages=%s", [page.url for page in pages])
+    title = document.title or document.pages[0].title
+    logger.debug("site crawl pages=%s", [page.url for page in document.pages])
     logger.info(
         "site crawl homepage=%s pages_discovered=%d pages_selected=%d pages_read=%d "
         "pages_skipped=%d blocked=%d robots_skipped=%d chars=%d timed_out=%s reasons=%s",
         discovery.homepage,
         discovery.considered,
-        len(discovery.pages),
-        len(pages),
+        len(selected),
+        len(document.pages),
         sum(skipped.values()),
         skipped.get("blocked", 0),
         skipped.get("robots", 0),
@@ -761,9 +1194,9 @@ async def crawl_site(
         homepage=discovery.homepage,
         title=title,
         text=text,
-        pages=pages,
+        pages=document.pages,
         discovered=discovery.considered,
-        selected=len(discovery.pages),
+        selected=len(selected),
         skipped=dict(skipped),
         timed_out=timed_out,
     )

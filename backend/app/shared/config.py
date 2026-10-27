@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # segment limit (12,000) to keep the turn to one structure call.
     website_crawl_max_pages: int = 10
     website_crawl_max_chars: int = 11_500
-    website_crawl_concurrency: int = 3
+    website_crawl_concurrency: int = 6
 
     # Log level for the structured JSON logger (app/observability/logging.py).
     log_level: str = "INFO"

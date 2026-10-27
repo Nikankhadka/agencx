@@ -109,6 +109,9 @@ class ActiveOffering:
     description: str
     category: str | None
     price_cents: int | None
+    # 29: the owner's own words when the price is not a fixed amount. Display
+    # material, quoted verbatim; it never becomes a computed amount.
+    pricing_wording: str | None = None
     categories: list[ActiveOfferingCategory] = field(default_factory=list)
 
 
@@ -177,7 +180,8 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
     business_name = str(profile.get("business_name") or "").strip()
     voice = voice_from_config(config)
     offering_rows = await conn.fetch(
-        "select o.id, o.name, o.description, o.category, o.price_cents from offerings o "
+        "select o.id, o.name, o.description, o.category, o.price_cents, "
+        "o.pricing_wording from offerings o "
         "where o.tenant_id = $1 and o.active "
         "order by o.position, o.created_at, o.id",
         tenant_id,
@@ -207,6 +211,7 @@ async def build_package(conn: AppConnection, tenant_id: UUID) -> ContextPackage:
             category=row["category"],
             categories=categories_by_offering.get(row["id"], []),
             price_cents=row["price_cents"],
+            pricing_wording=row["pricing_wording"],
         )
         for row in offering_rows
     ]
@@ -289,6 +294,12 @@ def format_offerings(offerings: list[ActiveOffering]) -> str:
             line += f": {offering.description}"
         if offering.price_cents is not None:
             line += f" (${offering.price_cents // 100}.{offering.price_cents % 100:02d})"
+        elif offering.pricing_wording:
+            # Verbatim, in the slot a fixed price occupies. This line is part of
+            # ``owner_material``, which is what makes the owner's own figure an
+            # allowed source for the money gate (C-1) without the model
+            # computing one.
+            line += f" ({offering.pricing_wording})"
         lines.append(f"- {line}")
     return "\n".join(lines)
 

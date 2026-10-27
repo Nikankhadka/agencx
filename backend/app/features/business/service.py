@@ -430,20 +430,22 @@ async def reconcile_offerings_batch(
             name,
             str(item.get("description", "")),
             item.get("price_cents"),
+            item.get("pricing_wording"),
         )
         row = existing.get(key)
         if row is not None:
             await conn.execute(
-                "update offerings set name = $3, description = $4, price_cents = $5 "
-                "where tenant_id = $1 and id = $2",
+                "update offerings set name = $3, description = $4, price_cents = $5, "
+                "pricing_wording = $6 where tenant_id = $1 and id = $2",
                 tenant_id,
                 row["id"],
                 *values,
             )
         else:
             inserted = await conn.fetchrow(
-                "insert into offerings (tenant_id, name, description, price_cents, position) "
-                "values ($1, $2, $3, $4, $5) returning id, name",
+                "insert into offerings "
+                "(tenant_id, name, description, price_cents, pricing_wording, position) "
+                "values ($1, $2, $3, $4, $5, $6) returning id, name",
                 tenant_id,
                 *values,
                 position,

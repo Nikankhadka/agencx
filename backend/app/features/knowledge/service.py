@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
+from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -369,33 +371,77 @@ class _StageFailure(Exception):
 
 
 async def _draft_sections_and_extraction(
-    body: bytes, extension: str, *, provider: LLMProvider, document_id: UUID
-) -> tuple[str, list[dict[str, str]], dict[str, Any]]:
-    """Raw bytes -> (source text, readable sections, offering extraction).
+    body: bytes,
+    extension: str,
+    *,
+    provider: LLMProvider,
+    document_id: UUID,
+    extract_profile: Callable[[str], Coroutine[Any, Any, Any]] | None = None,
+    timings: dict[str, float] | None = None,
+) -> tuple[str, list[dict[str, str]], dict[str, Any], Any]:
+    """Raw bytes -> (source text, readable sections, offering extraction, profile).
 
-    Shared by draft_from_upload (a fresh upload) and retry_draft (the same
-    file read back from storage), so both run the identical pipeline over
-    whichever bytes they have in hand. Raises _StageFailure naming whichever
-    step failed. structure_document and extract_offerings are both built to
-    degrade rather than raise (see their own docstrings), so in practice this
-    only trips on a file whose bytes cannot even be turned into text.
+    Shared by draft_from_upload (a fresh upload), retry_draft (the same
+    file read back from storage) and the 29 source upload, so every path runs
+    the identical pipeline over whichever bytes they have in hand. Raises
+    _StageFailure naming whichever step failed. structure_document and
+    extract_offerings are both built to degrade rather than raise (see their
+    own docstrings), so in practice this only trips on a file whose bytes
+    cannot even be turned into text.
+
+    29: the two model passes read the same text and neither needs the other's
+    output, so they run together. The stage labels are unchanged - structure is
+    awaited first, so it keeps reporting its own failure and a timeout while it
+    is still running still names "structure". ``extract_profile`` is an
+    optional third pass over the same text (the onboarding source path); it is
+    a callback so this module never imports onboarding. ``timings`` receives
+    the measured per-pass milliseconds, for the source turn's one log line.
     """
     stage: Literal["structure", "extract"] = "structure"
     try:
         async with asyncio.timeout(_DRAFT_TIMEOUT_SECONDS):
             try:
                 raw_text = await run_in_threadpool(extract_text, body, extension)
-                sections = await structure_document(raw_text, provider=provider)
             except Exception as exc:
                 raise _StageFailure("structure", exc) from exc
-            stage = "extract"
+            structure_started = time.perf_counter()
+            structure_task = asyncio.create_task(structure_document(raw_text, provider=provider))
+            extraction_started = time.perf_counter()
+            extraction_task = asyncio.create_task(
+                _extraction(raw_text, provider=provider, document_id=document_id)
+            )
+            profile_task: asyncio.Task[Any] | None = (
+                asyncio.create_task(extract_profile(raw_text))
+                if extract_profile is not None
+                else None
+            )
             try:
-                extraction = await _extraction(raw_text, provider=provider, document_id=document_id)
-            except Exception as exc:
-                raise _StageFailure("extract", exc) from exc
+                try:
+                    sections = await structure_task
+                except Exception as exc:
+                    raise _StageFailure("structure", exc) from exc
+                _record_ms(timings, "structure_ms", structure_started)
+                stage = "extract"
+                try:
+                    extraction = await extraction_task
+                except Exception as exc:
+                    raise _StageFailure("extract", exc) from exc
+                _record_ms(timings, "offerings_ms", extraction_started)
+                profile = await profile_task if profile_task is not None else None
+            finally:
+                # A failed pass leaves its siblings running otherwise; the
+                # gather they replace would have torn them down for us.
+                for task in (structure_task, extraction_task, profile_task):
+                    if task is not None and not task.done():
+                        task.cancel()
     except TimeoutError as exc:
         raise _StageFailure(stage, exc) from exc
-    return raw_text, sections, extraction
+    return raw_text, sections, extraction, profile
+
+
+def _record_ms(timings: dict[str, float] | None, key: str, started: float) -> None:
+    if timings is not None:
+        timings[key] = round((time.perf_counter() - started) * 1000, 1)
 
 
 async def _insert_failed_draft(
@@ -540,10 +586,65 @@ async def draft_from_upload(
     again. Only a rejection at the validation edge (api.py's _reject_upload,
     which runs before any of this) stores nothing at all.
     """
+    record, _profile = await _draft_upload(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        filename=filename,
+        body=body,
+        extension=extension,
+        provider=provider,
+    )
+    return record
+
+
+async def draft_from_upload_with_profile(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    filename: str,
+    body: bytes,
+    extension: str,
+    provider: LLMProvider,
+    extract_profile: Callable[[str], Coroutine[Any, Any, Any]],
+) -> tuple[dict[str, Any] | None, Any]:
+    """29: a file as an onboarding source - the upload twin of the URL turn.
+
+    Identical to ``draft_from_upload`` except that ``extract_profile`` runs over
+    the same parsed text alongside structure and offerings, so a source turn is
+    one read of the file rather than three. Returns the document record and
+    whatever the profile pass returned (None when the draft failed before the
+    text existed).
+    """
+    return await _draft_upload(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        filename=filename,
+        body=body,
+        extension=extension,
+        provider=provider,
+        extract_profile=extract_profile,
+    )
+
+
+async def _draft_upload(
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    filename: str,
+    body: bytes,
+    extension: str,
+    provider: LLMProvider,
+    extract_profile: Callable[[str], Coroutine[Any, Any, Any]] | None = None,
+) -> tuple[dict[str, Any] | None, Any]:
+    """Store the file, run the draft pipeline, park or insert the row."""
     await get_storage().put(document_key(tenant_id, document_id, extension), body)
     try:
-        raw_text, sections, extraction = await _draft_sections_and_extraction(
-            body, extension, provider=provider, document_id=document_id
+        raw_text, sections, extraction, profile = await _draft_sections_and_extraction(
+            body,
+            extension,
+            provider=provider,
+            document_id=document_id,
+            extract_profile=extract_profile,
         )
     except _StageFailure as failure:
         _log_failure(
@@ -552,15 +653,18 @@ async def draft_from_upload(
             stage=failure.stage,
             error=failure.error,
         )
-        return await _insert_failed_draft(
-            tenant_id=tenant_id,
-            document_id=document_id,
-            filename=filename,
-            doc_type="other",
-            stage=failure.stage,
-            error=_safe_failure_message(failure.stage),
-            sections=None,
-            extraction=None,
+        return (
+            await _insert_failed_draft(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                filename=filename,
+                doc_type="other",
+                stage=failure.stage,
+                error=_safe_failure_message(failure.stage),
+                sections=None,
+                extraction=None,
+            ),
+            None,
         )
     await _save_original_text(tenant_id=tenant_id, document_id=document_id, text=raw_text)
     # An extraction that comes back status="failed" is a degraded-but-reviewable
@@ -568,7 +672,7 @@ async def draft_from_upload(
     # lands as an ordinary draft with a thin or empty candidate list, exactly
     # like "partial" or "full". Only a raised exception (_StageFailure, above)
     # blocks the document at status='failed'.
-    return await _insert_draft(
+    record = await _insert_draft(
         tenant_id=tenant_id,
         document_id=document_id,
         filename=filename,
@@ -576,6 +680,7 @@ async def draft_from_upload(
         sections=sections,
         extraction=extraction,
     )
+    return record, profile
 
 
 async def retry_draft(
@@ -622,7 +727,7 @@ async def retry_draft(
         )
 
     try:
-        raw_text, sections, extraction = await _draft_sections_and_extraction(
+        raw_text, sections, extraction, _profile = await _draft_sections_and_extraction(
             body, extension, provider=provider, document_id=document_id
         )
     except _StageFailure as failure:
@@ -678,8 +783,13 @@ async def draft_from_url_text(
     text: str,
     title: str,
     provider: LLMProvider,
+    timings: dict[str, float] | None = None,
 ) -> dict[str, Any] | None:
-    """Store one already-fetched page as a draft."""
+    """Store one already-fetched page as a draft.
+
+    ``timings`` (29) receives the measured per-pass milliseconds of the draft
+    pipeline, so the streaming source turn can log where its time went.
+    """
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         existing = await conn.fetchval(
             "select id from documents where tenant_id = $1 and filename = $2",
@@ -690,8 +800,12 @@ async def draft_from_url_text(
     await get_storage().put(document_key(tenant_id, target, ".txt"), text.encode("utf-8"))
 
     try:
-        _raw_text, sections, extraction = await _draft_sections_and_extraction(
-            text.encode("utf-8"), ".txt", provider=provider, document_id=target
+        _raw_text, sections, extraction, _profile = await _draft_sections_and_extraction(
+            text.encode("utf-8"),
+            ".txt",
+            provider=provider,
+            document_id=target,
+            timings=timings,
         )
     except _StageFailure as failure:
         _log_failure(

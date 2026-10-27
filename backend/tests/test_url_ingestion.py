@@ -30,7 +30,7 @@ from app.main import app
 from app.shared import db
 from app.shared.config import get_settings
 from tests.conftest import _app_dsn_for
-from tests.fakes import EMBEDDING_DIM, ZeroEmbedder
+from tests.fakes import EMBEDDING_DIM, ConcurrencyProbe, ZeroEmbedder
 
 TEST_JWT_SECRET = "test-only-supabase-jwt-secret-do-not-use-in-prod"  # noqa: S105
 
@@ -759,3 +759,25 @@ async def test_ingest_url_requires_auth(
 ) -> None:
     response = await client.post("/api/knowledge/urls", json={"url": "https://example.com/"})
     assert response.status_code == 401
+
+
+# --- 29: the draft's two model passes run together ---------------------------
+
+_PROBE_SOURCE = "Screen replacement $89.\nBattery replacement $49.\n"
+
+
+async def test_structure_and_offerings_run_concurrently() -> None:
+    """29: the draft pipeline reads one document twice - once for readable
+    sections, once for offerings - and neither pass needs the other's result.
+    A fake provider counts how many ``extract`` calls are in flight, so a
+    serial implementation (the shape this replaces) shows at most one."""
+    provider = ConcurrencyProbe(
+        offerings=[{"name_quote": "Screen replacement", "price_block": "b0"}]
+    )
+
+    await service._draft_sections_and_extraction(
+        _PROBE_SOURCE.encode("utf-8"), ".txt", provider=provider, document_id=uuid.uuid4()
+    )
+
+    assert provider.max_in_flight >= 2
+    assert provider.started("offerings") < provider.finished("structure")

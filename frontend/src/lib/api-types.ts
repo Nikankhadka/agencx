@@ -207,6 +207,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Source
+         * @description 29: a file answers the source stage.
+         *
+         *     Same validation edge as every other upload - the allowlist, the size cap
+         *     and the empty-file check all come from ``_reject_upload`` so this door
+         *     cannot drift from the Knowledge screen's. One read of the file fills the
+         *     profile blanks and returns the reviewed candidates as onboarding state.
+         */
+        post: operations["post_source_api_onboarding_source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/knowledge/{document_id}": {
         parameters: {
             query?: never;
@@ -1073,6 +1098,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_post_source_api_onboarding_source_post */
+        Body_post_source_api_onboarding_source_post: {
+            /** File */
+            file: string;
+        };
         /** Body_put_cover_api_business_cover_put */
         Body_put_cover_api_business_cover_put: {
             /** File */
@@ -1764,6 +1794,10 @@ export interface components {
              * @default false
              */
             accept_price_changes: boolean;
+            /** Profile */
+            profile?: {
+                [key: string]: string;
+            } | null;
         };
         /** OnboardingKnowledgeBatchResponse */
         OnboardingKnowledgeBatchResponse: {
@@ -1837,6 +1871,8 @@ export interface components {
              * @default 0
              */
             revision: number;
+            /** Missing Required */
+            missing_required?: string[];
         };
         /** OnboardingSuggestionsRequest */
         OnboardingSuggestionsRequest: {
@@ -1869,6 +1905,11 @@ export interface components {
             description: string;
             /** Price Cents */
             price_cents?: number | null;
+            /**
+             * Pricing Wording
+             * @default
+             */
+            pricing_wording: string;
             /** Sources */
             sources?: ("owner" | "document")[];
             /** Source References */
@@ -1895,6 +1936,8 @@ export interface components {
             possible_matches?: string[];
             /** Price Options */
             price_options?: number[];
+            /** Wording Options */
+            wording_options?: string[];
             /**
              * Source Wording
              * @default
@@ -1945,6 +1988,11 @@ export interface components {
             description: string;
             /** Price Cents */
             price_cents?: number | null;
+            /**
+             * Pricing Wording
+             * @default
+             */
+            pricing_wording: string;
             /** Sources */
             sources?: ("owner" | "document")[];
             /** Source References */
@@ -1971,6 +2019,8 @@ export interface components {
             possible_matches?: string[];
             /** Price Options */
             price_options?: number[];
+            /** Wording Options */
+            wording_options?: string[];
             /**
              * Source Wording
              * @default
@@ -2828,6 +2878,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingKnowledgeBatchResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    post_source_api_onboarding_source_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_post_source_api_onboarding_source_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStateResponse"];
                 };
             };
             /** @description Validation failed */

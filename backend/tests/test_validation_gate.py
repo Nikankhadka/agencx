@@ -24,6 +24,7 @@ from app.llm.provider import ChatMessage, ToolCall, ToolTurn
 from app.pricing.validation_gate import extract_monetary_figures, validate
 from app.retrieval.rerank import Reranker
 from app.retrieval.types import RetrievedChunk
+from app.services.context_package import ActiveOffering, format_offerings
 from app.shared import db
 from tests.conftest import _app_dsn_for
 from tests.fakes import ToolAwareFakeProvider, ZeroEmbedder
@@ -190,6 +191,44 @@ def test_hedge_attaches_only_to_its_own_figure() -> None:
 def test_owner_profile_text_counts_as_material() -> None:
     profile = "Services offered: mobile screen repair, from $89 callout"
     assert validate("Callout starts from $89.", None, material=[profile]) == []
+
+
+# --- 29 slice C: owner-authored pricing wording is material, not model money ---
+
+
+def _owner_material_with_wording(wording: str) -> list[str]:
+    return [
+        format_offerings(
+            [
+                ActiveOffering(
+                    id="item-1",
+                    name="Catering box",
+                    description="Feeds 15",
+                    category=None,
+                    price_cents=None,
+                    pricing_wording=wording,
+                )
+            ]
+        )
+    ]
+
+
+def test_a_reply_quoting_the_owners_wording_passes() -> None:
+    material = _owner_material_with_wording("from $285 for 15 people")
+    assert validate("The catering box is from $285 for 15 people.", None, material=material) == []
+
+
+def test_an_invented_figure_against_the_owners_wording_fails() -> None:
+    material = _owner_material_with_wording("from $285 for 15 people")
+    violations = validate("The catering box is from $300 for 15 people.", None, material=material)
+    assert len(violations) == 1
+    assert "$300" in violations[0]
+
+
+def test_wording_without_a_figure_is_not_treated_as_money() -> None:
+    material = _owner_material_with_wording("market price")
+    assert extract_monetary_figures("market price") == []
+    assert validate("Pricing is market price.", None, material=material) == []
 
 
 # --- API-layer half: no request schema accepts money -------------------------

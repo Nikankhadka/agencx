@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { insertOwnerOffering, offeringPage, offeringPageCount, pageForOffering, Pagination, ReviewSheet, toWorkingOffering } from "./ReviewSheet";
+import {
+  insertOwnerOffering,
+  offeringPage,
+  offeringPageCount,
+  pageForOffering,
+  Pagination,
+  priceInputUpdate,
+  profilePatchFor,
+  ReviewSheet,
+  toPendingOffering,
+  toWorkingOffering,
+  type ReviewProfile,
+} from "./ReviewSheet";
 import type { KnowledgeRecord, ReviewOffering, ReviewWorkspace } from "./types";
 
 /**
@@ -117,14 +129,14 @@ describe("review toolbar", () => {
     };
   }
 
-  function workspaceWith(offeringCount: number): ReviewWorkspace {
+  function workspaceWith(offeringCount: number, priceCents: number | null = 1000): ReviewWorkspace {
     return {
       id: "ws-1",
       documents: [record()],
       offering_candidates: Array.from({ length: offeringCount }, (_, index) => ({
         name: `Offering ${index + 1}`,
         description: "",
-        price_cents: null,
+        price_cents: priceCents,
         sources: ["owner"] as const,
       })),
     };
@@ -339,11 +351,16 @@ describe("review workspace clarity", () => {
     };
   }
 
-  function renderClarity(sheet: ReviewWorkspace, onboarding = false): string {
+  function renderClarity(
+    sheet: ReviewWorkspace,
+    onboarding = false,
+    profile?: ReviewProfile,
+  ): string {
     return renderToStaticMarkup(
       <ReviewSheet
         workspace={sheet}
         onboarding={onboarding}
+        profile={profile}
         open
         busy={false}
         priceConflict={null}
@@ -363,12 +380,19 @@ describe("review workspace clarity", () => {
   });
 
   it("renders the sections in DOM order matching the visual order", () => {
-    // Ticket 28 reverses RF-6: offerings lead in both modes - they are what
-    // the review exists to check; business information is context read after.
+    // 29: the review leads with what the business offers, then the business
+    // details the source found, then the source line.
     const business = renderClarity(workspace("draft"));
-    expect(business.indexOf("Offerings")).toBeLessThan(business.indexOf("Business information"));
-    const onboarding = renderClarity(workspace("draft"), true);
-    expect(onboarding.indexOf("Offerings")).toBeLessThan(onboarding.indexOf("Business information"));
+    expect(business.indexOf("What you offer")).toBeLessThan(business.indexOf("Sources"));
+    const onboarding = renderClarity(workspace("draft"), true, {
+      business_name: "Test Repairs",
+    });
+    expect(onboarding.indexOf("What you offer")).toBeLessThan(
+      onboarding.indexOf("Business details"),
+    );
+    expect(onboarding.indexOf("Business details")).toBeLessThan(
+      onboarding.indexOf("Sources"),
+    );
   });
 
   it("drops the repeated source line from the business offerings count", () => {
@@ -376,5 +400,179 @@ describe("review workspace clarity", () => {
     const business = renderClarity(workspace("draft"));
     expect(business).toMatch(/<p class="mt-1 text-meta text-ink-a40">1 retained offering/);
     expect(business).not.toMatch(/<p class="mt-1 text-meta text-ink-a40">From /);
+  });
+});
+
+describe("priced-first review (29)", () => {
+  function record(overrides: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
+    return {
+      id: "doc-1",
+      filename: "menu.pdf",
+      doc_type: "other",
+      status: "draft",
+      error: null,
+      sections: [{ heading: "Hours", body: "The secret document body" }],
+      ...overrides,
+    };
+  }
+
+  function renderPricedFirst({
+    offerings = [candidate({ candidate_id: "c1", name: "Bowl" })],
+    profile,
+    missingRequired,
+    sectionBody = "The secret document body",
+  }: {
+    offerings?: ReviewOffering[];
+    profile?: ReviewProfile;
+    missingRequired?: string[];
+    sectionBody?: string;
+  } = {}): string {
+    const workspace: ReviewWorkspace = {
+      id: "ws-1",
+      documents: [
+        record({
+          sections: [{ heading: "Hours", body: sectionBody }],
+        }),
+      ],
+      offering_candidates: offerings,
+    };
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={workspace}
+        open
+        busy={false}
+        priceConflict={null}
+        profile={profile}
+        missingRequired={missingRequired}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("opens expanded with the banner when a service has no price", () => {
+    const offerings = Array.from({ length: 7 }, (_, index) =>
+      candidate({
+        candidate_id: `c${index}`,
+        name: `Offering ${index + 1}`,
+        price_cents: index === 6 ? null : 1000,
+      }),
+    );
+
+    const html = renderPricedFirst({ offerings });
+
+    expect(html).toContain(
+      "No prices found here. Add a price, or write it your way, like &quot;from $30&quot;.",
+    );
+    // The server render is the mobile/SSR three-row cap; the fourth row is only
+    // present when the list opened expanded.
+    expect(html).toContain('aria-label="Offering 4 name"');
+  });
+
+  it("keeps the banner away when every service has a price", () => {
+    const html = renderPricedFirst({
+      offerings: [candidate({ name: "Bowl", price_cents: 1200 })],
+    });
+
+    expect(html).not.toContain("No prices found here.");
+  });
+
+  it("serialises a number to price_cents and words to pricing_wording, never both", () => {
+    const numeric = toPendingOffering(
+      toWorkingOffering(candidate({ price_cents: 4500 })),
+    );
+    const worded = toPendingOffering(
+      toWorkingOffering(candidate({ price_cents: null, pricing_wording: "from $30" })),
+    );
+    const empty = toPendingOffering(
+      toWorkingOffering(candidate({ price_cents: null })),
+    );
+
+    expect(numeric.price_cents).toBe(4500);
+    expect(numeric.pricing_wording).toBe("");
+    expect(worded.price_cents).toBeNull();
+    expect(worded.pricing_wording).toBe("from $30");
+    expect(empty.price_cents).toBeNull();
+    expect(empty.pricing_wording).toBe("");
+    for (const payload of [numeric, worded, empty]) {
+      expect(Boolean(payload.price_cents != null && payload.pricing_wording)).toBe(false);
+    }
+  });
+
+  it("clears the server's conflicting wordings when the owner edits the price", () => {
+    expect(priceInputUpdate("$30").wording_options).toEqual([]);
+    expect(priceInputUpdate("from $30").wording_options).toEqual([]);
+  });
+
+  it("keeps the server's conflicting wordings on a save so the gate still sees them", () => {
+    const payload = toPendingOffering(
+      toWorkingOffering(
+        candidate({
+          price_cents: null,
+          pricing_wording: "from $30",
+          wording_options: ["from $30", "market price"],
+        }),
+      ),
+    );
+
+    expect(payload.wording_options).toEqual(["from $30", "market price"]);
+  });
+
+  it("patches only the profile rows the owner changed", () => {
+    // The state draft also carries lists (services); a string patch must never
+    // try to trim one, and a displayed value is not an edit.
+    expect(
+      profilePatchFor(
+        {
+          business_name: "Bytefix",
+          services: ["Screen repair"],
+          hours: "Mon-Fri 9-6",
+        },
+        { business_name: "Bytefix" },
+      ),
+    ).toEqual({ hours: "Mon-Fri 9-6" });
+  });
+
+  it("renders the ABN row only when the source found one", () => {
+    const withAbn = renderPricedFirst({
+      profile: { business_name: "Bytefix", abn: "51824753556" },
+    });
+    expect(withAbn).toContain('data-testid="review-profile-abn"');
+
+    const without = renderPricedFirst({
+      profile: { business_name: "Bytefix" },
+    });
+    expect(without).not.toContain('data-testid="review-profile-abn"');
+  });
+
+  it("lists the required beats the source left empty in one note", () => {
+    const html = renderPricedFirst({
+      profile: { business_name: "Bytefix" },
+      missingRequired: ["business type", "what you offer", "contact details"],
+    });
+
+    expect(html).toContain(
+      "I&#x27;ll ask next: business type, what you offer, contact details.",
+    );
+  });
+
+  it("does not render empty required rows", () => {
+    const html = renderPricedFirst({
+      profile: { business_name: "Bytefix" },
+    });
+
+    expect(html).toContain('data-testid="review-profile-business_name"');
+    expect(html).not.toContain('data-testid="review-profile-business_type"');
+    expect(html).not.toContain('data-testid="review-profile-hours"');
+    expect(html).not.toContain('data-testid="review-profile-contact"');
+  });
+
+  it("keeps the structured sections behind a closed disclosure by default", () => {
+    const html = renderPricedFirst({ sectionBody: "The secret document body" });
+
+    expect(html).toContain("More about what I read");
+    expect(html).not.toContain("The secret document body");
+    expect(html).not.toContain("Original extracted source");
   });
 });

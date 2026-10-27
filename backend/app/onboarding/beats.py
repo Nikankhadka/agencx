@@ -51,6 +51,23 @@ WidgetKind = Literal["text", "chips", "masked", "cta", "phone"]
 # the GST beat skip itself.
 NO_ABN = "none"
 
+# 29: the words that mean "leave my name out" on the beat that now has a Skip.
+# A fixed vocabulary, not a similarity check - the same rule the affirmative
+# check follows, so a message is resolved without a model ever seeing it.
+SKIP_WORDS = frozenset({"skip", "skip for now", "no thanks", "none", "later"})
+
+
+def is_skip_word(value: str) -> bool:
+    """Whether the owner's message is a skip, however it is typed.
+
+    Trims, casefolds, drops one trailing period and collapses internal
+    whitespace, so "  Skip.  " and "skip  for now" both resolve. Anything with
+    an extra word in it is a message, not a skip.
+    """
+    normalized = re.sub(r"\s+", " ", value.strip().casefold().removesuffix(".")).strip()
+    return normalized in SKIP_WORDS
+
+
 # 20: the `__skip__` selection sentinel is gone with the beat chips that sent
 # it. An optional beat resolves to its default or, failing that, to `skipped`
 # on the two-ask cap - neither path puts a sentinel in the draft, so skipped
@@ -98,6 +115,10 @@ class Beat:
     being enough to make a beat optional - ``services`` states a real business
     fact and is required, and the optional beats that remain all resolve
     themselves, so there is nothing left for a button to do.
+
+    29: one exception, carried by the beat itself rather than decided here -
+    the owner's name offers a Skip, because it sits straight before the source
+    ask and the no-source path needs a one-tap way past it.
 
     ``reject`` is what the beat says when it gets something that cannot be its
     answer, and it is spoken verbatim: a rejected beat's reply is the beat's own
@@ -208,6 +229,11 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # Nothing downstream reads the owner's name, and it cannot be guessed,
         # so this is the one beat that skips to a genuine blank.
         optional=True,
+        # 29: the one beat-level Skip in the interview. The name is asked first
+        # and the source ask follows it, so this chip is also how the no-source
+        # path starts; `apply_skip_word` answers it with no model call and never
+        # writes "skip" to the draft.
+        chips=(ChipSpec(label="Skip", value="skip", dashed=True),),
         valid=_wordish,
         reject="That doesn't look like a name.",
         example='just a first name is plenty - "Nikan"',
@@ -388,11 +414,11 @@ def next_beat(
 
 def input_spec(beat: Beat) -> InputSpec:
     """The composer widget for a beat."""
-    # 20: no beat renders a skip chip. Every optional beat now resolves by its
-    # own default or drops to `skipped` on the two-ask cap, and the one beat
-    # with neither (`owner_display_name`) is not a business fact, so a blank is
-    # a correct answer rather than something to offer a button for. The
-    # knowledge ask keeps a chip, but it is not a beat - see KNOWLEDGE_INPUT.
+    # 20: no beat renders a skip chip, except the owner's name, which carries
+    # its own (29) - every other optional beat resolves by its own default or
+    # drops to `skipped` on the two-ask cap, so a button adds nothing there.
+    # The knowledge ask keeps a chip too, but it is not a beat - see
+    # KNOWLEDGE_INPUT.
     chips = list(beat.chips)
     return InputSpec(
         kind=beat.kind,
@@ -457,9 +483,9 @@ NAME_CONFIRM_INPUT = InputSpec(
 )
 
 
-# The optional website/documents ask (see agent._completion_reply) is not a
-# beat - it never gates the profile - but it still needs a text composer, so it
-# reuses the same InputSpec shape as the text beats it follows.
+# The source stage (29) is not a beat - it never gates the profile - but it
+# still needs a text composer, so it reuses the same InputSpec shape as the
+# text beats. It is asked second, straight after the owner's name.
 KNOWLEDGE_INPUT = InputSpec(
     kind="text",
     placeholder="Paste a link or attach a file…",

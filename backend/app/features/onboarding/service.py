@@ -46,15 +46,26 @@ async def set_onboarding_json(
     record: dict[str, Any],
     *,
     expected_revision: int | None = None,
+    profile_patch: dict[str, Any] | None = None,
 ) -> None:
     where = "where tenant_id = $1"
     args: list[Any] = [tenant_id, json.dumps(record)]
+    # The profile lives in two jsonb copies. A batch that carries profile edits
+    # writes both in this one statement, the way write_profile does - one
+    # statement is what keeps them from silently diverging.
+    target = "config"
+    if profile_patch is not None:
+        args.append(json.dumps(profile_patch))
+        target = (
+            "jsonb_set(config, '{profile}', "
+            f"coalesce(config->'profile', '{{}}'::jsonb) || ${len(args)}::jsonb, true)"
+        )
     if expected_revision is not None:
-        where += " and coalesce((config->'onboarding'->>'revision')::bigint, 0) = $3"
         args.append(expected_revision)
+        where += f" and coalesce((config->'onboarding'->>'revision')::bigint, 0) = ${len(args)}"
     result = await conn.execute(
-        "update tenant_config set config = jsonb_set("
-        "config, '{onboarding}', $2::jsonb, true), "
+        f"update tenant_config set config = jsonb_set("
+        f"{target}, '{{onboarding}}', $2::jsonb, true), "
         f"updated_at = now() {where}",
         *args,
     )
@@ -62,11 +73,22 @@ async def set_onboarding_json(
         raise RevisionConflictError
 
 
-async def save_record(*, tenant_id: UUID, record: dict[str, Any]) -> None:
+async def save_record(
+    *,
+    tenant_id: UUID,
+    record: dict[str, Any],
+    profile_patch: dict[str, Any] | None = None,
+) -> None:
     expected_revision = int(record.get("revision", 0) or 0)
     record["revision"] = expected_revision + 1
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
-        await set_onboarding_json(conn, tenant_id, record, expected_revision=expected_revision)
+        await set_onboarding_json(
+            conn,
+            tenant_id,
+            record,
+            expected_revision=expected_revision,
+            profile_patch=profile_patch,
+        )
 
 
 async def apply_confirmation(

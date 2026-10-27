@@ -9,12 +9,17 @@ import { sourceLabel } from "./types";
  */
 
 export function normalizeOfferingName(value: string): string {
+  // 29: diacritics are spelling, not identity. "Açaí Bowl" and "Acai Bowl" are
+  // one offering, so the key drops combining marks before folding case and
+  // treating punctuation as a word break. Mirrors normalize_name in the backend.
   return value
-    .normalize("NFKC")
+    .normalize("NFKD")
+    .replace(/[\p{M}]/gu, "")
     .trim()
     .toLowerCase()
     .replace(/[\p{P}]/gu, " ")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Combine two candidates for the same offering, document values winning.
@@ -30,9 +35,12 @@ export function mergeOffering(existing: ReviewOffering, incoming: ReviewOffering
     (price): price is number => price != null,
   );
   const conflicting = [...new Set([...offered, ...(existing.price_options ?? []), ...(incoming.price_options ?? [])])].sort((left, right) => left - right);
+  // A spelling variant is not a rename: when both names fold to the same key,
+  // keep the spelling already on screen (the owner's own words win that case).
+  const sameSpelling = normalizeOfferingName(existing.name) === normalizeOfferingName(incoming.name);
   return {
     ...incoming,
-    name: document?.name ?? existing.name,
+    name: sameSpelling ? existing.name : (document?.name ?? existing.name),
     candidate_id: document?.candidate_id ?? existing.candidate_id,
     description,
     price_cents: priceCents,

@@ -24,6 +24,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.features.knowledge import offering_extraction as extraction
 from app.features.knowledge.offering_extraction import (
@@ -32,7 +33,7 @@ from app.features.knowledge.offering_extraction import (
     index_document,
 )
 from app.llm.provider import SchemaT
-from app.onboarding.flow import PendingOffering
+from app.onboarding.flow import PendingOffering, merge_offerings
 from app.pricing.validation_gate import extract_monetary_figures
 from tests.fakes import BaseFakeProvider
 
@@ -367,10 +368,69 @@ async def test_similar_names_are_suggested_not_merged() -> None:
 
 
 def test_close_names_pair_and_distinct_ones_do_not() -> None:
-    assert extraction._is_possible_match("coffe", "coffee drinks")
-    assert extraction._is_possible_match("Pita Pocket", "Sabbaba Pita Pocket")
+    """29: only a typo or a brand prefix is a possible duplicate.
+
+    Pure containment used to flag every category/product pair, which made a
+    real menu look like it was full of duplicates. "Beard trim" vs "Beard trim
+    + line up" must not flag; "Sabbaba" vs "Sabbaba Catering" must.
+    """
+    assert extraction._is_possible_match("Mens Haircut", "Mens Hircut")
+    assert extraction._is_possible_match("Sabbaba", "Sabbaba Catering")
+    assert not extraction._is_possible_match("Beard trim", "Beard trim + line up")
+    assert not extraction._is_possible_match("coffe", "coffee drinks")
+    assert not extraction._is_possible_match("Pita Pocket", "Sabbaba Pita Pocket")
     assert not extraction._is_possible_match("Plate", "Bowl")
     assert not extraction._is_possible_match("Plate", "Plate")
+
+
+def test_folded_spelling_variants_merge_into_one_row() -> None:
+    """29: the same name with different accents, case or punctuation is one
+    offering, and the first spelling is the one the owner sees."""
+    merged = extraction._reconcile(
+        [
+            PendingOffering(name="Açaí Bowl", sources=["document"]),
+            PendingOffering(name="ACAI BOWL.", sources=["document"]),
+        ]
+    )
+    assert [item.name for item in merged] == ["Açaí Bowl"]
+    assert merged[0].sources == ["document"]
+
+
+@pytest.mark.asyncio
+async def test_the_barbershop_source_keeps_fourteen_distinct_services() -> None:
+    """29 acceptance 4: the Styles by Jaimy source produces 14 rows, no
+    duplicate "Beard trim", and no duplicate prompt on a list of real services."""
+    barbershop = Path(__file__).parent / "fixtures" / "barbershop_services.txt"
+    services = [
+        "Men's Haircut",
+        "Men's Style Cut",
+        "Wash & Blowdry",
+        "Hot Towel Face Shave",
+        "Beard Trim",
+        "Beard Styling",
+        "Moustache Trim",
+        "Threading",
+        "Hair Colouring",
+        "Beard Colouring",
+        "Facial Waxing",
+        "Facial Mask",
+        "Zero Fade",
+        "Double & Triple Zero Fade Extra",
+    ]
+    # The real site spells the same service both ways across two pages.
+    identified = [{"name_quote": name} for name in services]
+    identified.append({"name_quote": "beard trim"})
+
+    candidates, status = await extract_offerings(
+        barbershop.read_text(),
+        provider=IdentifyFake(identified),
+        document_id=DOCUMENT_ID,
+    )
+
+    assert status == "full"
+    assert len(candidates) == 14
+    assert all(not item.possible_matches for item in candidates)
+    assert [item.name.casefold() for item in candidates].count("beard trim") == 1
 
 
 @pytest.mark.asyncio
@@ -401,3 +461,45 @@ async def test_the_whole_document_is_read_not_two_headings() -> None:
     index = index_document(SOURCE)
     assert "What we offer" not in SOURCE and "Prices" not in SOURCE
     assert len(index.figures) > 10
+
+
+# ---------------------------------------------------------------------------
+# 29 slice C: one price story through the draft merge
+# ---------------------------------------------------------------------------
+
+
+def test_a_wording_supersedes_a_missing_price() -> None:
+    """A worded price is the price when the other source was silent."""
+    silent = PendingOffering(name="Catering box", sources=["owner"])
+    worded = PendingOffering(
+        name="Catering box", pricing_wording="from $30 a head", sources=["document"]
+    )
+
+    merged = merge_offerings(silent, worded)
+
+    assert merged.price_cents is None
+    assert merged.pricing_wording == "from $30 a head"
+    assert merged.wording_options == []
+    assert merged.needs_review is False
+
+
+def test_two_different_wordings_become_options_and_need_review() -> None:
+    first = PendingOffering(
+        name="Catering box", pricing_wording="from $30 a head", sources=["document"]
+    )
+    second = PendingOffering(
+        name="Catering box", pricing_wording="market price", sources=["document"]
+    )
+
+    merged = merge_offerings(first, second)
+
+    assert merged.pricing_wording == "from $30 a head"
+    assert merged.wording_options == ["from $30 a head", "market price"]
+    assert merged.price_options == []
+    assert merged.needs_review is True
+
+
+def test_a_candidate_cannot_hold_a_fixed_price_and_a_wording() -> None:
+    """RF-4's mutual exclusion, now enforced before a draft can reach publish."""
+    with pytest.raises(ValidationError):
+        PendingOffering(name="Mixed", price_cents=1200, pricing_wording="from $12")

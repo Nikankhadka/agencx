@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -22,6 +23,7 @@ import jwt
 import pytest
 import pytest_asyncio
 
+from app.features.knowledge.offering_extraction import index_document
 from app.features.onboarding import service as onboarding_service
 from app.features.onboarding.controller import (
     _find_url,
@@ -29,6 +31,7 @@ from app.features.onboarding.controller import (
     response_from_record,
 )
 from app.features.tenants.slug import suggested_slug, validate_slug
+from app.ingestion.chunker import extract_text
 from app.ingestion.site import CrawlResult
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.provider import ChatMessage, SchemaT
@@ -37,8 +40,9 @@ from app.onboarding import beats
 from app.onboarding.agent import OnboardingRecord
 from app.shared import db
 from app.shared.config import get_settings
+from app.shared.limits import LimitTimeout
 from tests.conftest import _app_dsn_for
-from tests.fakes import BaseFakeProvider, ZeroEmbedder
+from tests.fakes import BaseFakeProvider, ConcurrencyProbe, ZeroEmbedder
 
 pytestmark = pytest.mark.db
 
@@ -85,9 +89,12 @@ _CHAT_REPLIES = [
 # The full walk: one typed answer per beat, plus the confirmation W-9 requires
 # before either name is persisted, plus the voice beat answered in the owner's
 # own words (the composer's fourth chip swaps to exactly this text widget).
+# 29: the source stage is the second question, so the walk declines it before
+# the profile beats begin.
 _FULL_WALK: list[tuple[Any, ...]] = [
     ("text", "I'm Sam"),
     ("text", "yes"),
+    ("text", "skip"),
     ("text", "we are Bytefix Repairs"),
     ("text", "yes"),
     ("text", "we fix phones"),
@@ -299,10 +306,9 @@ async def _walk_states(
 
 
 async def _walk_to_confirm(client: httpx.AsyncClient, token: str) -> None:
-    # The beats land on the optional website/documents ask ("knowledge"); one
-    # "skip" answers it and advances to confirm.
+    # The walk includes the source stage's decline, so the last answer is the
+    # final beat and the interview is already on confirm.
     await _walk(client, token)
-    await _send(client, {"Authorization": f"Bearer {token}"}, text="skip")
 
 
 def _page_slug(tenant_id: uuid.UUID) -> str:
@@ -491,7 +497,8 @@ async def test_message_captures_name_and_advances_stage(client: httpx.AsyncClien
     ]
 
     confirmed = await _send(client, headers, text="yes")
-    assert confirmed["stage"] == "business_name"
+    # 29: the source ask is the next stage, ahead of the profile beats.
+    assert confirmed["stage"] == "knowledge"
     assert confirmed["draft"]["owner_display_name"] == "Sam"
 
 
@@ -517,10 +524,10 @@ async def test_a_confirmed_name_is_stored_exactly_as_proposed(
         app.dependency_overrides[get_llm_provider] = lambda: OnboardingFakeProvider()
 
     assert body["draft"]["owner_display_name"] == "sababa"
-    assert body["history"][-2:] == [
-        {"role": "user", "content": "Yes"},
-        {"role": "assistant", "content": "Saved as sababa. What does the business go by?"},
-    ]
+    assert body["history"][-2]["role"] == "user"
+    assert body["history"][-2]["content"] == "Yes"
+    # 29: the confirmed name is followed by the source ask, not the next beat.
+    assert body["history"][-1]["content"].startswith("Saved as sababa. Do you have a website")
 
 
 async def test_draft_accumulates_across_turns(client: httpx.AsyncClient) -> None:
@@ -578,6 +585,7 @@ async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClie
     assert user_messages == [
         "I'm Sam",
         "yes",
+        "skip",
         "we are Bytefix Repairs",
         "yes",
         "we fix phones",
@@ -681,7 +689,8 @@ async def test_abn_selections_validate_the_number_and_skip_gst_for_no(
         headers,
         selection={"beat": "gst", "values": ["not yet"]},
     )
-    assert body["stage"] == "knowledge"
+    # 29: the source stage was already declined on this walk.
+    assert body["stage"] == "confirm"
     assert body["draft"]["gst"] == "no"
 
 
@@ -805,42 +814,101 @@ async def test_a_typed_correction_updates_one_field_without_extraction(
     assert corrected.json()["history"][-1]["content"] == "Updated opening hours."
 
 
-async def test_knowledge_ask_then_skip_advances_to_confirm(
+async def test_a_correction_to_services_marks_them_as_the_owners(
     client: httpx.AsyncClient,
 ) -> None:
-    """The website/documents ask is optional, not a gate: after the seven beats
-    the interview pauses on a ``knowledge`` stage with a text composer, and one
-    "skip" answers it so confirm becomes available."""
+    """29: a typed correction is the owner's own wording, so the review's
+    document sync must never replace it afterwards - which is what
+    ``services_source`` says."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await _walk_until(client, headers, "services")
+
+    corrected = await client.post(
+        "/api/onboarding/message",
+        json={"correction": {"field": "services", "value": "Owner cut $30"}},
+        headers=headers,
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["draft"]["services"] == ["Owner cut $30"]
+
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["services_source"] == "owner"
+
+
+async def test_the_source_stage_is_asked_second_and_skip_starts_the_beats(
+    client: httpx.AsyncClient,
+) -> None:
+    """29: the website/documents ask is no longer a post-interview offer. It is
+    the second question, a text composer with a Skip chip, and declining it
+    starts the profile beats where they always were."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    body: dict[str, Any] = {}
-    for step in _FULL_WALK:
-        body = await _send(client, headers, text=step[1])
+    first = await _send(client, headers, text="I'm Sam")
+    assert first["stage"] == "owner_display_name"
+    assert first["pending_confirmation"] is not None
 
-    # Profile complete -> the offer fires, and the stage is the non-blocking ask.
-    assert body["stage"] == "knowledge"
-    assert body["can_confirm"] is False
-    assert body["input"]["kind"] == "text"
+    confirmed = await _send(client, headers, text="yes")
+    assert confirmed["stage"] == "knowledge"
+    assert confirmed["draft"] == {"owner_display_name": "Sam"}
+    assert confirmed["can_confirm"] is False
+    assert confirmed["input"]["kind"] == "text"
 
     final = await _send(client, headers, text="skip")
-    assert final["stage"] == "confirm"
-    assert final["can_confirm"] is True
-    assert final["input"] is None
+    assert final["stage"] == "business_name"
+    assert final["draft"] == {"owner_display_name": "Sam"}
+    assert final["can_confirm"] is False
+
+
+async def test_a_skip_word_skips_the_name_without_a_model_call(
+    client: httpx.AsyncClient,
+) -> None:
+    """29: the name beat has a Skip now. "skip" is resolved deterministically,
+    is never saved as the owner's name, and no model sees it."""
+    counting = _CountingFake()
+    app.dependency_overrides[get_llm_provider] = lambda: counting
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    body = await _send(client, headers, text="Skip.")
+
+    assert counting.calls == 0
+    assert body["stage"] == "knowledge"
+    assert body["draft"] == {}
+    assert body["pending_confirmation"] is None
+    assert body["skipped"] == ["owner_display_name"]
+
+
+async def test_the_name_beat_accepts_the_skip_selection_without_a_409(
+    client: httpx.AsyncClient,
+) -> None:
+    """29: the deterministic selection path resolves the name's Skip, so the
+    chip and the typed word cannot disagree."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    body = await _send(
+        client, headers, selection={"beat": "owner_display_name", "values": ["skip"]}
+    )
+
+    assert body["stage"] == "knowledge"
+    assert body["draft"] == {}
+    assert body["skipped"] == ["owner_display_name"]
 
 
 async def test_the_knowledge_skip_chip_closes_the_ask_without_a_model_call(
     client: httpx.AsyncClient,
 ) -> None:
-    """20: the knowledge ask is the one place a Skip chip survives, and it is
+    """20/29: the source ask is the one place a Skip chip survives, and it is
     always visible - declining the only step that never gates go-live should
     not cost the owner a word they have to guess. The chip takes the
     deterministic selection path, so no extractor runs behind it."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # The ask lives past the last beat, so before it fires there is nothing to
-    # decline - `knowledge` is not a beat the cursor can be parked on.
+    # The source ask is not a beat the cursor can be parked on before its turn,
+    # so on a fresh record there is nothing to decline.
     early = await client.post(
         "/api/onboarding/message",
         json={"selection": {"beat": "knowledge", "values": ["skip"]}},
@@ -848,16 +916,14 @@ async def test_the_knowledge_skip_chip_closes_the_ask_without_a_model_call(
     )
     assert early.status_code == 409
 
-    body: dict[str, Any] = {}
-    for step in _FULL_WALK:
-        body = await _send(client, headers, text=step[1])
+    await _send(client, headers, text="I'm Sam")
+    body = await _send(client, headers, text="yes")
 
     assert body["stage"] == "knowledge"
     assert [(c["label"], c["value"]) for c in body["input"]["chips"]] == [("Skip for now", "skip")]
 
     final = await _send(client, headers, selection={"beat": "knowledge", "values": ["skip"]})
-    assert final["stage"] == "confirm"
-    assert final["can_confirm"] is True
+    assert final["stage"] == "business_name"
     assert final["history"][-2] == {"role": "user", "content": "Skip for now"}
 
 
@@ -1258,6 +1324,27 @@ class UrlFakeProvider(BaseFakeProvider):
             yield ""
 
 
+class ProfileFailingProvider(ConcurrencyProbe):
+    """A source turn where the document reads land but the profile read fails (29).
+
+    Scoped to the profile schema so the structure and offerings passes still
+    answer normally - the failure has to cost the profile, not the candidates.
+    """
+
+    def __init__(self, error: BaseException, *, offerings: list[dict[str, str]]) -> None:
+        super().__init__(offerings=offerings, delay=0.0)
+        self.error = error
+
+    async def extract(
+        self, *, system_prompt: str, user_input: str, schema: type[SchemaT]
+    ) -> SchemaT:
+        if "profile" in schema.model_fields:
+            raise self.error
+        return await super().extract(
+            system_prompt=system_prompt, user_input=user_input, schema=schema
+        )
+
+
 @pytest.fixture
 def uploads_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
@@ -1324,7 +1411,7 @@ async def test_url_message_scrapes_ingests_and_reads_back(
 async def test_url_message_scrape_failure_falls_back(
     client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    token, _tenant_id = await _signup_tenant_admin(client)
+    token, tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
 
@@ -1348,6 +1435,11 @@ async def test_url_message_scrape_failure_falls_back(
     assistant_msgs = [m["content"] for m in body["history"] if m["role"] == "assistant"]
     assert any("couldn't read that page" in m for m in assistant_msgs)
     assert any("Settings > Knowledge" in m for m in assistant_msgs)
+    # 29: the dead link answered the source stage. The source ask must not
+    # return after the name, so the flag is cleared even though the page failed.
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+    assert body["stage"] == "owner_display_name"
 
 
 async def test_url_message_survives_an_unreachable_host(
@@ -1377,34 +1469,367 @@ async def test_url_message_survives_an_unreachable_host(
     assert any("couldn't read that page" in m for m in assistant_msgs)
 
 
+async def _stream_events(
+    client: httpx.AsyncClient, headers: dict[str, str], *, text: str
+) -> list[dict[str, Any]]:
+    async with client.stream(
+        "POST",
+        "/api/onboarding/message/stream",
+        json={"text": text},
+        headers=headers,
+    ) as resp:
+        assert resp.status_code == 200
+        events: list[dict[str, Any]] = []
+        async for line in resp.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+    return events
+
+
 async def test_url_stream_leads_with_the_reading_stamp(
     client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The 'Reading your site' stamp covers the scrape, so it must be the first
-    event on the wire - emitted before the fetch, not after it."""
+    event on the wire - emitted before the fetch, not after it. 29 adds the two
+    stamps that cover the work after the crawl, in the order that work runs."""
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
     app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
     _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
     try:
-        async with client.stream(
-            "POST",
-            "/api/onboarding/message/stream",
-            json={"text": "https://bytefix.example.com"},
-            headers=headers,
-        ) as resp:
-            assert resp.status_code == 200
-            events: list[dict[str, Any]] = []
-            async for line in resp.aiter_lines():
-                if line.startswith("data: "):
-                    events.append(json.loads(line[6:]))
+        events = await _stream_events(client, headers, text="https://bytefix.example.com")
     finally:
         app.dependency_overrides.pop(get_llm_provider, None)
 
     assert events[0] == {"type": "progress", "stage": "reading_site"}
-    assert [e["type"] for e in events].count("progress") == 1
+    stages = [e["stage"] for e in events if e["type"] == "progress"]
+    assert stages == ["reading_site", "finding_services", "review"]
     reply = next(e for e in events if e["type"] == "reply")
     assert "Here's what I've got from your site" in reply["text"]
+
+
+async def test_url_stream_logs_one_timing_line_per_source_turn(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """29: one line per source turn, with every stage it can name.
+
+    The sub-stage numbers have to come from the measured awaits - a turn that
+    only logged a total could not show where the seconds went, and a
+    re-estimate would not be evidence.
+    """
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        with caplog.at_level(logging.INFO, logger="app.onboarding.controller"):
+            await _stream_events(client, headers, text="https://bytefix.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    lines = [r for r in caplog.records if r.getMessage() == "onboarding source timing"]
+    assert len(lines) == 1
+    for field in (
+        "crawl_ms",
+        "draft_ms",
+        "structure_ms",
+        "offerings_ms",
+        "profile_ms",
+        "reply_ms",
+        "total_ms",
+    ):
+        assert getattr(lines[0], field) is not None, field
+    # The reply is inside the total: the old success-only line stopped counting
+    # before it, so the number never described the turn it claimed to.
+    timings = vars(lines[0])
+    assert timings["total_ms"] >= timings["reply_ms"]
+
+
+async def test_url_stream_runs_the_draft_and_the_profile_together(
+    client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """29: after the crawl, the document draft and the profile read no longer
+    queue. The probe peaks at two calls in flight, which a serial turn cannot
+    reach, and the profile still lands in the draft."""
+    token, _tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    probe = ConcurrencyProbe(profile={"business_type": "phone repair shop", "hours": "Mon-Fri 9-6"})
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        events = await _stream_events(client, headers, text="https://bytefix.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    state = next(e for e in events if e["type"] == "state")
+    assert state["draft"]["business_type"] == "phone repair shop"
+    assert state["draft"]["hours"] == "Mon-Fri 9-6"
+    # 29: the review's "I'll ask next" note names only the required beats the
+    # source left empty, in beat order - optional beats never appear.
+    assert state["missing_required"] == [
+        "business name",
+        "what you offer",
+        "contact details",
+    ]
+    # A serial draft-then-profile turn never has two model calls in flight.
+    assert probe.max_in_flight >= 2
+
+
+async def test_state_reports_missing_required_beats_in_order(
+    client: httpx.AsyncClient,
+) -> None:
+    """29: the sheet does not render empty rows for the source's gaps. The state
+    carries the required beats that are still unanswered, in beat order."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await onboarding_service.save_record(
+        tenant_id=tenant_id,
+        record=OnboardingRecord(
+            draft={"business_name": "Bytefix", "hours": "Mon-Fri 9-6"}
+        ).to_jsonb(),
+    )
+
+    state = await client.get("/api/onboarding/state", headers=headers)
+
+    assert state.status_code == 200, state.text
+    assert state.json()["missing_required"] == [
+        "business type",
+        "what you offer",
+        "contact details",
+    ]
+
+
+def _url_offering_payloads() -> list[dict[str, str]]:
+    """Offering identification for the canned page, block ids read off it."""
+    index = index_document(_CANNED_URL_TEXT)
+
+    def block_id(fragment: str) -> str:
+        block = next(item for item in index.blocks if fragment in item.text)
+        return block.id
+
+    return [
+        {"name_quote": "Screen repairs", "price_block": block_id("Screen repairs")},
+        {"name_quote": "battery replacements", "price_block": block_id("battery replacements")},
+    ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [RuntimeError("provider went away"), LimitTimeout("LLM extract", 45.0)],
+    ids=["plain-error", "limit-timeout"],
+)
+async def test_url_stream_keeps_its_candidates_when_the_profile_read_fails(
+    client: httpx.AsyncClient,
+    uploads_tmp: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+) -> None:
+    """29: the profile read is an optional enrichment, so its failure must not
+    cost the turn. The document's candidates still land, the stage still
+    closes, and the owner never sees error chrome.
+
+    ``LimitTimeout`` is the sharp case: it is not a ``TimeoutError``, so before
+    the seam swallowed its own failures it escaped the turn's timeout handler.
+    """
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    probe = ProfileFailingProvider(error, offerings=_url_offering_payloads())
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    _patch_fetch(monkeypatch, _CANNED_URL_TEXT)
+    try:
+        events = await _stream_events(client, headers, text="https://bytefix.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert not [event for event in events if event["type"] == "error"]
+    state = next(event for event in events if event["type"] == "state")
+    assert [item["name"] for item in state["offering_candidates"]] == [
+        "Screen repairs",
+        "battery replacements",
+    ]
+    assert any(event["type"] == "reply" for event in events)
+    # The link answered the source stage, so the interview moves on rather
+    # than asking for a source again.
+    assert state["stage"] == "owner_display_name"
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+
+
+async def test_url_stream_scrape_failure_degrades_to_the_interview(
+    client: httpx.AsyncClient, uploads_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """29: a dead link is an answer to the source stage, not a loop.
+
+    The calm ask-to-describe is followed by the next profile beat, not by the
+    source ask again - leaving ``knowledge_pending`` set made the owner paste
+    a second link into the same dead end.
+    """
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: UrlFakeProvider()
+
+    async def fail_fetch(
+        url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> bytes:
+        raise ValueError("no extractable content at this URL")
+
+    monkeypatch.setattr("app.features.knowledge.service.scrape_site", fail_fetch)
+    try:
+        events = await _stream_events(client, headers, text="https://empty.example.com")
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    reply = next(event for event in events if event["type"] == "reply")
+    assert "couldn't read that page" in reply["text"]
+    state = next(event for event in events if event["type"] == "state")
+    assert state["stage"] == "owner_display_name"
+    # The source ask is second, so a name turn would otherwise bring it back.
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+
+
+# --- 29: POST /api/onboarding/source (a file as the source stage's answer) ----
+
+_SOURCE_FILE = (
+    b"Bytefix Repairs fixes phones and laptops.\n"
+    b"Screen replacement $89.\n"
+    b"Battery replacement $49.\n"
+    b"Open Monday to Friday, 9am to 6pm.\n"
+)
+
+_SOURCE_PROFILE = {
+    "business_name": "Bytefix Repairs",
+    "business_type": "phone repair shop",
+    "hours": "Mon-Fri 9-6",
+    "contact": "555-0100",
+    "abn": "51 824 753 556",
+}
+
+
+def _offering_payloads(text: str) -> list[dict[str, str]]:
+    """The identification a model would return, with block ids read off the
+    document itself rather than guessed."""
+    index = index_document(text)
+
+    def block_id(fragment: str) -> str:
+        block = next(item for item in index.blocks if fragment in item.text)
+        return block.id
+
+    return [
+        {"name_quote": "Screen replacement", "price_block": block_id("Screen replacement")},
+        {"name_quote": "Battery replacement", "price_block": block_id("Battery replacement")},
+    ]
+
+
+def _source_probe() -> ConcurrencyProbe:
+    text = extract_text(_SOURCE_FILE, ".txt")
+    return ConcurrencyProbe(offerings=_offering_payloads(text), profile=_SOURCE_PROFILE, delay=0.0)
+
+
+async def test_source_upload_merges_the_profile_and_returns_candidates(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    """29: a file is the source stage's other door. It reads the business
+    details and the menu in one turn and hands both back as state."""
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    app.dependency_overrides[get_llm_provider] = lambda: _source_probe()
+    try:
+        response = await client.post(
+            "/api/onboarding/source",
+            headers=headers,
+            files={"file": ("about.txt", _SOURCE_FILE, "text/plain")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["draft"]["business_name"] == "Bytefix Repairs"
+    assert body["draft"]["business_type"] == "phone repair shop"
+    assert body["draft"]["hours"] == "Mon-Fri 9-6"
+    assert body["draft"]["contact"] == "555-0100"
+    assert body["draft"]["abn"] == "51824753556"
+    assert [item["name"] for item in body["offering_candidates"]] == [
+        "Screen replacement",
+        "Battery replacement",
+    ]
+    assert body["offering_candidates"][0]["price_cents"] == 8900
+
+    # The file answered the source stage, so the interview moves on to the
+    # profile beats rather than asking for a source again.
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+    assert body["stage"] == "owner_display_name"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [RuntimeError("provider went away"), LimitTimeout("LLM extract", 45.0)],
+    ids=["plain-error", "limit-timeout"],
+)
+async def test_source_upload_survives_a_failed_profile_read(
+    client: httpx.AsyncClient, uploads_tmp: Path, error: BaseException
+) -> None:
+    """29: a failed profile read leaves a reviewable draft, never a 500.
+
+    The upload path runs the same profile callback, so the same seam keeps it
+    inside ``_draft_upload``'s failure handling instead of escaping as an
+    unhandled exception after the file was already stored.
+    """
+    token, tenant_id = await _signup_tenant_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    text = extract_text(_SOURCE_FILE, ".txt")
+    probe = ProfileFailingProvider(error, offerings=_offering_payloads(text))
+    app.dependency_overrides[get_llm_provider] = lambda: probe
+    try:
+        response = await client.post(
+            "/api/onboarding/source",
+            headers=headers,
+            files={"file": ("about.txt", _SOURCE_FILE, "text/plain")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["name"] for item in body["offering_candidates"]] == [
+        "Screen replacement",
+        "Battery replacement",
+    ]
+    # The profile fields are the one thing that failed, so the draft stays
+    # blank and the interview asks for them next.
+    assert body["draft"] == {}
+    assert body["stage"] == "owner_display_name"
+    record = await onboarding_service.load_record(tenant_id=tenant_id)
+    assert record["knowledge_pending"] is False
+
+
+async def test_source_upload_rejects_a_disallowed_file_type(
+    client: httpx.AsyncClient, uploads_tmp: Path
+) -> None:
+    token, _tenant_id = await _signup_tenant_admin(client)
+    response = await client.post(
+        "/api/onboarding/source",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("virus.exe", b"whatever", "application/octet-stream")},
+    )
+    assert response.status_code == 422
+    assert "unsupported file type" in response.json()["detail"]
+
+
+async def test_source_upload_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/onboarding/source",
+        files={"file": ("about.txt", _SOURCE_FILE, "text/plain")},
+    )
+    assert response.status_code == 401
 
 
 def test_find_url_extracts_http_url_and_strips_punctuation() -> None:

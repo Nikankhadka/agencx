@@ -365,7 +365,7 @@ async def _recommend_items_impl(
     ]
     rows = (
         await conn.fetch(
-            "select id, name, description, price_cents from offerings "
+            "select id, name, description, price_cents, pricing_wording from offerings "
             "where tenant_id = $1 and id = any($2::uuid[]) and active",
             tenant_id,
             item_ids,
@@ -379,6 +379,7 @@ async def _recommend_items_impl(
             "name": row["name"],
             "description": row["description"],
             "price_cents": row["price_cents"],
+            "pricing_wording": row["pricing_wording"],
         }
         for row in rows
     ]
@@ -960,6 +961,7 @@ async def run(state: AgentState) -> dict[str, Any]:
                                         for category in offering.categories
                                     ],
                                     "price_cents": offering.price_cents,
+                                    "pricing_wording": offering.pricing_wording,
                                 }
                                 for offering in package.offerings
                             ]

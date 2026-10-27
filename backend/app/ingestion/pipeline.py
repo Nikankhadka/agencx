@@ -176,7 +176,8 @@ async def ingest_offerings(conn: AppConnection, *, tenant_id: UUID, embedder: Em
     active offerings.
     """
     items = await conn.fetch(
-        "select id, name, description, price_cents from offerings where tenant_id = $1 and active",
+        "select id, name, description, price_cents, pricing_wording "
+        "from offerings where tenant_id = $1 and active",
         tenant_id,
     )
     document_id = await conn.fetchval(
@@ -210,7 +211,11 @@ async def ingest_offerings(conn: AppConnection, *, tenant_id: UUID, embedder: Em
     try:
         chunks = [
             chunk_catalog_item(
-                str(item["id"]), item["name"], item["description"], item["price_cents"]
+                str(item["id"]),
+                item["name"],
+                item["description"],
+                item["price_cents"],
+                item["pricing_wording"],
             )
             for item in items
         ]

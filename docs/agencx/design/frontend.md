@@ -445,12 +445,14 @@ conversation IS the product.
   max-attempts each get one calm line. Duplicate email sends the code regardless
   (no account-existence leak); success silently continues. No toast, no
   celebration.
-- **Interview:** the same conversation continues as the onboarding interview
-  (name, business name, business type, headcount, hours, what they sell).
-  Business type drives questions from config, never code (I8). Once those seven
-  fields are captured the assistant offers a website/documents ask (paste a
-  link, attach a file, or say "skip") - optional, one word to decline, and it
-  never gates go-live; the confirm button appears after it is answered.
+- **Interview:** the same conversation continues as the onboarding interview.
+  It asks the owner's name, then for a website or document (paste a link,
+  attach a file, or skip), then opens a priced review, then asks only the
+  required beats the source did not answer (business name, type, headcount,
+  hours, what they sell) followed by the existing optional beats, then
+  confirms. Business type drives questions from config, never code (I8). The
+  source is optional and never gates go-live; the source stage carries the Skip
+  chip and the name beat recognises the same skip words.
 - **Everyday chat: NOT in Stage 1.** This spec used to say the Chat tab holds
   the Copilot conversation after go-live. It does not, and no route answers
   one: `POST /api/onboarding/message` returns 409 once onboarding is confirmed
@@ -671,6 +673,26 @@ subsections render as document content and edit inline. Saved sources use the
 same expandable renderer. Original extracted source is an owner-only,
 on-demand region, never customer retrieval. No rich-text editor dependency or
 replacement wizard is used.
+
+**Ticket 29 made the review priced-first.** "What you offer" is the first
+section: one row per offering and one price input that accepts either a flat
+amount (stored as integer cents) or the owner's own wording (stored as
+`pricing_wording`, display-only and mutually exclusive with cents). When any
+offering has no price the list opens expanded and a warning banner reads
+`No prices found here. Add a price, or write it your way, like "from $30".`
+Missing prices warn and never block Save. The business details the source
+found follow as compact inline-editable rows - name, type, hours, contact, and
+ABN only when present - and the required fields it did not find collapse into
+one `I'll ask next: ...` note instead of empty rows. The structured source text
+sits behind a closed "More about what I read" disclosure, and the Sources block
+is one compact row per document with Replace, Remove, and one "Add another
+source". A review save re-reads `/api/onboarding/state`, so the server decides
+`can_confirm` rather than the screen assuming it.
+
+The chat catalog card remains the pre-29 shape: at most five rows per category
+with a `+N more` line. The 20-offering full-list boundary and the
+`View all N offerings` link to `/{slug}#offerings` are ticket 30 and are not
+shipped here.
 
 ### S3 - Public page (anonymous, per-tenant slug)
 

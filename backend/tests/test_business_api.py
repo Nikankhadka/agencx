@@ -1346,6 +1346,51 @@ async def test_rf4_pricing_wording_persists_and_reads_back(client: httpx.AsyncCl
     assert wording_offering["price_cents"] is None
 
 
+async def test_publish_reconcile_writes_the_reviewed_wording(client: httpx.AsyncClient) -> None:
+    """29 slice C: go-live must not null the wording the owner approved. Both
+    the insert and the update statement carry it, and the catalog chunk does."""
+    headers, tenant_id = await _signup(client)
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        await business_service.reconcile_offerings_batch(
+            conn=conn,
+            tenant_id=tenant_id,
+            offerings=[
+                {
+                    "name": "Catering box",
+                    "description": "Feeds 15",
+                    "price_cents": None,
+                    "pricing_wording": "from $12 a head",
+                }
+            ],
+            embedder=ZeroEmbedder(),
+        )
+        await business_service.reconcile_offerings_batch(
+            conn=conn,
+            tenant_id=tenant_id,
+            offerings=[
+                {
+                    "name": "Catering box",
+                    "description": "Feeds 15",
+                    "price_cents": None,
+                    "pricing_wording": "market price",
+                }
+            ],
+            embedder=ZeroEmbedder(),
+        )
+        chunks = await conn.fetch(
+            "select content from knowledge_chunks where tenant_id = $1 "
+            "and metadata->>'kind' = 'catalog_item'",
+            tenant_id,
+        )
+
+    slug = (await client.get("/api/business/page", headers=headers)).json()["slug"]
+    storefront = (await client.get(f"/api/public/tenant/{slug}/storefront")).json()
+    offering = next(o for o in storefront["offerings"] if o["name"] == "Catering box")
+    assert offering["pricing_wording"] == "market price"
+    assert offering["price_cents"] is None
+    assert any("market price" in row["content"] for row in chunks)
+
+
 async def test_rf4_price_and_wording_are_mutually_exclusive(client: httpx.AsyncClient) -> None:
     import json
 

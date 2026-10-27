@@ -77,12 +77,13 @@ retry converge on the same checkpoint instead of advancing twice.
   `resume`, or a typed `correction`. No beat exposes a `Skip for now` chip
   (20): the two-ask cap resolves an unanswered optional beat by default, or to
   `skipped` for the owner's name, and a required beat defers then pauses. The
-  `skip` field and its `__skip__` sentinel are gone.
-- The knowledge ask is not a beat - it sits past the last one, holding
-  `knowledge_pending` - and it carries the one `Skip for now` chip left,
-  always visible, submitting `{selection: {beat: "knowledge", values:
-  ["skip"]}}`. It is answered before any beat cursor is consulted, and
-  declining it never gates go-live. Typing "skip" still works.
+  `skip` field and its `__skip__` sentinel are gone. The name beat carries a
+  dashed `Skip` chip, which resolves the same words deterministically.
+- The source ask is not a beat: it is the second stage, holding
+  `knowledge_pending`, and it carries an always-visible `Skip for now` chip
+  submitting `{selection: {beat: "knowledge", values: ["skip"]}}`. It is
+  answered before the required beats, declining it never gates go-live, and
+  typing "skip" still works.
 - Name proposals expose `pending_confirmation`. `Yes` commits the exact
   proposal; `No` is a client-only edit affordance; a replacement is shape
   checked and then receives a constrained plausibility verdict without being
@@ -119,6 +120,36 @@ retry converge on the same checkpoint instead of advancing twice.
 Unapproved candidates never enter `offerings`, the storefront, or customer
 context. Go live publishes only approved candidates; optional unreviewed drafts
 remain private and can be opened later from Home or What you offer.
+
+## Source-first onboarding and pricing wording (29)
+
+- `POST /api/onboarding/source` is owner-only and multipart: one `file`. It
+  validates through the knowledge screen's own upload edge (extension
+  allowlist, 4MB cap, empty-file rejection), parses the file once, runs the
+  document draft, offering extraction and the profile read together, merges
+  the profile into empty fields only, checkpoints the record, and returns
+  `OnboardingStateResponse`. A confirmed onboarding is `409`; a failed profile
+  read does not fail the upload, so the document and its candidates still
+  return.
+- `OnboardingKnowledgeBatchRequest` gains an optional `profile:
+  dict[str, str]`. Its keys are the `ProfileDraft` fields; an unknown key is
+  `422 validation_failed` rather than a silent drop. The patch is written to
+  both profile jsonb copies in the same checkpoint as the documents and
+  offerings.
+- `OnboardingStateResponse.missing_required: string[]` and the streamed `state`
+  event carry the required beat labels the source did not answer, in beat
+  order. Optional beats are excluded, because they resolve themselves later.
+  The review sheet renders one "I'll ask next" note from this list and never
+  empty rows.
+- `PendingOffering` gains `pricing_wording` (string, 120-character cap) and
+  `wording_options: string[]`. `pricing_wording` is mutually exclusive with
+  `price_cents` at the draft layer as well as at the API; two differing source
+  wordings set `wording_options` and `needs_review`, and the review save answers
+  the same conflict message as a cents conflict. Cents stay integers in
+  `price_options`; words stay words in `wording_options`.
+- The `show_catalog` catalog payload carries `pricing_wording` on every
+  offering beside `price_cents`, along with the existing category fields, so
+  the card can show the owner's wording when there is no fixed amount.
 
 No unrelated API redesign, new relational entities, or full pricing schema is
 planned; the broader R-3 schema audit stays separate.

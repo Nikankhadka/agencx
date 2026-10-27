@@ -50,6 +50,14 @@ test("pasting a link reads the site and reads it back", async ({
   const before = await readBack.count();
 
   const composer = page.getByTestId("onboarding-composer");
+  // 29: the source ask is second, so the name beat comes first. Skip it (the
+  // chip the name beat now carries) to land on the source stage, whose own
+  // placeholder is the proof the composer moved.
+  await composer.getByTestId("onboarding-chip-skip").click();
+  await expect(composer.getByRole("textbox")).toHaveAttribute(
+    "placeholder",
+    /Paste a link or attach a file/,
+  );
   await composer.getByRole("textbox").fill(SITE_URL);
   await composer.getByRole("button", { name: "Send" }).click();
 
@@ -111,7 +119,10 @@ test("pasting a link reads the site and reads it back", async ({
   // fails this assertion instead of passing it by accident.
   const dialog = page.getByRole("dialog", { name: "Review your information" });
   await dialog.getByRole("button", { name: "Add offering" }).click();
-  const nameField = dialog.getByLabel(/name$/i).last();
+  // The new owner row takes focus; the extracted rows are editable too, so
+  // "the last name field" is not necessarily the one the owner just added.
+  const nameField = dialog.locator("input:focus");
+  await expect(nameField).toHaveAttribute("aria-label", /name$/i);
   const typedName = `Test offering ${Date.now()}`;
   await nameField.fill(typedName);
   await expect(nameField).toHaveValue(typedName);
@@ -123,7 +134,7 @@ test("pasting a link reads the site and reads it back", async ({
 
   await page.getByTestId("onboarding-reopen-review").click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel(/name$/i).last()).toHaveValue(typedName);
+  await expect(dialog.getByLabel("Offering 1 name")).toHaveValue(typedName);
 
   await dialog.getByTestId("onboarding-knowledge-discard").click();
   await expect(dialog).toBeHidden();

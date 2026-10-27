@@ -594,11 +594,13 @@ def _reconcile(candidates: list[PendingOffering]) -> list[PendingOffering]:
 def _attach_possible_matches(candidates: list[PendingOffering]) -> None:
     """Flag names that might be the same item, without merging them.
 
-    "coffe" and "coffee drinks" are a decision for the owner, not for this
-    module: one is a typo for the other, or they are a specific drink and the
-    category above it, and nothing in the text settles which. Merging on
-    similarity would silently delete a real item, so similar names stay two
-    rows carrying a pointer at each other. W-8 turns these into a choice.
+    29 narrowed this to two real cases. A typo ("Mens Haircutt") is close
+    enough over the whole name that nothing else explains it. A brand prefix
+    ("Sabbaba" / "Sabbaba Catering") is the owner's own name attached to a
+    service. Pure containment used to flag every category/product pair
+    ("Beard trim" / "Beard trim + line up"), which made a real menu look full
+    of duplicates; that is no longer a flag. Merging on similarity would
+    silently delete a real item, so these stay two rows pointing at each other.
     """
     for first, second in ((a, b) for a in candidates for b in candidates if a is not b):
         if _is_possible_match(first.name, second.name):
@@ -609,20 +611,23 @@ def _is_possible_match(left: str, right: str) -> bool:
     first, second = normalize_name(left), normalize_name(right)
     if not first or not second or first == second:
         return False
-    # One name contained in the other is the category/product case
-    # ("Pita Pocket" in "Sabbaba Pita Pocket"). A near-spelling is the typo case
-    # ("coffe" / "coffee drinks"), compared on first words so a shared head word
-    # with extra qualifiers still pairs.
-    if f" {first} " in f" {second} " or f" {second} " in f" {first} ":
-        return True
-    head, other_head = first.split(" ")[0], second.split(" ")[0]
-    return len(head) > 3 and len(other_head) > 3 and _close(head, other_head)
-
-
-def _close(left: str, right: str) -> bool:
-    """One edit apart, by the classic single-row Levenshtein."""
-    if abs(len(left) - len(right)) > 1:
+    if len(first) < 5 or len(second) < 5:
         return False
+    # (a) A typo: close spellings of the whole name. A prefix is never a typo -
+    # "Beard trim" and "Beard trim + line up" are different services.
+    if not first.startswith(second) and not second.startswith(first):
+        if _distance(first, second) <= 2:
+            return True
+    # (b) A brand prefix: the shorter name is exactly one token and the longer
+    # begins with it plus a space. This is the owner's name, not containment.
+    short, long = sorted((first, second), key=len)
+    if len(short.split()) == 1 and len(long.split()) >= 2 and long.startswith(f"{short} "):
+        return True
+    return False
+
+
+def _distance(left: str, right: str) -> int:
+    """Full Levenshtein distance, by the classic single-row algorithm."""
     previous = list(range(len(right) + 1))
     for i, left_char in enumerate(left, start=1):
         current = [i]
@@ -635,4 +640,4 @@ def _close(left: str, right: str) -> bool:
                 )
             )
         previous = current
-    return previous[-1] <= 1
+    return previous[-1]

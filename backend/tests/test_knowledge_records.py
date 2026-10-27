@@ -334,6 +334,7 @@ async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
         "name": "Coffee",
         "description": "House blend, served with oat milk on request.",
         "price_cents": 500,
+        "pricing_wording": "",
         "sources": ["document", "owner"],
         "source_references": [
             {
@@ -346,6 +347,7 @@ async def test_save_round_trips_complete_reviewed_offering_and_preserves_source(
         "price_note": "",
         "needs_review": False,
         "price_options": [],
+        "wording_options": [],
         "supporting_document_ids": [],
         "support_state": "supported",
         # D28: the normalization fields travel with the candidate, so a

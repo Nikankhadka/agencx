@@ -15,7 +15,9 @@ from app.features.business import offering_candidates as offerings
 
 
 def test_normalize_name_handles_unicode_punctuation_and_spacing() -> None:
-    assert offerings.normalize_name("  Café—Menu!  ") == "café menu"
+    # 29: diacritics are spelling, not identity - the key drops them so
+    # "Café Menu" and "Cafe Menu" are one offering.
+    assert offerings.normalize_name("  Café—Menu!  ") == "cafe menu"
 
 
 def test_normalize_name_is_the_equality_key_across_casing_and_punctuation() -> None:

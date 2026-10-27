@@ -75,6 +75,7 @@ export function onboardingState(overrides: Record<string, unknown> = {}) {
     can_confirm: false,
     suggested_slug: "test-repairs",
     paused_beat: null,
+    missing_required: [],
     ...overrides,
   };
 }
