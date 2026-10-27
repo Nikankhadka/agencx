@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Cha
 import { apiFetch } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS } from "@/lib/onboarding";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import type { ConfirmOptions } from "@/components/ui/ConfirmDialog";
 import {
@@ -772,12 +773,24 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
 function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
   const { categories, createCategory } = useContext(CategoryContext);
   // 31: one trigger and one picker per card, collapsed until asked for. The
-  // state is local so a card knows nothing about the sheet's own layout.
+  // state is local so a card knows nothing about the sheet's own layout. The
+  // open panel is one quiet group - suggestion, chips, search, Done - with no
+  // second heading and no instructional copy; the trigger already names it.
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const selectedIds = offering.category_ids ?? [];
+  const proposed = offering.proposed_category?.trim() ?? "";
+  // The suggestion is a shortcut to add; once it is in the selection it would
+  // just repeat a chip, so it leaves the panel.
+  const suggestionTaken =
+    proposed !== "" &&
+    selectedIds.some(
+      (id) =>
+        categories.find((category) => category.id === id)?.name.trim().toLocaleLowerCase() ===
+        proposed.toLocaleLowerCase(),
+    );
   useEffect(() => {
     if (!open) return;
     // Scroll-only: `focusSearch` puts focus in the field the owner came for.
@@ -793,9 +806,16 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
   }
   return <div className="mt-3">
     <button ref={triggerRef} type="button" {...categoryTriggerAria(open, panelId)} data-testid="review-category-trigger" onClick={() => setOpen((current) => !current)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>
-    {open ? <div id={panelId} ref={pickerRef}>
-      {offering.proposed_category ? <p className="mt-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
+    {open ? <div id={panelId} ref={pickerRef} className="mt-2 rounded-lg bg-surface-sunken p-3">
+      {proposed && !suggestionTaken ? <div className="flex min-h-11 items-center gap-2">
+        <span className="shrink-0 text-meta text-text-secondary">Suggested</span>
+        <button type="button" onClick={() => void acceptSuggestion()} aria-label={`Use suggested category ${proposed}`} className="flex min-h-11 min-w-0 items-center gap-1 rounded-full border border-border bg-surface px-3 text-body-sm font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-surface-container active:opacity-60">
+          <Icon name="add" size={14} className="shrink-0" />
+          <span className="truncate">{proposed}</span>
+        </button>
+      </div> : null}
       <CategoryPicker
+        compact
         focusSearch
         categories={categories}
         selectedIds={selectedIds}
@@ -803,7 +823,9 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
         onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
         onCreate={createCategory}
       />
-      <button type="button" data-testid="review-category-done" onClick={() => { setOpen(false); triggerRef.current?.focus(); }} className={`${TEXT_PRESS} mt-2 text-action font-medium text-accent-active`}>Done</button>
+      <div className="mt-2 flex justify-end">
+        <button type="button" data-testid="review-category-done" onClick={() => { setOpen(false); triggerRef.current?.focus(); }} className={`min-h-11 px-1 text-action font-medium text-text-secondary ${TEXT_PRESS}`}>Done</button>
+      </div>
     </div> : null}
   </div>;
 }

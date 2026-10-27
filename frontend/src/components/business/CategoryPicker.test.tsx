@@ -36,6 +36,50 @@ describe("CategoryPicker", () => {
     ]);
   });
 
+  it("marks the primary with a check, not a word on every chip", () => {
+    // 31: the chip used to spend two words ("Primary" / "Make primary") on
+    // every selection. The pressed state and the check carry it now.
+    const html = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[
+          { id: "repairs", name: "Repairs" },
+          { id: "screens", name: "Screen care" },
+        ]}
+        selectedIds={["repairs", "screens"]}
+        primaryId="screens"
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+      />,
+    );
+
+    expect(html).not.toContain(">Primary<");
+    expect(html).not.toContain(">Make primary<");
+  });
+
+  it("drops the duplicate heading and the hint in compact mode", () => {
+    const render = (compact: boolean) =>
+      renderToStaticMarkup(
+        <CategoryPicker
+          categories={[]}
+          selectedIds={[]}
+          primaryId={null}
+          onChange={() => {}}
+          onCreate={async () => ({ id: "new", name: "New" })}
+          compact={compact}
+        />,
+      );
+
+    const full = render(false);
+    expect(full).toContain(">Categories</legend>");
+    expect(full).toContain("Categories help customers browse");
+    // 31: an empty picker is just the search field - no "none yet" row.
+    expect(full).not.toContain("No category selected.");
+
+    const compact = render(true);
+    expect(compact).toContain('<legend class="sr-only">Categories</legend>');
+    expect(compact).not.toContain("Categories help customers browse");
+  });
+
   it("normalizes punctuation and unicode before matching existing categories", () => {
     expect(normalizedCategoryName("  Screen-care & Repairs  ")).toBe(
       normalizedCategoryName("screen care / repairs"),
