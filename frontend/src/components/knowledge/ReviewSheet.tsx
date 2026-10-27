@@ -761,8 +761,8 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
 function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
   const { categories, createCategory } = useContext(CategoryContext);
   // 31: one trigger and one picker per card. Opening replaces the trigger, so
-  // the panel owns its exits: Done beside the search field, Cancel at the top
-  // right. Both return to the trigger view.
+  // the panel owns its exits: Add beside the search field, Cancel at the top
+  // right. Both return to the trigger view; the sheet's footer is what saves.
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -797,7 +797,7 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
     onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
   }
   return <div className="mt-3">
-    {open ? <div ref={pickerRef} className="rounded-lg bg-surface-sunken p-3">
+    {open ? <div ref={pickerRef} className="rounded-lg bg-surface p-3 shadow-card">
       <div className="flex justify-end">
         <button type="button" onClick={closePanel} data-testid="review-category-cancel" className={`min-h-11 px-1 text-action font-medium text-text-secondary ${TEXT_PRESS}`}>Cancel</button>
       </div>
@@ -811,7 +811,7 @@ function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOfferi
       <CategoryPicker
         compact
         focusSearch
-        action={<Button type="button" variant="secondary" onClick={closePanel} data-testid="review-category-done">Done</Button>}
+        action={<Button type="button" variant="secondary" onClick={closePanel} data-testid="review-category-add">Add</Button>}
         categories={categories}
         selectedIds={selectedIds}
         primaryId={offering.primary_category_id ?? null}

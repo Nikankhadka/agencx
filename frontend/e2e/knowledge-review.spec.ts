@@ -427,18 +427,18 @@ test("the category panel replaces its trigger, and both exits return", async ({ 
   await expect(search).toBeFocused();
   await expectInViewport(search);
 
-  const done = sheet.getByTestId("review-category-done");
+  const add = sheet.getByTestId("review-category-add");
   const cancel = sheet.getByTestId("review-category-cancel");
-  await expect(done).toBeVisible();
+  await expect(add).toBeVisible();
   await expect(cancel).toBeVisible();
-  // Done sits beside the field; Cancel sits above it, at the top right.
+  // Add sits beside the field; Cancel sits above it, at the top right.
   const searchBox = (await search.boundingBox())!;
-  const doneBox = (await done.boundingBox())!;
+  const addBox = (await add.boundingBox())!;
   const cancelBox = (await cancel.boundingBox())!;
   expect(
-    Math.abs(searchBox.y + searchBox.height / 2 - (doneBox.y + doneBox.height / 2)),
+    Math.abs(searchBox.y + searchBox.height / 2 - (addBox.y + addBox.height / 2)),
   ).toBeLessThan(2);
-  expect(doneBox.x).toBeGreaterThan(searchBox.x + searchBox.width);
+  expect(addBox.x).toBeGreaterThan(searchBox.x + searchBox.width);
   expect(cancelBox.y).toBeLessThan(searchBox.y);
   expect(cancelBox.x).toBeGreaterThan(searchBox.x + searchBox.width / 2);
 
@@ -448,9 +448,9 @@ test("the category panel replaces its trigger, and both exits return", async ({ 
   await expect(trigger).toBeVisible();
   await expect(trigger).toBeFocused();
 
-  // Done is the other exit and returns focus the same way.
+  // Add is the other exit and returns focus the same way.
   await trigger.click();
-  await sheet.getByTestId("review-category-done").click();
+  await sheet.getByTestId("review-category-add").click();
   await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
