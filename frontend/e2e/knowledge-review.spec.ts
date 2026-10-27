@@ -9,6 +9,7 @@ import {
   stubBatch,
   stubOnboardingState,
   stubRecords,
+  stubSourceUrl,
   stubUpload,
   uploadFilePayloads,
 } from "./knowledge-review-mocks";
@@ -698,4 +699,166 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   // already inside the sheet on the new offering row above.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("onboarding-ready-card")).toBeVisible();
+});
+/** 31: a URL source row, addressed by its host label. */
+function websiteRecord(overrides: Parameters<typeof draftRecord>[0] = {}) {
+  return draftRecord({
+    id: "site-1",
+    filename: "https://old.example.com/menu",
+    doc_type: "website",
+    offering_candidates: [offeringCandidate("Menu item A", "site-1")],
+    ...overrides,
+  });
+}
+
+test("editing a link and cancelling leaves the source alone", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) => websiteRecord({ filename: url }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  const opener = sheet.getByTestId("review-edit-link");
+  await expect(opener).toHaveAttribute("aria-label", "Edit link for old.example.com");
+
+  await opener.click();
+  const input = sheet.getByTestId("review-link-input");
+  await expect(input).toHaveValue("https://old.example.com/menu");
+  await expect(input).toBeFocused();
+  await expectInViewport(input);
+
+  await sheet.getByLabel("Cancel link").click();
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  // The review is still open, the source is still there, and no request ran.
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  expect(sourceUrl.calls()).toHaveLength(0);
+  expect(records.deletedIds()).toHaveLength(0);
+});
+
+test("saving the same link re-reads one source in place", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) => websiteRecord({ filename: url }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("review-edit-link").click();
+  await sheet.getByLabel("Save link").click();
+
+  const confirm = page.getByRole("dialog", { name: "Replace this link?" });
+  await expect(confirm).toBeVisible();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect.poll(() => sourceUrl.calls().length).toBe(1);
+  expect(sourceUrl.calls()[0]).toEqual({
+    url: "https://old.example.com/menu",
+    replace_document_id: "site-1",
+  });
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  // Same address, same row: one source, one id, nothing deleted.
+  expect(store.records.map((record) => record.id)).toEqual(["site-1"]);
+  expect(records.deletedIds()).toHaveLength(0);
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+});
+
+test("saving a different link replaces the source", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) =>
+      websiteRecord({
+        id: "site-2",
+        filename: url,
+        offering_candidates: [offeringCandidate("Menu item A", "site-2")],
+      }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+
+  await sheet.getByTestId("review-edit-link").click();
+  const input = sheet.getByTestId("review-link-input");
+  await input.fill("https://new.example.com/menu");
+  await sheet.getByLabel("Save link").click();
+
+  // The replacement asks first; cancelling it makes no request.
+  const confirm = page.getByRole("dialog", { name: "Replace this link?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText(
+    "The new site will be read, and its details and offerings will replace this source.",
+  );
+  await expect(confirm.getByTestId("confirm-accept")).toHaveText("Replace link");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  expect(sourceUrl.calls()).toHaveLength(0);
+  await expect(input).toHaveValue("https://new.example.com/menu");
+
+  await sheet.getByLabel("Save link").click();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect.poll(() => sourceUrl.calls().length).toBe(1);
+  expect(sourceUrl.calls()[0]).toEqual({
+    url: "https://new.example.com/menu",
+    replace_document_id: "site-1",
+  });
+  await expect(sheet.getByText("old.example.com", { exact: true })).toHaveCount(0);
+  await expect(sheet.getByText("new.example.com", { exact: true })).toBeVisible();
+  expect(records.deletedIds()).toEqual(["site-1"]);
+  expect(store.records.map((record) => record.id)).toEqual(["site-2"]);
+});
+
+test("add a link adds a second source and focuses the editor", async ({ page, request }) => {
+  const store = recordsStore([draftRecord({ id: "draft-1", filename: "menu.txt" })]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) =>
+      draftRecord({
+        id: "site-2",
+        filename: url,
+        doc_type: "website",
+        offering_candidates: [offeringCandidate("Online item", "site-2")],
+      }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("review-add-link").click();
+
+  const input = sheet.getByTestId("review-link-input");
+  await expect(input).toHaveValue("");
+  await expect(input).toBeFocused();
+  await expectInViewport(input);
+
+  await input.fill("https://bytefix.example.com");
+  await sheet.getByLabel("Save link").click();
+
+  await expect(sheet.getByText("bytefix.example.com", { exact: true })).toBeVisible();
+  // Two source rows now: the file keeps its picker, the link its editor.
+  await expect(sheet.getByTestId("review-remove-source")).toHaveCount(2);
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  expect(sourceUrl.calls()).toEqual([
+    { url: "https://bytefix.example.com", replace_document_id: null },
+  ]);
+  expect(records.deletedIds()).toHaveLength(0);
 });

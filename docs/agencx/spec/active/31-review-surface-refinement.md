@@ -710,3 +710,38 @@ Two branches the ticket does not state, decided here and recorded in
 `_SOURCE_TURN_TIMEOUT_S` deadline fires after the crawl (it writes nothing, the
 same as the draft-failure path), and `.strip()` on the body's `url` before
 `_absolute_url`, matching the knowledge route's own callers.
+
+### Slice F - link editing on the review sheet
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (51 tests)
+ Test Files  2 passed (2)
+      Tests  81 passed (81)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ editing a link and cancelling leaves the source alone
+ ✓ saving the same link re-reads one source in place
+ ✓ saving a different link replaces the source
+ ✓ add a link adds a second source and focuses the editor
+ (plus the 14 specs from slices A to D)
+ 18 passed (21.1s)
+```
+
+Ticket correction: `review-add-source` sits on the `Add another source` button, not
+on the hidden file input, which carries `review-add-input` and has no consumer
+outside its own row. The button is now `Add a file` with
+`data-testid="review-add-file"`; the hidden input testid is unchanged. The
+cancel-confirm arm of the replacement is also exercised ("saving a different
+link replaces the source" cancels once and asserts no request ran).

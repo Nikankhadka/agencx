@@ -93,6 +93,19 @@ export function discardConfirm(count: number): ConfirmOptions {
   };
 }
 
+/** 31: the link replacement question. Same fixed copy and layer rule as the
+ *  offering removal - the sheet sits inside the panel's transformed box. */
+export function replaceLinkConfirm(): ConfirmOptions {
+  return {
+    title: "Replace this link?",
+    description:
+      "The new site will be read, and its details and offerings will replace this source.",
+    confirmLabel: "Replace link",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
 const CategoryContext = createContext<{
   categories: CategoryOption[];
   createCategory: (name: string) => Promise<CategoryOption>;
@@ -161,6 +174,11 @@ export interface ReviewSheetProps {
   onAddSource?: (files: File[]) => Promise<KnowledgeRecord[]>;
   onReplaceSource?: (documentId: string, file: File) => Promise<KnowledgeRecord | null>;
   onRemoveSource?: (documentId: string) => Promise<void>;
+  /** 31: the link editor's two doors, both optional. A replacement answers the
+   *  new record plus the state's draft (the fields the site stated); an added
+   *  link answers the records now in the review. */
+  onReplaceLink?: (documentId: string, url: string) => Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null>;
+  onAddLink?: (url: string) => Promise<KnowledgeRecord[]>;
   /**
    * The parent's `confirm` (its dialog renders at page level, above this
    * sheet) - the sheet asks through it before dropping a source, so the
@@ -169,7 +187,7 @@ export interface ReviewSheetProps {
   confirmRemove?: (options: ConfirmOptions) => Promise<boolean>;
 }
 
-export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, open, busy, priceConflict, onboarding = false, profile, missingRequired, onClose, onSave, onSaveSuggestions, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: ReviewSheetProps) {
+export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, open, busy, priceConflict, onboarding = false, profile, missingRequired, onClose, onSave, onSaveSuggestions, onDiscard, onAddSource, onReplaceSource, onRemoveSource, onReplaceLink, onAddLink, confirmRemove }: ReviewSheetProps) {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   useEffect(() => {
     if (!open) return;
@@ -202,7 +220,7 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
         onDiscard={onDiscard}
         confirmRemove={confirmRemove}
       />
-    ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} profile={profile} missingRequired={missingRequired} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} confirmRemove={confirmRemove} /> : null}
+    ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} profile={profile} missingRequired={missingRequired} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} onReplaceLink={onReplaceLink} onAddLink={onAddLink} confirmRemove={confirmRemove} /> : null}
   </CategoryContext.Provider></Sheet>;
 }
 
@@ -261,7 +279,7 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemov
   </div>;
 }
 
-function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, missingRequired, onSave, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: { workspace: ReviewWorkspace; busy: boolean; priceConflict: string | null; onboarding: boolean; profile?: ReviewProfile; missingRequired?: string[]; onSave: ReviewSheetProps["onSave"]; onDiscard: () => void; onAddSource?: ReviewSheetProps["onAddSource"]; onReplaceSource?: ReviewSheetProps["onReplaceSource"]; onRemoveSource?: ReviewSheetProps["onRemoveSource"]; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
+function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, missingRequired, onSave, onDiscard, onAddSource, onReplaceSource, onRemoveSource, onReplaceLink, onAddLink, confirmRemove }: { workspace: ReviewWorkspace; busy: boolean; priceConflict: string | null; onboarding: boolean; profile?: ReviewProfile; missingRequired?: string[]; onSave: ReviewSheetProps["onSave"]; onDiscard: () => void; onAddSource?: ReviewSheetProps["onAddSource"]; onReplaceSource?: ReviewSheetProps["onReplaceSource"]; onRemoveSource?: ReviewSheetProps["onRemoveSource"]; onReplaceLink?: ReviewSheetProps["onReplaceLink"]; onAddLink?: ReviewSheetProps["onAddLink"]; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
   // Ticket 28: the collapsed cap is the mobile cap during SSR (useMediaQuery
   // defaults false server-side) and the page size at lg+; the client corrects
   // it after hydration.
@@ -299,6 +317,18 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   const addOfferingRef = useRef<HTMLButtonElement>(null);
   const addFileRef = useRef<HTMLInputElement>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
+  // 31: the inline link editor. `documentId` null means the editor is adding a
+  // source; the opener is remembered only so Cancel can return focus to it.
+  const [linkEditor, setLinkEditor] = useState<{ documentId: string | null } | null>(null);
+  const [linkValue, setLinkValue] = useState("");
+  const [linkPending, setLinkPending] = useState(false);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkOpenerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!linkEditor) return;
+    // The editor is the field the owner came for: focus it once it is laid out.
+    revealNode(linkInputRef.current);
+  }, [linkEditor]);
   useEffect(() => {
     if (!revealRequest) return;
     if ("id" in revealRequest) reveal(cardRefs, revealRequest.id);
@@ -407,35 +437,117 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     if (adopted) setOfferings(reconcileAfterSave(offerings, adopted, workspace.documents, editedIdsRef.current).map(toWorkingOffering));
   }
   async function loadSource(docId: string) { if (sources.has(docId) || sourceLoading) return; setSourceLoading(docId); try { const detail = await apiFetch<SourceDetail>(`/api/knowledge/records/${docId}/source`); setSources((previous) => { const next = new Map(previous); next.set(docId, detail); return next; }); } finally { setSourceLoading(null); } }
+  /** 31: fold accepted records into the review without disturbing its edits.
+   *  Shared by the file and link doors so both adopt the same way. */
+  function adoptRecords(records: KnowledgeRecord[]) {
+    if (records.length === 0) return;
+    setSectionsByDocument((previous) => {
+      const next = new Map(previous);
+      for (const record of records) next.set(record.id, orderedSections(record.sections));
+      return next;
+    });
+    setOfferings((previous) => {
+      const merged = mergeIncomingCandidates(previous, records);
+      return merged.map((item, index) => {
+        const working = toWorkingOffering(item);
+        if (index < previous.length && previous[index].dirty) {
+          working.dirty = true;
+          editedIdsRef.current.add(working.candidate_id);
+        }
+        return working;
+      });
+    });
+  }
   async function handleAddFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (files.length === 0 || !onAddSource) return;
     setAddingSources(true);
     try {
-      const records = await onAddSource(files);
-      if (records.length > 0) {
-        setSectionsByDocument((previous) => {
-          const next = new Map(previous);
-          for (const record of records) next.set(record.id, orderedSections(record.sections));
-          return next;
-        });
-        setOfferings((previous) => {
-          const merged = mergeIncomingCandidates(previous, records);
-          return merged.map((item, index) => {
-            const working = toWorkingOffering(item);
-            if (index < previous.length && previous[index].dirty) {
-              working.dirty = true;
-              editedIdsRef.current.add(working.candidate_id);
-            }
-            return working;
-          });
-        });
-      }
+      adoptRecords(await onAddSource(files));
     } finally {
       setAddingSources(false);
     }
   }
+  /** 31: a URL row edits in place; a file row keeps the picker. */
+  function openLinkEditor(documentId: string | null, opener: HTMLButtonElement) {
+    linkOpenerRef.current = opener;
+    setLinkValue(documentId === null ? "" : workspace.documents.find((doc) => doc.id === documentId)?.filename ?? "");
+    setLinkEditor({ documentId });
+  }
+  function cancelLink() {
+    // 31: cancel is not a source change - no request, no document edit.
+    setLinkEditor(null);
+    linkOpenerRef.current?.focus();
+  }
+  async function saveLink() {
+    const editor = linkEditor;
+    const trimmed = linkValue.trim();
+    const documentId = editor?.documentId ?? null;
+    if (!editor || !trimmed || linkPending) return;
+    if (documentId !== null) {
+      if (confirmRemove && !(await confirmRemove(replaceLinkConfirm()))) return;
+      if (!onReplaceLink) return;
+      setLinkPending(true);
+      try {
+        const result = await onReplaceLink(documentId, trimmed);
+        if (!result) return;
+        const { record, draft } = result;
+        setSectionsByDocument((previous) => {
+          const next = new Map(previous);
+          next.delete(documentId);
+          next.set(record.id, orderedSections(record.sections));
+          return next;
+        });
+        setSources((previous) => {
+          const next = new Map(previous);
+          next.delete(documentId);
+          return next;
+        });
+        setOfferings((previous) => reconcileOfferings(previous, record.offering_candidates ?? [], documentId, editedIdsRef.current).map(toWorkingOffering));
+        // 31: the site fields it stated win; a field it omitted is absent from
+        // the draft, so the value on screen survives.
+        setProfileValues((previous) => {
+          const next = { ...previous };
+          for (const { key } of PROFILE_ROWS) {
+            if (key in draft) next[key] = String(draft[key] ?? "");
+          }
+          return next;
+        });
+        setLinkEditor(null);
+      } finally {
+        setLinkPending(false);
+      }
+      return;
+    }
+    if (!onAddLink) return;
+    setLinkPending(true);
+    try {
+      const records = await onAddLink(trimmed);
+      if (records.length > 0) {
+        adoptRecords(records);
+        setLinkEditor(null);
+      }
+    } finally {
+      setLinkPending(false);
+    }
+  }
+  const linkEditorForm = (
+    <div className="mt-3 flex items-center gap-2">
+      <input
+        ref={linkInputRef}
+        data-testid="review-link-input"
+        aria-label="Link address"
+        placeholder="https://"
+        value={linkValue}
+        disabled={linkPending}
+        onChange={(event) => setLinkValue(event.target.value)}
+        className={`min-w-0 flex-1 ${FIELD}`}
+      />
+      <button type="button" aria-label="Save link" disabled={busy || linkPending || !linkValue.trim()} onClick={() => void saveLink()} className={`${TEXT_PRESS} shrink-0 text-action font-medium text-accent-active disabled:opacity-40`}>Save</button>
+      <button type="button" aria-label="Cancel link" disabled={linkPending} onClick={cancelLink} className={`${TEXT_PRESS} shrink-0 text-action text-ink-a40 disabled:opacity-40`}>Cancel</button>
+    </div>
+  );
   async function handleReplaceFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -535,20 +647,34 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
           const label = sourceLabel(doc);
           const failed = doc.status === "failed";
           const replacing = replacingSource === doc.id;
-          const canAct = (doc.status === "draft" || failed) && onReplaceSource !== undefined && onRemoveSource !== undefined;
-          return <div key={doc.id} className="flex items-center justify-between gap-3 rounded-card border border-hairline px-3 py-3">
-            <div className="min-w-0">
-              <p className="truncate text-prose text-text">{label}</p>
-              {failed ? <p className="mt-1 text-meta text-danger">{workspace.errors?.[doc.id] ?? "Failed"}</p> : workspace.errors?.[doc.id] ? <p className="mt-1 text-meta text-danger">{workspace.errors[doc.id]}</p> : null}
+          const actionable = doc.status === "draft" || failed;
+          const canRemove = actionable && onRemoveSource !== undefined;
+          // 31: a URL row edits its address in place; a file row keeps the
+          // picker. Neither action is offered by the Business surface.
+          const canEditLink = actionable && doc.doc_type === "website" && onReplaceLink !== undefined;
+          const canReplaceFile = actionable && doc.doc_type !== "website" && onReplaceSource !== undefined;
+          const editingThis = linkEditor?.documentId === doc.id;
+          return <div key={doc.id} className="rounded-card border border-hairline px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-prose text-text">{label}</p>
+                {failed ? <p className="mt-1 text-meta text-danger">{workspace.errors?.[doc.id] ?? "Failed"}</p> : workspace.errors?.[doc.id] ? <p className="mt-1 text-meta text-danger">{workspace.errors[doc.id]}</p> : null}
+              </div>
+              {canRemove || canEditLink || canReplaceFile ? <div className="flex shrink-0 items-center gap-2">
+                {canEditLink ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={(event) => openLinkEditor(doc.id, event.currentTarget)} aria-label={`Edit link for ${label}`} data-testid="review-edit-link" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>Edit link</button> : null}
+                {canReplaceFile ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={() => { setReplaceTarget(doc.id); replaceFileRef.current?.click(); }} aria-label={`Replace ${label}`} data-testid="review-replace-source" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{replacing ? "Replacing\u2026" : "Replace"}</button> : null}
+                {canRemove ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={() => void handleRemoveSource(doc.id)} aria-label={`Remove ${label}`} data-testid="review-remove-source" className={`${TEXT_PRESS} text-action text-ink-a40 disabled:opacity-40`}>Remove</button> : null}
+              </div> : null}
             </div>
-            {canAct ? <div className="flex shrink-0 items-center gap-2">
-              <button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => { setReplaceTarget(doc.id); replaceFileRef.current?.click(); }} aria-label={`Replace ${label}`} data-testid="review-replace-source" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{replacing ? "Replacing\u2026" : "Replace"}</button>
-              <button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => void handleRemoveSource(doc.id)} aria-label={`Remove ${label}`} data-testid="review-remove-source" className={`${TEXT_PRESS} text-action text-ink-a40 disabled:opacity-40`}>Remove</button>
-            </div> : null}
+            {editingThis ? linkEditorForm : null}
           </div>;
         })}
       </div>
-      {onAddSource ? <button type="button" disabled={busy || replacingSource !== null} onClick={() => addFileRef.current?.click()} data-testid="review-add-source" className={`mt-3 ${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{addingSources ? "Adding\u2026" : "Add another source"}</button> : null}
+      <div className="mt-3 flex items-center gap-4">
+        {onAddLink ? <button type="button" disabled={busy || replacingSource !== null || linkPending} onClick={(event) => openLinkEditor(null, event.currentTarget)} data-testid="review-add-link" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>Add a link</button> : null}
+        {onAddSource ? <button type="button" disabled={busy || replacingSource !== null || addingSources || linkPending} onClick={() => addFileRef.current?.click()} data-testid="review-add-file" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{addingSources ? "Adding\u2026" : "Add a file"}</button> : null}
+      </div>
+      {linkEditor?.documentId === null ? linkEditorForm : null}
       <input ref={addFileRef} type="file" multiple accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-add-input" onChange={(event) => void handleAddFiles(event)} />
       <input ref={replaceFileRef} type="file" accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-replace-input" onChange={(event) => void handleReplaceFile(event)} />
     </section>

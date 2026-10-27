@@ -9,6 +9,7 @@ import {
   Pagination,
   priceInputUpdate,
   removeOfferingConfirm,
+  replaceLinkConfirm,
   profilePatchFor,
   ReviewSheet,
   toPendingOffering,
@@ -852,5 +853,96 @@ describe("priced-first review (29)", () => {
     expect(html).toContain("More about what I read");
     expect(html).not.toContain("The secret document body");
     expect(html).not.toContain("Original extracted source");
+  });
+});
+
+describe("link editing (31)", () => {
+  function record(overrides: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
+    return {
+      id: "doc-1",
+      filename: "https://bytefix.example.com/menu",
+      doc_type: "website",
+      status: "draft",
+      error: null,
+      sections: [],
+      ...overrides,
+    };
+  }
+
+  function renderSources(
+    documents: KnowledgeRecord[],
+    handlers: {
+      onReplaceLink?: (documentId: string, url: string) => Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null>;
+      onAddLink?: (url: string) => Promise<KnowledgeRecord[]>;
+      onAddSource?: (files: File[]) => Promise<KnowledgeRecord[]>;
+      onReplaceSource?: (documentId: string, file: File) => Promise<KnowledgeRecord | null>;
+      onRemoveSource?: (documentId: string) => Promise<void>;
+    } = {},
+  ): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{ id: "ws-1", documents, offering_candidates: [] }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+        {...handlers}
+      />,
+    );
+  }
+
+  const sourceHandlers = {
+    onReplaceLink: async () => null,
+    onAddLink: async () => [],
+    onAddSource: async () => [],
+    onReplaceSource: async () => null,
+    onRemoveSource: async () => {},
+  };
+
+  it("pins the link replacement question", () => {
+    expect(replaceLinkConfirm()).toEqual({
+      title: "Replace this link?",
+      description:
+        "The new site will be read, and its details and offerings will replace this source.",
+      confirmLabel: "Replace link",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("gives a URL row an inline edit and keeps the file picker off it", () => {
+    const html = renderSources([record()], sourceHandlers);
+    expect(html).toContain('data-testid="review-edit-link"');
+    expect(html).toContain('aria-label="Edit link for bytefix.example.com"');
+    expect(html).toContain(">Edit link</button>");
+    expect(html).not.toContain('data-testid="review-replace-source"');
+    // Closed means the editor is not in the DOM at all.
+    expect(html).not.toContain('data-testid="review-link-input"');
+  });
+
+  it("keeps the file picker on a file row and offers no link edit", () => {
+    const html = renderSources([record({ doc_type: "other", filename: "menu.pdf" })], sourceHandlers);
+    expect(html).toContain('data-testid="review-replace-source"');
+    expect(html).not.toContain('data-testid="review-edit-link"');
+  });
+
+  it("offers add a link and add a file as two actions", () => {
+    const html = renderSources([record({ doc_type: "other", filename: "menu.pdf" })], sourceHandlers);
+    expect(html).toContain('data-testid="review-add-link"');
+    expect(html).toContain(">Add a link</button>");
+    expect(html).toContain('data-testid="review-add-file"');
+    expect(html).toContain(">Add a file</button>");
+    expect(html).not.toContain("Add another source");
+  });
+
+  it("renders no source actions on a surface that passes no handlers", () => {
+    const html = renderSources([record()]);
+    expect(html).not.toContain('data-testid="review-edit-link"');
+    expect(html).not.toContain('data-testid="review-add-link"');
+    expect(html).not.toContain('data-testid="review-add-file"');
+    expect(html).not.toContain('data-testid="review-remove-source"');
   });
 });
