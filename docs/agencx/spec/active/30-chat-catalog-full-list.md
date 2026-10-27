@@ -135,5 +135,5 @@ Acceptance evidence:
 
 ## Delivered
 
-`6b90bcc` - the catalog boundary, the page link, the `#offerings` anchor, the
-slug prop, and the tool guidance.
+`14e1cd6` - the catalog boundary, the page link, the `#offerings` anchor, the
+slug prop, and the tool guidance. Squashed into `development` on 2026-10-27.

@@ -465,17 +465,20 @@ The migration runner (`make migrate`) was already at
 
 ## Delivered
 
-| Slice | Commit | What landed |
-|---|---|---|
-| A1 | `65ef878` | Flow inverted to name -> source -> review -> beats -> confirm: the source stage is second, skip words resolve deterministically and never reach the draft, `save_profile(only_empty=True)` lets an owner answer win, and `services_source` decides the services sync. |
-| A2 | `b8d8b19` | The source turn runs structure, offerings and the profile read together under one timeout; `POST /api/onboarding/source` is the upload twin; `_URL_EXTRACT_PROMPT` no longer extracts `services`; the turn logs one `onboarding source timing` line. |
-| A3 | `3e9dd7c` | The onboarding screen treats the source as a stage: "+" on every composer, a stage-aware upload target, the review opens only on a pending draft, and a review save re-reads `/api/onboarding/state` instead of assuming `can_confirm`. |
-| B | `ef70289` | The review sheet leads with priced services, opens in edit mode with the missing-price banner, takes one price field in two shapes, shows the found business details, one "I'll ask next" note, collapsed source text and compact source rows; the batch carries the optional `profile` map. |
-| C | `7556f67` | `pricing_wording` rides the candidate, the merge and the conflict check, the publish/reconcile path, catalog chunks, `recommend_items` and `show_catalog`; it stays inside `owner_material` so the money guard can reconcile a quoted wording. |
-| D | `ab335b3`, `a29cc31`, `68885f6` | Offerings-first discovery with the anchor label, the sitemap only when nav/body sell nothing, six concurrent reads under 10s, budget-satisfied early exit, a thin-result sitemap fallback, and the fallback's depth-first ranking with a two-page cap per first path segment. |
+Delivered as `11fb930` on `development` (2026-10-27), one squashed commit for
+the whole ticket.
 
-Slice A shipped as three commits plus one fix commit:
-`492d167` closed four source-fill ownership edges. The profile-read failure is
+| Slice | What landed |
+|---|---|
+| A1 | Flow inverted to name -> source -> review -> beats -> confirm: the source stage is second, skip words resolve deterministically and never reach the draft, `save_profile(only_empty=True)` lets an owner answer win, and `services_source` decides the services sync. |
+| A2 | The source turn runs structure, offerings and the profile read together under one timeout; `POST /api/onboarding/source` is the upload twin; `_URL_EXTRACT_PROMPT` no longer extracts `services`; the turn logs one `onboarding source timing` line. |
+| A3 | The onboarding screen treats the source as a stage: "+" on every composer, a stage-aware upload target, the review opens only on a pending draft, and a review save re-reads `/api/onboarding/state` instead of assuming `can_confirm`. |
+| B | The review sheet leads with priced services, opens in edit mode with the missing-price banner, takes one price field in two shapes, shows the found business details, one "I'll ask next" note, collapsed source text and compact source rows; the batch carries the optional `profile` map. |
+| C | `pricing_wording` rides the candidate, the merge and the conflict check, the publish/reconcile path, catalog chunks, `recommend_items` and `show_catalog`; it stays inside `owner_material` so the money guard can reconcile a quoted wording. |
+| D | Offerings-first discovery with the anchor label, the sitemap only when nav/body sell nothing, six concurrent reads under 10s, budget-satisfied early exit, a thin-result sitemap fallback, and the fallback's depth-first ranking with a two-page cap per first path segment. |
+
+Slice A shipped as three slices plus one fix that closed four source-fill
+ownership edges. The profile-read failure is
 swallowed at one seam (`prepare_source_profile` returns `None`, because
 `LimitTimeout` is not a `TimeoutError`), and the turn gathers with
 `return_exceptions=True` so one failure cannot leak its sibling. The source

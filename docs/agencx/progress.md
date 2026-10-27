@@ -370,9 +370,9 @@ live in the ticket files, not here.
 - [x] Source-first onboarding (ticket 29): name -> website/document -> review ->
   missing required beats -> optional beats -> confirm, with a priced review
   sheet, owner wording in the assistant context, and a faster 10-page crawl.
-  Six feature commits (`65ef878`, `b8d8b19`, `3e9dd7c`, `ef70289`, `7556f67`,
-  `ab335b3`) plus three fixes (`492d167`, `a29cc31`, `68885f6`). The interview
-  asks for a source second; the review leads with priced services and saves the
+  Landed as `11fb930` on `development`, one squashed commit for the ticket.
+  The interview asks for a source second; the review leads with priced services
+  and saves the
   business details; a worded price reaches the assistant as owner material; and
   the crawl reads six pages at once under a 10s deadline with a thin-result
   sitemap fallback. Probe: fixture 145ms against 461ms, python.org the same six
@@ -390,8 +390,7 @@ live in the ticket files, not here.
   prop on the card rather than a payload field so a restored card keeps working,
   and the tool guidance tells the assistant to call `show_catalog` for a
   full-list request without repeating the catalog in prose. Landed as
-  `6b90bcc` on `feat/30-chat-catalog-full-list`, stacked deliberately on
-  ticket 29's branch because slice C is not merged yet. Status
+  `14e1cd6` on `development`. Status
   `Active - awaiting review`. See
   [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
 
