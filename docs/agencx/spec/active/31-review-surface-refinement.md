@@ -1,7 +1,12 @@
 # 31: Review surface refinement
 
-**Status:** Active - todo.
+**Status:** Active - awaiting review.
 **Phase 1 area:** Onboarding, knowledge review, offerings, site ingestion.
+
+**Open red spec:** `frontend/e2e/onboarding-url.spec.ts:56` fails before it
+reaches this ticket's discard step - the uncommitted
+`backend/app/onboarding/beats.py` revert removes the owner-name Skip chip that
+spec clicks. Every other ticket spec passes; see the Evidence section.
 
 Refines the review surface delivered by [29-source-first-onboarding.md](29-source-first-onboarding.md)
 (status: awaiting review). One component serves three surfaces: onboarding,
@@ -109,7 +114,7 @@ Interaction vocabulary comes from the console prototype
 | 19 | `Add a link` is used | A second URL document joins the review, the profile fills empty fields only, and owner answers survive |
 | 20 | The suggestions sheet holds nine candidates | Five rows on desktop, three on mobile, with `Showing 1-5 of 9 suggestions`; paging focuses and scrolls to the first suggestion |
 | 21 | All nine are saved from page 1 | The request body carries nine candidates |
-| 22 | The Business > Knowledge review sheet is opened | No source actions, no suggestions, no category regression; paging, focus and the discard confirm behave as they do on onboarding |
+| 22 | The Business > Knowledge review sheet is opened | No source actions, no suggestions, no category regression; paging and focus behave as they do on onboarding, and discard keeps that page's own single confirm |
 
 ## Migration
 
@@ -260,16 +265,21 @@ the sheet.
   `<ReviewSheet>` (never inside a panel, per `ConfirmDialog.tsx:104-106`), and
   passes `confirmRemove={confirm}`.
 - Footer discard becomes `handleDiscard()`: confirm with the locked copy
-  (pluralised from `workspace.documents.length`) when `confirmRemove` is
-  provided, then `onDiscard()`. The label becomes `Discard source` /
-  `Discard sources` on the onboarding surface; the non-onboarding labels stay
-  `Discard draft` and `Remove source`.
+  (pluralised from `workspace.documents.length`) when `onboarding` and
+  `confirmRemove` are supplied, then `onDiscard()`. The label becomes
+  `Discard source` / `Discard sources` on the onboarding surface; the
+  non-onboarding labels stay `Discard draft` and `Remove source`.
 - `business/details/knowledge/page.tsx` passes `confirmRemove={confirm}` to its
-  `ReviewSheet` (`:538-553`), so its footer discard asks too. This is the one
-  shipped behaviour outside onboarding that changes; see Flags.
-- Spec updates this forces: `onboarding-go-live.spec.ts:208`, `:258`,
-  `onboarding-url.spec.ts:139`, `settings-knowledge.spec.ts:294`, `:305` each
-  add one `confirm-accept` click.
+  `ReviewSheet` (`:538-553`) so its offering and source removals still ask. Its
+  footer discard does **not** ask through the sheet: that page's own
+  `discardWorkspace` already owns that question (it confirms a saved source and
+  drops a draft directly), so the sheet-level footer confirm is gated to
+  `onboarding === true`. A later review found the ungated version asked twice
+  there; see the review-fix evidence. No shipped behaviour outside onboarding
+  changes.
+- Spec updates this forces: `onboarding-go-live.spec.ts:208`, `:258` and
+  `onboarding-url.spec.ts:139` each add one `confirm-accept` click.
+  `settings-knowledge.spec.ts` does not - one click, the page's own dialog.
 
 **Test seams**
 
@@ -530,7 +540,7 @@ Full-suite gate at the branch tip: `make lint`, `make typecheck`, `make test`,
 
 | Flag | Default taken |
 |---|---|
-| The discard confirm reaches the Business > Knowledge sheet too, because the footer is shared and `confirmRemove` is now passed there; that surface's own record list already confirms, its sheet footer did not | Confirmed everywhere, with the label unchanged off onboarding; two specs gain one click. Say the word and it stays onboarding-only |
+| The footer discard `confirmRemove` is injected on the Business > Knowledge sheet, but that page's own `discardWorkspace` already asks before removing a saved source | The sheet-level footer confirm is onboarding-only, so Business > Knowledge asks exactly once (through its own dialog) and keeps its pre-ticket behaviour: a saved source confirms, a draft drops directly. Offering removal and source removal still confirm there. This corrects the earlier "confirmed everywhere" default, which asked twice and made the two specs click twice |
 | `px-4 py-3 text-body` renders 48px tall, so `min-h-11` (44px) is a floor that never binds. A 44px field exactly would need `py-2` | Keep `py-3` (the system recipe's padding) and the 44px floor |
 | `text-body` on form controls departs from the 18/25 `text-field` role that `frontend.md` 4.4 names for sheet fields; `text-field` itself stays for the contact and profile sheets | Treated as a founder ruling for the review surface only, recorded in 4.6 |
 | A replacement never clears a field the new site omits, per the request | Kept as stated; clearing is a separate ask |
@@ -819,3 +829,98 @@ persisted `offering_candidates` no longer holds `Battery swap` (backed only by
 the deleted row) and still holds `Owner typed row`, and the same-URL test
 asserts every persisted candidate keeps the document id in
 `supporting_document_ids`.
+
+### Review fixes before acceptance
+
+Eight defects found while reviewing the ticket against the founder's brief.
+Each fix is small; the seam that proves it is named, because this repo has no
+jsdom, so click behaviour is proved in the browser and the pure logic in vitest.
+
+1. **One discard dialog per click.** `handleDiscard` now confirms only when
+   `onboarding`, because `business/details/knowledge/page.tsx`'s
+   `discardWorkspace` already owns that question. Proof: E2E
+   `settings-knowledge.spec.ts` "removing a saved document from the sheet asks
+   first, escape leaves it alone" - one `confirm-accept` click, Escape cancels
+   with `records.deleteCount() === 0`, a second click deletes exactly once.
+2. **`aria-controls` never names an absent node.** `categoryTriggerAria` keeps
+   `aria-expanded` in both states and emits `aria-controls` only while the panel
+   renders. Proof: unit, `ReviewSheet.test.tsx` "keeps a card with no category
+   collapsed behind one trigger" (closed markup has no `aria-controls`) and
+   "names its panel only while that panel is rendered" (helper mapping); E2E,
+   `knowledge-review.spec.ts` "the category picker stays collapsed until its
+   trigger is used" reads the open trigger's `aria-controls` and asserts exactly
+   one node carries that id.
+3. **A double Save cannot reach the endpoint.** `claimLinkSave` claims the slot
+   before the confirm opens and the handler releases it in `finally`;
+   `linkPending` is set before the confirm. Proof: unit, "lets only one link save
+   hold the slot at a time"; E2E, `saving a different link replaces the source`
+   cancels the dialog and saves again successfully, which is the release path.
+   (The leak itself - `useConfirm` overwriting its one pending entry - has no
+   browser-visible symptom, so the promise is asserted at the pure seam only.)
+4. **A replaced link cannot duplicate a source.** `replaceDocument` swaps in
+   place and drops any other entry with the new id; `onboarding/page.tsx` uses it
+   for both the workspace and the drafts list. Proof: unit only,
+   `offerings.test.ts` "keeps one row when the replacement already exists in the
+   review" and "swaps a source ... at the same position". No E2E case covers the
+   page wiring for this path.
+5. **A failed draft does not advance the source stage.** `run_source_url`
+   returns the unchanged state when `draft_from_url_text` answers `None`. Proof:
+   `test_onboarding_api.py::test_source_url_a_missing_draft_leaves_the_source_stage_open`
+   - red before the fix (assertion failed at line 2138), green after:
+   `1 passed`.
+6. **The viewport assertion measures the sheet panel too.** `expectInViewport`
+   now asserts the element's rect sits inside its nearest scrollable ancestor as
+   well as the window. It passed without a scroll change, so `revealNode`'s
+   `scrollIntoView({ block: "nearest" })` was already correct for every reveal
+   case.
+7. **Mobile 5/3 is proved in a browser.** New E2E
+   `business-page-actions.spec.ts` "the suggestions sheet pages three at a time
+   on a phone" sets a 360px viewport, reuses the existing suggestions stubs,
+   asserts three rows and `Showing 1-3 of 9 suggestions`, then `Showing 4-6 of
+   9` with `Offering 4 name` focused after `Next`.
+8. **Focus returns to a surviving row's `Edit link`.** `saveLink` calls
+   `revealNode(linkOpenerRef.current)` only when `record.id === documentId`.
+   Proof: E2E `saving the same link re-reads one source in place` asserts
+   `review-edit-link` is focused; `saving a different link replaces the source`
+   asserts the new row's `Edit link` is not focused.
+
+```
+$ make lint
+> eslint
+(no output - clean)
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+All checks passed!
+Contracts: 3 kept, 0 broken.
+
+$ make typecheck
+> tsc --noEmit
+(no output - clean)
+Success: no issues found in 256 source files
+
+$ make test
+ Test Files  43 passed (43)
+      Tests  428 passed (428)
+============================ 1633 passed in 43.55s =============================
+
+$ cd frontend && npm run gen:types -- --check
+api-types.ts is up to date
+
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+73 passed in 4.21s
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (33 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (55 tests)
+ Test Files  2 passed (2)
+      Tests  88 passed (88)
+
+$ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobile.spec.ts \
+    e2e/business-page-actions.spec.ts e2e/onboarding-resume.spec.ts \
+    e2e/onboarding-go-live.spec.ts e2e/settings-knowledge.spec.ts
+  48 passed (1.1m)
+```
+
+`onboarding-url.spec.ts` is not in that run: it fails at line 56 on the Skip
+chip that the uncommitted `backend/app/onboarding/beats.py` revert removes,
+before it reaches the discard this ticket changes. The same discard path is
+covered by `settings-knowledge.spec.ts` and `knowledge-review.spec.ts` above.

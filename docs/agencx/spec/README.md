@@ -34,6 +34,7 @@ Per-ticket header pattern:
 | [active/13-latency.md](active/13-latency.md) | Latency instrument and model matrix, slices 1-6 plus coalescing merged at `d544ce5`; slice 7 deferred | `Merged - slice 7 deferred` |
 | [active/29-source-first-onboarding.md](active/29-source-first-onboarding.md) | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D) | `Active - awaiting review` |
 | [active/30-chat-catalog-full-list.md](active/30-chat-catalog-full-list.md) | Chat catalog boundary at 20 offerings plus the business-page link | `Active - awaiting review` |
+| [active/31-review-surface-refinement.md](active/31-review-surface-refinement.md) | Review surface refinement: field recipe, collapsed categories and focus, confirmations, suggestions paging, URL source endpoint, in-place link editing (slices A-F plus review fixes) | `Active - awaiting review` |
 
 ## Completed work
 

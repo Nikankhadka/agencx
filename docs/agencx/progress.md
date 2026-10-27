@@ -382,6 +382,17 @@ live in the ticket files, not here.
   bar) and the 5s p50 target was not measured end to end, only crawl wall time.
   Status `Active - awaiting review`. See
   [29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md).
+- [ ] Review surface refinement (ticket 31): the review sheet's field recipe
+  and spacing, collapsed category pickers with focus movement, one confirm for
+  every removal and the onboarding-only footer discard, suggestions paged five
+  and three, `POST /api/onboarding/source/url`, and in-place link editing with
+  same-URL re-reads and replacement reconcile. Slices A-F plus eight review
+  fixes are green (`make lint`, `make typecheck`, `make test`, 48 ticket E2E
+  cases). Branch `feat/review-surface-refinement`, ticket commits
+  `c021e62..bb3db0c`, awaiting review. One red spec is environmental:
+  `onboarding-url.spec.ts:56` clicks the owner-name Skip chip that the
+  uncommitted `beats.py` revert removes. See
+  [31-review-surface-refinement.md](spec/active/31-review-surface-refinement.md).
 - [x] Chat catalog for large menus (ticket 30): 20 or fewer offerings render in
   full in category order; above 20 the card keeps five rows per category, the
   `+N more` line, and adds one `View all N offerings` link to
@@ -403,6 +414,7 @@ live in the ticket files, not here.
 | [spec/active/13-latency.md](spec/active/13-latency.md) | `Active - in progress, slices 1-6 and coalescing merged at d544ce5; slice 7 deferred` | Latency instrument and model matrix, slices 1-6 merged at `d544ce5` and slice 7 deferred (slice 1 landed; slice 2 measured, mechanism-inert; slice 3 measured at `2ac8247`, PASS on the mechanism with both founder rulings recorded on 2026-10-19 - citations cited-only and internal only, generation FAIL accepted as a provider level shift with the tolerance unchanged; slice 4 measured at `040a473`, PASS structurally with no clock effect; slice 5 measured at `d99ca54`, gate PASS with the cache proven by non-zero `cached_input_tokens` and no clock claim, the trajectory delta bounded by an identical-code repeat; slice 6 measured at `2004617`/`5a4578a`, CLOSED WITH NO WINNER - cache-adjusted cost shipped, OpenRouter matrix heavily censored, ling has no tool-correctness row, Google swung 10/15 to 2/15 under 429s, so no ranking is supportable; cumulative package for slices 1-6 built - hybrid calls p50 4.0 -> 3.0, fast tenants unchanged, no clock claim; slice 7 deferred, and the merge is closed; follow-on burst coalescing shipped in the composer - mid-turn questions queue and send as one combined turn, 68-77% faster than serial per [report-coalesce.md](evidence/latency-2026-10/report-coalesce.md)) Merged to development and staging on 2026-10-23; make ci green at the tip (1514 backend, 373 frontend); the founder's 10% bar is met by the coalesced burst (68-77% faster), with no single-turn clock claim. |
 | [spec/active/29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md) | `Active - awaiting review` | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D) |
 | [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - awaiting review` | Chat catalog boundary at 20 offerings plus the business-page link |
+| [spec/active/31-review-surface-refinement.md](spec/active/31-review-surface-refinement.md) | `Active - awaiting review` | Review surface refinement, slices A-F plus the review fixes |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items
