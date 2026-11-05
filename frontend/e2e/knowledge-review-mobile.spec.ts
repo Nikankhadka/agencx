@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 import { expectNoHorizontalOverflow } from "./mobile-helpers";
 import {
@@ -26,6 +26,27 @@ const FIVE_NAMES = ["menu.txt", "hours.txt", "policies.txt", "notes.txt", "faq.t
 
 function dialog(page: Page) {
   return page.getByRole("dialog", { name: "Review your information" });
+}
+
+/** 31: a revealed field must be inside the sheet's own scroll box, not merely
+ *  inside the window - the panel clips its content with `overflow-y-auto`. */
+async function expectInViewport(locator: Locator) {
+  const box = (await locator.boundingBox())!;
+  const frame = await locator.evaluate((node) => {
+    let parent = node.parentElement;
+    while (parent) {
+      const style = getComputedStyle(parent);
+      if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) {
+        const rect = parent.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom };
+      }
+      parent = parent.parentElement;
+    }
+    return { top: 0, bottom: window.innerHeight };
+  });
+  expect(box.y).toBeGreaterThanOrEqual(frame.top);
+  expect(box.y + box.height).toBeLessThanOrEqual(frame.bottom);
+  expect(box.y + box.height).toBeLessThanOrEqual(locator.page().viewportSize()!.height);
 }
 
 test("five files settle into the review sheet at phone width", async ({ page, request }) => {
@@ -149,6 +170,93 @@ test("the pagination shows two rows after expanding", async ({ page, request }) 
   const showingBox = await showing.boundingBox();
   expect(showingBox!.y).toBeGreaterThan(pageBox!.y);
   await expectNoHorizontalOverflow(page);
+});
+
+test("the collapsed list keeps three cards and one category trigger each", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 3 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  for (const [index, name] of ["Item 1", "Item 2", "Item 3"].entries()) {
+    await expect(sheet.getByLabel(`Offering ${index + 1} name`)).toHaveValue(name);
+  }
+  // 31: the phone keeps the same quiet card - one collapsed trigger each, no
+  // open picker taking a third of the screen.
+  await expect(sheet.getByTestId("review-category-trigger")).toHaveCount(3);
+  await expect(sheet.getByTestId("review-category-trigger").first()).toHaveText(
+    "Add category",
+  );
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test("the category panel fits a 360px phone and Escape backs out one level", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([
+    draftRecord({
+      id: "draft-1",
+      filename: "catalog.txt",
+      offering_candidates: [offeringCandidate("Item 1", "draft-1", { price_cents: 1000 })],
+    }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+  await page.setViewportSize({ width: 360, height: 720 });
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  const trigger = sheet.getByTestId("review-category-trigger");
+  await trigger.click();
+
+  // The field the trigger promised is focused and on screen.
+  const search = sheet.getByLabel("Search categories");
+  await expect(search).toBeFocused();
+  await expectInViewport(search);
+
+  // One exit, visible and reachable at phone width.
+  const done = sheet.getByTestId("review-category-done");
+  await expect(done).toBeVisible();
+  await expectInViewport(done);
+  expect((await done.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+
+  // The panel groups itself inside the sheet without pushing it sideways.
+  const overflow = await search.evaluate((node) => {
+    let parent = node.parentElement;
+    while (parent) {
+      const style = getComputedStyle(parent);
+      if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) {
+        return parent.scrollWidth - parent.clientWidth;
+      }
+      parent = parent.parentElement;
+    }
+    return null;
+  });
+  expect(overflow).not.toBeNull();
+  expect(overflow!).toBeLessThanOrEqual(0);
+  await expectNoHorizontalOverflow(page);
+
+  // Escape closes the picker, not the review, and returns focus to the trigger.
+  await page.keyboard.press("Escape");
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expect(sheet).toBeVisible();
+  await expect(trigger).toBeFocused();
 });
 
 test("the ready card stacks the button under the heading", async ({ page, request }) => {

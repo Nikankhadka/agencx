@@ -126,13 +126,16 @@ export function offeringCandidate(
   };
 }
 
-/** The server's records list, shared by the records/upload/delete stubs. */
+/** The server's records list, shared by the records/upload/delete stubs.
+ *  `deletedIds` is the one ledger wherever a row disappears, so a replacement
+ *  performed by the URL endpoint is visible beside a plain DELETE. */
 export interface RecordsStore {
   records: MockKnowledgeRecord[];
+  deletedIds: string[];
 }
 
 export function recordsStore(initial: MockKnowledgeRecord[]): RecordsStore {
-  return { records: [...initial] };
+  return { records: [...initial], deletedIds: [] };
 }
 
 export interface RecordsStub {
@@ -148,7 +151,6 @@ export interface RecordsStub {
 export async function stubRecords(page: Page, store: RecordsStore): Promise<RecordsStub> {
   let getCount = 0;
   let deleteCount = 0;
-  const deletedIds: string[] = [];
   let lastGetBody = "[]";
   await page.route("**/api/knowledge/records", (route) => {
     getCount += 1;
@@ -158,16 +160,73 @@ export async function stubRecords(page: Page, store: RecordsStore): Promise<Reco
   await page.route("**/api/knowledge/records/*", (route) => {
     deleteCount += 1;
     const id = route.request().url().match(/\/records\/([^/]+)$/)?.[1] ?? "";
-    deletedIds.push(decodeURIComponent(id));
+    store.deletedIds.push(decodeURIComponent(id));
     store.records = store.records.filter((record) => record.id !== id);
     return route.fulfill({ status: 204, body: "" });
   });
   return {
     getCount: () => getCount,
     deleteCount: () => deleteCount,
-    deletedIds: () => [...deletedIds],
+    deletedIds: () => [...store.deletedIds],
     lastGetBody: () => lastGetBody,
   };
+}
+
+export interface SourceUrlCall {
+  url: string;
+  replace_document_id: string | null;
+}
+
+export interface SourceUrlStub {
+  /** Every posted body, in order - a cancelled editor records none. */
+  calls(): SourceUrlCall[];
+}
+
+export interface SourceUrlOptions {
+  /** The document the site reader would produce for this request. */
+  recordFor: (url: string, replaceDocumentId: string | null) => MockKnowledgeRecord;
+  /** Overrides for the state the endpoint answers beside the document. */
+  state?: Record<string, unknown>;
+}
+
+/**
+ * 31: POST /api/onboarding/source/url, fulfilled from the store so the E2E
+ * never crawls a real site. A replacement with a different id removes the old
+ * row and records it on the store's deleted ledger; a re-read of the same
+ * address updates that row in place. The posted body is kept for assertions.
+ */
+export async function stubSourceUrl(
+  page: Page,
+  store: RecordsStore,
+  options: SourceUrlOptions,
+): Promise<SourceUrlStub> {
+  const calls: SourceUrlCall[] = [];
+  await page.route("**/api/onboarding/source/url", (route) => {
+    let body: { url?: string; replace_document_id?: string | null } = {};
+    try {
+      body = (route.request().postDataJSON() ?? {}) as typeof body;
+    } catch {
+      body = {};
+    }
+    const url = body.url ?? "";
+    const replaceDocumentId = body.replace_document_id ?? null;
+    calls.push({ url, replace_document_id: replaceDocumentId });
+    const record = options.recordFor(url, replaceDocumentId);
+    if (replaceDocumentId !== null && replaceDocumentId !== record.id) {
+      store.records = store.records.filter((item) => item.id !== replaceDocumentId);
+      store.deletedIds.push(replaceDocumentId);
+      store.records = [...store.records, record];
+    } else {
+      const index = store.records.findIndex((item) => item.id === record.id);
+      if (index >= 0) store.records = store.records.map((item, position) => (position === index ? record : item));
+      else store.records = [...store.records, record];
+    }
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ state: onboardingState(options.state), document: record }),
+    });
+  });
+  return { calls: () => [...calls] };
 }
 
 export interface UploadStub {

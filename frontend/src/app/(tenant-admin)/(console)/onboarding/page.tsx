@@ -44,7 +44,7 @@ import {
   type PendingOffering,
   type ReviewWorkspace,
 } from "@/components/knowledge/types";
-import { buildWorkspace } from "@/components/knowledge/offerings";
+import { buildWorkspace, replaceDocument } from "@/components/knowledge/offerings";
 import { ReviewSheet } from "@/components/knowledge/ReviewSheet";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
@@ -80,6 +80,13 @@ interface UploadBatch {
   accepted: KnowledgeRecord[];
   /** At least one file got through, so there may be something to review. */
   landed: boolean;
+}
+
+/** 31: the link endpoint's answer - the onboarding state and the document the
+ *  site became, so the page and the review sheet each read their own half. */
+interface SourceUrlResponse {
+  state: OnboardingState;
+  document: KnowledgeRecord | null;
 }
 
 /**
@@ -875,6 +882,95 @@ export default function OnboardingPage() {
   }
 
   /**
+   * 31: replace a link from the review sheet. The server crawls the new site,
+   * swaps the source and answers both the state and the new document; a page
+   * reload is not needed and nothing is deleted client-side.
+   */
+  async function replaceLink(
+    documentId: string,
+    url: string,
+  ): Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null> {
+    if (busy) return null;
+    setError(null);
+    setReviewError(null);
+    setBusy(true);
+    try {
+      const body = await apiFetch<SourceUrlResponse>("/api/onboarding/source/url", {
+        method: "POST",
+        body: JSON.stringify({ url, replace_document_id: documentId }),
+      });
+      const record = body.document;
+      if (!record) {
+        setReviewError("I couldn't read that link. Nothing changed.");
+        return null;
+      }
+      applyStateFields(body.state);
+      // A draft is always reviewable, so confirm stays blocked until it saves.
+      setCanConfirm(false);
+      setDrafts((previous) => replaceDocument(previous, documentId, record));
+      setWorkspace((previous) =>
+        previous
+          ? buildWorkspace(
+              replaceDocument(previous.documents, documentId, record),
+              ownerOfferings,
+              previous.id,
+            )
+          : previous,
+      );
+      return { record, draft: body.state.draft };
+    } catch (err) {
+      setReviewError(
+        err instanceof ApiError ? err.detail : "I couldn't read that link. Nothing changed.",
+      );
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 31: add a link as a second source from the review sheet. Same server call
+   * with no target, and the workspace grows by the one record it answers.
+   */
+  async function addLink(url: string): Promise<KnowledgeRecord[]> {
+    if (busy) return [];
+    setError(null);
+    setReviewError(null);
+    setBusy(true);
+    try {
+      const body = await apiFetch<SourceUrlResponse>("/api/onboarding/source/url", {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      });
+      const record = body.document;
+      if (!record) {
+        setReviewError("I couldn't read that link. Nothing changed.");
+        return [];
+      }
+      applyStateFields(body.state);
+      setCanConfirm(false);
+      setDrafts((previous) => [...previous, record]);
+      setWorkspace((previous) =>
+        previous
+          ? buildWorkspace(
+              [...previous.documents, record],
+              ownerOfferings,
+              previous.id,
+            )
+          : previous,
+      );
+      return [record];
+    } catch (err) {
+      setReviewError(
+        err instanceof ApiError ? err.detail : "I couldn't read that link. Nothing changed.",
+      );
+      return [];
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
    * W-11c: remove one source from the review sheet. Deletes the record, then
    * refreshes the list. Removing the last document clears the workspace and
    * unblocks confirm.
@@ -1288,6 +1384,8 @@ export default function OnboardingPage() {
         onAddSource={(files) => addSources(files)}
         onReplaceSource={(documentId, file) => replaceSource(documentId, file)}
         onRemoveSource={(documentId) => removeSource(documentId)}
+        onReplaceLink={(documentId, url) => replaceLink(documentId, url)}
+        onAddLink={(url) => addLink(url)}
         confirmRemove={confirmRemove}
       />
       {confirmDialog}

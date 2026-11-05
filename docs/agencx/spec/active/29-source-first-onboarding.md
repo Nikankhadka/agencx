@@ -402,7 +402,7 @@ docker compose run --rm backend python -m scripts.crawl_probe --url http://front
 | Whether `legacy_discovery` is one flag or several | One keyword-only flag, probe-only, `ponytail:` comment |
 | `wording_options` vs reusing `price_options` | New `list[str]`; cents stay integers |
 | Profile patch type on the batch endpoint | `dict[str, str]`, unknown keys rejected by `ProfileDraft` |
-| Where the skip action lives in the UI | A dashed chip from `InputSpec`, same as the existing knowledge skip |
+| Where the skip action lives in the UI | Typed `skip` word, no chip (reversed 2026-11-05, see the follow-up section) |
 
 ## Verification
 
@@ -505,3 +505,27 @@ belongs to ticket 30 and is not shipped here.
 ## Blockers
 
 None.
+
+## Follow-up - the owner-name skip chip removed (2026-11-05)
+
+The delivered slice gave the name beat a dashed `Skip` chip through
+`InputSpec`. The founder reversed that: no beat renders a skip chip now. The
+typed skip word survives unchanged - `SKIP_WORDS` still resolves `"skip"`
+deterministically before any model call and never writes it to the draft - and
+the knowledge ask keeps its own `Skip for now` chip because it is not a beat.
+
+Commit `cd9f00d`. The specs that clicked the name chip now type `skip`:
+`onboarding-source-first.spec.ts` (the mock name stage moved to `onText`, and its
+selection counts follow), `onboarding-url.spec.ts`, and `source-latency.spec.ts`.
+`onboarding-resume.spec.ts` needed no change because its chip steps are the
+knowledge ask. `backend/tests/test_onboarding_agent.py` now asserts the name beat
+renders no chips and the knowledge ask keeps one.
+
+```
+$ docker compose run --rm backend pytest tests/test_onboarding_agent.py -q
+146 passed in 0.69s
+$ docker compose run --rm backend ruff check .
+All checks passed!
+$ ... npm run test:e2e -- e2e/onboarding-source-first.spec.ts e2e/onboarding-url.spec.ts e2e/onboarding-resume.spec.ts
+ 8 passed (32.3s)
+```

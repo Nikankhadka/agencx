@@ -205,3 +205,19 @@ export function buildWorkspace(
     offering_candidates: withCombinedOfferings(documents, ownerOfferings),
   };
 }
+
+/** 31: swap one source for the record it became, in place. The server keys a
+ *  link by its address, so editing a source to the URL of one already in the
+ *  review answers that existing row's id - a plain map would then list it
+ *  twice (duplicate keys, and the batch save would carry both). */
+export function replaceDocument(
+  documents: KnowledgeRecord[],
+  documentId: string,
+  record: KnowledgeRecord,
+): KnowledgeRecord[] {
+  const index = documents.findIndex((doc) => doc.id === documentId);
+  if (index < 0) return documents;
+  return documents
+    .map((doc, position) => (position === index ? record : doc))
+    .filter((doc, position) => position === index || doc.id !== record.id);
+}

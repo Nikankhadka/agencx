@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 
 export interface CategoryOption {
@@ -17,6 +17,15 @@ interface Props {
   onChange: (selectedIds: string[], primaryId: string | null) => void;
   onCreate: (name: string) => Promise<CategoryOption>;
   label?: string;
+  /** 31: focus the search field on mount - the review's collapsed picker is
+   *  opened by a trigger, so the owner lands in the field they came for. */
+  focusSearch?: boolean;
+  /** 31: the review renders the picker inside its own named panel, so the
+   *  duplicate heading and the onboarding hint are dropped there. The
+   *  Business form keeps both: it has no panel to name the group. */
+  compact?: boolean;
+  /** 31: the control rendered beside the search field - the review's one exit. */
+  action?: ReactNode;
 }
 
 export function normalizedCategoryName(value: string) {
@@ -40,6 +49,9 @@ export function CategoryPicker({
   onChange,
   onCreate,
   label = "Categories",
+  focusSearch = false,
+  compact = false,
+  action,
 }: Props) {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
@@ -93,54 +105,81 @@ export function CategoryPicker({
   }
 
   return (
-    <fieldset>
-      <legend className="text-label font-medium uppercase text-ink-a40">{label}</legend>
+    <fieldset className="min-w-0">
+      <legend
+        className={
+          compact
+            ? "sr-only"
+            : "text-label font-medium uppercase text-ink-a40"
+        }
+      >
+        {label}
+      </legend>
       {selected.length ? (
         <ul className="mt-2 flex flex-wrap gap-2" aria-label="Selected categories">
-          {selected.map((category) => (
-            <li
-              key={category.id}
-              className="flex items-center gap-1 rounded-full bg-surface-container px-2 py-1 text-meta text-text"
-            >
-              <button
-                type="button"
-                onClick={() => onChange(selectedIds, category.id)}
-                aria-label={`Make ${category.name} primary`}
-                aria-pressed={primaryId === category.id}
-                className="font-medium text-accent-active"
+          {selected.map((category) => {
+            const primary = primaryId === category.id;
+            return (
+              <li
+                key={category.id}
+                className={`flex min-h-11 items-center rounded-full border pl-3 text-body-sm font-medium ${
+                  primary
+                    ? "border-transparent bg-accent-container text-accent-active"
+                    : "border-border bg-surface text-text"
+                }`}
               >
-                {primaryId === category.id ? "Primary" : "Make primary"}
-              </button>
-              <span>{category.name}</span>
-              <button
-                type="button"
-                onClick={() => remove(category.id)}
-                aria-label={`Remove ${category.name}`}
-                className="rounded-full p-1 text-ink-a40 hover:text-text"
-              >
-                <Icon name="cancel" size={14} />
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onChange(selectedIds, category.id)}
+                  aria-label={`Make ${category.name} primary`}
+                  aria-pressed={primary}
+                  className="flex min-h-11 min-w-0 items-center gap-2 transition-opacity duration-(--duration-fast) hover:opacity-80 active:opacity-60"
+                >
+                  {primary ? (
+                    <Icon name="check" size={14} className="shrink-0" />
+                  ) : null}
+                  <span className="truncate">{category.name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(category.id)}
+                  aria-label={`Remove ${category.name}`}
+                  className={`grid size-11 shrink-0 place-items-center rounded-full transition-opacity duration-(--duration-fast) hover:opacity-70 active:opacity-60 ${
+                    primary ? "text-accent-active" : "text-text-secondary"
+                  }`}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
-      ) : (
-        <p className="mt-2 text-meta text-ink-a40">No category selected.</p>
-      )}
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search or create a category"
-        aria-label="Search categories"
-        className="mt-2 w-full rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none placeholder:text-ink-a40 focus:border-text"
-      />
+      ) : null}
+      <div className={action ? "mt-2 flex items-center gap-2" : undefined}>
+        <input
+          autoFocus={focusSearch}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search or create a category"
+          aria-label="Search categories"
+          className={`${action ? "min-w-0 flex-1" : "mt-2 w-full"} rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text`}
+        />
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {query.trim() ? (
-        <div className="mt-2 rounded-field border border-hairline bg-surface p-2">
+        <div
+          className={
+            compact
+              ? "mt-1"
+              : "mt-2 rounded-field border border-hairline bg-surface p-2"
+          }
+        >
           {matches.slice(0, 6).map((category) => (
             <button
               key={category.id}
               type="button"
               onClick={() => select(category)}
-              className="block w-full rounded-field px-2 py-2 text-left text-field text-text hover:bg-surface-container"
+              className="block min-h-11 w-full rounded-field px-4 py-2 text-left text-body text-text transition-colors duration-(--duration-fast) hover:bg-surface-container"
             >
               {category.name}
             </button>
@@ -150,7 +189,7 @@ export function CategoryPicker({
               type="button"
               disabled={creating}
               onClick={() => void create(parts)}
-              className="block w-full rounded-field px-2 py-2 text-left text-field font-medium text-accent-active hover:bg-surface-container disabled:opacity-50"
+              className="block min-h-11 w-full rounded-field px-4 py-2 text-left text-body font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-surface-container disabled:opacity-50"
             >
               Create separately: {parts.join(", ")}
             </button>
@@ -160,7 +199,7 @@ export function CategoryPicker({
               type="button"
               disabled={creating}
               onClick={() => void create([query.trim()])}
-              className="block w-full rounded-field px-2 py-2 text-left text-field font-medium text-accent-active hover:bg-surface-container disabled:opacity-50"
+              className="block min-h-11 w-full rounded-field px-4 py-2 text-left text-body font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-surface-container disabled:opacity-50"
             >
               {parts.length > 1 ? `Keep exact label: ${query.trim()}` : `Create ${query.trim()}`}
             </button>
@@ -168,9 +207,11 @@ export function CategoryPicker({
         </div>
       ) : null}
       {createError ? <p className="mt-2 text-meta text-danger">{createError}</p> : null}
-      <p className="mt-2 text-meta text-ink-a40">
-        Categories help customers browse. Select only the ones that genuinely fit.
-      </p>
+      {compact ? null : (
+        <p className="mt-2 text-meta text-ink-a40">
+          Categories help customers browse. Select only the ones that genuinely fit.
+        </p>
+      )}
     </fieldset>
   );
 }

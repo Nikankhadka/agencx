@@ -36,9 +36,85 @@ describe("CategoryPicker", () => {
     ]);
   });
 
+  it("marks the primary with a check, not a word on every chip", () => {
+    // 31: the chip used to spend two words ("Primary" / "Make primary") on
+    // every selection. The pressed state and the check carry it now.
+    const html = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[
+          { id: "repairs", name: "Repairs" },
+          { id: "screens", name: "Screen care" },
+        ]}
+        selectedIds={["repairs", "screens"]}
+        primaryId="screens"
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+      />,
+    );
+
+    expect(html).not.toContain(">Primary<");
+    expect(html).not.toContain(">Make primary<");
+  });
+
+  it("keeps the compact legend sr-only and drops only the hint", () => {
+    // 31: compact still keeps a legend - it is the fieldset's accessible name -
+    // so what it drops is the visible heading and the onboarding hint, not
+    // the legend itself.
+    const render = (compact: boolean) =>
+      renderToStaticMarkup(
+        <CategoryPicker
+          categories={[]}
+          selectedIds={[]}
+          primaryId={null}
+          onChange={() => {}}
+          onCreate={async () => ({ id: "new", name: "New" })}
+          compact={compact}
+        />,
+      );
+
+    const full = render(false);
+    expect(full).toContain(">Categories</legend>");
+    expect(full).not.toContain("sr-only");
+    expect(full).toContain("Categories help customers browse");
+    // 31: an empty picker is just the search field - no "none yet" row.
+    expect(full).not.toContain("No category selected.");
+
+    const compact = render(true);
+    expect(compact).toContain('<legend class="sr-only">Categories</legend>');
+    expect(compact).not.toContain("Categories help customers browse");
+  });
+
   it("normalizes punctuation and unicode before matching existing categories", () => {
     expect(normalizedCategoryName("  Screen-care & Repairs  ")).toBe(
       normalizedCategoryName("screen care / repairs"),
     );
+  });
+
+  it("focuses the search field only when asked to", () => {
+    // 31: the review opens the picker behind a trigger, so focus belongs in
+    // the search field; the Business page's always-open picker keeps today's
+    // behaviour (no autofocus) and stays exactly as it was.
+    const idle = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[]}
+        selectedIds={[]}
+        primaryId={null}
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+      />,
+    );
+    expect(idle).not.toMatch(/<input[^>]*autofocus/i);
+
+    const focused = renderToStaticMarkup(
+      <CategoryPicker
+        categories={[]}
+        selectedIds={[]}
+        primaryId={null}
+        onChange={() => {}}
+        onCreate={async () => ({ id: "new", name: "New" })}
+        focusSearch
+      />,
+    );
+    expect(focused).toMatch(/<input[^>]*autofocus/i);
   });
 });

@@ -52,6 +52,7 @@ from app.onboarding.flow import (
     ProfileDraft,
     customer_voice_for,
     merge_offerings,
+    reconcile_replacement,
 )
 from app.onboarding.tools import is_blank, request_finalize, save_profile
 from app.shared.limits import DEFAULT_LLM_TIMEOUT_S, TimeLimitedProvider
@@ -297,14 +298,25 @@ async def _checkpoint(tenant_id: UUID, record: OnboardingRecord) -> dict[str, An
     return record_data
 
 
-def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
-    merged = {normalize_name(item.name): item for item in record.offering_candidates}
+def _document_candidates(raw: Any) -> list[PendingOffering]:
+    """Validate one document's raw candidates and stamp them as its own.
+
+    One reader for every door a document's candidates come through, so the
+    replacement reconcile and the additive merge trust the same model.
+    """
+    candidates: list[PendingOffering] = []
     for item in raw if isinstance(raw, list) else []:
         try:
             document = PendingOffering.model_validate(item)
         except (TypeError, ValueError):
             continue
-        document = document.model_copy(update={"sources": ["document"]})
+        candidates.append(document.model_copy(update={"sources": ["document"]}))
+    return candidates
+
+
+def _merge_document_candidates(record: OnboardingRecord, raw: Any) -> None:
+    merged = {normalize_name(item.name): item for item in record.offering_candidates}
+    for document in _document_candidates(raw):
         key = normalize_name(document.name)
         existing = merged.get(key)
         # W-7: the document's price and description win an overlap.
@@ -948,6 +960,120 @@ async def _stream_url_turn(
                 "total_ms": _elapsed_ms(turn_started),
             },
         )
+
+
+async def run_source_url(
+    *,
+    tenant_id: UUID,
+    url: str,
+    replace_document_id: UUID | None,
+    provider: LLMProvider,
+) -> dict[str, Any]:
+    """31: read one link, replacing an existing source in place.
+
+    The JSON twin of the streamed URL turn: the crawl goes through the same
+    site reader, then the document draft and the profile read run together
+    under one timeout. A replacement is a different intent from an added
+    source - the new site's fields win where it states them, and an added link
+    stays fill-empty - so ``only_empty`` follows ``replace_document_id``.
+
+    Nothing is deleted until the new document is a real draft, and a page we
+    cannot read writes nothing at all. The same address re-reads the row it
+    already holds (``draft_from_url_text`` targets that filename), so the
+    delete only fires when the resolved id differs from the one being replaced.
+    A real replacement also takes the replaced document's offerings with it
+    (``reconcile_replacement``); a re-read in place merges them instead.
+    """
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    if onboarding.completed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="onboarding already confirmed",
+        )
+    bounded = TimeLimitedProvider(provider, DEFAULT_LLM_TIMEOUT_S)
+    try:
+        crawl = await knowledge_service.scrape_site(url=url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_url_failure_code(exc),
+        ) from exc
+
+    document_id = uuid4()
+    document: Any
+    profile: Any
+    try:
+        async with asyncio.timeout(_SOURCE_TURN_TIMEOUT_S):
+            document, profile = await asyncio.gather(
+                knowledge_service.draft_from_url_text(
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    url=url,
+                    text=crawl.text,
+                    title=crawl.title,
+                    provider=bounded,
+                ),
+                prepare_source_profile(
+                    record=onboarding,
+                    text=crawl.text,
+                    provider=bounded,
+                    only_empty=replace_document_id is None,
+                ),
+                return_exceptions=True,
+            )
+    except TimeoutError as exc:
+        # The ticket names the draft failure; this is the shared deadline that
+        # catches a pipeline that outlived its own ceiling, and it writes
+        # nothing either.
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="timeout",
+        ) from exc
+
+    if isinstance(document, BaseException):
+        logger.warning(
+            "onboarding source url draft failed",
+            extra={"step": "draft", "error": type(document).__name__},
+        )
+        return {"state": onboarding.to_jsonb(), "document": None}
+    if document is None:
+        # 31: no draft means no source. Clearing the stage here would advance
+        # the interview past a source that does not exist, and the read-back
+        # would name fields nothing backs. Nothing was written, so nothing is
+        # deleted and no history lands.
+        logger.warning("onboarding source url draft returned nothing", extra={"step": "draft"})
+        return {"state": onboarding.to_jsonb(), "document": None}
+    if isinstance(profile, BaseException):
+        logger.warning(
+            "onboarding source url profile failed",
+            extra={"step": "profile", "error": type(profile).__name__},
+        )
+
+    if document:
+        if (
+            replace_document_id is not None
+            and UUID(str(document["id"])) != replace_document_id
+            and document.get("status") == "draft"
+        ):
+            # A real replacement: the old row goes, and so does what only it
+            # vouched for. W-11's reconcile owns which offerings survive.
+            await knowledge_service.delete_record(
+                tenant_id=tenant_id, document_id=replace_document_id
+            )
+            onboarding.offering_candidates = reconcile_replacement(
+                onboarding.offering_candidates,
+                _document_candidates(document.get("offering_candidates", [])),
+                replaced_document_id=replace_document_id,
+                edited_candidate_ids=set(),
+            )
+        else:
+            _merge_document_candidates(onboarding, document.get("offering_candidates", []))
+    onboarding.knowledge_pending = False
+    onboarding.history.append({"role": "user", "content": url})
+    onboarding.history.append({"role": "assistant", "content": url_readback(onboarding.draft)})
+    state = await _checkpoint(tenant_id, onboarding)
+    return {"state": state, "document": document}
 
 
 async def run_source_upload(

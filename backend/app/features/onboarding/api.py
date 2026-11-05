@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.features.knowledge.api import KnowledgeRecord, _reject_upload
+from app.features.knowledge.api import KnowledgeRecord, _absolute_url, _reject_upload
 from app.features.knowledge.models import KnowledgeSection
 from app.features.onboarding import controller
 from app.features.tenants.slug import validate_slug
@@ -183,6 +183,20 @@ class OnboardingKnowledgeBatchResponse(BaseModel):
     offering_candidates: list[PendingOffering]
 
 
+class OnboardingSourceUrlRequest(BaseModel):
+    # 31: the link editor's body. `replace_document_id` names the source being
+    # swapped out; absent means the link is an extra source.
+    url: str = Field(min_length=1, max_length=2048)
+    replace_document_id: UUID | None = None
+
+
+class OnboardingSourceUrlResponse(BaseModel):
+    # 31: the sheet needs the document's own candidates, the page needs the
+    # state - one call answers both.
+    state: OnboardingStateResponse
+    document: KnowledgeRecord | None
+
+
 @router.get("/state", response_model=OnboardingStateResponse)
 async def get_state(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
@@ -267,6 +281,31 @@ async def post_source(
         provider=provider,
     )
     return OnboardingStateResponse(**controller.response_from_record(record_data))
+
+
+@router.post("/source/url", response_model=OnboardingSourceUrlResponse)
+async def post_source_url(
+    body: OnboardingSourceUrlRequest,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> OnboardingSourceUrlResponse:
+    """31: read one link, or replace a source in place, in one call.
+
+    A page the site reader cannot read is a 422 naming the failure category and
+    writes nothing. A confirmed onboarding is a 409.
+    """
+    result = await controller.run_source_url(
+        tenant_id=admin.tenant_id,
+        url=_absolute_url(body.url.strip()),
+        replace_document_id=body.replace_document_id,
+        provider=provider,
+    )
+    return OnboardingSourceUrlResponse(
+        state=OnboardingStateResponse(**controller.response_from_record(result["state"])),
+        document=(
+            KnowledgeRecord(**result["document"]) if result["document"] is not None else None
+        ),
+    )
 
 
 @router.put("/knowledge/{document_id}", response_model=OnboardingKnowledgeResponse)

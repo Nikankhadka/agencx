@@ -1,0 +1,1087 @@
+# 31: Review surface refinement
+
+**Status:** Active - awaiting review.
+**Phase 1 area:** Onboarding, knowledge review, offerings, site ingestion.
+
+**Red spec resolved:** `frontend/e2e/onboarding-url.spec.ts` clicked the
+owner-name Skip chip that was removed by the ticket-29 follow-up (`cd9f00d`);
+the spec now types `skip` and passes.
+
+Refines the review surface delivered by [29-source-first-onboarding.md](29-source-first-onboarding.md)
+(status: awaiting review). One component serves three surfaces: onboarding,
+Business > Knowledge, and the Home suggestions sheet. The Business surface
+passes neither source actions nor suggestions, so every prop added here is
+optional and its behaviour must not change.
+
+## Intent
+
+The review sheet works but reads like a form built in a hurry. Its fields are
+smaller than the app's own fields, the offering stack is loose, and every card
+carries an open category picker whether or not the owner wants one. Removing an
+offering or discarding a source takes effect on the first click with no dialog.
+Paging, adding and expanding all move content under a keyboard user's focus
+without saying where it went. And the one thing the sheet cannot do is fix a
+wrong link: a URL source can only be replaced by uploading a file.
+
+This ticket tightens the rhythm to the field recipe the rest of the console
+uses, collapses the category picker behind one action per card, routes every
+destructive action through the app's one confirm dialog, makes focus follow
+what it revealed, lets a URL row be edited in place, and adds the one backend
+endpoint a full link replacement needs.
+
+## Design reference
+
+The review sheet's own render functions are the screen: `ReviewDocument`,
+`SuggestionDocument`, `OfferingCard`, `ReviewCategoryControl`, `ProfileRow` and
+`Pagination` in `frontend/src/components/knowledge/ReviewSheet.tsx`, and
+`CategoryPicker` in `frontend/src/components/business/CategoryPicker.tsx`.
+Interaction vocabulary comes from the console prototype
+(`docs/agencx/design/prototypes/agencx-prototype-v6.html`, the
+`#sheet-settings-edit` sheet). Spacing, type and radii come from
+`docs/agencx/design/frontend.md` section 4, which wins where the two disagree.
+
+## Locked decisions
+
+| # | Decision |
+|---|---|
+| 1 | The collapse state is component-local to `ReviewCategoryControl` (one picker per card, one trigger per card). There is no sheet-level category control. |
+| 2 | Closed label: `Add category` when `category_ids` is empty, `Categories (N)` when it is not, N = `category_ids.length`. The trigger renders only while the panel is collapsed and carries neither `aria-expanded` nor `aria-controls` - it is unmounted while the panel is open, so an expanded state could never be true. The open panel replaces it and names itself `role="group"` with `aria-label="Categories for <offering name>"`. |
+| 3 | Opening replaces the trigger with the panel and focuses and reveals the search field. One exit: `Done` sits beside that field and collapses back to the trigger. Chips apply through `onChange` immediately, so the panel commits nothing and a second cancel-flavoured exit would promise a revert it cannot perform. Escape inside the panel closes the panel only, never the sheet. `CategoryPicker` gains `focusSearch?: boolean` (default false) that puts `autoFocus` on its search input, the same mechanism `ProfileRow` already uses, and `action?: ReactNode` for the control beside that input. |
+| 4 | The suggested-category line moves inside the expanded region, so a closed card is one row shorter than today. |
+| 5 | "The same site reader" is `knowledge_service.scrape_site` (`features/knowledge/service.py:160`), which crawls through `crawl_site` (`ingestion/site.py:1065`). `fetch_page` is never called directly. |
+| 6 | The link editor renders under the source row, inside the same bordered container (label and actions stay visible). It never replaces the row. |
+| 7 | A row is a URL row when `doc.doc_type === "website"`. URL rows get `Edit link`; file rows keep `Replace`. |
+| 8 | `Add a link` and `Add a file` are two labels over one control each: the link opens the inline editor with no target document, the file opens the existing hidden multi-file input (`ReviewSheet.tsx:427`). |
+| 9 | Confirm copy is fixed: offering removal `Remove <name>?` / `It will not be saved to your catalog.` / `Remove`; link replacement `Replace this link?` / `The new site will be read, and its details and offerings will replace this source.` / `Replace link`; discard `Discard this source?` (or `Discard these sources?`) / `It is deleted, and its details and offerings are not saved.` (or `They are deleted...`) / `Discard source` (or `Discard sources`). |
+| 10 | One dialog for all four removals: the injected `confirmRemove` prop, which is `useConfirm`'s `confirm`. Every call made from inside the sheet passes `layer: "top"`, because the sheet panel is transformed and a fixed overlay inside it clips. |
+| 11 | Merge policy: a link *replacement* overwrites the business fields the new site states (`only_empty=False`); `Add a link` is a source, so it keeps `only_empty=True`. A field the new site does not mention keeps its current value in both cases, because `save_profile` never writes an absent value. |
+| 12 | Candidates are reconciled on the client through `reconcileOfferings` (`components/knowledge/offerings.ts:80`), exactly as the file-replace path does (`ReviewSheet.tsx:340`), and the next batch save persists the surviving list (`features/onboarding/controller.py:1171`). The endpoint does not reconcile: it cannot see in-session edits, and the server-side `reconcile_replacement` (`onboarding/flow.py:400`) stays the reference the client mirrors. |
+| 13 | Replacing with the same URL re-reads in place: `draft_from_url_text` already targets the row with that filename (`service.py:794-799`), so the endpoint deletes the old document only when the resolved document id differs from `replace_document_id`. |
+| 14 | `POST /api/onboarding/source/url` takes JSON `{url, replace_document_id?}` and answers `{state: OnboardingStateResponse, document: KnowledgeRecord \| null}`. The sheet needs the document's own candidates; the page needs the state. |
+| 15 | The review field recipe is `rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text`. No new token: `text-body` (16/24) and `min-h-11` both exist, and `check:tokens` scans only the `p|m|gap|space` families (`frontend/scripts/check-tokens.mjs:48-49`). |
+| 16 | Focus uses one helper, `reveal(refs, id)`: `requestAnimationFrame`, then `node.focus()`, then `node.scrollIntoView({ block: "nearest" })`. It extends the pattern already at `ReviewSheet.tsx:254` with the scroll convention at `PhonePill.tsx:156`. No new focus library, no `setTimeout`. |
+| 17 | `Pagination` gains `pageSize` (default `PAGE_SIZE`) and `noun` (default `"offerings"`), so the review's copy and pages are unchanged. |
+
+## Current behaviour this changes (verified)
+
+| Today | Where (file:line) | Change |
+|---|---|---|
+| Review fields are the 18/25 sheet-field size at `px-3 py-2` | `components/knowledge/ReviewSheet.tsx:458`, `:471`; `CategoryPicker.tsx:134` | 16/25 `text-body`, `px-4 py-3`, `min-h-11` (44px floor) |
+| The profile row's input is the tightest control on the sheet | `ReviewSheet.tsx:458` | Same recipe as the offering rows |
+| Card stack gap is 12px; the offerings section opens at 20px; later sections at 32px | `ReviewSheet.tsx:387`, `:382`, `:167`, `:398`, `:406` | `gap-2`, `mt-4`, later sections `mt-6` |
+| The price input is 112px wide | `ReviewSheet.tsx:471` | `w-24` (96px) |
+| `CategoryPicker` renders open on every card, with no trigger and no Done; its search input is never focused on open | `ReviewSheet.tsx:489`; `CategoryPicker.tsx:96-135` | Collapsed trigger that the open panel replaces; `Done` beside the field, Escape closes the panel, focus on open |
+| The suggested-category line sits above the picker and adds height to every card | `ReviewSheet.tsx:488` | Inside the expanded region |
+| Removing an offering drops the row immediately on both surfaces | `ReviewSheet.tsx:243` (review), `:168` (suggestions) | Confirmed through `confirmRemove`, `layer: "top"` |
+| Removing a *source* already confirms through the injected `confirmRemove` | `ReviewSheet.tsx:345-357` | Unchanged; the same dialog now also guards the footer discard |
+| The footer discard acts immediately and is labelled `Discard` | `ReviewSheet.tsx:450`; `onboarding/page.tsx:1287` | Confirmed; labelled `Discard source` / `Discard sources` |
+| Cancel of any dialog returns focus to its opener already, because `Modal` captures and restores it | `components/ui/Modal.tsx:42-55` | No new mechanism; the cancel paths inherit it |
+| Paging moves no focus | `ReviewSheet.tsx:388`, `:505` | First row of the new page focused and scrolled into view |
+| `Add offering` focuses the new row but does not scroll to it | `ReviewSheet.tsx:254` | Also scrolls |
+| `Review all` expands and pages to the top with no focus move | `ReviewSheet.tsx:390` | Focuses the first row |
+| Source rows offer `Replace` (a file picker) and `Remove` only; a URL source cannot be edited | `ReviewSheet.tsx:413-422` | URL rows get `Edit link` plus an inline editor; file rows keep `Replace` |
+| One hidden multi-file input sits behind `Add another source` | `ReviewSheet.tsx:426-428` | Two actions: `Add a link`, `Add a file` |
+| Suggestions render every candidate in one unpaginated stack; their cards carry no refs | `ReviewSheet.tsx:164-170`, `:168` | Pages of 5 desktop / 3 mobile, with refs for focus |
+| Pagination copy hardcodes `PAGE_SIZE` and the word "offerings" | `ReviewSheet.tsx:505-506` | `pageSize` and `noun` props, defaults unchanged |
+| A suggestion save already sends every local candidate, not a page | `ReviewSheet.tsx:160-162` | Keep it that way; acceptance 12 is a regression guard, not new work |
+| The first source merge fills empty profile fields only | `onboarding/agent.py:1113`; `onboarding/tools.py:69` | A replacement overwrites; add-a-link stays fill-empty |
+| A URL already ingested re-reads in place rather than duplicating | `features/knowledge/service.py:794-799` | The replace path reuses it and skips the delete |
+| There is no onboarding URL endpoint, only the streaming turn and the file upload | `features/onboarding/api.py:247`; `controller.py:823` | New `POST /api/onboarding/source/url` |
+
+## Acceptance criteria
+
+| # | Scenario | Passes when |
+|---|---|---|
+| 1 | Any review field is measured | Computed font-size 16px, height at least 44px, radius and padding match the shared field recipe, on the offering rows, the price row and every profile row |
+| 2 | Spacing is measured | Card-to-card gap is 8px, the offerings section starts 16px below the intro, later sections 24px |
+| 3 | A card with no category is closed | One `Add category` button, no picker in the DOM, card height unchanged by the suggested-category line |
+| 4 | A card with two categories is closed | One `Categories (2)` button, no `aria-expanded` attribute |
+| 5 | The trigger is clicked | The trigger leaves the DOM; the panel renders named `Categories for <offering>`; its search field has focus and is in view; `Done` sits beside that field at the same height and radius; the suggested-category line is inside the panel; Escape closes only the panel |
+| 6 | `Done` is clicked | The picker leaves the DOM, the trigger returns, and focus is on the trigger |
+| 7 | An offering's `Remove` is clicked | The dialog reads `Remove <name>?` / `It will not be saved to your catalog.` and paints above the sheet; confirm removes the row, cancel keeps it |
+| 8 | The same removal is reached from the Home suggestions sheet | Same dialog, same copy, same above-sheet layer |
+| 9 | The footer discard is clicked | The dialog names what is deleted; confirm deletes every reviewed source, cancel keeps them all and leaves the review open |
+| 10 | `Next` is clicked on page 1 | The page changes and the first offering name on page 2 has focus and is scrolled into view; `Previous` behaves the same |
+| 11 | The only row on the last page is removed | Focus lands on the previous row; removing a middle row focuses the next one; removing the last row of all focuses `Add offering` |
+| 12 | `Add offering` / `Review all` / category open / link editor open | Focus lands on the revealed field and that field is in view |
+| 13 | Every cancel path is exercised | Focus returns to the control that opened it: category `Done` or Escape to the trigger, link `Cancel` to `Edit link` or `Add a link`, dialog cancel to the opener |
+| 14 | A URL row's `Edit link` is clicked, `Cancel` is clicked | The editor closes; the document count, the source label, the review and the interview stage are all unchanged, and no request was made |
+| 15 | The link editor is saved with the same URL | The site is read again into the same document id; no new row, no delete |
+| 16 | The link editor is saved with a different URL | The new site is crawled, the old document is gone, the new one is listed, and the old document's offerings that the owner never edited are gone from the review |
+| 17 | The replacement states a field the review already holds | The new value wins in the review and in both profile jsonb copies after the next save |
+| 18 | The replacement does not state a field | The current value survives, and is not cleared |
+| 19 | `Add a link` is used | A second URL document joins the review, the profile fills empty fields only, and owner answers survive |
+| 20 | The suggestions sheet holds nine candidates | Five rows on desktop, three on mobile, with `Showing 1-5 of 9 suggestions`; paging focuses and scrolls to the first suggestion |
+| 21 | All nine are saved from page 1 | The request body carries nine candidates |
+| 22 | The Business > Knowledge review sheet is opened | No source actions, no suggestions, no category regression; paging and focus behave as they do on onboarding, and discard keeps that page's own single confirm |
+
+## Migration
+
+None. The highest applied migration is
+`backend/migrations/0038_conversations_resolved_at.sql`; `0039` stays unused.
+The new endpoint writes only existing tables (`documents`, which already
+carries `doc_type = 'website'` from
+`0015_website_doc_type.sql`, and `tenant_config.config->'onboarding'`).
+`frontend/src/lib/api-types.ts` is regenerated, not hand-edited.
+
+## Slice A - Field recipe, spacing, profile rows
+
+**Goal:** the review reads as one form, and every field matches the shared recipe.
+
+**Files**
+
+- `frontend/src/components/knowledge/ReviewSheet.tsx` - `ProfileRow`,
+  `OfferingCard`, `KnowledgeDocument` inputs, section and card spacing.
+- `frontend/src/components/business/CategoryPicker.tsx` - search input class.
+- `docs/agencx/design/frontend.md` - section 4.4 names the review field recipe
+  (`px-4 py-3 text-body min-h-11`) beside the sheet-field recipe, and 4.6 notes
+  the `text-body` size on form controls as a founder ruling.
+
+**Technical contract**
+
+- One exported constant in `ReviewSheet.tsx`, `FIELD`, holding the recipe from
+  locked decision 15, used by every text and number input in the file. The
+  `KnowledgeDocument` heading input keeps `text-row-label` (it is a heading, not
+  a field) and takes only the padding and height.
+- Card stack `gap-3` becomes `gap-2` at `:387` and `:167`. The offerings
+  section `mt-5` at `:382` becomes `mt-4`; `:398` and `:406` become `mt-6`;
+  `:437` becomes `mt-6`.
+- Price input `w-28` becomes `w-24` at `:471`. Name input keeps `flex-1`.
+- No new token and no `@theme` change, so no `make dev-reset` is needed.
+
+**Test seams**
+
+- `frontend/src/components/knowledge/ReviewSheet.test.tsx` - the rendered
+  markup carries `text-body` and `min-h-11` and does not carry `text-field` on
+  any review input; the price input carries `w-24`.
+- `frontend/e2e/knowledge-review.spec.ts` - one computed-style assertion on the
+  first offering name input and one on a profile input: font-size 16px, height
+  at least 44px, border-radius from `--radius-field`.
+
+**Verify**
+
+```
+make lint-frontend
+make typecheck-frontend
+docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+```
+
+## Slice B - Collapsed categories and focus movement
+
+**Goal:** a card is quiet until the owner opens categories, and focus always
+lands on what just appeared.
+
+**Files**
+
+- `frontend/src/components/knowledge/ReviewSheet.tsx`
+- `frontend/src/components/business/CategoryPicker.tsx`
+- `frontend/src/components/knowledge/ReviewSheet.test.tsx`,
+  `frontend/src/components/business/CategoryPicker.test.tsx`
+
+**Technical contract**
+
+- `CategoryPicker` gains `focusSearch?: boolean` (default `false`), an
+  internal `searchRef`, and `action?: ReactNode`: the search input gets
+  `autoFocus={focusSearch}`, and `action` renders in a flex row beside it while
+  the input takes `flex-1`. Without `action` the input keeps `w-full`, so
+  `business/components/OfferingsList.tsx:680` keeps today's behaviour.
+- `ReviewCategoryControl` owns `open`, `triggerRef`, `pickerRef`. Collapsed
+  renders only the trigger (`data-testid="review-category-trigger"`, no
+  `aria-expanded`, no `aria-controls`, label per locked decision 2). Open renders
+  one `div ref={pickerRef}` carrying `role="group"` and
+  `aria-label="Categories for <offering name>"`, the suggestion pill, then
+  `CategoryPicker compact focusSearch` with `action={<Done/>}`
+  (`data-testid="review-category-done"`) beside the field. `Done` closes through
+  one handler that sets `open` false and focuses the trigger on the next frame,
+  when the collapsed view has remounted it. Escape inside the panel stops
+  propagation and closes the panel. Opening scrolls the focused search field
+  into view, not the panel's top edge.
+- `reveal(refs, id)` is a module-level helper in `ReviewSheet.tsx` per locked
+  decision 16. `addOffering` (`:254`) and the duplicate jump (`:276`) switch to
+  it.
+- `ReviewDocument` gains `gotoPage(next)`: clamp to `0..pages-1`, `setPage`,
+  then `reveal(cardRefs, offeringPage(offerings, clamped)[0].candidate_id)`.
+  `Pagination` at `:388` takes `onPage={gotoPage}`.
+- `Review all` (`:390`) sets expanded, pages to 0, then reveals
+  `offerings[0]`. `Add offering` reveals the new row through the same helper.
+- `removeOffering` becomes `async`, computes the removed index, keeps the
+  survivor id (`offerings[index + 1] ?? offerings[index - 1]`), and after the
+  filter sets the page with the existing `pageForOffering` (`:508`) and reveals
+  the survivor. With no survivor it focuses a new `addOfferingRef`. Confirm
+  wiring is Slice C; this slice keeps the direct removal.
+- `SuggestionDocument` gets its own `cardRefs` map, passed as
+  `inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }}`,
+  so Slice D can focus a suggestion.
+
+**Test seams**
+
+- `ReviewSheet.test.tsx` - a closed card renders `Add category` and no
+  `Search or create a category` field; a selected card renders
+  `Categories (2)`; the suggestion line is absent while closed; `Pagination`
+  calls its handler with the neighbouring page and the default copy is
+  unchanged.
+- `CategoryPicker.test.tsx` - `focusSearch` marks the search field
+  `autofocus`; the default render does not; compact drops the duplicate legend
+  and the hint; the primary chip carries a check, not a per-chip word.
+- `frontend/e2e/knowledge-review.spec.ts` - `Review all` then `Next`: the
+  first name on page 2 is focused and inside the viewport; `Add offering`
+  focuses and reveals the new row; a closed card shows `Add category`, opening
+  replaces it with the panel named `Categories for <offering>`, `Done` sits
+  beside the search field at the same height and radius, Escape closes the panel
+  only, and `Done` returns focus to the trigger.
+- `frontend/e2e/knowledge-review-mobile.spec.ts` - the collapsed list keeps
+  three cards and the same trigger copy at 360px.
+
+**Verify**
+
+```
+make lint-frontend
+make typecheck-frontend
+docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge src/components/business
+docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+```
+(`E2E_NET_SH` and the stack requirement are defined under Verification.)
+
+## Slice C - Removal and discard confirmations
+
+**Goal:** nothing is destroyed on a single click, and the confirm sits above
+the sheet.
+
+**Files**
+
+- `frontend/src/components/knowledge/ReviewSheet.tsx`
+- `frontend/src/components/knowledge/OfferingSuggestions.tsx`
+- `frontend/src/app/(tenant-admin)/(console)/business/details/knowledge/page.tsx`
+  (pass the existing `confirm` through)
+- `frontend/src/components/knowledge/ReviewSheet.test.tsx`
+- `frontend/e2e/knowledge-review.spec.ts`, `knowledge-review-mobile.spec.ts`,
+  `business-page-actions.spec.ts`, `onboarding-resume.spec.ts`,
+  `onboarding-go-live.spec.ts`, `onboarding-url.spec.ts`,
+  `settings-knowledge.spec.ts`
+
+**Technical contract**
+
+- `OfferingCard`'s `onRemove` stays a synchronous callback; the guard lives in
+  the two owners, so one dialog covers both surfaces.
+- `ReviewDocument.removeOffering` becomes `async`: `await confirmRemove?.({...})`
+  with the copy from locked decision 9, `tone: "danger"`, `layer: "top"`; return
+  on false; otherwise run the Slice B removal and focus logic.
+- `SuggestionDocument` takes `confirmRemove` and confirms the same way before
+  filtering. `ReviewSheet` passes it to both branches.
+- `OfferingSuggestions` calls `useConfirm()`, renders `{dialog}` beside
+  `<ReviewSheet>` (never inside a panel, per `ConfirmDialog.tsx:104-106`), and
+  passes `confirmRemove={confirm}`.
+- Footer discard becomes `handleDiscard()`: confirm with the locked copy
+  (pluralised from `workspace.documents.length`) when `onboarding` and
+  `confirmRemove` are supplied, then `onDiscard()`. The label becomes
+  `Discard source` / `Discard sources` on the onboarding surface; the
+  non-onboarding labels stay `Discard draft` and `Remove source`.
+- `business/details/knowledge/page.tsx` passes `confirmRemove={confirm}` to its
+  `ReviewSheet` (`:538-553`) so its offering and source removals still ask. Its
+  footer discard does **not** ask through the sheet: that page's own
+  `discardWorkspace` already owns that question (it confirms a saved source and
+  drops a draft directly), so the sheet-level footer confirm is gated to
+  `onboarding === true`. A later review found the ungated version asked twice
+  there; see the review-fix evidence. No shipped behaviour outside onboarding
+  changes.
+- Spec updates this forces: `onboarding-go-live.spec.ts:208`, `:258` and
+  `onboarding-url.spec.ts:139` each add one `confirm-accept` click.
+  `settings-knowledge.spec.ts` does not - one click, the page's own dialog.
+
+**Test seams**
+
+- `ReviewSheet.test.tsx` - rendering `ReviewDocument` and `SuggestionDocument`
+  with a confirming `confirmRemove` shows no removal until the promise
+  resolves true; resolving false leaves the row; the footer label follows the
+  document count; `ConfirmOptions` carries `layer: "top"`.
+- `frontend/e2e/knowledge-review.spec.ts` - remove an offering: dialog copy,
+  confirm removes, cancel keeps; discard asks and cancel leaves the review open.
+- `frontend/e2e/business-page-actions.spec.ts` and `onboarding-resume.spec.ts` -
+  the suggestions sheet asks before removing a suggestion.
+
+**Verify**
+
+```
+make lint-frontend
+make typecheck-frontend
+docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+```
+
+## Slice D - Suggestions pagination at 5 and 3
+
+**Goal:** the suggestions sheet stops being an endless list without narrowing
+what it saves.
+
+**Files**
+
+- `frontend/src/components/knowledge/ReviewSheet.tsx` (`SuggestionDocument`,
+  `Pagination`)
+- `frontend/src/components/knowledge/ReviewSheet.test.tsx`
+
+**Technical contract**
+
+- `Pagination({ page, pages, count, onPage, pageSize = PAGE_SIZE, noun = "offerings" })`;
+  the summary line uses `pageSize` and `noun` and nothing else changes.
+- `SuggestionDocument` uses `useMediaQuery(DESKTOP_QUERY)`, `pageSize =
+  desktop ? PAGE_SIZE : COLLAPSED_MOBILE`, `pages`, `page`, `visible`, and a
+  `gotoPage` that reveals the first visible suggestion through `reveal`.
+  `Pagination` renders when `pages > 1`.
+- `save()` keeps mapping the whole `offerings` array, never `visible`.
+- The page resets to 0 when the last row on the last page is removed.
+
+**Test seams**
+
+- `ReviewSheet.test.tsx` - nine suggestions render five rows on the desktop
+  branch and three on the mobile branch (mock `@/lib/useMediaQuery`, spreading
+  the real module per the memory gotcha); the summary copy reads
+  `Showing 1-5 of 9 suggestions`; `onSaveSuggestions` receives nine candidates
+  while page 1 shows five.
+- `frontend/e2e/business-page-actions.spec.ts` - the sheet pages at 1024px with
+  five rows; `frontend/e2e/onboarding-resume.spec.ts` covers save-after-paging.
+
+**Verify**
+
+```
+make lint-frontend
+make typecheck-frontend
+docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/business-page-actions.spec.ts
+```
+
+## Slice E - The URL source endpoint
+
+**Goal:** one owner-authenticated call reads a site the way onboarding reads
+one, and can replace an existing source in place.
+
+**Files**
+
+- `backend/app/features/onboarding/api.py` - request and response models, the
+  route.
+- `backend/app/features/onboarding/controller.py` - `run_source_url`.
+- `backend/app/onboarding/agent.py` - `prepare_source_profile(..., only_empty: bool = True)`.
+- `backend/tests/test_onboarding_api.py` - a new section.
+- `frontend/src/lib/api-types.ts` - regenerated (host).
+- `docs/agencx/design/api-contract.md` - the new section.
+
+**Technical contract**
+
+```python
+class OnboardingSourceUrlRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    replace_document_id: UUID | None = None
+
+class OnboardingSourceUrlResponse(BaseModel):
+    state: OnboardingStateResponse
+    document: KnowledgeRecord | None
+```
+
+- `@router.post("/source/url", response_model=OnboardingSourceUrlResponse)`,
+  owner-only through `auth.require_owner`, JSON body. `url` passes through the
+  knowledge module's `_absolute_url` (`features/knowledge/api.py:78`); importing
+  that private helper is the precedent already set at `onboarding/api.py:25`.
+- `run_source_url(*, tenant_id, url, replace_document_id, provider)` returns
+  `{"state": ..., "document": ...}` and runs:
+  1. Load the record and 409 when `onboarding.completed`, mirroring
+     `run_source_upload` (`controller.py:969-975`).
+  2. `crawl = await knowledge_service.scrape_site(url=url)`. A `ValueError`
+     becomes a 422 whose detail is the existing `_url_failure_code(exc)` line
+     (`:93`); nothing is written and the old source is untouched.
+  3. `document_id = uuid4()`; the draft and the profile read run together under
+     one `asyncio.timeout(_SOURCE_TURN_TIMEOUT_S)` with
+     `asyncio.gather(..., return_exceptions=True)`, exactly as
+     `_stream_url_turn` (`:842-868`) does:
+     `draft_from_url_text(...)` and
+     `prepare_source_profile(record=..., text=crawl.text, provider=bounded,
+     only_empty=replace_document_id is None)`.
+  4. If the draft result is a `BaseException`, do not delete anything and
+     return `document=None` with the unchanged state.
+  5. Delete the old source only when `replace_document_id` is set, the returned
+     document's id differs from it, and the returned record's `status` is
+     `"draft"`: `knowledge_service.delete_record(...)` (`service.py:1192`).
+  6. `_merge_document_candidates(onboarding, document["offering_candidates"])`,
+     `onboarding.knowledge_pending = False`, append the URL and the
+     `url_readback(onboarding.draft)` line to `history`, `_checkpoint`, return.
+- `prepare_source_profile` gains `only_empty: bool = True` and passes it to
+  `save_profile` (`agent.py:1113`). Default keeps `_stream_url_turn` and
+  `run_source_upload` byte-identical.
+- `OnboardingStateResponse` is unchanged, so no other frontend type moves.
+
+**Test seams**
+
+- `backend/tests/test_onboarding_api.py`, using the existing
+  `UrlFakeProvider`/`_patch_fetch`/`_signup_tenant_admin` seams (`:1301`,
+  `:1355`, `:244`) and `superuser_conn` for the row assertions:
+  - add-link: no `replace_document_id` keeps the owner's `business_name`, fills
+    an empty `hours`, creates one `website` draft, returns that document.
+  - wrong-URL replacement: the old row is gone from `documents`, the new row is
+    a `website` draft, and the response document is the new one.
+  - field overwrite: a field the new site states replaces the owner's value in
+    `draft`; a field it does not state keeps its value (two assertions).
+  - same-URL re-read: `replace_document_id` equals the row that holds that URL,
+    so the response document id equals it, `documents` still holds one row, and
+    no delete happened (assert via the still-present row, not a mock).
+  - scrape failure: a `ValueError` from `scrape_site` is 422, one document
+    remains, `draft` is unchanged.
+  - confirmed onboarding: 409.
+  - auth: no bearer token is 401.
+  - `_reject_upload`-class rejections do not apply (JSON route); an empty `url`
+    is 422 from `Field(min_length=1)`.
+
+**Verify**
+
+```
+docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+docker compose run --rm backend ruff check . && docker compose run --rm backend mypy
+cd frontend && npm run gen:types && npm run gen:types -- --check
+```
+
+## Slice F - Link editing on the review sheet
+
+**Goal:** a wrong link is fixed in place, and the sheet calls the new endpoint
+through the same page-owned callbacks the file actions use.
+
+**Files**
+
+- `frontend/src/components/knowledge/ReviewSheet.tsx`
+- `frontend/src/app/(tenant-admin)/(console)/onboarding/page.tsx`
+- `frontend/e2e/knowledge-review.spec.ts`,
+  `frontend/e2e/knowledge-review-mocks.ts`
+- `frontend/src/components/knowledge/ReviewSheet.test.tsx`
+
+**Technical contract**
+
+- New props, both optional:
+  `onReplaceLink?: (documentId: string, url: string) => Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null>`
+  and `onAddLink?: (url: string) => Promise<KnowledgeRecord[]>`.
+- `ReviewDocument` state: `linkEditor: { documentId: string | null } | null`,
+  `linkValue`, `linkInputRef`, `linkOpenerRef`.
+  - `Edit link` (`data-testid="review-edit-link"`, `aria-label="Edit link for
+    <label>"`) seeds `linkValue` with `doc.filename` and stores
+    `event.currentTarget` as the opener.
+  - `Add a link` (`data-testid="review-add-link"`) opens the editor with
+    `documentId: null` and an empty value.
+  - `Add a file` keeps the hidden multi-file input and takes the testid
+    `review-add-file` (`review-add-source` has no other consumer).
+  - The editor is an input (`data-testid="review-link-input"`) plus `Save`
+    (`aria-label="Save link"`) and `Cancel` (`aria-label="Cancel link"`), inside
+    the row container for a replace and below the list for an add.
+- Save path: for a replace, confirm first with the locked copy
+  (`layer: "top"`), then `await onReplaceLink(id, trimmed)`. On a record,
+  delete `sectionsByDocument` and `sources` entries for the old id, set the new
+  one, run
+  `reconcileOfferings(previous, record.offering_candidates ?? [], id, editedIdsRef.current)`,
+  and merge the returned `draft`'s `PROFILE_ROWS` keys into `profileValues`.
+  For an add, `await onAddLink(trimmed)` and hand the records to the same
+  `adoptRecords(records)` helper `handleAddFiles` uses (`:305-315`).
+  Failure sets nothing but `busy` and the page's existing `reviewError` path.
+- Cancel path: `setLinkEditor(null)` and `linkOpenerRef.current?.focus()`.
+  Nothing else runs: no request, no document change, no stage change, no
+  `onDiscard`.
+- Page: `replaceLink(documentId, url)` and `addLink(url)` post to
+  `/api/onboarding/source/url`, then `applyStateFields(state)`, then rebuild
+  `workspace` (replace or append, keeping `workspace.id`) and `setCanConfirm(false)`
+  as `addSources` already does (`:800`). They return the record and draft, or
+  `null`/`[]` with `setReviewError(err.detail)` on an `ApiError`.
+- `knowledge-review-mocks.ts` gains `stubSourceUrl(page, store, options)` that
+  fulfils `/api/onboarding/source/url` with the Slice E shape and records the
+  posted body, so the E2E never crawls.
+
+**Test seams**
+
+- `ReviewSheet.test.tsx` - `Edit link` opens the editor with the current URL and
+  `Cancel` calls neither callback; `Save` on a replace calls the confirm and
+  then `onReplaceLink`; a cancelled confirm calls nothing; a successful replace
+  drops the old document's candidates the owner never edited and keeps an edited
+  one as `orphaned`; `Add a link` calls `onAddLink` with no target.
+- `frontend/e2e/knowledge-review.spec.ts` - edit, cancel: the sheet stays open,
+  the source label and count are unchanged, and `stubSourceUrl` recorded no
+  call; edit, save with the same URL: one source, same id; edit, save with a
+  different URL: confirm copy, the old label is gone, the new label appears, and
+  the deleted id is recorded by `stubRecords().deletedIds()`.
+- `frontend/e2e/knowledge-review.spec.ts` - `Add a link` adds a second source
+  and focuses the revealed field.
+
+**Verify**
+
+```
+make lint-frontend
+make typecheck-frontend
+docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+```
+
+## Verification
+
+The stack must be up before any spec-scoped run (`make dev && make seed`). The
+network shim is the Makefile's own `E2E_NET` body:
+
+```
+E2E_NET_SH='socat TCP-LISTEN:3000,fork,reuseaddr,bind=127.0.0.1 TCP:frontend:3000 & socat TCP-LISTEN:8000,fork,reuseaddr,bind=127.0.0.1 TCP:backend:8000 & socat TCP-LISTEN:54321,fork,reuseaddr,bind=127.0.0.1 TCP:auth-proxy:80 & socat TCP-LISTEN:8025,fork,reuseaddr,bind=127.0.0.1 TCP:mailpit:8025 & exec "$@"'
+```
+
+Full-suite gate at the branch tip: `make lint`, `make typecheck`, `make test`,
+`make test-e2e`, plus `cd frontend && npm run gen:types -- --check` (host).
+
+## Definition of done
+
+- Slices A to F land in order, each with its verify command green and the
+  output pasted into this file.
+- Acceptance scenarios 1 to 22 demonstrated: unit tests for the field recipe,
+  the closed and open category states, both confirmations, pagination copy and
+  page size, and the link editor's three paths; E2E for every focus move, both
+  confirmations, `Edit link` cancel and save, `Add a link`, and the 5/3
+  suggestions split; backend tests for the endpoint's seven cases.
+- `docs/agencx/design/api-contract.md` documents
+  `POST /api/onboarding/source/url` and its replace semantics.
+- `docs/agencx/design/frontend.md` 4.4 carries the review field recipe and 4.6
+  the `text-body` control exception.
+- `docs/agencx/progress.md` row for 31 and the `docs/agencx/spec/README.md`
+  active row.
+- `.agents/memory.md` gains only the non-obvious facts: the client-side
+  candidate reconcile for a link replacement, and the confirm-from-inside-a-sheet
+  `layer: "top"` requirement for offering removal.
+- No new migration; `make migrate` still reports `0038` as the head.
+
+## Flags for the founder
+
+| Flag | Default taken |
+|---|---|
+| The footer discard `confirmRemove` is injected on the Business > Knowledge sheet, but that page's own `discardWorkspace` already asks before removing a source | The sheet-level footer confirm is onboarding-only, so Business > Knowledge asks exactly once through its own dialog on both paths: a saved source as `Remove <label>?`, an unsaved draft as `Discard <label>?` ("It was never saved, so it never answered customers."). Offering removal and source removal still confirm there. This corrects the earlier "confirmed everywhere" default, which asked twice and made the two specs click twice, and the interim draft-drops-directly default, which left the one single-click destroy on that surface |
+| `px-4 py-3 text-body` renders 48px tall, so `min-h-11` (44px) is a floor that never binds. A 44px field exactly would need `py-2` | Keep `py-3` (the system recipe's padding) and the 44px floor |
+| `text-body` on form controls departs from the 18/25 `text-field` role that `frontend.md` 4.4 names for sheet fields; `text-field` itself stays for the contact and profile sheets | Treated as a founder ruling for the review surface only, recorded in 4.6 |
+| A replacement never clears a field the new site omits, per the request | Kept as stated; clearing is a separate ask |
+
+## Blockers
+
+None.
+
+## Evidence
+
+### Slice A - field recipe, spacing, profile rows
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (37 tests)
+ Test Files  2 passed (2)
+      Tests  67 passed (67)
+```
+
+### Slice B - collapsed categories and focus movement
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge src/components/business
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/business/CategoryPicker.test.tsx (4 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (40 tests)
+ Test Files  3 passed (3)
+      Tests  74 passed (74)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ uploads five files three at a time and opens one combined review
+ ✓ caps the batch at five files
+ ✓ a stored failure stays in Knowledge and never joins the review
+ ✓ the ready card persists and reopens with edits intact
+ ✓ replace is safe when the upload fails
+ ✓ a successful replace reconciles offering provenance
+ ✓ batch publish keeps one failing document reviewable until it saves
+ ✓ the category picker stays collapsed until its trigger is used
+ ✓ priced services lead and the source detail stays closed
+ ✓ pagination and toolbar keep review stable while typing
+ 10 passed (14.3s)
+
+$ ... npm run test:e2e -- e2e/knowledge-review-mobile.spec.ts
+ 6 passed (10.9s)
+```
+
+Note on the test seams: this repo has no jsdom (memory, 2026-10-03), so
+"calls its handler" cannot be unit-tested from static markup. The unit tests
+assert the closed/open markup and the trigger copy; the handler wiring is
+covered by the e2e above (Next, Previous, Add offering, Review all, Done).
+
+### Slice C - removal and discard confirmations
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (43 tests)
+ Test Files  2 passed (2)
+      Tests  73 passed (73)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ removing an offering asks first, above the sheet, and cancel keeps it
+ ✓ removing a middle offering focuses the next row
+ ✓ removing the only row on the last page focuses the row above
+ ✓ discarding from the footer asks, and cancel leaves the review open
+ (plus the 10 specs from slice B)
+ 14 passed (18.1s)
+
+$ ... npm run test:e2e -- e2e/onboarding-go-live.spec.ts e2e/onboarding-url.spec.ts \
+    e2e/settings-knowledge.spec.ts e2e/business-page-actions.spec.ts e2e/onboarding-resume.spec.ts
+ 21 passed, 1 failed - onboarding-url.spec.ts "pasting a link reads the site and reads it back"
+```
+
+`onboarding-url.spec.ts` is blocked by unrelated uncommitted work in the tree:
+`backend/app/onboarding/beats.py` removes the owner-name Skip chip that spec
+clicks at line 56, before it ever reaches the discard at line 139. Re-run with
+that file parked also failed earlier, in `loginInChat` (live mail round trip).
+The discard path it covers is the same one verified above and in
+`settings-knowledge.spec.ts`.
+
+### Slice D - suggestions pagination at 5 and 3
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (46 tests)
+ Test Files  2 passed (2)
+      Tests  76 passed (76)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/business-page-actions.spec.ts
+ ✓ the suggestions sheet asks before removing a suggestion
+ ✓ the suggestions sheet pages five at a time on desktop
+ 4 passed (6.5s)
+
+$ ... npm run test:e2e -- e2e/onboarding-resume.spec.ts
+ ✓ the Home suggestions sheet asks before removing a suggestion
+ ✓ paging the suggestions sheet still sends every candidate on save
+ 5 passed (7.2s)
+
+$ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobile.spec.ts
+ 20 passed (28.8s)
+```
+
+The two suggestions unit seams that need a click ("onSaveSuggestions receives
+nine candidates") are covered by the `onboarding-resume` save-after-paging e2e;
+the markup seams (five rows desktop, three rows phone, the summary copy) are
+the unit tests.
+
+### Slice E - the URL source endpoint
+
+```
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+72 passed in 4.35s
+
+$ docker compose run --rm --no-deps backend ruff check .
+All checks passed!
+$ docker compose run --rm --no-deps backend ruff format --check .
+260 files already formatted
+$ docker compose run --rm --no-deps backend mypy
+Success: no issues found in 256 source files
+$ docker compose run --rm --no-deps backend lint-imports
+Contracts: 3 kept, 0 broken.
+
+$ cd frontend && npm run gen:types && npm run gen:types -- --check
+wrote src/lib/api-types.ts
+api-types.ts is up to date
+```
+
+The eight new endpoint tests cover add-a-link (fill empty only), replacement by a
+different URL, replacement field overwrite versus an omitted field, same-URL
+re-read in place, a scrape failure, a confirmed onboarding (409), missing auth
+(401), and an empty or relative URL (422).
+
+Two branches the ticket does not state, decided here and recorded in
+[api-contract.md](../../design/api-contract.md): a 504 `timeout` when the shared
+`_SOURCE_TURN_TIMEOUT_S` deadline fires after the crawl (it writes nothing, the
+same as the draft-failure path), and `.strip()` on the body's `url` before
+`_absolute_url`, matching the knowledge route's own callers.
+
+### Slice F - link editing on the review sheet
+
+```
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (51 tests)
+ Test Files  2 passed (2)
+      Tests  81 passed (81)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ ✓ editing a link and cancelling leaves the source alone
+ ✓ saving the same link re-reads one source in place
+ ✓ saving a different link replaces the source
+ ✓ add a link adds a second source and focuses the editor
+ (plus the 14 specs from slices A to D)
+ 18 passed (21.1s)
+```
+
+Ticket correction: `review-add-source` sits on the `Add another source` button, not
+on the hidden file input, which carries `review-add-input` and has no consumer
+outside its own row. The button is now `Add a file` with
+`data-testid="review-add-file"`; the hidden input testid is unchanged. The
+cancel-confirm arm of the replacement is also exercised ("saving a different
+link replaces the source" cancels once and asserts no request ran).
+
+### Review follow-up - the same-URL re-read and the replaced source's offerings
+
+Two defects in the link-replacement path, both keyed off the same distinction:
+the new document's id equals the one being replaced (a same-URL re-read) or it
+does not (a replacement).
+
+1. Frontend: `ReviewDocument.saveLink` always ran
+   `reconcileOfferings(previous, record.offering_candidates ?? [], documentId,
+   editedIdsRef.current)`. Because the endpoint re-reads the same row on a
+   same-URL save, the returned candidates carry that same id as their support,
+   and `reconcileOfferings` strips `replacedDocumentId` from every incoming
+   candidate by design - so a row the re-read added read `From document`, an
+   owner-edited row lost its document support, and an unedited row the re-read
+   no longer matched disappeared. The save now dispatches through
+   `reconcileLinkOfferings` (exported beside `replaceLinkConfirm`):
+   `record.id === replacedDocumentId` refreshes in place with
+   `mergeIncomingCandidates(previous, [record])`; a different id keeps the
+   replacement reconcile. Sections and the sources map are unchanged.
+2. Backend: `run_source_url` merged the new candidates with
+   `_merge_document_candidates` in both cases, so a candidate that only the
+   deleted document backed stayed in `record.offering_candidates`. When the
+   replacement is real (different id, new row a `draft`) it now runs
+   `flow.reconcile_replacement` over the same validated candidates
+   (`_document_candidates`, the validation `_merge_document_candidates` already
+   applied) with `edited_candidate_ids=set()`. The same-URL re-read and an
+   added link keep the additive merge. This supersedes locked decision 12's
+   "the endpoint does not reconcile": it still cannot see the sheet's edits, and
+   the client's pass still protects them, but the record it writes no longer
+   strands the replaced source's offerings.
+
+`.agents/memory.md`'s earlier note that called the same-URL label loss harmless
+and told future work not to fix it was wrong and is corrected; so is
+`design/api-contract.md`'s "the endpoint does not reconcile offerings".
+
+```
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+72 passed in 4.19s
+
+$ docker compose run --rm backend ruff check .
+All checks passed!
+$ docker compose run --rm backend mypy
+Success: no issues found in 256 source files
+
+$ make lint-frontend
+> eslint
+(no output - clean)
+> node scripts/check-tokens.mjs
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+
+$ make typecheck-frontend
+> tsc --noEmit
+(no output - clean)
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (30 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (53 tests)
+ Test Files  2 passed (2)
+      Tests  83 passed (83)
+
+$ docker compose --profile e2e run --rm -e E2E_LLM=1 e2e sh -c "$E2E_NET_SH" -- npm run test:e2e -- e2e/knowledge-review.spec.ts
+ 18 passed (21.2s)
+```
+
+The regression tests, each red before its fix: `ReviewSheet.test.tsx` "keeps a
+same-URL re-read in place, so every row keeps its source" (re-read candidate
+keeps `doc-1` in `supporting_document_ids` and labels `From
+bytefix.example.com`; the edited row keeps `["owner", "document"]` and stays
+`supported`) and "drops an unedited row when a different URL replaces the
+source"; `test_onboarding_api.py`'s wrong-URL replacement now asserts the
+persisted `offering_candidates` no longer holds `Battery swap` (backed only by
+the deleted row) and still holds `Owner typed row`, and the same-URL test
+asserts every persisted candidate keeps the document id in
+`supporting_document_ids`.
+
+### Review fixes before acceptance
+
+Eight defects found while reviewing the ticket against the founder's brief.
+Each fix is small; the seam that proves it is named, because this repo has no
+jsdom, so click behaviour is proved in the browser and the pure logic in vitest.
+
+1. **One discard dialog per click.** `handleDiscard` now confirms only when
+   `onboarding`, because `business/details/knowledge/page.tsx`'s
+   `discardWorkspace` already owns that question. Proof: E2E
+   `settings-knowledge.spec.ts` "removing a saved document from the sheet asks
+   first, escape leaves it alone" - one `confirm-accept` click, Escape cancels
+   with `records.deleteCount() === 0`, a second click deletes exactly once.
+2. **The trigger never names an absent node and claims no state.** The trigger
+   is mounted only while the panel is collapsed, so it carries no
+   `aria-controls` and no `aria-expanded` - an attribute that can never be
+   `true` is worse than none. The open panel names itself `role="group"` with
+   `aria-label="Categories for <offering name>"`. Proof: unit,
+   `ReviewSheet.test.tsx` "keeps a card with no category collapsed behind one
+   trigger" (closed markup has no `aria-controls`); E2E,
+   `knowledge-review.spec.ts` "the category panel replaces its trigger and has
+   one honest exit" asserts the trigger leaves the DOM on open, `Done` sits
+   beside the search field at the same height and radius, Escape closes the panel
+   only, and `Done` restores the trigger and its focus.
+3. **A double Save cannot reach the endpoint.** `claimLinkSave` claims the slot
+   before the confirm opens and the handler releases it in `finally`;
+   `linkPending` is set before the confirm. Proof: unit, "lets only one link save
+   hold the slot at a time"; E2E, `saving a different link replaces the source`
+   cancels the dialog and saves again successfully, which is the release path.
+   (The leak itself - `useConfirm` overwriting its one pending entry - has no
+   browser-visible symptom, so the promise is asserted at the pure seam only.)
+4. **A replaced link cannot duplicate a source.** `replaceDocument` swaps in
+   place and drops any other entry with the new id; `onboarding/page.tsx` uses it
+   for both the workspace and the drafts list. Proof: unit only,
+   `offerings.test.ts` "keeps one row when the replacement already exists in the
+   review" and "swaps a source ... at the same position". No E2E case covers the
+   page wiring for this path.
+5. **A failed draft does not advance the source stage.** `run_source_url`
+   returns the unchanged state when `draft_from_url_text` answers `None`. Proof:
+   `test_onboarding_api.py::test_source_url_a_missing_draft_leaves_the_source_stage_open`
+   - red before the fix (assertion failed at line 2138), green after:
+   `1 passed`.
+6. **The viewport assertion measures the sheet panel too.** `expectInViewport`
+   now asserts the element's rect sits inside its nearest scrollable ancestor as
+   well as the window. It passed without a scroll change, so `revealNode`'s
+   `scrollIntoView({ block: "nearest" })` was already correct for every reveal
+   case.
+7. **Mobile 5/3 is proved in a browser.** New E2E
+   `business-page-actions.spec.ts` "the suggestions sheet pages three at a time
+   on a phone" sets a 360px viewport, reuses the existing suggestions stubs,
+   asserts three rows and `Showing 1-3 of 9 suggestions`, then `Showing 4-6 of
+   9` with `Offering 4 name` focused after `Next`.
+8. **Focus returns to a surviving row's `Edit link`.** `saveLink` calls
+   `revealNode(linkOpenerRef.current)` only when `record.id === documentId`.
+   Proof: E2E `saving the same link re-reads one source in place` asserts
+   `review-edit-link` is focused; `saving a different link replaces the source`
+   asserts the new row's `Edit link` is not focused.
+
+```
+$ make lint
+> eslint
+(no output - clean)
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+All checks passed!
+Contracts: 3 kept, 0 broken.
+
+$ make typecheck
+> tsc --noEmit
+(no output - clean)
+Success: no issues found in 256 source files
+
+$ make test
+ Test Files  43 passed (43)
+      Tests  428 passed (428)
+============================ 1633 passed in 43.55s =============================
+
+$ cd frontend && npm run gen:types -- --check
+api-types.ts is up to date
+
+$ docker compose run --rm backend pytest tests/test_onboarding_api.py -q
+73 passed in 4.21s
+
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge
+ ✓ src/components/knowledge/offerings.test.ts (33 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (55 tests)
+ Test Files  2 passed (2)
+      Tests  88 passed (88)
+
+$ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobile.spec.ts \
+    e2e/business-page-actions.spec.ts e2e/onboarding-resume.spec.ts \
+    e2e/onboarding-go-live.spec.ts e2e/settings-knowledge.spec.ts
+  48 passed (1.1m)
+```
+
+`onboarding-url.spec.ts` is not in that run: it fails at line 56 on the Skip
+chip that the uncommitted `backend/app/onboarding/beats.py` revert removes,
+before it reaches the discard this ticket changes. The same discard path is
+covered by `settings-knowledge.spec.ts` and `knowledge-review.spec.ts` above.
+
+### Review fix - the Business draft discard asks first
+
+`business/details/knowledge/page.tsx`'s `discardWorkspace` dropped an unsaved
+draft on the first click, while the saved-source path asked through the page's
+own `confirm`. The sheet's footer confirm is deliberately onboarding-only, so
+this was the one remaining single-click destroy on that surface. It now asks
+through the same `confirm`, `layer: "top"`, with `Discard <label>?` / "It was
+never saved, so it never answered customers." / `Discard draft`; a cancel
+returns before `dropWorkspace`, so nothing is deleted and the sheet stays open.
+No second dialog, no `window.confirm`, no sheet change. This supersedes the
+Slice C contract line that says the page "drops a draft directly".
+
+Proof, in `settings-knowledge.spec.ts`: "discarding a draft from the sheet asks
+first, escape leaves it alone", reusing the file's existing `draftRecord`,
+`recordsStore` and `stubRecords` fixtures with no new stack. Red before the
+fix, failing at the missing dialog after the click had already deleted the
+draft; green after. It asserts the dialog copy, Escape with
+`records.deleteCount() === 0` and the sheet still open, then one accept, one
+`Draft discarded` toast, `deleteCount() === 1`, and the row and sheet gone.
+
+```
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts -g "discarding a draft"
+  ✘  1 ... discarding a draft from the sheet asks first, escape leaves it alone
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('dialog', { name: 'Discard notes.txt?' })
+    Error: element(s) not found          # red: the click deleted with no dialog
+  1 failed
+
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts -g "discarding a draft"
+  ✓  1 ... discarding a draft from the sheet asks first, escape leaves it alone (2.0s)
+  1 passed (2.4s)
+
+$ ... npm run test:e2e -- e2e/settings-knowledge.spec.ts
+  ✓ a pasted link is read back as sections, then saved
+  ✓ a failed source retries into a draft
+  ✓ replace succeeds and is safe on failure
+  ✓ the closed review sheet stays fully off-screen on desktop
+  ✓ removing a saved document from the sheet asks first, escape leaves it alone
+  ✓ discarding a draft from the sheet asks first, escape leaves it alone
+  6 passed (13.0s)
+
+$ make lint
+> eslint
+(no output - clean)
+check-tokens: OK (no raw color values outside theme.css; spacing and type on the canonical scale)
+All checks passed!
+Contracts: 3 kept, 0 broken.
+
+$ make typecheck
+> tsc --noEmit
+(no output - clean)
+Success: no issues found in 256 source files
+
+$ make test
+ Test Files  43 passed (43)
+      Tests  428 passed (428)
+============================ 1633 passed in 43.23s =============================
+
+$ cd frontend && npm run gen:types -- --check
+api-types.ts is up to date
+```
+
+### Follow-up - the category panel pass (four commits plus the review fix)
+
+Four commits after the ticket closeout refined the category control:
+`3cafa29` moved the trigger below the description; `5f7b711` simplified the
+control (compact picker, 44px rows, check and remove glyphs, one suggestion
+pill); `6b335ed` made the panel replace its trigger in place; `2a72dfe` lifted
+the panel and renamed its exit. A review of those commits found four defects;
+`1383e9b` closes them.
+
+1. **No elevation inside a sheet.** The panel carried `shadow-card` on
+   `bg-surface` inside a `bg-surface` sheet, which `frontend.md:269`/`:366` and
+   `Card.tsx` forbid - cards inside sheets stay flat, and the depth vocabulary
+   grants a disclosure panel no elevation either. It is `rounded-lg
+   bg-surface-sunken p-3` again, the sunken step the sheet already uses to
+   group.
+2. **One honest exit.** `Add` beside the search field and `Cancel` at the top
+   right both only collapsed the panel, while chips apply immediately through
+   `onChange`: nothing was committed and nothing was reverted. The panel now has
+   one exit, `Done` (`data-testid="review-category-done"`), beside the field.
+3. **Escape backs out one level.** The panel's `onKeyDown` stops `Escape` and
+   closes the panel; the review sheet's own Escape still closes the sheet from
+   anywhere else.
+4. **No dead attribute and no lost focus.** The trigger no longer carries a
+   permanent `aria-expanded="false"`; the panel is `role="group"` named
+   `Categories for <offering name>`; opening scrolls the auto-focused search
+   field into view instead of the panel's top edge. `CategoryPicker` lost its
+   unused `searchRef`, its compact `fieldset` gained `min-w-0` (its UA
+   `min-inline-size` pushed the 360px sheet 60px wide once the action row
+   existed), and the paired `Done` button carries `min-h-12 rounded-field!
+   py-3` so it sits flush with the 50px field (the field is 50px, not 48: 24px
+   line + `py-3` + the 1px borders).
+
+```
+$ make lint-frontend
+(clean; check-tokens OK)
+$ make typecheck-frontend
+(clean)
+$ docker compose run --rm --no-deps frontend npx vitest run src/components/knowledge src/components/business
+ ✓ src/components/business/CategoryPicker.test.tsx (6 tests)
+ ✓ src/components/knowledge/offerings.test.ts (33 tests)
+ ✓ src/components/knowledge/ReviewSheet.test.tsx (54 tests)
+ Test Files  3 passed (3)
+      Tests  93 passed (93)
+$ ... npm run test:e2e -- e2e/knowledge-review.spec.ts e2e/knowledge-review-mobile.spec.ts
+ 25 passed (42.1s)
+```
+
+### Branch-tip gate
+
+```
+$ make lint
+(eslint clean; check-tokens OK; ruff clean; import contracts 3 kept, 0 broken)
+$ make typecheck
+(tsc clean; mypy: Success: no issues found in 256 source files)
+$ make format-check
+260 files already formatted
+$ make test
+ Test Files  43 passed (43)
+      Tests  429 passed (429)
+ ============================ 1633 passed in 65.89s =============================
+$ cd frontend && npm run gen:types -- --check
+api-types.ts is up to date
+$ make build
+ Compiled successfully in 7.4s
+```
+
+The full E2E suite ran twice at this tip: 277 tests, 3 skipped, 273 passed,
+with one different failure each time and neither in this ticket's UI.
+
+- Run 1, `mobile-voice-sheet.spec.ts` (mobile-chrome): `page.goto` aborted with
+  "WebKit encountered an internal error". Isolated rerun: `1 passed (8.3s)`.
+- Run 2, `settings-knowledge.spec.ts:37`: the review sheet never appeared. The
+  backend log shows Google AI Studio returning `503 UNAVAILABLE` on the primary
+  leg, the OpenRouter failover answering `200`, and the request completing at
+  `90_246 ms` - after Playwright's 60s global test timeout. Isolated rerun failed
+  at 71s, then passed at 66s once the request landed at `52_514 ms`.
+
+That exposed a latent test-configuration defect, fixed in `c402ed5`: the
+assertion carried a 90s budget inside a 60s test, while the backend's own
+`_DRAFT_TIMEOUT_SECONDS` is 90, so the assertion budget was unreachable. The
+test now sets `test.setTimeout(180_000)` and asserts with `150_000`, putting the
+spec's budget above the server ceiling instead of below it. Two consecutive
+green runs followed (server-side `73.1s` and `34.2s`), the first of which would
+have failed under the old cap.
+
+Residual: the primary leg's 503s are the provider's, and a request that trips
+the backend's own 90s draft ceiling still returns a failed record rather than a
+read-back. That is a product ceiling question, not this ticket's.

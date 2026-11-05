@@ -272,6 +272,11 @@ contract test.
 - Controls: the sheet-field recipe is `rounded-field border border-border
   px-4 py-3 text-field`. Pills use `py-4` (field) or `py-3` (command) with
   `pl-4` / `pr-2`.
+- Review field recipe (31): `rounded-field border border-border bg-surface
+  px-4 py-3 text-body min-h-11`, one step tighter than the sheet-field role.
+  Every text, number, and textarea control in the knowledge review uses it -
+  the offering rows, the price row, and every profile row - so the two
+  surfaces that share that component read as one form.
 - Safe-area bottom padding lives only on the element touching the viewport
   bottom: composers use `pb-[max(1rem,env(safe-area-inset-bottom))]`, the
   TabBar uses `pb-[env(safe-area-inset-bottom)]`, sheets and the thread top
@@ -309,6 +314,11 @@ the same no-cache-wipe property. The ticket-24 centered document sheet is
 `--width-doc` (768px), used through the same custom-property shorthand
 `lg:max-w-(--width-doc)`, because the knowledge review and the offering detail
 needed one desktop dialog width; form sheets cap at the existing `max-w-md`.
+
+The ticket-31 review fields carry `text-body` (16/24) rather than the 18/25
+`text-field` role named for sheet fields in 4.4. That is a founder ruling for
+the review surface only - `text-field` itself stays the field role for the
+contact and profile sheets.
 
 ### 4.7 Enforcement
 

@@ -145,6 +145,14 @@
 - **The onboarding `draft` is not all strings** (2026-10-27, 29): `services` is a list, so a profile patch built from every key in the state response throws on `.trim()`. Build the batch's `profile` map from the editable rows only (`profilePatchFor` in `ReviewSheet.tsx`); a displayed value is not an edit, so send only changed keys.
 - **A closed review disclosure must not render its children** (2026-10-27, 29): the Sheet never unmounts, so a real closed signal is a field that is absent, not `toBeHidden`. "More about what I read" keeps `detailsOpen` in state and conditionally renders its content; React renders `<details>` children even when the attribute is absent.
 - **`normalize_name` folds diacritics now** (2026-10-27, 29): the backend equality key and its frontend twin drop combining marks, so "Açaí Bowl" and "Acai Bowl" merge. Any test pinning the old accent-preserving key must assert the folded form instead.
+- **A link replacement reconciles against the document it replaced, and a same-URL re-read does not** (2026-10-27, 31; corrected the same day by the review follow-up): both sides key the lifecycle off `record.id === replacedDocumentId`. A different id is a replacement - the endpoint drops what only the deleted row backed with `flow.reconcile_replacement` (`edited_candidate_ids=set()`: it cannot see the sheet's in-session edits) and the sheet mirrors it with `reconcileOfferings`. A same-URL save re-reads the *same* row, so both merge in place instead (`mergeIncomingCandidates` on the client, `_merge_document_candidates` on the server); reconciling against the id the row itself carries strips that id from the incoming candidates, so reloaded rows read "From document", an edited row loses its document support, and an unedited row the re-read no longer matched is dropped. The earlier note calling that harmless and saying not to fix it was wrong.
+- **A confirm raised from inside a sheet must pass `layer: "top"`** (2026-10-27, 31): the sheet panel carries a CSS transform, so a `fixed` dialog rendered inside it clips and paints under the sheet. Every `ConfirmOptions` built in `ReviewSheet.tsx` (offering removal, link replacement, footer discard) sets it, and the dialog itself must render beside the sheet, never inside it.
+- **The Business > Knowledge footer confirms on both paths, so the shared sheet must not** (2026-10-27, 31 review fix; the draft arm added the same day): `business/details/knowledge/page.tsx`'s `discardWorkspace` owns that question - a saved source confirms through `confirmRemove` (`Remove <label>?`), an unsaved draft through its own `confirm` (`Discard <label>?` / "It was never saved, so it never answered customers." / `Discard draft`). `ReviewSheet.handleDiscard` therefore gates its confirm on `onboarding === true`; ungating it asked twice and made `settings-knowledge.spec.ts` accept twice. Offering and source removal still confirm on both surfaces.
+- **The Business review sheet's accessible name depends on the document's status** (2026-10-27, 31): a draft opens as "Read this back", a saved source as "Edit what I know" (`ReviewSheet.tsx:247`). An E2E that locates the dialog by name must pick the draft title, or it waits forever on a sheet that is open.
+- **The suggestions sheet's page size follows `useMediaQuery(DESKTOP_QUERY)`** (2026-10-27, 31): `SuggestionDocument` pages five at `lg+` and three below it, so SSR and the first client paint show three until the effect corrects it. Unit tests pick the branch by mocking the hook (spreading the real module); the 360px E2E case is the browser proof, and `Pagination` takes `pageSize`/`noun` rather than reading either.
+- **The review field is 50px tall, not 48** (2026-11-05, 31): 24px line + `py-3` (24px) + the 1px borders. A control paired beside it needs `py-3`/`min-h-12` to match, and `rounded-field!` to beat `Button`'s `rounded-md` in the cascade. The category panel is flat inside the sheet (`bg-surface-sunken`; `shadow-card` belongs to page cards), has one exit (`Done`), and Escape closes the panel before the sheet.
+- **`CategoryPicker`'s compact `fieldset` needs `min-w-0`** (2026-11-05, 31): the UA `min-inline-size: min-content` pushed the sheet 60px past a 360px viewport once the action row existed. The paired `Done` button is asserted against the search field's computed height and radius in E2E, because `check:tokens` cannot see either.
+- **A chip testid derives from its value** (2026-11-05, 29): `BeatComposer.tsx` builds `onboarding-chip-${chip.value}`, so the removed name-beat chip and the knowledge ask's `Skip for now` both mapped to `onboarding-chip-skip`; dropping one beat's chip leaves the other intact, and its specs are the guard.
 
 ### Chat lifecycle (D43-D45, 2026-10-04)
 
@@ -546,3 +554,18 @@
 ### Conventions
 
 - **Convention: the closeout sections cite the squash, not the slice commits.** Once a ticket lands as one commit, the slice hashes are unreachable and stale; `## Delivered` names the squash hash and keeps the slice names with one line each. Per-slice hashes stay in evidence files and commit bodies, which are historical by design.
+
+## Pasted-link spec budget vs the draft ceiling (2026-11-05)
+
+### Decisions
+
+- **Decision: the LLM-backed pasted-link spec carries its own 180s budget, and its dialog assertion is 150s.** Playwright's global 60s cap (`playwright.config.ts:42`) was the real ceiling, not the assertion's old 90s, so the assertion budget was unreachable. The ladder is now 60s global -> 180s test -> 150s assertion -> 90s backend `_DRAFT_TIMEOUT_SECONDS`, all with room for the failover path.
+- **Decision: raising the test budget is not a fix for a request that trips the backend's own 90s draft ceiling.** In that state `/api/knowledge/drafts/url` still returns 201 after ~90.2s, but with a failed record at `stage=extract`, so the review sheet never opens and the spec fails on content, not time. The spec change only stops the 60s cap from pre-empting a genuinely slow success.
+
+### Gotchas
+
+- **Gotcha: a green run between two failover-timeout runs proves nothing about the provider state.** In the same session on the same 503-primary/OpenRouter-failover state, draft turns returned 90.2s (failed), 52.5s (success), 73.1s (success), 34.2s (success). Sample the backend `drafts/url` `duration_ms` before reading a single red or green as regression or repair.
+
+### Conventions
+
+- **Convention: assert against the backend ceiling when a spec waits on a bounded server budget.** Match the spec's own timeout to `_DRAFT_TIMEOUT_SECONDS` plus crawl and margin, and keep the assertion under the test budget, or the failure names the wrong limit.

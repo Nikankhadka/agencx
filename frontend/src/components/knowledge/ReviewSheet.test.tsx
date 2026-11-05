@@ -1,19 +1,38 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  claimLinkSave,
+  discardConfirm,
   insertOwnerOffering,
   offeringPage,
   offeringPageCount,
   pageForOffering,
   Pagination,
   priceInputUpdate,
+  reconcileLinkOfferings,
+  removeOfferingConfirm,
+  replaceLinkConfirm,
   profilePatchFor,
   ReviewSheet,
   toPendingOffering,
   toWorkingOffering,
   type ReviewProfile,
 } from "./ReviewSheet";
+import { offeringLabel } from "./offerings";
 import type { KnowledgeRecord, ReviewOffering, ReviewWorkspace } from "./types";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+
+// The repo has no jsdom (memory, 2026-10-03), so the media-query branch is
+// selected by mocking the hook - spreading the real module so DESKTOP_QUERY
+// survives the mock.
+vi.mock("@/lib/useMediaQuery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/useMediaQuery")>()),
+  useMediaQuery: vi.fn(() => false),
+}));
+
+afterEach(() => {
+  vi.mocked(useMediaQuery).mockReturnValue(false);
+});
 
 /**
  * W-6. What the owner is shown about a price is a product decision, not a
@@ -293,6 +312,272 @@ describe("suggestions-only review", () => {
   });
 });
 
+describe("review field recipe (31)", () => {
+  function renderEditable(): string {
+    const workspace: ReviewWorkspace = {
+      id: "ws-1",
+      documents: [
+        {
+          id: "doc-1",
+          filename: "menu.pdf",
+          doc_type: "other",
+          status: "draft",
+          error: null,
+          sections: [],
+        },
+      ],
+      offering_candidates: [
+        {
+          candidate_id: "c-1",
+          name: "Bowl",
+          description: "comes with pita",
+          price_cents: 1200,
+          sources: ["owner"],
+        },
+      ],
+    };
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={workspace}
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("gives every review field the shared field recipe", () => {
+    const html = renderEditable();
+    expect(html).toContain("min-h-11");
+    expect(html).toContain("px-4 py-3 text-body");
+    expect(html).not.toContain("text-field");
+  });
+
+  it("widens the price field to the 96px step", () => {
+    const html = renderEditable();
+    expect(html).toContain('class="w-24 rounded-field');
+    expect(html).not.toContain("w-28");
+  });
+});
+
+describe("collapsed categories (31)", () => {
+  function renderCard(overrides: Partial<ReviewOffering> = {}): string {
+    const workspace: ReviewWorkspace = {
+      id: "ws-1",
+      documents: [
+        {
+          id: "doc-1",
+          filename: "menu.pdf",
+          doc_type: "other",
+          status: "draft",
+          error: null,
+          sections: [],
+        },
+      ],
+      offering_candidates: [
+        {
+          candidate_id: "c-1",
+          name: "Bowl",
+          description: "",
+          price_cents: 1200,
+          sources: ["owner"],
+          ...overrides,
+        },
+      ],
+    };
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={workspace}
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  it("keeps a card with no category collapsed behind one trigger", () => {
+    const html = renderCard();
+    expect(html).toContain('data-testid="review-category-trigger"');
+    expect(html).toContain(">Add category</button>");
+    // The trigger sits below the description: the owner names, prices and
+    // describes the offering before filing it.
+    expect(html.indexOf("Offering 1 description")).toBeLessThan(
+      html.indexOf("review-category-trigger"),
+    );
+    // Closed means the picker is not in the DOM at all, not merely hidden.
+    expect(html).not.toContain("Search or create a category");
+  });
+
+  it("labels a card that already has categories by its count", () => {
+    const html = renderCard({ category_ids: ["a", "b"], primary_category_id: "a" });
+    expect(html).toContain(">Categories (2)</button>");
+  });
+
+  it("keeps the suggested category out of the collapsed card", () => {
+    // 31: the line moved inside the expanded region, so a closed card is one
+    // row shorter than the ticket-29 render.
+    const html = renderCard({ proposed_category: "Coffee" });
+    expect(html).not.toContain("Suggested category");
+  });
+});
+
+describe("removal confirmations (31)", () => {
+  it("pins the offering removal copy, tone and layer", () => {
+    expect(removeOfferingConfirm("Screen repair")).toEqual({
+      title: "Remove Screen repair?",
+      description: "It will not be saved to your catalog.",
+      confirmLabel: "Remove",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("names one source or several when the footer discard is used", () => {
+    expect(discardConfirm(1)).toMatchObject({
+      title: "Discard this source?",
+      description: "It is deleted, and its details and offerings are not saved.",
+      confirmLabel: "Discard source",
+      tone: "danger",
+      layer: "top",
+    });
+    expect(discardConfirm(2)).toMatchObject({
+      title: "Discard these sources?",
+      description: "They are deleted, and their details and offerings are not saved.",
+      confirmLabel: "Discard sources",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("labels the onboarding footer by the number of reviewed sources", () => {
+    const one = renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{
+          id: "ws-1",
+          documents: [
+            {
+              id: "doc-1",
+              filename: "menu.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+          ],
+          offering_candidates: [],
+        }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+    expect(one).toContain(">Discard source</button>");
+
+    const two = renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{
+          id: "ws-1",
+          documents: [
+            {
+              id: "doc-1",
+              filename: "menu.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+            {
+              id: "doc-2",
+              filename: "hours.pdf",
+              doc_type: "other",
+              status: "draft",
+              error: null,
+              sections: [],
+            },
+          ],
+          offering_candidates: [],
+        }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+      />,
+    );
+    expect(two).toContain(">Discard sources</button>");
+  });
+});
+
+describe("suggestions pagination (31)", () => {
+  function nineSuggestions(): ReviewOffering[] {
+    return Array.from({ length: 9 }, (_, index) => ({
+      candidate_id: `cand-${index + 1}`,
+      name: `Suggestion ${index + 1}`,
+      description: "",
+      price_cents: null,
+      sources: ["document"] as const,
+      review_status: "pending" as const,
+    }));
+  }
+
+  function renderNine(): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={null}
+        suggestions={nineSuggestions()}
+        suggestionsOnly
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onSaveSuggestions={async () => {}}
+        onDiscard={() => {}}
+      />,
+    );
+  }
+
+  function renderedNames(html: string): number {
+    return (html.match(/aria-label="Offering \d+ name"/g) ?? []).length;
+  }
+
+  it("shows five suggestions a page on the desktop branch", () => {
+    vi.mocked(useMediaQuery).mockReturnValue(true);
+    const html = renderNine();
+    expect(renderedNames(html)).toBe(5);
+    expect(html).toContain("Page 1 of 2");
+    expect(html).toContain("Showing 1-5 of 9 suggestions");
+  });
+
+  it("shows three suggestions a page on the phone branch", () => {
+    const html = renderNine();
+    expect(renderedNames(html)).toBe(3);
+    expect(html).toContain("Page 1 of 3");
+    expect(html).toContain("Showing 1-3 of 9 suggestions");
+  });
+
+  it("keeps the review's own pagination copy by default", () => {
+    // 31: pageSize and noun are opt-in; the review's five-a-page offerings
+    // wording is unchanged.
+    const html = renderToStaticMarkup(
+      <Pagination page={0} pages={2} count={9} onPage={() => {}} />,
+    );
+    expect(html).toContain("Showing 1-5 of 9 offerings");
+  });
+});
+
 describe("pagination copy", () => {
   function renderPagination(page: number, pages: number, count: number): string {
     return renderToStaticMarkup(
@@ -376,7 +661,7 @@ describe("review workspace clarity", () => {
     // draft is discarded and a saved source is removed.
     expect(renderClarity(workspace("draft"))).toContain(">Discard draft</button>");
     expect(renderClarity(workspace("ready"))).toContain(">Remove source</button>");
-    expect(renderClarity(workspace("draft"), true)).toContain(">Discard</button>");
+    expect(renderClarity(workspace("draft"), true)).toContain(">Discard source</button>");
   });
 
   it("renders the sections in DOM order matching the visual order", () => {
@@ -574,5 +859,177 @@ describe("priced-first review (29)", () => {
     expect(html).toContain("More about what I read");
     expect(html).not.toContain("The secret document body");
     expect(html).not.toContain("Original extracted source");
+  });
+});
+
+describe("link editing (31)", () => {
+  function record(overrides: Partial<KnowledgeRecord> = {}): KnowledgeRecord {
+    return {
+      id: "doc-1",
+      filename: "https://bytefix.example.com/menu",
+      doc_type: "website",
+      status: "draft",
+      error: null,
+      sections: [],
+      ...overrides,
+    };
+  }
+
+  function renderSources(
+    documents: KnowledgeRecord[],
+    handlers: {
+      onReplaceLink?: (documentId: string, url: string) => Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null>;
+      onAddLink?: (url: string) => Promise<KnowledgeRecord[]>;
+      onAddSource?: (files: File[]) => Promise<KnowledgeRecord[]>;
+      onReplaceSource?: (documentId: string, file: File) => Promise<KnowledgeRecord | null>;
+      onRemoveSource?: (documentId: string) => Promise<void>;
+    } = {},
+  ): string {
+    return renderToStaticMarkup(
+      <ReviewSheet
+        workspace={{ id: "ws-1", documents, offering_candidates: [] }}
+        onboarding
+        open
+        busy={false}
+        priceConflict={null}
+        onClose={() => {}}
+        onSave={async () => null}
+        onDiscard={() => {}}
+        {...handlers}
+      />,
+    );
+  }
+
+  const sourceHandlers = {
+    onReplaceLink: async () => null,
+    onAddLink: async () => [],
+    onAddSource: async () => [],
+    onReplaceSource: async () => null,
+    onRemoveSource: async () => {},
+  };
+
+  it("pins the link replacement question", () => {
+    expect(replaceLinkConfirm()).toEqual({
+      title: "Replace this link?",
+      description:
+        "The new site will be read, and its details and offerings will replace this source.",
+      confirmLabel: "Replace link",
+      tone: "danger",
+      layer: "top",
+    });
+  });
+
+  it("lets only one link save hold the slot at a time", () => {
+    // 31: the slot is claimed before the confirm opens. useConfirm keeps one
+    // pending entry, so a second save asked while it is open would replace the
+    // first and leave its promise unresolved - it must never reach the
+    // endpoint. The release on cancel is what lets the retry below work.
+    const slot = { current: false };
+    expect(claimLinkSave(slot)).toBe(true);
+    expect(claimLinkSave(slot)).toBe(false);
+    slot.current = false;
+    expect(claimLinkSave(slot)).toBe(true);
+  });
+
+  it("gives a URL row an inline edit and keeps the file picker off it", () => {
+    const html = renderSources([record()], sourceHandlers);
+    expect(html).toContain('data-testid="review-edit-link"');
+    expect(html).toContain('aria-label="Edit link for bytefix.example.com"');
+    expect(html).toContain(">Edit link</button>");
+    expect(html).not.toContain('data-testid="review-replace-source"');
+    // Closed means the editor is not in the DOM at all.
+    expect(html).not.toContain('data-testid="review-link-input"');
+  });
+
+  it("keeps the file picker on a file row and offers no link edit", () => {
+    const html = renderSources([record({ doc_type: "other", filename: "menu.pdf" })], sourceHandlers);
+    expect(html).toContain('data-testid="review-replace-source"');
+    expect(html).not.toContain('data-testid="review-edit-link"');
+  });
+
+  it("offers add a link and add a file as two actions", () => {
+    const html = renderSources([record({ doc_type: "other", filename: "menu.pdf" })], sourceHandlers);
+    expect(html).toContain('data-testid="review-add-link"');
+    expect(html).toContain(">Add a link</button>");
+    expect(html).toContain('data-testid="review-add-file"');
+    expect(html).toContain(">Add a file</button>");
+    expect(html).not.toContain("Add another source");
+  });
+
+  it("renders no source actions on a surface that passes no handlers", () => {
+    const html = renderSources([record()]);
+    expect(html).not.toContain('data-testid="review-edit-link"');
+    expect(html).not.toContain('data-testid="review-add-link"');
+    expect(html).not.toContain('data-testid="review-add-file"');
+    expect(html).not.toContain('data-testid="review-remove-source"');
+  });
+
+  it("keeps a same-URL re-read in place, so every row keeps its source", () => {
+    // Replacing a link with the same address re-reads the same document row.
+    // Reconciling that row against itself would strip the id that names its
+    // source, so the re-read merges in place instead.
+    const document = record();
+    const previous: ReviewOffering[] = [
+      candidate({
+        candidate_id: "c-1",
+        name: "Screen repairs",
+        sources: ["document"],
+        supporting_document_ids: ["doc-1"],
+      }),
+      candidate({
+        candidate_id: "c-2",
+        name: "Screen protectors",
+        sources: ["owner", "document"],
+        supporting_document_ids: ["doc-1"],
+        support_state: "supported",
+      }),
+    ];
+    const reRead = record({
+      offering_candidates: [
+        candidate({ name: "Screen repairs", sources: ["document"], supporting_document_ids: ["doc-1"] }),
+        candidate({ name: "battery replacements", sources: ["document"], supporting_document_ids: ["doc-1"] }),
+      ],
+    });
+
+    const next = reconcileLinkOfferings(previous, reRead, "doc-1", new Set(["c-2"]));
+
+    expect(next.map((item) => item.name)).toEqual([
+      "Screen repairs",
+      "Screen protectors",
+      "battery replacements",
+    ]);
+    // The row the page added on the re-read still resolves to its source.
+    const added = next.find((item) => item.name === "battery replacements");
+    expect(added?.supporting_document_ids).toContain("doc-1");
+    expect(offeringLabel(added!, [document])).toBe("From bytefix.example.com");
+    // The row the owner edited survives, still backed by the source it names.
+    const edited = next.find((item) => item.name === "Screen protectors");
+    expect(edited?.supporting_document_ids).toContain("doc-1");
+    expect(edited?.sources).toEqual(["owner", "document"]);
+    expect(edited?.support_state).toBe("supported");
+  });
+
+  it("drops an unedited row when a different URL replaces the source", () => {
+    const previous: ReviewOffering[] = [
+      candidate({
+        candidate_id: "c-1",
+        name: "Screen repairs",
+        sources: ["document"],
+        supporting_document_ids: ["doc-1"],
+      }),
+      candidate({ candidate_id: "c-2", name: "Owner typed row", sources: ["owner"] }),
+    ];
+    const replacement = record({
+      id: "doc-2",
+      filename: "https://new.example.com",
+      offering_candidates: [
+        candidate({ name: "Battery replacements", sources: ["document"], supporting_document_ids: ["doc-2"] }),
+      ],
+    });
+
+    const next = reconcileLinkOfferings(previous, replacement, "doc-1", new Set());
+
+    // Nothing else vouches for the old document's row; the owner's own row stays.
+    expect(next.map((item) => item.name)).toEqual(["Owner typed row", "Battery replacements"]);
   });
 });

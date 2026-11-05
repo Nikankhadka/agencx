@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ChangeEven
 import { apiFetch } from "@/lib/api";
 import { ACCEPTED_UPLOAD_EXTENSIONS } from "@/lib/onboarding";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import type { ConfirmOptions } from "@/components/ui/ConfirmDialog";
 import {
@@ -37,6 +38,98 @@ export type ReviewProfile = Partial<Record<ProfileKey, string>>;
 
 /** Shared press feedback for the sheet's text actions: underline on hover, dim on press. */
 const TEXT_PRESS = "transition-colors duration-(--duration-fast) hover:underline active:opacity-60";
+
+/** 31: the review's one field recipe - 16/24 text on the 44px floor, matching
+ *  the console's own controls rather than the 18/25 sheet-field role. */
+export const FIELD = "rounded-field border border-border bg-surface px-4 py-3 text-body text-text min-h-11 outline-none placeholder:text-ink-a40 focus:border-text";
+
+type CardRefs = { current: Map<string, HTMLInputElement> };
+
+/** 31: ask for a reveal after the render that produced the node - expanding
+ *  from read-only to editable replaces the content, so the request is applied
+ *  from an effect rather than from the click handler. */
+type RevealRequest = { id: string } | { add: true };
+
+/** 31: the one focus helper. After the revealed node is laid out, focus it
+ *  (unless the reveal is a scroll-only one) and bring it into view by the
+ *  nearest edge, so paging and expanding never leave the keyboard behind. */
+function revealNode(node: HTMLElement | null, focus = true) {
+  if (!node) return;
+  requestAnimationFrame(() => {
+    if (focus) node.focus();
+    node.scrollIntoView({ block: "nearest" });
+  });
+}
+
+export function reveal(cardRefs: CardRefs, id: string | null | undefined) {
+  if (!id) return;
+  revealNode(cardRefs.current.get(id) ?? null);
+}
+
+/** 31: the one removal question, used from both owners of an offering card
+ *  (the review and the suggestions sheet). Fixed copy, and "top" because the
+ *  caller sits inside the sheet's transformed panel. */
+export function removeOfferingConfirm(name: string): ConfirmOptions {
+  return {
+    title: `Remove ${name.trim() || "this offering"}?`,
+    description: "It will not be saved to your catalog.",
+    confirmLabel: "Remove",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
+/** 31: the footer discard question, pluralised from the reviewed source count.
+ *  Same layer rule as the offering removal. */
+export function discardConfirm(count: number): ConfirmOptions {
+  const many = count > 1;
+  return {
+    title: many ? "Discard these sources?" : "Discard this source?",
+    description: many
+      ? "They are deleted, and their details and offerings are not saved."
+      : "It is deleted, and its details and offerings are not saved.",
+    confirmLabel: many ? "Discard sources" : "Discard source",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
+/** 31: the link replacement question. Same fixed copy and layer rule as the
+ *  offering removal - the sheet sits inside the panel's transformed box. */
+export function replaceLinkConfirm(): ConfirmOptions {
+  return {
+    title: "Replace this link?",
+    description:
+      "The new site will be read, and its details and offerings will replace this source.",
+    confirmLabel: "Replace link",
+    tone: "danger",
+    layer: "top",
+  };
+}
+
+/** 31: which offerings survive a link save. A different URL is a replacement,
+ *  so the review reconciles against the document it replaced. The same URL is
+ *  a re-read of that same row - its candidates are its own, so they merge in
+ *  place and keep the id that names their source. */
+export function reconcileLinkOfferings(
+  previous: ReviewOffering[],
+  record: KnowledgeRecord,
+  replacedDocumentId: string,
+  editedCandidateIds: Set<string>,
+): ReviewOffering[] {
+  if (record.id === replacedDocumentId) return mergeIncomingCandidates(previous, [record]);
+  return reconcileOfferings(previous, record.offering_candidates ?? [], replacedDocumentId, editedCandidateIds);
+}
+
+/** 31: one link save at a time. The slot is claimed before the confirm opens,
+ *  because `useConfirm` keeps a single pending entry: a second save asked while
+ *  that dialog is up would replace the first promise and leave it unresolved.
+ *  The handler releases the slot in its `finally`, so a cancel frees it too. */
+export function claimLinkSave(slot: { current: boolean }): boolean {
+  if (slot.current) return false;
+  slot.current = true;
+  return true;
+}
 
 const CategoryContext = createContext<{
   categories: CategoryOption[];
@@ -106,6 +199,11 @@ export interface ReviewSheetProps {
   onAddSource?: (files: File[]) => Promise<KnowledgeRecord[]>;
   onReplaceSource?: (documentId: string, file: File) => Promise<KnowledgeRecord | null>;
   onRemoveSource?: (documentId: string) => Promise<void>;
+  /** 31: the link editor's two doors, both optional. A replacement answers the
+   *  new record plus the state's draft (the fields the site stated); an added
+   *  link answers the records now in the review. */
+  onReplaceLink?: (documentId: string, url: string) => Promise<{ record: KnowledgeRecord; draft: Record<string, unknown> } | null>;
+  onAddLink?: (url: string) => Promise<KnowledgeRecord[]>;
   /**
    * The parent's `confirm` (its dialog renders at page level, above this
    * sheet) - the sheet asks through it before dropping a source, so the
@@ -114,7 +212,7 @@ export interface ReviewSheetProps {
   confirmRemove?: (options: ConfirmOptions) => Promise<boolean>;
 }
 
-export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, open, busy, priceConflict, onboarding = false, profile, missingRequired, onClose, onSave, onSaveSuggestions, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: ReviewSheetProps) {
+export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, open, busy, priceConflict, onboarding = false, profile, missingRequired, onClose, onSave, onSaveSuggestions, onDiscard, onAddSource, onReplaceSource, onRemoveSource, onReplaceLink, onAddLink, confirmRemove }: ReviewSheetProps) {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   useEffect(() => {
     if (!open) return;
@@ -145,16 +243,46 @@ export function ReviewSheet({ workspace, suggestions, suggestionsOnly = false, o
         busy={busy}
         onSave={onSaveSuggestions}
         onDiscard={onDiscard}
+        confirmRemove={confirmRemove}
       />
-    ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} profile={profile} missingRequired={missingRequired} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} confirmRemove={confirmRemove} /> : null}
+    ) : workspace ? <ReviewDocument key={workspace.id} workspace={workspace} busy={busy} priceConflict={priceConflict} onboarding={onboarding} profile={profile} missingRequired={missingRequired} onSave={onSave} onDiscard={onDiscard} onAddSource={onAddSource} onReplaceSource={onReplaceSource} onRemoveSource={onRemoveSource} onReplaceLink={onReplaceLink} onAddLink={onAddLink} confirmRemove={confirmRemove} /> : null}
   </CategoryContext.Provider></Sheet>;
 }
 
-function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void }) {
+function SuggestionDocument({ suggestions, busy, onSave, onDiscard, confirmRemove }: { suggestions: ReviewOffering[]; busy: boolean; onSave: (offerings: PendingOffering[]) => Promise<void>; onDiscard: () => void; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const pageSize = desktop ? PAGE_SIZE : COLLAPSED_MOBILE;
   const [offerings, setOfferings] = useState(() => suggestions.map(toWorkingOffering));
+  const [page, setPage] = useState(0);
+  const [revealRequest, setRevealRequest] = useState<{ id: string } | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLInputElement>());
+  const pages = offeringPageCount(offerings.length, pageSize);
+  const currentPage = Math.min(page, pages - 1);
+  const visible = offeringPage(offerings, currentPage, pageSize);
+  useEffect(() => {
+    if (!revealRequest) return;
+    reveal(cardRefs, revealRequest.id);
+  }, [revealRequest]);
+
+  function gotoPage(nextPage: number) {
+    const clamped = Math.min(Math.max(nextPage, 0), pages - 1);
+    setPage(clamped);
+    const first = offeringPage(offerings, clamped, pageSize)[0];
+    if (first) setRevealRequest({ id: first.candidate_id });
+  }
 
   function updateOffering(id: string, update: Partial<WorkingOffering>) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
+  }
+
+  async function removeOffering(id: string) {
+    const target = offerings.find((item) => item.candidate_id === id);
+    if (!target) return;
+    if (confirmRemove && !(await confirmRemove(removeOfferingConfirm(target.name)))) return;
+    const next = offerings.filter((item) => item.candidate_id !== id);
+    setOfferings(next);
+    // 31: a page that no longer exists falls back to the first one.
+    if (page > offeringPageCount(next.length, pageSize) - 1) setPage(0);
   }
 
   async function save() {
@@ -164,9 +292,10 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggesti
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto pb-4">
       <p className="text-meta text-ink-a40">These private drafts never reach customers until you save them.</p>
-      <div className="mt-5 flex flex-col gap-3">
-        {offerings.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={index + 1} all={offerings} editing inputRef={() => undefined} onChange={updateOffering} onRemove={(id) => setOfferings((previous) => previous.filter((item) => item.candidate_id !== id))} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
+      <div className="mt-4 flex flex-col gap-2">
+        {visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={[]} position={currentPage * pageSize + index + 1} all={offerings} editing inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={() => undefined} onCombine={() => undefined} />)}
       </div>
+      {pages > 1 ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={gotoPage} pageSize={pageSize} noun="suggestions" /> : null}
     </div>
     <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3">
       <Button className="flex-1" loading={busy} onClick={() => void save()} data-testid="suggestions-save">Save suggestions</Button>
@@ -175,7 +304,7 @@ function SuggestionDocument({ suggestions, busy, onSave, onDiscard }: { suggesti
   </div>;
 }
 
-function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, missingRequired, onSave, onDiscard, onAddSource, onReplaceSource, onRemoveSource, confirmRemove }: { workspace: ReviewWorkspace; busy: boolean; priceConflict: string | null; onboarding: boolean; profile?: ReviewProfile; missingRequired?: string[]; onSave: ReviewSheetProps["onSave"]; onDiscard: () => void; onAddSource?: ReviewSheetProps["onAddSource"]; onReplaceSource?: ReviewSheetProps["onReplaceSource"]; onRemoveSource?: ReviewSheetProps["onRemoveSource"]; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
+function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, missingRequired, onSave, onDiscard, onAddSource, onReplaceSource, onRemoveSource, onReplaceLink, onAddLink, confirmRemove }: { workspace: ReviewWorkspace; busy: boolean; priceConflict: string | null; onboarding: boolean; profile?: ReviewProfile; missingRequired?: string[]; onSave: ReviewSheetProps["onSave"]; onDiscard: () => void; onAddSource?: ReviewSheetProps["onAddSource"]; onReplaceSource?: ReviewSheetProps["onReplaceSource"]; onRemoveSource?: ReviewSheetProps["onRemoveSource"]; onReplaceLink?: ReviewSheetProps["onReplaceLink"]; onAddLink?: ReviewSheetProps["onAddLink"]; confirmRemove?: ReviewSheetProps["confirmRemove"] }) {
   // Ticket 28: the collapsed cap is the mobile cap during SSR (useMediaQuery
   // defaults false server-side) and the page size at lg+; the client corrects
   // it after hydration.
@@ -206,11 +335,31 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   const [replacingSource, setReplacingSource] = useState<string | null>(null);
   const [addingSources, setAddingSources] = useState(false);
   const cardRefs = useRef(new Map<string, HTMLInputElement>());
+  const [revealRequest, setRevealRequest] = useState<RevealRequest | null>(null);
   // W-11c: every user edit/add/combine marks the row dirty (and enters this
   // ref) so a later replace orphans it instead of silently dropping it.
   const editedIdsRef = useRef(new Set<string>());
+  const addOfferingRef = useRef<HTMLButtonElement>(null);
   const addFileRef = useRef<HTMLInputElement>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
+  // 31: the inline link editor. `documentId` null means the editor is adding a
+  // source; the opener is remembered only so Cancel can return focus to it.
+  const [linkEditor, setLinkEditor] = useState<{ documentId: string | null } | null>(null);
+  const [linkValue, setLinkValue] = useState("");
+  const [linkPending, setLinkPending] = useState(false);
+  const linkSaveRef = useRef(false);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkOpenerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!linkEditor) return;
+    // The editor is the field the owner came for: focus it once it is laid out.
+    revealNode(linkInputRef.current);
+  }, [linkEditor]);
+  useEffect(() => {
+    if (!revealRequest) return;
+    if ("id" in revealRequest) reveal(cardRefs, revealRequest.id);
+    else revealNode(addOfferingRef.current);
+  }, [revealRequest]);
   const pages = offeringPageCount(offerings.length);
   const currentPage = Math.min(page, pages - 1);
   const allFit = offerings.length <= collapsedLimit;
@@ -240,7 +389,23 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     editedIdsRef.current.add(id);
     setOfferings((previous) => previous.map((item) => item.candidate_id === id ? { ...item, ...update, dirty: true } : item));
   }
-  function removeOffering(id: string) { setOfferings((previous) => previous.filter((item) => item.candidate_id !== id)); }
+  async function removeOffering(id: string) {
+    const index = offerings.findIndex((item) => item.candidate_id === id);
+    if (index < 0) return;
+    if (confirmRemove && !(await confirmRemove(removeOfferingConfirm(offerings[index].name)))) return;
+    // 31: focus follows what the removal revealed - the next row, else the
+    // one above, else the action that adds one back.
+    const survivor = offerings[index + 1] ?? offerings[index - 1];
+    const next = offerings.filter((item) => item.candidate_id !== id);
+    setOfferings(next);
+    if (!survivor) {
+      setPage(0);
+      setRevealRequest({ add: true });
+      return;
+    }
+    setPage(pageForOffering(next.indexOf(survivor)));
+    setRevealRequest({ id: survivor.candidate_id });
+  }
   function addOffering() {
     const candidate_id = `owner_${crypto.randomUUID()}`;
     editedIdsRef.current.add(candidate_id);
@@ -251,7 +416,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
       const next = insertOwnerOffering(previous, { candidate_id, name: "", description: "", price_cents: null, sources: ["owner"] as ("owner" | "document")[], source_references: [], priceText: "", priceWording: "", priceOptions: [], priceNote: "", possibleMatches: [], support_state: "supported" as const, dirty: true });
       setExpanded(true); setPage(next.page); return next.list;
     });
-    requestAnimationFrame(() => cardRefs.current.get(candidate_id)?.focus());
+    setRevealRequest({ id: candidate_id });
   }
   function keepBoth(left: string, right: string) {
     setOfferings((previous) => previous.map((item) => item.candidate_id === left || item.candidate_id === right ? { ...item, possibleMatches: item.possibleMatches.filter((id) => id !== left && id !== right) } : item));
@@ -270,10 +435,22 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     setOfferings((previous) => previous.filter((item) => item.candidate_id !== removed.candidate_id).map((item) => item.candidate_id !== retained.candidate_id ? item : { ...retained, price_cents: price, priceText: formatPrice(price), priceWording: "", description: retained.description || removed.description, sources: [...new Set([...retained.sources, ...removed.sources])], source_references: [...(retained.source_references ?? []), ...(removed.source_references ?? [])], possibleMatches: [...new Set([...retained.possibleMatches, ...removed.possibleMatches])].filter((id) => id !== retained.candidate_id && id !== removed.candidate_id), dirty: true }));
     setCombine(null);
   }
+  /** 31: the footer asks before it destroys anything, and names what goes.
+   *  Onboarding owns the question. The Business > Knowledge page asks through
+   *  its own confirm for both a saved source and a draft, so a sheet-level
+   *  question would ask twice. */
+  async function handleDiscard() {
+    if (onboarding && confirmRemove) {
+      const confirmed = await confirmRemove(discardConfirm(workspace.documents.length));
+      if (!confirmed) return;
+    }
+    onDiscard();
+  }
+
   async function save() {
     if (duplicateIds.length) {
       const target = offerings.find((item) => duplicateIds.includes(item.candidate_id));
-      if (target) { setExpanded(true); setPage(Math.floor(offerings.indexOf(target) / PAGE_SIZE)); requestAnimationFrame(() => cardRefs.current.get(target.candidate_id)?.focus()); }
+      if (target) { setExpanded(true); setPage(Math.floor(offerings.indexOf(target) / PAGE_SIZE)); setRevealRequest({ id: target.candidate_id }); }
       return;
     }
     const documents = workspace.documents.map((doc) => ({ document_id: doc.id, sections: sectionsFor(doc.id, doc) }));
@@ -289,35 +466,121 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     if (adopted) setOfferings(reconcileAfterSave(offerings, adopted, workspace.documents, editedIdsRef.current).map(toWorkingOffering));
   }
   async function loadSource(docId: string) { if (sources.has(docId) || sourceLoading) return; setSourceLoading(docId); try { const detail = await apiFetch<SourceDetail>(`/api/knowledge/records/${docId}/source`); setSources((previous) => { const next = new Map(previous); next.set(docId, detail); return next; }); } finally { setSourceLoading(null); } }
+  /** 31: fold accepted records into the review without disturbing its edits.
+   *  Shared by the file and link doors so both adopt the same way. */
+  function adoptRecords(records: KnowledgeRecord[]) {
+    if (records.length === 0) return;
+    setSectionsByDocument((previous) => {
+      const next = new Map(previous);
+      for (const record of records) next.set(record.id, orderedSections(record.sections));
+      return next;
+    });
+    setOfferings((previous) => {
+      const merged = mergeIncomingCandidates(previous, records);
+      return merged.map((item, index) => {
+        const working = toWorkingOffering(item);
+        if (index < previous.length && previous[index].dirty) {
+          working.dirty = true;
+          editedIdsRef.current.add(working.candidate_id);
+        }
+        return working;
+      });
+    });
+  }
   async function handleAddFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (files.length === 0 || !onAddSource) return;
     setAddingSources(true);
     try {
-      const records = await onAddSource(files);
-      if (records.length > 0) {
-        setSectionsByDocument((previous) => {
-          const next = new Map(previous);
-          for (const record of records) next.set(record.id, orderedSections(record.sections));
-          return next;
-        });
-        setOfferings((previous) => {
-          const merged = mergeIncomingCandidates(previous, records);
-          return merged.map((item, index) => {
-            const working = toWorkingOffering(item);
-            if (index < previous.length && previous[index].dirty) {
-              working.dirty = true;
-              editedIdsRef.current.add(working.candidate_id);
-            }
-            return working;
-          });
-        });
-      }
+      adoptRecords(await onAddSource(files));
     } finally {
       setAddingSources(false);
     }
   }
+  /** 31: a URL row edits in place; a file row keeps the picker. */
+  function openLinkEditor(documentId: string | null, opener: HTMLButtonElement) {
+    linkOpenerRef.current = opener;
+    setLinkValue(documentId === null ? "" : workspace.documents.find((doc) => doc.id === documentId)?.filename ?? "");
+    setLinkEditor({ documentId });
+  }
+  function cancelLink() {
+    // 31: cancel is not a source change - no request, no document edit.
+    setLinkEditor(null);
+    linkOpenerRef.current?.focus();
+  }
+  async function saveLink() {
+    const editor = linkEditor;
+    const trimmed = linkValue.trim();
+    const documentId = editor?.documentId ?? null;
+    if (!editor || !trimmed) return;
+    // 31: claim the slot before the confirm opens, so an impatient second Save
+    // never reaches the endpoint (see claimLinkSave). Every path below releases
+    // it, cancel included.
+    if (!claimLinkSave(linkSaveRef)) return;
+    setLinkPending(true);
+    try {
+      if (documentId !== null) {
+        if (!onReplaceLink) return;
+        if (confirmRemove && !(await confirmRemove(replaceLinkConfirm()))) return;
+        const result = await onReplaceLink(documentId, trimmed);
+        if (!result) return;
+        const { record, draft } = result;
+        setSectionsByDocument((previous) => {
+          const next = new Map(previous);
+          next.delete(documentId);
+          next.set(record.id, orderedSections(record.sections));
+          return next;
+        });
+        setSources((previous) => {
+          const next = new Map(previous);
+          next.delete(documentId);
+          return next;
+        });
+        setOfferings((previous) => reconcileLinkOfferings(previous, record, documentId, editedIdsRef.current).map(toWorkingOffering));
+        // 31: the site fields it stated win; a field it omitted is absent from
+        // the draft, so the value on screen survives.
+        setProfileValues((previous) => {
+          const next = { ...previous };
+          for (const { key } of PROFILE_ROWS) {
+            if (key in draft) next[key] = String(draft[key] ?? "");
+          }
+          return next;
+        });
+        setLinkEditor(null);
+        // 31: a same-URL re-read keeps this row, so its opener is still the
+        // control the owner came from and focus goes back to it. A replacement
+        // swapped the row out; that node is gone, and focus is left alone.
+        if (record.id === documentId) revealNode(linkOpenerRef.current);
+        return;
+      }
+      if (!onAddLink) return;
+      const records = await onAddLink(trimmed);
+      if (records.length > 0) {
+        adoptRecords(records);
+        setLinkEditor(null);
+      }
+    } finally {
+      linkSaveRef.current = false;
+      setLinkPending(false);
+    }
+  }
+  const linkEditorForm = (
+    <div className="mt-3 flex items-center gap-2">
+      <input
+        ref={linkInputRef}
+        data-testid="review-link-input"
+        aria-label="Link address"
+        placeholder="https://"
+        value={linkValue}
+        disabled={linkPending}
+        onChange={(event) => setLinkValue(event.target.value)}
+        className={`min-w-0 flex-1 ${FIELD}`}
+      />
+      <button type="button" aria-label="Save link" disabled={busy || linkPending || !linkValue.trim()} onClick={() => void saveLink()} className={`${TEXT_PRESS} shrink-0 text-action font-medium text-accent-active disabled:opacity-40`}>Save</button>
+      <button type="button" aria-label="Cancel link" disabled={linkPending} onClick={cancelLink} className={`${TEXT_PRESS} shrink-0 text-action text-ink-a40 disabled:opacity-40`}>Cancel</button>
+    </div>
+  );
   async function handleReplaceFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -370,6 +633,13 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
       : `Here's what I found in ${sourceLabel(firstDocument)}. Review it before you use it.`
     : `From ${labels}. Your assistant answers from the reviewed facts below.`;
 
+  function gotoPage(next: number) {
+    const clamped = Math.min(Math.max(next, 0), pages - 1);
+    setPage(clamped);
+    const first = offeringPage(offerings, clamped)[0];
+    if (first) setRevealRequest({ id: first.candidate_id });
+  }
+
   const profileRows = PROFILE_ROWS.map((row) => ({
     ...row,
     value: (profileValues[row.key] ?? "").trim(),
@@ -379,23 +649,23 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   // check. Business details are context the owner can correct inline, and the
   // source line follows. DOM order matches visual order; no CSS `order`.
   const offeringsSection = (
-    <section className="mt-5">
+    <section className="mt-4">
       <h3 className="text-row-label font-medium text-text">What you offer</h3>
       <p className="mt-1 text-meta text-ink-a40">{offerings.length} retained {offerings.length === 1 ? "offering" : "offerings"}{unresolvedMatches ? `, ${unresolvedMatches} possible ${unresolvedMatches === 1 ? "duplicate" : "duplicates"} to check` : ""}.</p>
       {pricesMissing ? <p role="status" data-testid="review-missing-prices" className="mt-3 rounded-field bg-warning-subtle p-3 text-meta text-text">{'No prices found here. Add a price, or write it your way, like "from $30".'}</p> : null}
       {offerings.length === 0 ? <p className="mt-3 rounded-field bg-surface-container p-3 text-prose text-text">No offerings yet.</p> : null}
-      <div className="mt-3 flex flex-col gap-3">{visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={workspace.documents} position={(expanded ? currentPage * PAGE_SIZE : 0) + index + 1} all={offerings} editing={rowsEditable} inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={keepBoth} onCombine={(left, right) => setCombine({ left, right, price: null })} />)}</div>
-      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={setPage} /> : null}
+      <div className="mt-3 flex flex-col gap-2">{visible.map((offering, index) => <OfferingCard key={offering.candidate_id} offering={offering} documents={workspace.documents} position={(expanded ? currentPage * PAGE_SIZE : 0) + index + 1} all={offerings} editing={rowsEditable} inputRef={(node) => { if (node) cardRefs.current.set(offering.candidate_id, node); }} onChange={updateOffering} onRemove={removeOffering} onKeepBoth={keepBoth} onCombine={(left, right) => setCombine({ left, right, price: null })} />)}</div>
+      {expanded && offerings.length > PAGE_SIZE ? <Pagination page={currentPage} pages={pages} count={offerings.length} onPage={gotoPage} /> : null}
       <div className="mt-3 flex items-center justify-between">
-        {showReviewAll ? <button type="button" onClick={() => { setExpanded(true); setPage(0); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length} offerings</button> : <span />}
-        <button type="button" onClick={addOffering} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Add offering</button>
+        {showReviewAll ? <button type="button" onClick={() => { setExpanded(true); setPage(0); setRevealRequest({ id: offerings[0].candidate_id }); }} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Review all {offerings.length} offerings</button> : <span />}
+        <button ref={addOfferingRef} type="button" onClick={addOffering} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Add offering</button>
       </div>
       {duplicateIds.length ? <p role="alert" className="mt-2 text-meta text-danger">Two retained offerings have the same name. Go to the highlighted offering to correct it.</p> : null}
     </section>
   );
 
   const businessDetailsSection = profile && (profileRows.length > 0 || missingRequired?.length) ? (
-    <section className="mt-8">
+    <section className="mt-6">
       <h3 className="text-row-label font-medium text-text">Business details</h3>
       {profileRows.length > 0 ? <div className="mt-2">{profileRows.map((row) => <ProfileRow key={row.key} field={row.key} label={row.label} value={row.value} editing={editingProfileField === row.key} onEdit={() => setEditingProfileField(row.key)} onDone={() => setEditingProfileField(null)} onChange={(value) => setProfileValues((previous) => ({ ...previous, [row.key]: value }))} />)}</div> : null}
       {missingRequired?.length ? <p className="mt-4 text-meta text-ink-a40" data-testid="review-missing-required">{"I'll ask next: "}{missingRequired.join(", ")}.</p> : null}
@@ -403,27 +673,41 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   ) : null;
 
   const sourcesSection = (
-    <section className="mt-8">
+    <section className="mt-6">
       <h3 className="text-row-label font-medium text-text">Sources</h3>
       <div className="mt-2 flex flex-col gap-2">
         {workspace.documents.map((doc) => {
           const label = sourceLabel(doc);
           const failed = doc.status === "failed";
           const replacing = replacingSource === doc.id;
-          const canAct = (doc.status === "draft" || failed) && onReplaceSource !== undefined && onRemoveSource !== undefined;
-          return <div key={doc.id} className="flex items-center justify-between gap-3 rounded-card border border-hairline px-3 py-3">
-            <div className="min-w-0">
-              <p className="truncate text-prose text-text">{label}</p>
-              {failed ? <p className="mt-1 text-meta text-danger">{workspace.errors?.[doc.id] ?? "Failed"}</p> : workspace.errors?.[doc.id] ? <p className="mt-1 text-meta text-danger">{workspace.errors[doc.id]}</p> : null}
+          const actionable = doc.status === "draft" || failed;
+          const canRemove = actionable && onRemoveSource !== undefined;
+          // 31: a URL row edits its address in place; a file row keeps the
+          // picker. Neither action is offered by the Business surface.
+          const canEditLink = actionable && doc.doc_type === "website" && onReplaceLink !== undefined;
+          const canReplaceFile = actionable && doc.doc_type !== "website" && onReplaceSource !== undefined;
+          const editingThis = linkEditor?.documentId === doc.id;
+          return <div key={doc.id} className="rounded-card border border-hairline px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-prose text-text">{label}</p>
+                {failed ? <p className="mt-1 text-meta text-danger">{workspace.errors?.[doc.id] ?? "Failed"}</p> : workspace.errors?.[doc.id] ? <p className="mt-1 text-meta text-danger">{workspace.errors[doc.id]}</p> : null}
+              </div>
+              {canRemove || canEditLink || canReplaceFile ? <div className="flex shrink-0 items-center gap-2">
+                {canEditLink ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={(event) => openLinkEditor(doc.id, event.currentTarget)} aria-label={`Edit link for ${label}`} data-testid="review-edit-link" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>Edit link</button> : null}
+                {canReplaceFile ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={() => { setReplaceTarget(doc.id); replaceFileRef.current?.click(); }} aria-label={`Replace ${label}`} data-testid="review-replace-source" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{replacing ? "Replacing\u2026" : "Replace"}</button> : null}
+                {canRemove ? <button type="button" disabled={busy || addingSources || replacingSource !== null || linkPending} onClick={() => void handleRemoveSource(doc.id)} aria-label={`Remove ${label}`} data-testid="review-remove-source" className={`${TEXT_PRESS} text-action text-ink-a40 disabled:opacity-40`}>Remove</button> : null}
+              </div> : null}
             </div>
-            {canAct ? <div className="flex shrink-0 items-center gap-2">
-              <button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => { setReplaceTarget(doc.id); replaceFileRef.current?.click(); }} aria-label={`Replace ${label}`} data-testid="review-replace-source" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{replacing ? "Replacing\u2026" : "Replace"}</button>
-              <button type="button" disabled={busy || addingSources || replacingSource !== null} onClick={() => void handleRemoveSource(doc.id)} aria-label={`Remove ${label}`} data-testid="review-remove-source" className={`${TEXT_PRESS} text-action text-ink-a40 disabled:opacity-40`}>Remove</button>
-            </div> : null}
+            {editingThis ? linkEditorForm : null}
           </div>;
         })}
       </div>
-      {onAddSource ? <button type="button" disabled={busy || replacingSource !== null} onClick={() => addFileRef.current?.click()} data-testid="review-add-source" className={`mt-3 ${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{addingSources ? "Adding\u2026" : "Add another source"}</button> : null}
+      <div className="mt-3 flex items-center gap-4">
+        {onAddLink ? <button type="button" disabled={busy || replacingSource !== null || linkPending} onClick={(event) => openLinkEditor(null, event.currentTarget)} data-testid="review-add-link" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>Add a link</button> : null}
+        {onAddSource ? <button type="button" disabled={busy || replacingSource !== null || addingSources || linkPending} onClick={() => addFileRef.current?.click()} data-testid="review-add-file" className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-40`}>{addingSources ? "Adding\u2026" : "Add a file"}</button> : null}
+      </div>
+      {linkEditor?.documentId === null ? linkEditorForm : null}
       <input ref={addFileRef} type="file" multiple accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-add-input" onChange={(event) => void handleAddFiles(event)} />
       <input ref={replaceFileRef} type="file" accept={ACCEPTED_UPLOAD_EXTENSIONS.join(",")} className="hidden" data-testid="review-replace-input" onChange={(event) => void handleReplaceFile(event)} />
     </section>
@@ -434,7 +718,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
   // content is not rendered until opened - the Source text stays out of the
   // default view.
   const documentDetailsSection = (
-    <details className="mt-8 rounded-card border border-hairline p-3" open={detailsOpen} onToggle={(event) => setDetailsOpen(event.currentTarget.open)}>
+    <details className="mt-6 rounded-card border border-hairline p-3" open={detailsOpen} onToggle={(event) => setDetailsOpen(event.currentTarget.open)}>
       <summary data-testid="review-more-about-source" className={`cursor-pointer ${TEXT_PRESS} text-action font-medium text-accent-active`}>More about what I read</summary>
       {detailsOpen ? <div>{workspace.documents.map((doc) => { const sections = sectionsFor(doc.id, doc); const label = sourceLabel(doc); return <div key={doc.id} className="mt-4">{workspace.documents.length > 1 ? <p className="text-meta text-ink-a40">From {label}</p> : null}{doc.extraction_status === "partial" || doc.extraction_status === "failed" ? <p role="status" className="mt-3 rounded-field bg-warning-subtle p-2 text-meta text-text">{doc.extraction_status === "failed" ? "I could not read the offerings from this source." : "I could not read all of this source."} Add anything missing, or check the original source.</p> : null}<KnowledgeDocument sections={sections} editingSection={editingSection?.docId === doc.id ? editingSection.index : null} onEdit={(index) => setEditingSection((current) => index === null || (current?.docId === doc.id && current.index === index) ? null : { docId: doc.id, index })} onChange={(index, update) => updateSections(doc.id, (previous) => previous.map((section, position) => position === index ? { ...section, ...update } : section))} onRemove={(index) => updateSections(doc.id, (previous) => previous.filter((_, position) => position !== index))} onAddOther={() => { updateSections(doc.id, (previous) => [...previous, { heading: "New information", body: "", kind: "other" }]); setEditingSection({ docId: doc.id, index: sections.length }); }} /><details className="mt-4 rounded-card border border-hairline p-3" onToggle={(event) => { if (event.currentTarget.open) void loadSource(doc.id); }}><summary className={`cursor-pointer ${TEXT_PRESS} text-action font-medium text-accent-active`}>View original source</summary>{sourceLoading === doc.id ? <p className="mt-3 text-meta text-ink-a40">Loading source…</p> : null}{sources.get(doc.id) ? <><p className="mt-3 text-meta text-ink-a40">{sources.get(doc.id)!.is_fallback ? "This legacy source only retains its saved reviewed text." : "Original extracted source. It does not answer customers."}</p><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-prose text-text">{sources.get(doc.id)!.text}</pre></> : null}</details></div>; })}</div> : null}
     </details>
@@ -447,7 +731,7 @@ function ReviewDocument({ workspace, busy, priceConflict, onboarding, profile, m
     </div>
     {combine ? <CombinePreview combine={combine} offerings={offerings} onPrice={(price) => setCombine({ ...combine, price })} onCancel={() => setCombine(null)} onConfirm={applyCombine} /> : null}
     {priceConflict ? <p role="alert" className="mt-3 rounded-card bg-warning-subtle p-3 text-meta text-text">{priceConflict}</p> : null}
-    <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3"><Button className="flex-1" loading={busy} onClick={save} data-testid={onboarding ? "onboarding-knowledge-save" : "knowledge-save"}>{onboarding ? "Use this information" : priceConflict ? "Confirm price changes" : firstDocument?.status === "draft" ? "Save it" : "Save changes"}</Button><button type="button" onClick={onDiscard} disabled={busy} className={`px-3 ${TEXT_PRESS} text-action font-medium text-ink-a40`} data-testid={onboarding ? "onboarding-knowledge-discard" : "knowledge-discard"}>{onboarding ? "Discard" : firstDocument?.status === "draft" ? "Discard draft" : "Remove source"}</button></footer>
+    <footer className="mt-3 flex shrink-0 gap-2 border-t border-hairline pt-3"><Button className="flex-1" loading={busy} onClick={save} data-testid={onboarding ? "onboarding-knowledge-save" : "knowledge-save"}>{onboarding ? "Use this information" : priceConflict ? "Confirm price changes" : firstDocument?.status === "draft" ? "Save it" : "Save changes"}</Button><button type="button" onClick={() => void handleDiscard()} disabled={busy} className={`px-3 ${TEXT_PRESS} text-action font-medium text-ink-a40`} data-testid={onboarding ? "onboarding-knowledge-discard" : "knowledge-discard"}>{onboarding ? (workspace.documents.length > 1 ? "Discard sources" : "Discard source") : firstDocument?.status === "draft" ? "Discard draft" : "Remove source"}</button></footer>
   </div>;
 }
 
@@ -455,7 +739,7 @@ function ProfileRow({ field, label, value, editing, onEdit, onDone, onChange }: 
   return <div data-testid={`review-profile-${field}`} className="flex items-center justify-between gap-3 border-b border-hairline py-2 last:border-b-0">
     <span className="shrink-0 text-meta text-ink-a40">{label}</span>
     {editing ? <div className="flex min-w-0 flex-1 items-center gap-2">
-      <input value={value} aria-label={label} autoFocus onChange={(event) => onChange(event.target.value)} className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" />
+      <input value={value} aria-label={label} autoFocus onChange={(event) => onChange(event.target.value)} className={`min-w-0 flex-1 ${FIELD}`} />
       <button type="button" onClick={onDone} className={`${TEXT_PRESS} shrink-0 text-action font-medium text-accent-active`}>Done</button>
     </div> : <div className="flex min-w-0 items-center gap-3">
       <span className="min-w-0 truncate text-body-sm text-text">{value}</span>
@@ -468,7 +752,7 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
   const matches = all.filter((item) => offering.possibleMatches.includes(item.candidate_id));
   const priceValue = offering.priceText || offering.priceWording;
   return <article className={`rounded-card border p-3 ${matches.length ? "border-text bg-surface" : "border-border bg-surface"}`}><div className="flex items-start justify-between gap-2"><span className="text-meta text-ink-a40">{offeringLabel(offering, documents)}{offering.source_references?.length ? ` · ${offering.source_references.length} source ${offering.source_references.length === 1 ? "reference" : "references"}` : ""}</span>{editing ? <button type="button" onClick={() => onRemove(offering.candidate_id)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Remove</button> : null}</div>
-    {editing ? <><div className="mt-2 flex gap-2"><input ref={inputRef} value={offering.name} aria-label={`Offering ${position} name`} placeholder="Offering" onChange={(event) => onChange(offering.candidate_id, { name: event.target.value })} className="min-w-0 flex-1 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /><input value={priceValue} aria-label={`Offering ${position} price`} placeholder="Price" onChange={(event) => onChange(offering.candidate_id, { ...priceInputUpdate(event.target.value), priceOptions: [] })} className="w-28 rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></div><ReviewCategoryControl offering={offering} onChange={onChange} /><textarea value={offering.description} aria-label={`Offering ${position} description`} placeholder="Description (optional)" rows={2} onChange={(event) => onChange(offering.candidate_id, { description: event.target.value })} className="mt-2 w-full resize-y rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /></> : <><div className="mt-2 flex justify-between gap-3"><h4 className="text-row-label font-medium text-text">{offering.name}</h4><span className="shrink-0 text-row-label text-text">{priceValue || "Price not set"}</span></div>{offering.description ? <p className="mt-1 whitespace-pre-line text-prose text-text">{offering.description}</p> : null}</>}
+    {editing ? <><div className="mt-2 flex gap-2"><input ref={inputRef} value={offering.name} aria-label={`Offering ${position} name`} placeholder="Offering" onChange={(event) => onChange(offering.candidate_id, { name: event.target.value })} className={`min-w-0 flex-1 ${FIELD}`} /><input value={priceValue} aria-label={`Offering ${position} price`} placeholder="Price" onChange={(event) => onChange(offering.candidate_id, { ...priceInputUpdate(event.target.value), priceOptions: [] })} className={`w-24 ${FIELD}`} /></div><textarea value={offering.description} aria-label={`Offering ${position} description`} placeholder="Description (optional)" rows={2} onChange={(event) => onChange(offering.candidate_id, { description: event.target.value })} className={`mt-2 w-full resize-y ${FIELD}`} /><ReviewCategoryControl offering={offering} onChange={onChange} /></> : <><div className="mt-2 flex justify-between gap-3"><h4 className="text-row-label font-medium text-text">{offering.name}</h4><span className="shrink-0 text-row-label text-text">{priceValue || "Price not set"}</span></div>{offering.description ? <p className="mt-1 whitespace-pre-line text-prose text-text">{offering.description}</p> : null}</>}
     {offering.priceNote ? <p className="mt-2 rounded-field bg-warning-subtle p-2 text-meta text-text">Check this price: {offering.priceNote}</p> : null}
     {offering.priceOptions.length > 1 ? <div role="alert" className="mt-2 text-meta text-text">Choose a price: {offering.priceOptions.map((price) => <button key={price} type="button" onClick={() => onChange(offering.candidate_id, { price_cents: price, priceText: formatPrice(price), priceWording: "", priceOptions: [], wording_options: [] })} className={`${TEXT_PRESS} ml-2 text-action text-accent-active`}>Use {formatPrice(price)}</button>)}</div> : null}
     {matches.map((match) => <div key={match.candidate_id} className="mt-3 text-meta text-text"><p>This may be the same offering as <strong>{match.name}</strong>. Both remain separate until you decide.</p><div className="mt-2 flex gap-3"><button type="button" onClick={() => onCombine(offering.candidate_id, match.candidate_id)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>Combine</button><button type="button" onClick={() => onKeepBoth(offering.candidate_id, match.candidate_id)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Keep both</button></div></div>)}</article>;
@@ -476,35 +760,93 @@ function OfferingCard({ offering, documents, position, all, editing, inputRef, o
 
 function ReviewCategoryControl({ offering, onChange }: { offering: WorkingOffering; onChange: (id: string, update: Partial<WorkingOffering>) => void }) {
   const { categories, createCategory } = useContext(CategoryContext);
+  // 31: one trigger and one picker per card. Opening replaces the trigger, so
+  // the panel owns its one exit: Done beside the search field. Chips apply as
+  // they are picked, so the panel only collapses - it commits and reverts
+  // nothing. The sheet's footer is what saves. Done takes the field's own
+  // height and radius (`py-3` plus the border is the field's 50px; the `!`
+  // radius beats the Button's own `rounded-md`), so the two read as one row.
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const selectedIds = offering.category_ids ?? [];
+  const proposed = offering.proposed_category?.trim() ?? "";
+  // The suggestion is a shortcut to add; once it is in the selection it would
+  // just repeat a chip, so it leaves the panel.
+  const suggestionTaken =
+    proposed !== "" &&
+    selectedIds.some(
+      (id) =>
+        categories.find((category) => category.id === id)?.name.trim().toLocaleLowerCase() ===
+        proposed.toLocaleLowerCase(),
+    );
+  useEffect(() => {
+    if (!open) return;
+    // Scroll what has focus: `focusSearch` puts focus in the field the owner
+    // came for, and on a tall panel scrolling the panel's top would leave that
+    // field below the fold.
+    revealNode(
+      document.activeElement instanceof HTMLElement ? document.activeElement : pickerRef.current,
+      false,
+    );
+  }, [open]);
+  function closePanel() {
+    setOpen(false);
+    // The trigger is unmounted while the panel is open, so it is only back in
+    // the DOM after the next frame - focus it then.
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }
   async function acceptSuggestion() {
     const suggestion = offering.proposed_category?.trim();
     if (!suggestion) return;
     const match = categories.find((category) => category.name.trim().toLocaleLowerCase() === suggestion.toLocaleLowerCase());
     const category = match ?? await createCategory(suggestion);
-    const ids = [...new Set([...(offering.category_ids ?? []), category.id])];
+    const ids = [...new Set([...selectedIds, category.id])];
     onChange(offering.candidate_id, { category_ids: ids, primary_category_id: offering.primary_category_id ?? category.id });
   }
   return <div className="mt-3">
-    {offering.proposed_category ? <p className="mb-2 text-meta text-ink-a40">Suggested category: {offering.proposed_category} <button type="button" onClick={() => void acceptSuggestion()} className={`${TEXT_PRESS} ml-1 font-medium text-accent-active`}>Use suggestion</button></p> : null}
-    <CategoryPicker
-      categories={categories}
-      selectedIds={offering.category_ids ?? []}
-      primaryId={offering.primary_category_id ?? null}
-      onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
-      onCreate={createCategory}
-    />
+    {open ? <div
+      ref={pickerRef}
+      role="group"
+      aria-label={`Categories for ${offering.name}`}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        // Escape backs out one level: the picker closes, the review stays open.
+        event.stopPropagation();
+        closePanel();
+      }}
+      className="rounded-lg bg-surface-sunken p-3"
+    >
+      {proposed && !suggestionTaken ? <div className="flex min-h-11 items-center gap-2">
+        <span className="shrink-0 text-meta text-text-secondary">Suggested</span>
+        <button type="button" onClick={() => void acceptSuggestion()} aria-label={`Use suggested category ${proposed}`} className="flex min-h-11 min-w-0 items-center gap-1 rounded-full border border-border bg-surface px-3 text-body-sm font-medium text-accent-active transition-colors duration-(--duration-fast) hover:bg-surface-container active:opacity-60">
+          <Icon name="add" size={14} className="shrink-0" />
+          <span className="truncate">{proposed}</span>
+        </button>
+      </div> : null}
+      <CategoryPicker
+        compact
+        focusSearch
+        action={<Button type="button" variant="secondary" onClick={closePanel} data-testid="review-category-done" className="min-h-12 rounded-field! py-3">Done</Button>}
+        categories={categories}
+        selectedIds={selectedIds}
+        primaryId={offering.primary_category_id ?? null}
+        onChange={(category_ids, primary_category_id) => onChange(offering.candidate_id, { category_ids, primary_category_id })}
+        onCreate={createCategory}
+      />
+    </div> : <button ref={triggerRef} type="button" data-testid="review-category-trigger" onClick={() => setOpen(true)} className={`${TEXT_PRESS} text-action font-medium text-accent-active`}>{selectedIds.length ? `Categories (${selectedIds.length})` : "Add category"}</button>}
   </div>;
 }
 
 export function KnowledgeDocument({ sections, editingSection = null, onEdit, onChange, onRemove, onAddOther }: { sections: KnowledgeSection[]; editingSection?: number | null; onEdit?: (index: number | null) => void; onChange?: (index: number, update: Partial<KnowledgeSection>) => void; onRemove?: (index: number) => void; onAddOther?: () => void }) {
-  return <div className="mt-3 flex flex-col gap-4">{sections.map((section, index) => <section key={`${section.kind}-${section.heading}-${index}`} className="rounded-card border border-hairline p-3"><div className="flex items-center justify-between gap-3">{editingSection === index ? <input value={section.heading} aria-label="Section heading" onChange={(event) => onChange?.(index, { heading: event.target.value })} className="min-w-0 rounded-field border border-border bg-surface px-2 py-1 text-row-label font-medium text-text" /> : <h4 className="text-label font-medium uppercase text-ink-a40">{section.heading}</h4>}{onEdit ? <div className="flex gap-3"><button type="button" onClick={() => onEdit(editingSection === index ? null : index)} className={`${TEXT_PRESS} text-action text-accent-active`}>{editingSection === index ? "Done" : "Edit"}</button>{section.kind === "other" ? <button type="button" onClick={() => onRemove?.(index)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Remove</button> : null}</div> : null}</div>{editingSection === index ? <textarea value={section.body} rows={4} aria-label={`${section.heading} details`} onChange={(event) => onChange?.(index, { body: event.target.value })} className="mt-2 w-full resize-y rounded-field border border-border bg-surface px-3 py-2 text-field text-text outline-none focus:border-text" /> : <FormattedBody body={section.body} />}</section>)}{onAddOther ? <button type="button" onClick={onAddOther} className={`text-left ${TEXT_PRESS} text-action font-medium text-accent-active`}>Add other information</button> : null}</div>;
+  return <div className="mt-3 flex flex-col gap-4">{sections.map((section, index) => <section key={`${section.kind}-${section.heading}-${index}`} className="rounded-card border border-hairline p-3"><div className="flex items-center justify-between gap-3">{editingSection === index ? <input value={section.heading} aria-label="Section heading" onChange={(event) => onChange?.(index, { heading: event.target.value })} className="min-w-0 rounded-field border border-border bg-surface px-4 py-3 text-row-label font-medium text-text min-h-11" /> : <h4 className="text-label font-medium uppercase text-ink-a40">{section.heading}</h4>}{onEdit ? <div className="flex gap-3"><button type="button" onClick={() => onEdit(editingSection === index ? null : index)} className={`${TEXT_PRESS} text-action text-accent-active`}>{editingSection === index ? "Done" : "Edit"}</button>{section.kind === "other" ? <button type="button" onClick={() => onRemove?.(index)} className={`${TEXT_PRESS} text-action text-ink-a40`}>Remove</button> : null}</div> : null}</div>{editingSection === index ? <textarea value={section.body} rows={4} aria-label={`${section.heading} details`} onChange={(event) => onChange?.(index, { body: event.target.value })} className={`mt-2 w-full resize-y ${FIELD}`} /> : <FormattedBody body={section.body} />}</section>)}{onAddOther ? <button type="button" onClick={onAddOther} className={`text-left ${TEXT_PRESS} text-action font-medium text-accent-active`}>Add other information</button> : null}</div>;
 }
 
 function FormattedBody({ body }: { body: string }) { return <div className="mt-2 whitespace-pre-line break-words text-prose text-text">{body.split("\n").map((line, index) => line.startsWith("- ") || line.startsWith("• ") ? <div key={index} className="pl-4 before:mr-2 before:content-['•']">{line.slice(2)}</div> : <p key={index} className={line ? "" : "h-3"}>{line}</p>)}</div>; }
 function CombinePreview({ combine, offerings, onPrice, onCancel, onConfirm }: { combine: { left: string; right: string; price: number | null }; offerings: WorkingOffering[]; onPrice: (price: number) => void; onCancel: () => void; onConfirm: () => void }) { const pair = offerings.filter((item) => item.candidate_id === combine.left || item.candidate_id === combine.right); const retained = pair.find((item) => item.sources.includes("owner")) ?? pair[0]; const prices = [...new Set(pair.map((item) => item.price_cents).filter((price): price is number => price != null))]; if (!retained) return null; return <section className="mt-3 rounded-card border border-text bg-surface p-3"><h3 className="text-row-label font-medium text-text">Combine offerings</h3><p className="mt-1 text-meta text-text">This keeps {retained.name}, {retained.description || "the available description"}, and {prices.length > 1 ? "the price you choose" : retained.priceText || retained.priceWording || "no price"}. Source evidence is combined.</p>{prices.length > 1 ? <div className="mt-2"><p className="text-meta text-text">Choose the retained price.</p>{prices.map((price) => <button key={price} type="button" onClick={() => onPrice(price)} className={`mr-2 mt-2 rounded-full border px-3 py-1 text-action transition-colors duration-(--duration-fast) hover:bg-surface-container ${combine.price === price ? "border-text bg-surface text-text" : "border-border text-text"}`}>{formatPrice(price)}</button>)}</div> : null}<div className="mt-3 flex gap-3"><button type="button" onClick={onConfirm} disabled={prices.length > 1 && combine.price == null} className={`${TEXT_PRESS} text-action font-medium text-accent-active disabled:opacity-50`}>Confirm combine</button><button type="button" onClick={onCancel} className={`${TEXT_PRESS} text-action text-ink-a40`}>Cancel</button></div></section>; }
-export function Pagination({ page, pages, count, onPage }: { page: number; pages: number; count: number; onPage: (page: number) => void }) { return <div className="mt-4 flex flex-col gap-2 text-meta text-text"><div className="flex items-center justify-between"><button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Previous</button><span>Page {page + 1} of {pages}</span><button type="button" disabled={page === pages - 1} onClick={() => onPage(page + 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Next</button></div><p className="text-center">Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, count)} of {count} offerings</p></div>; }
-export function offeringPageCount(count: number) { return Math.max(1, Math.ceil(count / PAGE_SIZE)); }
-export function offeringPage<T>(offerings: T[], page: number) { return offerings.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE); }
+export function Pagination({ page, pages, count, onPage, pageSize = PAGE_SIZE, noun = "offerings" }: { page: number; pages: number; count: number; onPage: (page: number) => void; pageSize?: number; noun?: string }) { return <div className="mt-4 flex flex-col gap-2 text-meta text-text"><div className="flex items-center justify-between"><button type="button" disabled={page === 0} onClick={() => onPage(page - 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Previous</button><span>Page {page + 1} of {pages}</span><button type="button" disabled={page === pages - 1} onClick={() => onPage(page + 1)} className={`${TEXT_PRESS} text-action text-accent-active disabled:opacity-40`}>Next</button></div><p className="text-center">Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, count)} of {count} {noun}</p></div>; }
+export function offeringPageCount(count: number, pageSize = PAGE_SIZE) { return Math.max(1, Math.ceil(count / pageSize)); }
+export function offeringPage<T>(offerings: T[], page: number, pageSize = PAGE_SIZE) { return offerings.slice(page * pageSize, page * pageSize + pageSize); }
 export function pageForOffering(index: number) { return Math.max(0, Math.floor(index / PAGE_SIZE)); }
 /** W-11c: where a fresh owner row lands - right after the last owner-source
  *  row, or at the top of the list when there is none - and the page that

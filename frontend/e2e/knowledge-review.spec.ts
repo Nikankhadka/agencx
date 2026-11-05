@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { DEMO_USERS, loginAsTenantAdmin } from "./auth-helpers";
 import {
   MIDDLE_DOT,
@@ -9,6 +9,7 @@ import {
   stubBatch,
   stubOnboardingState,
   stubRecords,
+  stubSourceUrl,
   stubUpload,
   uploadFilePayloads,
 } from "./knowledge-review-mocks";
@@ -31,6 +32,34 @@ const SEVEN_NAMES = [...FIVE_NAMES, "extra6.txt", "extra7.txt"];
 
 function dialog(page: Page) {
   return page.getByRole("dialog", { name: "Review your information" });
+}
+
+/** 31: a revealed field must actually be on screen, not just focused. The
+ *  window alone is not enough - the sheet's own panel clips its content with
+ *  `overflow-y-auto`, so a field scrolled out of that panel still passes a
+ *  window-only check. Measure the nearest scrollable ancestor too. */
+async function expectInViewport(locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = locator.page().viewportSize()!;
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+
+  const panel = await locator.evaluate((node) => {
+    let parent = node.parentElement;
+    while (parent) {
+      const style = getComputedStyle(parent);
+      if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) {
+        const rect = parent.getBoundingClientRect();
+        return { found: true, top: rect.top, bottom: rect.bottom };
+      }
+      parent = parent.parentElement;
+    }
+    return { found: false, top: 0, bottom: window.innerHeight };
+  });
+  expect(panel.found).toBe(true);
+  expect(box!.y).toBeGreaterThanOrEqual(panel.top);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(panel.bottom);
 }
 
 test("uploads five files three at a time and opens one combined review", async ({
@@ -369,6 +398,206 @@ test("batch publish keeps one failing document reviewable until it saves", async
   await expect(page.getByTestId("onboarding-ready-card")).toHaveCount(0);
 });
 
+test("the category panel replaces its trigger and has one honest exit", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([
+    draftRecord({
+      id: "draft-1",
+      filename: "menu.txt",
+      offering_candidates: [offeringCandidate("Menu item A", "draft-1", { price_cents: 1000 })],
+    }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  // 31: one trigger, no picker in the DOM.
+  const trigger = sheet.getByTestId("review-category-trigger");
+  await expect(trigger).toHaveText("Add category");
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+
+  await trigger.click();
+  // The panel replaces the trigger: one exit, not two.
+  await expect(trigger).toHaveCount(0);
+  const panel = sheet.getByRole("group", { name: "Categories for Menu item A" });
+  await expect(panel).toBeVisible();
+  const search = panel.getByLabel("Search categories");
+  await expect(search).toBeFocused();
+  await expectInViewport(search);
+
+  // Flat inside the sheet: the sunken step groups the panel, and a page-level
+  // card shadow stays out of the sheet.
+  const panelShadow = await panel.evaluate((node) => getComputedStyle(node).boxShadow);
+  expect(panelShadow).toBe("none");
+
+  const done = panel.getByTestId("review-category-done");
+  await expect(done).toHaveText("Done");
+  await expect(done).toBeVisible();
+  // Done sits beside the field, flush with it: one row, one height, one radius.
+  const searchBox = (await search.boundingBox())!;
+  const doneBox = (await done.boundingBox())!;
+  expect(
+    Math.abs(searchBox.y + searchBox.height / 2 - (doneBox.y + doneBox.height / 2)),
+  ).toBeLessThan(2);
+  expect(doneBox.x).toBeGreaterThan(searchBox.x + searchBox.width - 1);
+  expect(Math.abs(doneBox.height - searchBox.height)).toBeLessThanOrEqual(1);
+  const radii = await Promise.all([
+    search.evaluate((node) => getComputedStyle(node).borderRadius),
+    done.evaluate((node) => getComputedStyle(node).borderRadius),
+  ]);
+  expect(radii[0]).toBe(radii[1]);
+
+  // Done is the one exit: it collapses the panel and restores focus.
+  await done.click();
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  // Escape backs out one level: the picker closes, the review stays open.
+  await trigger.click();
+  await expect(sheet.getByLabel("Search categories")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(sheet.getByLabel("Search categories")).toHaveCount(0);
+  await expect(sheet).toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  // Reopened and closed with Done, then Escape closes the sheet as before.
+  await trigger.click();
+  await panel.getByTestId("review-category-done").click();
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+});
+
+test("removing an offering asks first, above the sheet, and cancel keeps it", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([
+    draftRecord({
+      id: "draft-1",
+      filename: "menu.txt",
+      offering_candidates: [offeringCandidate("Menu item A", "draft-1", { price_cents: 1000 })],
+    }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Menu item A");
+
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Remove Menu item A?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText("It will not be saved to your catalog.");
+  // 31: the dialog is the page-level one, painted above the sheet's panel.
+  const overlayZ = await confirm.evaluate(
+    (node) => getComputedStyle(node.parentElement!).zIndex,
+  );
+  expect(overlayZ).toBe("60");
+
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Menu item A");
+
+  // The last row of all: confirming removes it and focus lands on the action
+  // that can add one back.
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveCount(0);
+  await expect(sheet.getByText("No offerings yet.")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Add offering" })).toBeFocused();
+});
+
+test("removing a middle offering focuses the next row", async ({ page, request }) => {
+  const candidates = Array.from({ length: 3 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Remove", exact: true }).nth(1).click();
+  await page.getByTestId("confirm-accept").click();
+
+  // 31: the survivor moves up into the removed row and takes focus.
+  await expect(sheet.getByLabel("Offering 2 name")).toHaveValue("Item 3");
+  await expect(sheet.getByLabel("Offering 2 name")).toBeFocused();
+});
+
+test("removing the only row on the last page focuses the row above", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 6 }, (_, i) =>
+    offeringCandidate(`Item ${i + 1}`, "draft-1", { price_cents: 1000 }),
+  );
+  const store = recordsStore([
+    draftRecord({ id: "draft-1", filename: "catalog.txt", offering_candidates: candidates }),
+  ]);
+  await stubOnboardingState(page);
+  await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Review all 6 offerings" }).click();
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
+
+  await sheet.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect(sheet.getByLabel("Offering 5 name")).toHaveValue("Item 5");
+  await expect(sheet.getByLabel("Offering 5 name")).toBeFocused();
+});
+
+test("discarding from the footer asks, and cancel leaves the review open", async ({
+  page,
+  request,
+}) => {
+  const store = recordsStore([draftRecord({ id: "draft-1", filename: "menu.txt" })]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+
+  await sheet.getByTestId("onboarding-knowledge-discard").click();
+  const confirm = page.getByRole("dialog", { name: "Discard this source?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText(
+    "It is deleted, and its details and offerings are not saved.",
+  );
+  await expect(confirm.getByTestId("confirm-accept")).toHaveText("Discard source");
+
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(sheet).toBeVisible();
+  expect(records.deleteCount()).toBe(0);
+
+  await sheet.getByTestId("onboarding-knowledge-discard").click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(sheet).toBeHidden();
+  expect(records.deletedIds()).toEqual(["draft-1"]);
+});
+
 test("priced services lead and the source detail stays closed", async ({ page, request }) => {
   const candidates = Array.from({ length: 6 }, (_, i) =>
     offeringCandidate(`Item ${i + 1}`, "draft-1", {
@@ -405,6 +634,40 @@ test("priced services lead and the source detail stays closed", async ({ page, r
   await expect(sheet.getByTestId("review-missing-required")).toHaveText(
     "I'll ask next: contact details.",
   );
+
+  // 31: every review field uses the console recipe - 16px text, at least the
+  // 44px floor, and the field radius - and the card stack keeps the 8px step.
+  const fieldFacts = async (label: string) =>
+    sheet.getByLabel(label).evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        fontSize: style.fontSize,
+        height: node.getBoundingClientRect().height,
+        radius: style.borderRadius,
+      };
+    });
+  const fieldRadius = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--radius-field").trim(),
+  );
+  const offeringFacts = await fieldFacts("Offering 1 name");
+  expect(offeringFacts.fontSize).toBe("16px");
+  expect(offeringFacts.height).toBeGreaterThanOrEqual(44);
+  expect(offeringFacts.radius).toBe(fieldRadius);
+  const firstCard = await sheet.locator("article").nth(0).boundingBox();
+  const secondCard = await sheet.locator("article").nth(1).boundingBox();
+  expect(secondCard!.y - (firstCard!.y + firstCard!.height)).toBeCloseTo(8, 0);
+  const introBottom = (await sheet.getByText(/Here's what I found in/).boundingBox())!;
+  const offeringsTop = (await sheet
+    .getByRole("heading", { name: "What you offer" })
+    .locator("..")
+    .boundingBox())!;
+  expect(offeringsTop.y - (introBottom.y + introBottom.height)).toBeCloseTo(16, 0);
+
+  await sheet.getByTestId("review-profile-edit-business_name").click();
+  const profileFacts = await fieldFacts("Business name");
+  expect(profileFacts.fontSize).toBe("16px");
+  expect(profileFacts.height).toBeGreaterThanOrEqual(44);
+  expect(profileFacts.radius).toBe(fieldRadius);
 
   // The structured sections and the source text are not inline by default.
   await expect(sheet.getByText("9 to 5, Monday to Friday")).toHaveCount(0);
@@ -458,18 +721,27 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   await reviewAll.click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 1-5 of 12 offerings")).toBeVisible();
+  // 31: expanding lands focus on the row it revealed.
+  await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
 
   await sheet.getByRole("button", { name: "Next" }).click();
   await expect(sheet.getByText("Page 2 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 6-10 of 12 offerings")).toBeVisible();
+  // 31: paging moves focus to the first row of the new page and scrolls it in.
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 6 name"));
 
   await sheet.getByRole("button", { name: "Next" }).click();
   await expect(sheet.getByText("Page 3 of 3")).toBeVisible();
   await expect(sheet.getByText("Showing 11-12 of 12 offerings")).toBeVisible();
+  await expect(sheet.getByLabel("Offering 11 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 11 name"));
 
   await sheet.getByRole("button", { name: "Previous" }).click();
+  await expect(sheet.getByLabel("Offering 6 name")).toBeFocused();
   await sheet.getByRole("button", { name: "Previous" }).click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
+  await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
 
   // Typing in an offering never changes the page.
   await sheet.getByLabel("Offering 1 name").fill("Renamed item");
@@ -483,10 +755,180 @@ test("pagination and toolbar keep review stable while typing", async ({ page, re
   await addOffering.click();
   await expect(sheet.getByText("Page 1 of 3")).toBeVisible();
   await expect(sheet.getByLabel("Offering 1 name")).toBeFocused();
+  await expectInViewport(sheet.getByLabel("Offering 1 name"));
   await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("");
 
   // Escape closes the sheet; the ready card is the way back in. Focus is
   // already inside the sheet on the new offering row above.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("onboarding-ready-card")).toBeVisible();
+});
+/** 31: a URL source row, addressed by its host label. */
+function websiteRecord(overrides: Parameters<typeof draftRecord>[0] = {}) {
+  return draftRecord({
+    id: "site-1",
+    filename: "https://old.example.com/menu",
+    doc_type: "website",
+    offering_candidates: [offeringCandidate("Menu item A", "site-1")],
+    ...overrides,
+  });
+}
+
+test("editing a link and cancelling leaves the source alone", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) => websiteRecord({ filename: url }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  const opener = sheet.getByTestId("review-edit-link");
+  await expect(opener).toHaveAttribute("aria-label", "Edit link for old.example.com");
+
+  await opener.click();
+  const input = sheet.getByTestId("review-link-input");
+  await expect(input).toHaveValue("https://old.example.com/menu");
+  await expect(input).toBeFocused();
+  await expectInViewport(input);
+
+  await sheet.getByLabel("Cancel link").click();
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  // The review is still open, the source is still there, and no request ran.
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  expect(sourceUrl.calls()).toHaveLength(0);
+  expect(records.deletedIds()).toHaveLength(0);
+});
+
+test("saving the same link re-reads one source in place", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) => websiteRecord({ filename: url }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("review-edit-link").click();
+  await sheet.getByLabel("Save link").click();
+
+  const confirm = page.getByRole("dialog", { name: "Replace this link?" });
+  await expect(confirm).toBeVisible();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect.poll(() => sourceUrl.calls().length).toBe(1);
+  expect(sourceUrl.calls()[0]).toEqual({
+    url: "https://old.example.com/menu",
+    replace_document_id: "site-1",
+  });
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  // Same address, same row: one source, one id, nothing deleted.
+  expect(store.records.map((record) => record.id)).toEqual(["site-1"]);
+  expect(records.deletedIds()).toHaveLength(0);
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  // 31: the row survived, so focus goes back to the control that opened it.
+  await expect(sheet.getByTestId("review-edit-link")).toBeFocused();
+});
+
+test("saving a different link replaces the source", async ({ page, request }) => {
+  const store = recordsStore([websiteRecord()]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) =>
+      websiteRecord({
+        id: "site-2",
+        filename: url,
+        offering_candidates: [offeringCandidate("Menu item A", "site-2")],
+      }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText("old.example.com", { exact: true })).toBeVisible();
+
+  await sheet.getByTestId("review-edit-link").click();
+  const input = sheet.getByTestId("review-link-input");
+  await input.fill("https://new.example.com/menu");
+  await sheet.getByLabel("Save link").click();
+
+  // The replacement asks first; cancelling it makes no request.
+  const confirm = page.getByRole("dialog", { name: "Replace this link?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText(
+    "The new site will be read, and its details and offerings will replace this source.",
+  );
+  await expect(confirm.getByTestId("confirm-accept")).toHaveText("Replace link");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  expect(sourceUrl.calls()).toHaveLength(0);
+  await expect(input).toHaveValue("https://new.example.com/menu");
+
+  await sheet.getByLabel("Save link").click();
+  await page.getByTestId("confirm-accept").click();
+
+  await expect.poll(() => sourceUrl.calls().length).toBe(1);
+  expect(sourceUrl.calls()[0]).toEqual({
+    url: "https://new.example.com/menu",
+    replace_document_id: "site-1",
+  });
+  await expect(sheet.getByText("old.example.com", { exact: true })).toHaveCount(0);
+  await expect(sheet.getByText("new.example.com", { exact: true })).toBeVisible();
+  expect(records.deletedIds()).toEqual(["site-1"]);
+  expect(store.records.map((record) => record.id)).toEqual(["site-2"]);
+  // 31: the row was replaced, so its old opener is gone and focus is not moved
+  // to the new row's control on its own.
+  expect(
+    await sheet.getByTestId("review-edit-link").evaluate((node) => node === document.activeElement),
+  ).toBe(false);
+});
+
+test("add a link adds a second source and focuses the editor", async ({ page, request }) => {
+  const store = recordsStore([draftRecord({ id: "draft-1", filename: "menu.txt" })]);
+  await stubOnboardingState(page);
+  const records = await stubRecords(page, store);
+  const sourceUrl = await stubSourceUrl(page, store, {
+    recordFor: (url) =>
+      draftRecord({
+        id: "site-2",
+        filename: url,
+        doc_type: "website",
+        offering_candidates: [offeringCandidate("Online item", "site-2")],
+      }),
+  });
+
+  await loginAsTenantAdmin(page, request, DEMO_USERS[0]);
+
+  const sheet = dialog(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("review-add-link").click();
+
+  const input = sheet.getByTestId("review-link-input");
+  await expect(input).toHaveValue("");
+  await expect(input).toBeFocused();
+  await expectInViewport(input);
+
+  await input.fill("https://bytefix.example.com");
+  await sheet.getByLabel("Save link").click();
+
+  await expect(sheet.getByText("bytefix.example.com", { exact: true })).toBeVisible();
+  // Two source rows now: the file keeps its picker, the link its editor.
+  await expect(sheet.getByTestId("review-remove-source")).toHaveCount(2);
+  await expect(sheet.getByTestId("review-edit-link")).toHaveCount(1);
+  await expect(sheet.getByTestId("review-link-input")).toHaveCount(0);
+  expect(sourceUrl.calls()).toEqual([
+    { url: "https://bytefix.example.com", replace_document_id: null },
+  ]);
+  expect(records.deletedIds()).toHaveLength(0);
 });

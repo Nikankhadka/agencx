@@ -198,3 +198,94 @@ test("the Home suggestions card reviews the private drafts and publishes them", 
   // Nothing is waiting any more, so the card is gone rather than showing zero.
   await expect(page.getByRole("button", { name: "Review suggestions" })).toHaveCount(0);
 });
+
+test("the Home suggestions sheet asks before removing a suggestion", async ({
+  page,
+  request,
+}) => {
+  const candidates = [
+    {
+      candidate_id: "cand-screen-repair",
+      name: "Screen repair",
+      description: "",
+      price_cents: null,
+      sources: ["document"],
+      review_status: "pending",
+    },
+    {
+      candidate_id: "cand-battery-swap",
+      name: "Battery swap",
+      description: "",
+      price_cents: null,
+      sources: ["document"],
+      review_status: "pending",
+    },
+  ];
+  let puts = 0;
+  await page.route("**/api/onboarding/suggestions", (route) => {
+    if (route.request().method() === "PUT") {
+      puts += 1;
+      return route.fulfill({ json: { count: 0, candidates: [] } });
+    }
+    return route.fulfill({ json: { count: candidates.length, candidates } });
+  });
+
+  await loginAsTenantAdmin(page, request, BYTEFIX);
+  await page.goto("/home");
+  await page.getByRole("button", { name: "Review suggestions" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Remove", exact: true }).first().click();
+
+  const confirm = page.getByRole("dialog", { name: "Remove Screen repair?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText("It will not be saved to your catalog.");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Screen repair");
+  await expect(sheet.getByLabel("Offering 2 name")).toHaveValue("Battery swap");
+
+  await sheet.getByRole("button", { name: "Remove", exact: true }).first().click();
+  await page.getByTestId("confirm-accept").click();
+  await expect(sheet.getByLabel("Offering 1 name")).toHaveValue("Battery swap");
+  expect(puts).toBe(0);
+});
+
+test("paging the suggestions sheet still sends every candidate on save", async ({
+  page,
+  request,
+}) => {
+  const candidates = Array.from({ length: 9 }, (_, index) => ({
+    candidate_id: `cand-${index + 1}`,
+    name: `Suggestion ${index + 1}`,
+    description: "",
+    price_cents: null,
+    sources: ["document"],
+    review_status: "pending",
+  }));
+  let published: { candidates: { name: string; review_status?: string }[] } | null = null;
+  await page.route("**/api/onboarding/suggestions", (route) => {
+    if (route.request().method() === "PUT") {
+      published = JSON.parse(route.request().postData() ?? "{}");
+      return route.fulfill({ json: { count: 0, candidates: [] } });
+    }
+    return route.fulfill({ json: { count: candidates.length, candidates } });
+  });
+
+  await loginAsTenantAdmin(page, request, BYTEFIX);
+  await page.goto("/home");
+  await page.getByRole("button", { name: "Review suggestions" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Suggestions to review" });
+  await expect(sheet.getByText("Showing 1-5 of 9 suggestions")).toBeVisible();
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await expect(sheet.getByText("Showing 6-9 of 9 suggestions")).toBeVisible();
+
+  // 31: the save is the whole list, never the visible page.
+  await page.getByTestId("suggestions-save").click();
+  await expect.poll(() => published).not.toBeNull();
+  expect(published!.candidates.map((item) => item.name)).toEqual(
+    candidates.map((item) => item.name),
+  );
+  expect(published!.candidates.every((item) => item.review_status === "approved")).toBe(true);
+});

@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import { ReviewSheet } from "./ReviewSheet";
 import type { PendingOffering, ReviewOffering } from "./types";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface SuggestionsResponse {
   count: number;
@@ -19,6 +20,9 @@ export function OfferingSuggestions({ variant }: OfferingSuggestionsProps) {
   const [data, setData] = useState<SuggestionsResponse | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 31: the sheet's removals ask through the page-level dialog, never one
+  // rendered inside the sheet (its transform would clip the overlay).
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     apiFetch<SuggestionsResponse>("/api/onboarding/suggestions")
@@ -94,7 +98,9 @@ export function OfferingSuggestions({ variant }: OfferingSuggestionsProps) {
         onSave={async () => null}
         onSaveSuggestions={save}
         onDiscard={() => setOpen(false)}
+        confirmRemove={confirm}
       />
+      {dialog}
     </>
   );
 }
