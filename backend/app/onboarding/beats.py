@@ -116,9 +116,8 @@ class Beat:
     fact and is required, and the optional beats that remain all resolve
     themselves, so there is nothing left for a button to do.
 
-    29: one exception, carried by the beat itself rather than decided here -
-    the owner's name offers a Skip, because it sits straight before the source
-    ask and the no-source path needs a one-tap way past it.
+    The owner's name can still be skipped by typing "skip" (SKIP_WORDS), but it
+    no longer offers a Skip chip.
 
     ``reject`` is what the beat says when it gets something that cannot be its
     answer, and it is spoken verbatim: a rejected beat's reply is the beat's own
@@ -229,11 +228,8 @@ BEAT_ORDER: tuple[Beat, ...] = (
         # Nothing downstream reads the owner's name, and it cannot be guessed,
         # so this is the one beat that skips to a genuine blank.
         optional=True,
-        # 29: the one beat-level Skip in the interview. The name is asked first
-        # and the source ask follows it, so this chip is also how the no-source
-        # path starts; `apply_skip_word` answers it with no model call and never
-        # writes "skip" to the draft.
-        chips=(ChipSpec(label="Skip", value="skip", dashed=True),),
+        # The owner can still skip by typing "skip" (SKIP_WORDS) - the chip is
+        # no longer offered on the first question.
         valid=_wordish,
         reject="That doesn't look like a name.",
         example='just a first name is plenty - "Nikan"',
@@ -414,10 +410,9 @@ def next_beat(
 
 def input_spec(beat: Beat) -> InputSpec:
     """The composer widget for a beat."""
-    # 20: no beat renders a skip chip, except the owner's name, which carries
-    # its own (29) - every other optional beat resolves by its own default or
-    # drops to `skipped` on the two-ask cap, so a button adds nothing there.
-    # The knowledge ask keeps a chip too, but it is not a beat - see
+    # 20: no beat renders a skip chip - every optional beat resolves by its own
+    # default or drops to `skipped` on the two-ask cap, so a button adds nothing
+    # there. The knowledge ask keeps a chip, but it is not a beat - see
     # KNOWLEDGE_INPUT.
     chips = list(beat.chips)
     return InputSpec(

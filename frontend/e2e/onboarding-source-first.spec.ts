@@ -13,18 +13,19 @@ import {
  *
  * Two runs of the same first two stages:
  *
- * 1. name -> Skip -> source -> attach a file -> the review opens -> save ->
- *    the beats the source left unanswered are asked -> confirm. The source
- *    endpoint is mocked (no provider needed) and answers state with
+ * 1. name -> typed "skip" -> source -> attach a file -> the review opens ->
+ *    save -> the beats the source left unanswered are asked -> confirm. The
+ *    source endpoint is mocked (no provider needed) and answers state with
  *    candidates, exactly as the real one does after reading a menu.
- * 2. the no-source path: Skip on the name, Skip on the source, then the
- *    existing interview runs on the text path, unchanged.
+ * 2. the no-source path: typed "skip" on the name, Skip on the source, then
+ *    the existing interview runs on the text path, unchanged.
  *
  * The onboarding server is a small state machine rather than a fixed reply, so
  * the client is driven by whatever stage it just moved to - and every request
  * is captured, because the point of the first two stages is which door the
- * client picks (the selection payload, not text; the source endpoint, not the
- * drafts batch).
+ * client picks (the source endpoint, not the drafts batch; the name beat's
+ * skip is a typed turn now that its chip is gone, so it must not post a
+ * selection).
  */
 
 interface Chip {
@@ -61,8 +62,6 @@ interface Selection {
   values: string[];
 }
 
-const NAME_SKIP: Chip = { label: "Skip", value: "skip", dashed: true, widget: null };
-
 function textInput(overrides: Partial<Input> = {}): Input {
   return {
     kind: "text",
@@ -95,7 +94,8 @@ function view(stage: string, overrides: Partial<ServerState> = {}): ServerState 
 function nameStage(): ServerState {
   return view("owner_display_name", {
     prompt: "Before we start, what should I call you?",
-    input: textInput({ chips: [NAME_SKIP] }),
+    // 29: the name beat carries no chip - "skip" is typed into the composer.
+    input: textInput(),
     history: [{ role: "assistant", content: "Before we start, what should I call you?" }],
   });
 }
@@ -226,15 +226,20 @@ test("a source file opens the review, and the beats it left are asked after the 
   await stubRecords(page, store);
   const flow = await installFlow(page, nameStage());
 
-  flow.onSelection = (selection) => {
-    if (selection.beat === "owner_display_name") {
-      expect(selection.values).toEqual(["skip"]);
-      return sourceStage([
+  flow.onText = (text) => {
+    // The name's skip is the typed word now, so it streams - the server
+    // answers it deterministically, with no model call.
+    expect(text).toBe("skip");
+    return {
+      reply: "No problem. Do you have a website or any documents?",
+      state: sourceStage([
         { role: "assistant", content: "Before we start, what should I call you?" },
-        { role: "user", content: "Skip" },
+        { role: "user", content: "skip" },
         { role: "assistant", content: "No problem. Do you have a website or any documents?" },
-      ]);
-    }
+      ]),
+    };
+  };
+  flow.onSelection = (selection) => {
     // The source left the team question open, so it is asked before go-live.
     expect(selection).toEqual({ beat: "headcount", values: ["got a team"] });
     return view("confirm", {
@@ -284,13 +289,16 @@ test("a source file opens the review, and the beats it left are asked after the 
   const thread = page.getByTestId("onboarding-thread");
   await expect(thread).toBeVisible();
 
-  // 1. The name is the first stage and its Skip is a selection, not text.
-  await page.getByTestId("onboarding-chip-skip").click();
-  await expect.poll(() => flow.selections.length).toBe(1);
-  expect(flow.streamCalls()).toBe(0);
+  const composer = page.getByTestId("onboarding-composer");
+
+  // 1. The name is the first stage and its chip is gone, so the skip is the
+  // typed word: it takes the text path and posts no selection.
+  await composer.getByRole("textbox").fill("skip");
+  await composer.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => flow.texts).toEqual(["skip"]);
+  expect(flow.selections).toEqual([]);
 
   // 2. The source stage follows, with the same Skip and the attach affordance.
-  const composer = page.getByTestId("onboarding-composer");
   await expect(composer.getByRole("textbox")).toHaveAttribute(
     "placeholder",
     /Paste a link or attach a file/,
@@ -325,8 +333,8 @@ test("a source file opens the review, and the beats it left are asked after the 
 
   // 6. The beat the source left is answered, then confirm becomes available.
   await composer.getByRole("button", { name: "Got a team" }).click();
-  await expect.poll(() => flow.selections.length).toBe(2);
-  expect(flow.selections[1]).toEqual({ beat: "headcount", values: ["got a team"] });
+  await expect.poll(() => flow.selections.length).toBe(1);
+  expect(flow.selections[0]).toEqual({ beat: "headcount", values: ["got a team"] });
 
   await expect(page.getByTestId("onboarding-confirm")).toBeVisible();
   await expect(page.getByTestId("onboarding-public-slug")).toHaveValue("bytefix");
@@ -346,14 +354,6 @@ test("the no-source path keeps the existing interview unchanged", async ({
   const flow = await installFlow(page, nameStage());
 
   flow.onSelection = (selection) => {
-    if (selection.beat === "owner_display_name") {
-      expect(selection.values).toEqual(["skip"]);
-      return sourceStage([
-        { role: "assistant", content: "Before we start, what should I call you?" },
-        { role: "user", content: "Skip" },
-        { role: "assistant", content: "No problem. Do you have a website or any documents?" },
-      ]);
-    }
     expect(selection).toEqual({ beat: "knowledge", values: ["skip"] });
     return view("business_name", {
       prompt: "What does the business go by?",
@@ -366,6 +366,16 @@ test("the no-source path keeps the existing interview unchanged", async ({
     });
   };
   flow.onText = (text) => {
+    if (text === "skip") {
+      return {
+        reply: "No problem. Do you have a website or any documents?",
+        state: sourceStage([
+          { role: "assistant", content: "Before we start, what should I call you?" },
+          { role: "user", content: "skip" },
+          { role: "assistant", content: "No problem. Do you have a website or any documents?" },
+        ]),
+      };
+    }
     if (text === "Bytefix") {
       return {
         reply: "Got it. What days and hours are you open?",
@@ -392,21 +402,21 @@ test("the no-source path keeps the existing interview unchanged", async ({
   await expect(thread).toBeVisible();
   const composer = page.getByTestId("onboarding-composer");
 
-  // Name -> Skip, source -> Skip. Both are selections on the server's own
-  // stage key, and neither touches the text path.
-  await page.getByTestId("onboarding-chip-skip").click();
+  // Name -> typed skip, source -> Skip. The name takes the text path now that
+  // its chip is gone; the source is still a selection on the server's own
+  // stage key, and neither touches the source endpoint.
+  await composer.getByRole("textbox").fill("skip");
+  await composer.getByRole("button", { name: "Send" }).click();
   await expect(composer.getByRole("textbox")).toHaveAttribute(
     "placeholder",
     /Paste a link or attach a file/,
   );
   await page.getByTestId("onboarding-chip-skip").click();
 
-  await expect.poll(() => flow.selections.length).toBe(2);
-  expect(flow.selections).toEqual([
-    { beat: "owner_display_name", values: ["skip"] },
-    { beat: "knowledge", values: ["skip"] },
-  ]);
-  expect(flow.streamCalls()).toBe(0);
+  await expect.poll(() => flow.selections.length).toBe(1);
+  expect(flow.selections).toEqual([{ beat: "knowledge", values: ["skip"] }]);
+  expect(flow.texts).toEqual(["skip"]);
+  expect(flow.streamCalls()).toBe(1);
   expect(flow.sourceUploads).toEqual([]);
   expect(flow.draftsUploads()).toBe(0);
   // Nothing was read, so there is nothing to review.
@@ -418,12 +428,12 @@ test("the no-source path keeps the existing interview unchanged", async ({
   await expect(composer.getByRole("button", { name: "Attach" })).toBeVisible();
   await composer.getByRole("textbox").fill("Bytefix");
   await composer.getByRole("button", { name: "Send" }).click();
-  await expect.poll(() => flow.texts).toEqual(["Bytefix"]);
+  await expect.poll(() => flow.texts).toEqual(["skip", "Bytefix"]);
 
   await expect(thread).toContainText("What days and hours are you open?");
   await composer.getByRole("textbox").fill("Weekdays 9 to 5");
   await composer.getByRole("button", { name: "Send" }).click();
-  await expect.poll(() => flow.texts).toEqual(["Bytefix", "Weekdays 9 to 5"]);
+  await expect.poll(() => flow.texts).toEqual(["skip", "Bytefix", "Weekdays 9 to 5"]);
 
   await expect(page.getByTestId("onboarding-confirm")).toBeVisible();
   await expect(page.getByTestId("onboarding-public-slug")).toHaveValue("bytefix");

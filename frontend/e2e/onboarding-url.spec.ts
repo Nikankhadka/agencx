@@ -50,13 +50,15 @@ test("pasting a link reads the site and reads it back", async ({
   const before = await readBack.count();
 
   const composer = page.getByTestId("onboarding-composer");
-  // 29: the source ask is second, so the name beat comes first. Skip it (the
-  // chip the name beat now carries) to land on the source stage, whose own
-  // placeholder is the proof the composer moved.
-  await composer.getByTestId("onboarding-chip-skip").click();
+  // 29: the source ask is second, so the name beat comes first - and it carries
+  // no chip, so the skip is the typed word. The source stage's own placeholder
+  // is the proof the composer moved.
+  await composer.getByRole("textbox").fill("skip");
+  await composer.getByRole("button", { name: "Send" }).click();
   await expect(composer.getByRole("textbox")).toHaveAttribute(
     "placeholder",
     /Paste a link or attach a file/,
+    { timeout: 30_000 },
   );
   await composer.getByRole("textbox").fill(SITE_URL);
   await composer.getByRole("button", { name: "Send" }).click();

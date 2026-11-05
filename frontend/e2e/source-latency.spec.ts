@@ -14,7 +14,8 @@ import { getAccessToken, loginInChat } from "./auth-helpers";
  *
  * `SOURCE_FLOW=old` drives the pre-ticket interview (name, business name, type,
  * headcount, hours, services, voice, contact, ABN) and only then the website
- * ask; `new` drives the source-first flow (name Skip, then the source stage).
+ * ask; `new` drives the source-first flow (a typed skip on the name, then the
+ * source stage).
  * Both submit the same URL through the same composer into the same review
  * sheet, so the two numbers are one owner action on two implementations.
  *
@@ -276,7 +277,9 @@ for (let run = 1; run <= RUNS; run++) {
       const token = await getAccessToken(page);
 
       if (FLOW === "new") {
-        await composer.getByTestId("onboarding-chip-skip").click();
+        // 29: the name beat carries no chip; the typed word takes the text
+        // path and the server answers it without a model call.
+        await answer(page, "text", "skip");
         await expect(composer.getByRole("textbox")).toHaveAttribute(
           "placeholder",
           /Paste a link or attach a file/,

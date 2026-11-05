@@ -1459,21 +1459,19 @@ def test_ack_keeps_the_statement_and_drops_a_trailing_question() -> None:
     assert _ack("What's your name?") == ""
 
 
-def test_only_the_name_beat_and_the_knowledge_ask_offer_a_skip_chip() -> None:
-    """20/29: two skips survive, and they are the two the flow needs.
+def test_only_the_knowledge_ask_offers_a_skip_chip() -> None:
+    """20/29: only the knowledge ask keeps a skip chip.
 
-    The knowledge ask never gates go-live, so declining it stays one tap. 29
-    adds the owner's own name: it is the beat straight before the source ask,
-    so a one-tap Skip there is the shortest road to "just read my site" - and
-    the same chip is the no-source path's first step. Every other beat resolves
-    itself (its default, or `skipped` on the two-ask cap), so a button adds
-    nothing there.
+    The knowledge ask never gates go-live, so declining it stays one tap. The
+    owner's name can still be skipped by typing "skip", but it no longer offers
+    a Skip chip on the first question. Every other beat resolves itself (its
+    default, or `skipped` on the two-ask cap), so a button adds nothing there.
     """
     name_chips = [
         (chip.label, chip.value, chip.dashed)
         for chip in beats.input_spec(beats.BEATS["owner_display_name"]).chips
     ]
-    assert name_chips == [("Skip", "skip", True)]
+    assert name_chips == []
 
     for beat in beats.BEAT_ORDER:
         if beat.key == "owner_display_name":
