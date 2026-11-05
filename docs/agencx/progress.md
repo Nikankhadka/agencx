@@ -382,6 +382,7 @@ live in the ticket files, not here.
   bar) and the 5s p50 target was not measured end to end, only crawl wall time.
   The owner-name Skip chip was later removed by founder ruling (`cd9f00d`, the
   follow-up section); typed `skip` still resolves deterministically.
+  Merged to `development` as `d687ba5`.
   Status `Active - awaiting review`. See
   [29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md).
 - [ ] Review surface refinement (ticket 31): the review sheet's field recipe
@@ -395,8 +396,8 @@ live in the ticket files, not here.
   full E2E suite ran 273 of 277 (3 skipped) twice with one different
   provider-side failure each time, both green on isolated rerun; the latent
   60s-vs-90s spec budget it exposed is fixed in `c402ed5`.
-  Branch `feat/review-surface-refinement`, ticket commits
-  `c021e62..c402ed5`, awaiting review. The former red spec is resolved:
+  Merged to `development` as `6a2c3fc`; founder walkthrough remains. The former
+  red spec is resolved:
   `onboarding-url.spec.ts` now types `skip` after the owner-name chip was
   removed (`cd9f00d`, ticket 29 follow-up). See
   [31-review-surface-refinement.md](spec/active/31-review-surface-refinement.md).
