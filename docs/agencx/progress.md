@@ -412,6 +412,13 @@ live in the ticket files, not here.
   `14e1cd6` on `development`. Status
   `Active - awaiting review`. See
   [30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md).
+- [ ] Selling modes and the Phase 2 order kernel (ticket 32): four owner-facing
+  modes (Orders, Bookings, Quotes, Products) chosen by one inferred onboarding
+  confirmation, six independent capability axes, tenant labels, one order
+  object with capacity holds for stock, kitchen throughput, slots, and
+  resources, a Board/Calendar view, channel-agnostic leads, and a payments
+  ledger. Spec written on `docs/32-selling-modes`; build not started. See
+  [32-selling-modes.md](spec/active/32-selling-modes.md).
 
 ## Spec status
 
@@ -423,6 +430,7 @@ live in the ticket files, not here.
 | [spec/active/29-source-first-onboarding.md](spec/active/29-source-first-onboarding.md) | `Active - awaiting review` | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D, owner-name skip chip removed) |
 | [spec/active/30-chat-catalog-full-list.md](spec/active/30-chat-catalog-full-list.md) | `Active - awaiting review` | Chat catalog boundary at 20 offerings plus the business-page link |
 | [spec/active/31-review-surface-refinement.md](spec/active/31-review-surface-refinement.md) | `Active - awaiting review` | Review surface refinement, slices A-F plus the review fixes and the category panel pass |
+| [spec/active/32-selling-modes.md](spec/active/32-selling-modes.md) | `Active - todo` | Selling modes, inferred lead capture, one order object, capacity kernel, scheduling and calendar, owner console, payments ledger (slices A-H) |
 | [archived tickets](../archive/phase1-complete/README.md) | `Done - merged` | All delivered feature, deployment, and supporting phases, including M-7 and the 23-28 refinement batch |
 
 Phase 1 is not called fully complete until the active refinement items

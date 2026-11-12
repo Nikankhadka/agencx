@@ -35,6 +35,7 @@ Per-ticket header pattern:
 | [active/29-source-first-onboarding.md](active/29-source-first-onboarding.md) | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D, owner-name skip chip removed) | `Active - awaiting review` |
 | [active/30-chat-catalog-full-list.md](active/30-chat-catalog-full-list.md) | Chat catalog boundary at 20 offerings plus the business-page link | `Active - awaiting review` |
 | [active/31-review-surface-refinement.md](active/31-review-surface-refinement.md) | Review surface refinement: field recipe, collapsed categories and focus, confirmations, suggestions paging, URL source endpoint, in-place link editing, category panel pass (slices A-F plus review fixes) | `Active - awaiting review` |
+| [active/32-selling-modes.md](active/32-selling-modes.md) | Selling modes, inferred lead capture, one order object, capacity kernel, scheduling and calendar, owner console, payments ledger (slices A-H) | `Active - todo` |
 
 ## Completed work
 
@@ -71,8 +72,10 @@ behaviour, never prototype copy or hex values. Visual values belong in
 Phase 1 delivered onboarding, customer chat, and the business page; the
 walkthrough phase (W-1 through W-9) is a second bug-fix pass on shipped
 Phase 1 surfaces, not new product scope. B-2, D-1, and D-3 stay
-`Deferred - Phase 2`. Payments, scheduling, invoicing, and leads stay out.
-Full scope boundary is in [the PRD](../prd.md); current status is in
+`Deferred - Phase 2`. Payments, scheduling, invoicing, and leads stay out of
+Phase 1. Ticket 32 opens the Phase 2 selling-mode slice: lead capture,
+ordering, booking, stock, calendar, the owner console, and the payments
+ledger. Full scope boundary is in [the PRD](../prd.md); current status is in
 [progress.md](../progress.md).
 
 ## Maintenance
