@@ -303,6 +303,9 @@ async def test_tenant_admin_me_is_isolated_per_tenant(client: httpx.AsyncClient)
         "slug": slug_a,
         "name": "Tenant A",
         "brand": {},
+        # 32: the ordering block rides the owner bootstrap; no selling mode is
+        # confirmed yet, so it is an empty object rather than absent.
+        "ordering": {},
     }
     assert me_a.json()["tenant_id"] != tenant_b_id
 
@@ -313,6 +316,7 @@ async def test_tenant_admin_me_is_isolated_per_tenant(client: httpx.AsyncClient)
         "slug": slug_b,
         "name": "Tenant B",
         "brand": {},
+        "ordering": {},
     }
 
 

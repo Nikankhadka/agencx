@@ -47,6 +47,10 @@ class TenantMeResponse(BaseModel):
     slug: str
     name: str
     brand: dict[str, Any] = Field(default_factory=dict)
+    # 32: the owner's ordering block - mode, capabilities, labels, defaults - so
+    # the console reads what this tenant sells from its bootstrap call instead of
+    # hardcoding a vertical. Empty before a selling mode is confirmed.
+    ordering: dict[str, Any] = Field(default_factory=dict)
 
 
 @router.post("", response_model=TenantSignupResponse)
@@ -72,4 +76,5 @@ async def me(
         slug=result["slug"],
         name=result["name"],
         brand=result["brand"],
+        ordering=result["ordering"],
     )

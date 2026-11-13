@@ -7,6 +7,8 @@
  * never aborts an in-progress stream.
  */
 
+import type { SellingModeSuggestion } from "./selling-modes";
+
 export type WidgetKind = "text" | "chips" | "masked" | "cta" | "phone";
 
 export interface ChipSpec {
@@ -86,6 +88,11 @@ export interface OnboardingState {
   revision?: number;
   /** 29: required beats the source did not find, in beat order. */
   missing_required?: string[];
+  /**
+   * 32: the selling-mode card's payload, present only while that stage is the
+   * one on screen. Composed by the server, never by this client.
+   */
+  selling_mode?: SellingModeSuggestion | null;
   offering_candidates?: {
     name: string;
     description: string;
@@ -115,6 +122,7 @@ export type OnboardingStreamEvent =
       skipped?: string[];
       revision?: number;
       missing_required?: string[];
+      selling_mode?: SellingModeSuggestion | null;
       offering_candidates?: OnboardingState["offering_candidates"];
     }
   | { type: "done" }

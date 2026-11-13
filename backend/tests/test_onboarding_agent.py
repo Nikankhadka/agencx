@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 from app.features.business.service import profile_tagline
+from app.features.onboarding.selling_modes import normalize_selling_mode
 from app.llm.provider import ChatMessage, SchemaT
 from app.onboarding import beats
 from app.onboarding.agent import (
@@ -206,6 +207,15 @@ def _complete_draft() -> dict[str, Any]:
         # answered like any other beat before the interview is complete.
         "customer_voice_preset": "warm_casual",
     }
+
+
+def _confirmed_mode() -> dict[str, Any]:
+    """32: a record that has already answered the selling-mode question.
+
+    Most tests here are about the beats; the one non-beat stage before them is
+    settled explicitly so a beat test keeps testing the beat it names.
+    """
+    return normalize_selling_mode(mode="orders", capabilities=None, labels={}).model_dump()
 
 
 def test_gst_is_not_asked_of_a_business_without_an_abn() -> None:
@@ -447,7 +457,7 @@ async def test_run_turn_proposes_a_business_name_before_it_persists_one() -> Non
         updates=[{"profile": {"business_name": "Bytefix Repairs"}}],
         replies=["Got it - Bytefix Repairs!"],
     )
-    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, selling_mode=_confirmed_mode())
     updated, reply = await run_turn(
         admin_message="we are called Bytefix Repairs", record=record, provider=provider
     )
@@ -469,7 +479,7 @@ async def test_run_turn_acknowledges_every_field_it_captured() -> None:
         updates=[{"profile": {"hours": "Mon-Fri 9-6", "contact": "555-0100"}}],
         replies=["Noted."],
     )
-    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, selling_mode=_confirmed_mode())
     _updated, _reply = await run_turn(
         admin_message="we're open Mon-Fri 9-6, call 555-0100", record=record, provider=provider
     )
@@ -506,7 +516,7 @@ async def test_run_turn_acknowledges_a_list_valued_field_without_a_python_repr()
 async def test_run_turn_uses_the_authoritative_next_beat() -> None:
     """W-2 US-1: the model writes the acknowledgment, the server writes the question."""
     provider = _ExtractFake(updates=[{}], replies=["Sure thing."])
-    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, selling_mode=_confirmed_mode())
     _updated, reply = await run_turn(admin_message="ok go on", record=record, provider=provider)
 
     assert reply == "Sure thing. What does the business go by?"
@@ -550,7 +560,7 @@ async def test_run_turn_off_topic_answers_gently() -> None:
         ],
         replies=["I'm here to help you set up your business. What is your business called?"],
     )
-    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"}, selling_mode=_confirmed_mode())
     updated, reply = await run_turn(admin_message="who are you", record=record, provider=provider)
 
     # W-2: an off-topic turn is persisted like any other, so the stored record
@@ -620,7 +630,7 @@ async def test_prepare_turn_sets_summary_once_the_profile_is_complete() -> None:
     provider = _ExtractFake(updates=[{"profile": {"contact": "555-0100"}}], replies=[])
     draft = _complete_draft()
     del draft["contact"]
-    record = OnboardingRecord(draft=draft)
+    record = OnboardingRecord(draft=draft, selling_mode=_confirmed_mode())
 
     plan = await prepare_turn(admin_message="call us on 555-0100", record=record, provider=provider)
 
@@ -1011,13 +1021,51 @@ def test_the_source_stage_is_asked_before_the_business_name_beat() -> None:
     assert spec is beats.KNOWLEDGE_INPUT
 
 
+@pytest.mark.asyncio
+async def test_a_typed_answer_to_the_mode_card_asks_no_beat() -> None:
+    """32: the selling mode is a card, so a typed message cannot pick a beat or
+    append a beat's question - the same guard the source stage has.
+
+    Without it a text turn saved a profile field and announced the next beat,
+    putting a card and a beat question on screen together.
+    """
+    provider = _ExtractFake(
+        updates=[{"profile": {"business_name": "Should not land"}, "answered_asked": True}],
+        replies=["should not be called"],
+    )
+    record = OnboardingRecord(draft={"owner_display_name": "Sam"})
+
+    updated, reply = await run_turn(
+        admin_message="we take bookings", record=record, provider=provider
+    )
+
+    assert reply == "I didn't quite catch that. How do customers buy from you?"
+    assert "business_name" not in updated.draft
+    assert updated.ask_beat == ""
+    assert updated.ask_count == 0
+    # No model call at all: the stage answers in its own words.
+    assert provider.extract_inputs == []
+    assert provider.chat_messages == []
+    assert progress(updated)[0] == "selling_mode"
+    assert updated.history[-2:] == [
+        {"role": "user", "content": "we take bookings"},
+        {"role": "assistant", "content": reply},
+    ]
+
+
 def test_declining_the_source_stage_restores_the_original_beat_order() -> None:
     """29 acceptance 7: with the source declined, the interview is the one it
-    was before - the same eight beats, in the same order."""
+    was before - the same eight beats, in the same order (32 puts one non-beat
+    stage in front of them, which is answered once and never returns)."""
     record = OnboardingRecord(draft={"owner_display_name": "Sam"}, knowledge_pending=True)
     declined = decline_knowledge(record)
 
-    assert declined.endswith(beats.BEATS["business_name"].ask)
+    # 32: the mode question follows the source, before the first missing beat.
+    assert declined.endswith("How do customers buy from you?")
+    assert progress(record)[0] == "selling_mode"
+    record.selling_mode = _confirmed_mode()
+
+    assert progress(record)[0] == "business_name"
     seen: list[str] = []
     while (stage := progress(record)[0]) != "confirm":
         assert stage in beats.BEATS, f"{stage} is not a beat"
@@ -1105,7 +1153,9 @@ async def test_a_pasted_link_answers_the_source_stage() -> None:
     )
 
     assert plan.record.knowledge_pending is False
-    assert progress(plan.record)[0] == "business_name"
+    # 32: the settled source is what the mode is inferred from, so the mode is
+    # the next thing asked - not the first profile beat.
+    assert progress(plan.record)[0] == "selling_mode"
 
 
 @pytest.mark.asyncio
@@ -1127,9 +1177,14 @@ async def test_completing_every_beat_in_one_message_still_asks_for_the_source() 
 
 def test_declining_knowledge_closes_the_ask_and_returns_the_summary() -> None:
     """20/29: the Skip chip's deterministic door - no model call on this path.
-    With every field captured, declining the source stage lands on the
-    activation summary, and that summary never re-offers the source."""
-    record = OnboardingRecord(draft=_complete_draft(), knowledge_pending=True)
+    With every field captured, declining the source stage moves the interview
+    on, and the summary never re-offers the source.
+
+    32 adds one question between the two: the selling mode, so declining the
+    source asks that rather than declaring the assistant ready."""
+    record = OnboardingRecord(
+        draft=_complete_draft(), knowledge_pending=True, selling_mode=_confirmed_mode()
+    )
     assert record.knowledge_pending is True
 
     reply = decline_knowledge(record)
@@ -1138,7 +1193,45 @@ def test_declining_knowledge_closes_the_ask_and_returns_the_summary() -> None:
     assert "ready to go live" in reply
     assert "website" not in reply.casefold()
     assert "Skip for now" not in reply
+
+
+def test_declining_the_source_asks_the_mode_before_the_summary() -> None:
+    """32: an unconfirmed mode is the one thing still standing before go-live."""
+    record = OnboardingRecord(draft=_complete_draft(), knowledge_pending=True)
+
+    reply = decline_knowledge(record)
+
+    assert reply == "No problem. How do customers buy from you?"
+    assert "ready to go live" not in reply
+    assert progress(record)[0] == "selling_mode"
     assert "becomes a reference" not in reply
+
+
+@pytest.mark.asyncio
+async def test_the_last_beat_does_not_announce_go_live_before_the_mode() -> None:
+    """32: a pre-32 record reaching its last beat still owes the mode.
+
+    Such a record carries an `ask_beat` and no `selling_mode`, so `_advance`
+    answers None for it only after the cursor is cleared - which is exactly the
+    turn where the completion line used to be spoken. The owner was told they
+    were ready to go live while the state for that same reply was
+    ``stage: selling_mode``, and then heard the summary again after answering.
+    """
+    draft = _complete_draft()
+    del draft["gst"]
+    provider = _ExtractFake(updates=[{"profile": {"gst": "yes"}}], replies=[])
+    record = OnboardingRecord(draft=draft, knowledge_pending=False, ask_beat="gst", ask_count=1)
+    assert record.selling_mode is None
+
+    plan = await prepare_turn(admin_message="yes we are", record=record, provider=provider)
+
+    assert plan.summary is not None
+    assert "ready to go live" not in plan.summary
+    assert plan.summary == "How do customers buy from you?"
+    # The state for this same reply asks for the mode, so the words and the
+    # stage agree - and the summary is still owed after the mode is answered.
+    assert progress(plan.record)[0] == "selling_mode"
+    assert plan.record.selling_mode is None
 
 
 def test_declining_knowledge_that_was_never_asked_is_refused() -> None:
@@ -1206,7 +1299,13 @@ def test_directive_never_asks_the_model_for_a_question() -> None:
 
 
 def _drafted(**fields: str) -> OnboardingRecord:
-    return OnboardingRecord(draft=dict(fields))
+    """A record mid-interview with these fields captured.
+
+    32: a record in the beats has already answered the selling-mode stage - the
+    interview asks it before the first missing beat - so it is set here rather
+    than in every test that is about a beat.
+    """
+    return OnboardingRecord(draft=dict(fields), selling_mode=_confirmed_mode())
 
 
 @pytest.mark.asyncio
@@ -1305,7 +1404,9 @@ async def test_the_final_pass_pauses_without_saving_an_unusable_answer() -> None
     provider = _ExtractFake(updates=[{}, {}, {}], replies=["Right."])
     draft = _complete_draft()
     del draft["business_type"]
-    record = OnboardingRecord(draft=draft, deferred=["business_type"])
+    record = OnboardingRecord(
+        draft=draft, deferred=["business_type"], selling_mode=_confirmed_mode()
+    )
 
     for _ in range(3):
         record, _reply = await run_turn(
@@ -1534,6 +1635,7 @@ async def test_a_genuine_answer_is_accepted_and_advances() -> None:
         replies=["Lovely to meet you, Nikan."],
     )
     record = OnboardingRecord(ask_beat="owner_display_name", ask_count=1)
+    record.selling_mode = _confirmed_mode()
     updated, reply = await run_turn(admin_message="Nikan", record=record, provider=provider)
 
     # W-9: a usable name is proposed first; agreeing is what advances the beat.
@@ -1554,7 +1656,10 @@ async def test_two_junk_answers_hand_off_out_loud_to_the_next_beat() -> None:
     )
     # Already asked twice; this third junk reply trips the hand-off.
     record = OnboardingRecord(
-        draft={"owner_display_name": "Nikan"}, ask_beat="business_name", ask_count=2
+        draft={"owner_display_name": "Nikan"},
+        ask_beat="business_name",
+        ask_count=2,
+        selling_mode=_confirmed_mode(),
     )
     updated, reply = await run_turn(admin_message="@@@@", record=record, provider=provider)
 
@@ -2327,6 +2432,7 @@ async def test_a_typed_voice_is_captured_by_the_server_not_the_model() -> None:
         ask_beat="customer_voice_preset",
         ask_count=1,
     )
+    record.selling_mode = _confirmed_mode()
     described = "friendly but brief"
     updated, reply = await run_turn(admin_message=described, record=record, provider=provider)
 

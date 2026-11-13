@@ -172,6 +172,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/selling-mode/suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Selling Mode Suggestion
+         * @description 32: the inference, the signals it scored, and the stored config if any.
+         *
+         *     Deterministic and model-free - the owner's confirmation is answering a value
+         *     that was already computed, which is what makes it one tap.
+         */
+        get: operations["get_selling_mode_suggestion_api_onboarding_selling_mode_suggestion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/onboarding/selling-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Selling Mode
+         * @description The stored ordering block, with the summary rendered from it.
+         *
+         *     No selling mode confirmed yet is a null pair, not a 404: the review card has
+         *     to be able to ask "what is there?" on a tenant that has not answered.
+         */
+        get: operations["get_selling_mode_api_onboarding_selling_mode_get"];
+        put?: never;
+        /**
+         * Post Selling Mode
+         * @description Confirm or correct the mode: no model call, and the cursor advances.
+         *
+         *     One statement writes the record's ``selling_mode`` gate and
+         *     ``tenant_config.config.ordering``, so the interview can never believe it
+         *     asked a question the product has no answer to.
+         */
+        post: operations["post_selling_mode_api_onboarding_selling_mode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/suggestions": {
         parameters: {
             query?: never;
@@ -1230,6 +1284,40 @@ export interface components {
             /** Services */
             services: string[];
         };
+        /**
+         * Capabilities
+         * @description The six independent switches the whole product reads.
+         *
+         *     ``extra="forbid"`` is what makes an unknown axis a 422 instead of a key that
+         *     is stored and then ignored: the config is the source of truth for every
+         *     later screen, so a typo in an axis name has to fail loudly at the door.
+         */
+        Capabilities: {
+            /** Sell */
+            sell: ("orders" | "bookings" | "quotes" | "products")[];
+            /**
+             * Schedule
+             * @enum {string}
+             */
+            schedule: "none" | "asap" | "slot" | "window";
+            /**
+             * Stock
+             * @enum {string}
+             */
+            stock: "none" | "flag" | "counted";
+            /** Fulfillment */
+            fulfillment: ("in_house" | "pickup" | "delivery" | "onsite" | "shipping")[];
+            /**
+             * Acceptance
+             * @enum {string}
+             */
+            acceptance: "auto" | "owner" | "deposit";
+            /**
+             * Payment
+             * @enum {string}
+             */
+            payment: "now" | "later" | "deposit";
+        };
         /** CatalogItemResponse */
         CatalogItemResponse: {
             /**
@@ -1908,6 +1996,7 @@ export interface components {
             revision: number;
             /** Missing Required */
             missing_required?: string[];
+            selling_mode?: components["schemas"]["SellingModePayload"] | null;
         };
         /** OnboardingSuggestionsRequest */
         OnboardingSuggestionsRequest: {
@@ -2259,6 +2348,111 @@ export interface components {
             /** Values */
             values?: string[];
         };
+        /**
+         * SellingModeConfigResponse
+         * @description ``config.ordering`` as stored, with its own read-back.
+         */
+        SellingModeConfigResponse: {
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Summary */
+            summary?: string | null;
+        };
+        /**
+         * SellingModePayload
+         * @description 32: the card the interview renders for the one selling-mode question.
+         *
+         *     ``candidates`` is what the card offers when the guess is not certain - the
+         *     two that tied, or all four when there was no source. ``summary`` is
+         *     server-rendered from the stored capabilities and labels, never assembled in
+         *     the client.
+         */
+        SellingModePayload: {
+            /** Mode */
+            mode: string;
+            /** Capabilities */
+            capabilities: {
+                [key: string]: unknown;
+            };
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /** Defaults */
+            defaults?: {
+                [key: string]: unknown;
+            };
+            /** Confidence */
+            confidence: string;
+            /** Candidates */
+            candidates?: string[];
+            /** Evidence */
+            evidence?: string[];
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * SellingModeRequest
+         * @description The confirmation and the correction, one body.
+         *
+         *     The vocabulary is pydantic's, so a mode that is not one of the four, an
+         *     empty ``sell``, or an axis value outside its allowed set is a 422 at the
+         *     door rather than a stored value every later screen has to defend against.
+         *     Labels are the one tolerant field: they are stringified, unknown keys are
+         *     dropped, and a missing key falls back to the neutral default. ``defaults``
+         *     is the strict shape one level down - the key set is closed and every value
+         *     is coerced to the type its key already has.
+         */
+        SellingModeRequest: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "orders" | "bookings" | "quotes" | "products";
+            capabilities: components["schemas"]["Capabilities"];
+            /** Labels */
+            labels?: {
+                [key: string]: unknown;
+            };
+            /** Defaults */
+            defaults?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * SellingModeSuggestionResponse
+         * @description The inference, its evidence, and whatever is already stored.
+         */
+        SellingModeSuggestionResponse: {
+            /** Mode */
+            mode: string;
+            /** Capabilities */
+            capabilities: {
+                [key: string]: unknown;
+            };
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /** Defaults */
+            defaults?: {
+                [key: string]: unknown;
+            };
+            /** Confidence */
+            confidence: string;
+            /** Candidates */
+            candidates?: string[];
+            /** Evidence */
+            evidence?: string[];
+            /** Summary */
+            summary: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** SourceDetail */
         SourceDetail: {
             /** Text */
@@ -2314,6 +2508,10 @@ export interface components {
             name: string;
             /** Brand */
             brand?: {
+                [key: string]: unknown;
+            };
+            /** Ordering */
+            ordering?: {
                 [key: string]: unknown;
             };
         };
@@ -2809,6 +3007,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStateResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_selling_mode_suggestion_api_onboarding_selling_mode_suggestion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingModeSuggestionResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_selling_mode_api_onboarding_selling_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellingModeConfigResponse"];
+                };
+            };
+            /** @description Problem details error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    post_selling_mode_api_onboarding_selling_mode_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellingModeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStateResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Problem details error */

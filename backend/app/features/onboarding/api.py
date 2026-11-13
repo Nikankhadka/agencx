@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.features.knowledge.api import KnowledgeRecord, _absolute_url, _reject_upload
 from app.features.knowledge.models import KnowledgeSection
 from app.features.onboarding import controller
+from app.features.onboarding.selling_modes import Capabilities, Mode, normalize_defaults
 from app.features.tenants.slug import validate_slug
 from app.llm.dependency import get_embedder_dependency, get_llm_provider
 from app.llm.embedder import Embedder
@@ -63,6 +64,8 @@ class OnboardingStateResponse(BaseModel):
     # 29: required beats the source did not find, in beat order. The review
     # sheet renders one note; it never renders empty rows.
     missing_required: list[str] = Field(default_factory=list)
+    # 32: the selling-mode card, present only while that stage is on screen.
+    selling_mode: SellingModePayload | None = None
 
 
 class OnboardingSuggestionsResponse(BaseModel):
@@ -197,12 +200,126 @@ class OnboardingSourceUrlResponse(BaseModel):
     document: KnowledgeRecord | None
 
 
+class SellingModePayload(BaseModel):
+    """32: the card the interview renders for the one selling-mode question.
+
+    ``candidates`` is what the card offers when the guess is not certain - the
+    two that tied, or all four when there was no source. ``summary`` is
+    server-rendered from the stored capabilities and labels, never assembled in
+    the client.
+    """
+
+    mode: str
+    capabilities: dict[str, Any]
+    labels: dict[str, str]
+    # 32: the ordering defaults this tenant will run on (`hold_ttl_minutes`,
+    # `lead_time_minutes`, ...). The card starts its timing row from the stored
+    # value rather than a second copy of the constant on the client.
+    defaults: dict[str, Any] = Field(default_factory=dict)
+    confidence: str
+    candidates: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    summary: str
+
+
+class SellingModeConfigResponse(BaseModel):
+    """``config.ordering`` as stored, with its own read-back."""
+
+    config: dict[str, Any] | None = None
+    summary: str | None = None
+
+
+class SellingModeSuggestionResponse(SellingModePayload):
+    """The inference, its evidence, and whatever is already stored."""
+
+    config: dict[str, Any] | None = None
+
+
+class SellingModeRequest(BaseModel):
+    """The confirmation and the correction, one body.
+
+    The vocabulary is pydantic's, so a mode that is not one of the four, an
+    empty ``sell``, or an axis value outside its allowed set is a 422 at the
+    door rather than a stored value every later screen has to defend against.
+    Labels are the one tolerant field: they are stringified, unknown keys are
+    dropped, and a missing key falls back to the neutral default. ``defaults``
+    is the strict shape one level down - the key set is closed and every value
+    is coerced to the type its key already has.
+    """
+
+    mode: Mode
+    capabilities: Capabilities
+    labels: dict[str, Any] = Field(default_factory=dict)
+    defaults: dict[str, Any] | None = None
+
+    @field_validator("defaults")
+    @classmethod
+    def _known_defaults(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        # Run the real normalizer here so an unknown key or an uncoercible value
+        # is the same 422 the rest of the body gets.
+        normalize_defaults(value)
+        return value
+
+
 @router.get("/state", response_model=OnboardingStateResponse)
 async def get_state(
     admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
 ) -> OnboardingStateResponse:
     record = await controller.load_record_state(tenant_id=admin.tenant_id)
     return OnboardingStateResponse(**record)
+
+
+@router.get("/selling-mode/suggestion", response_model=SellingModeSuggestionResponse)
+async def get_selling_mode_suggestion(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> SellingModeSuggestionResponse:
+    """32: the inference, the signals it scored, and the stored config if any.
+
+    Deterministic and model-free - the owner's confirmation is answering a value
+    that was already computed, which is what makes it one tap.
+    """
+    return SellingModeSuggestionResponse(
+        **await controller.suggest_selling_mode(tenant_id=admin.tenant_id)
+    )
+
+
+@router.get("/selling-mode", response_model=SellingModeConfigResponse)
+async def get_selling_mode(
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> SellingModeConfigResponse:
+    """The stored ordering block, with the summary rendered from it.
+
+    No selling mode confirmed yet is a null pair, not a 404: the review card has
+    to be able to ask "what is there?" on a tenant that has not answered.
+    """
+    return SellingModeConfigResponse(
+        **await controller.load_selling_mode(tenant_id=admin.tenant_id)
+    )
+
+
+@router.post("/selling-mode", response_model=OnboardingStateResponse)
+async def post_selling_mode(
+    body: SellingModeRequest,
+    admin: Annotated[auth.AuthedTenantAdmin, Depends(auth.require_owner)],
+) -> OnboardingStateResponse:
+    """Confirm or correct the mode: no model call, and the cursor advances.
+
+    One statement writes the record's ``selling_mode`` gate and
+    ``tenant_config.config.ordering``, so the interview can never believe it
+    asked a question the product has no answer to.
+    """
+    record_data = await controller.confirm_selling_mode(
+        tenant_id=admin.tenant_id,
+        mode=body.mode,
+        capabilities=body.capabilities.model_dump(),
+        labels=body.labels,
+        defaults=body.defaults,
+    )
+    return OnboardingStateResponse(
+        **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+    )
 
 
 @router.get("/suggestions", response_model=OnboardingSuggestionsResponse)
@@ -280,7 +397,9 @@ async def post_source(
         extension=ext,
         provider=provider,
     )
-    return OnboardingStateResponse(**controller.response_from_record(record_data))
+    return OnboardingStateResponse(
+        **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+    )
 
 
 @router.post("/source/url", response_model=OnboardingSourceUrlResponse)
@@ -301,7 +420,9 @@ async def post_source_url(
         provider=provider,
     )
     return OnboardingSourceUrlResponse(
-        state=OnboardingStateResponse(**controller.response_from_record(result["state"])),
+        state=OnboardingStateResponse(
+            **await controller.state_payload(tenant_id=admin.tenant_id, record_data=result["state"])
+        ),
         document=(
             KnowledgeRecord(**result["document"]) if result["document"] is not None else None
         ),
@@ -338,7 +459,9 @@ async def post_message(
         record_data = await controller.run_resume(
             tenant_id=admin.tenant_id, idempotency_key=body.idempotency_key
         )
-        return OnboardingStateResponse(**controller.response_from_record(record_data))
+        return OnboardingStateResponse(
+            **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+        )
     if body.selection is not None:
         record_data = await controller.run_selection(
             tenant_id=admin.tenant_id,
@@ -346,7 +469,9 @@ async def post_message(
             values=body.selection.values,
             idempotency_key=body.idempotency_key,
         )
-        return OnboardingStateResponse(**controller.response_from_record(record_data))
+        return OnboardingStateResponse(
+            **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+        )
     if body.correction is not None:
         record_data = await controller.run_correction(
             tenant_id=admin.tenant_id,
@@ -354,7 +479,9 @@ async def post_message(
             provider=provider,
             idempotency_key=body.idempotency_key,
         )
-        return OnboardingStateResponse(**controller.response_from_record(record_data))
+        return OnboardingStateResponse(
+            **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+        )
     assert body.text is not None
     record_data = await controller.run_message(
         tenant_id=admin.tenant_id,
@@ -363,7 +490,9 @@ async def post_message(
         embedder=embedder,
         idempotency_key=body.idempotency_key,
     )
-    return OnboardingStateResponse(**controller.response_from_record(record_data))
+    return OnboardingStateResponse(
+        **await controller.state_payload(tenant_id=admin.tenant_id, record_data=record_data)
+    )
 
 
 @router.post("/message/stream")
