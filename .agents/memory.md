@@ -569,3 +569,49 @@
 ### Conventions
 
 - **Convention: assert against the backend ceiling when a spec waits on a bounded server budget.** Match the spec's own timeout to `_DRAFT_TIMEOUT_SECONDS` plus crawl and margin, and keep the assertion under the test budget, or the failure names the wrong limit.
+
+## Ticket 32 slice A - selling mode inference and config (2026-11-13)
+
+### Decisions
+
+- **Decision: `candidates` rides both the inference payload and the stage payload.** The ticket's pinned shape is `{mode, capabilities, labels, confidence, evidence, summary}`, but one `mode` field cannot carry the two modes a medium-confidence source returns or the four a no-source run offers, and the card has to render those. It is an additive field, documented in the commit body; nothing reads `mode` alone to decide anything.
+- **Decision: the selling-mode confirmation is one `UPDATE`, through the same `_checkpoint` every other onboarding write uses.** `service.set_onboarding_json(..., ordering=...)` nests `jsonb_set` calls so `config.ordering` and `config.onboarding` land together with the revision compare-and-swap intact. Do not add a second write path for any later Settings edit of the same block.
+- **Decision: `confirm` refuses to go live without `selling_mode`.** `config.ordering` is what the ordering service, the public payload, and the tools read; a live tenant without it is a broken tenant, and the interview asks the question before the beats, so a confirm without one is a skipped step, not a choice.
+- **Decision: `selection_reply` now asks from `progress()`, not `_advance()`.** `_advance` only knows beats, so it announced the first missing beat while a non-beat stage was on screen. Any future non-beat stage is now announced for free; keep that seam single-sourced.
+- **Decision: `_advance` returns None while the selling-mode stage is due, the same guard the source stage has.** A text turn during the card therefore saves no beat and announces none; it is answered deterministically in the stage's own words (`_GENERIC_REJECT` + the ask), with no model call. `_selling_mode_due` also requires `ask_beat` empty, so the rule reads "the card is asked only when no other question is on screen" and an interview that was mid-beat when this shipped is not interrupted mid-answer.
+- **Decision: the confirmation POST is idempotent on its own body.** `confirm_selling_mode` fingerprints the written config and runs `_already_applied`/`_mark_action` like every other onboarding write, so a retried POST returns the state the first one produced - one history pair, one ask - instead of appending a second question from an advanced cursor. The card applies that POST response directly; there is no follow-up read, so a lost response costs a retry and nothing else.
+- **Decision: `defaults` is writable through the same POST** (`{"lead_time_minutes": 45}`), with a closed key set and values coerced to the type each key already has. That is what makes the card's "how long does an order take?" row real rather than a control that changes nothing, and it is the seam Settings will use for the rest of the block.
+
+### Gotchas
+
+- **Gotcha: `docker compose run --rm backend` re-creates the auth container, and it can lose the race against `db`.** Symptom: `dependency failed to start: container agencx-auth-1 exited (1)` with GoTrue logging `lookup db on 127.0.0.11:53: no such host`. `docker compose up -d db auth` then retrying the run clears it - do not start debugging the code.
+- **Gotcha: another project squatting host ports 5432/3000/8000 silently blocks the whole stack.** Here `jackpot-postgres-1` held 5432 and `jackpot-frontend-1`/`jackpot-backend-1` held 3000/8000; `make dev` reports "port is already allocated" (or hangs) rather than "another project". `docker ps` first when the stack will not come up.
+- **Gotcha: a spec that calls `POST /api/onboarding/confirm` without a slug gets `suggested_slug(business_name)`.** Two tests sharing a name ("Bytefix") collide on the slug in the shared `wren_test` database, and the 409 says "taken", not "slug". Pass an explicit unique slug in any backend test that confirms.
+- **Gotcha: the multi-select correction path starts from the inference, so switching mode is two taps** (pick the new one, unpick the inferred one). The E2E asserts exactly that; a one-tap replacement would make "add a second capability" impossible on the same control.
+- **Gotcha: a test fixture that parks a record on a beat with no `selling_mode` is not a reachable state any more.** The mode is asked before the first missing beat, so such a record makes `progress()` report `selling_mode` and the beat tests pass vacuously (or fail on the reply). Set `selling_mode=_confirmed_mode()` in the fixture - `_drafted()` in `test_onboarding_agent.py` does it for every caller.
+
+### Conventions
+
+- **Convention: a new non-beat interview stage is a `progress()` gate plus an `InputSpec` in `beats.py`, never an entry in `BEAT_ORDER`.** `BEAT_ORDER` drives completeness and the two-pass cap; a stage that gates no profile field would distort both. The record field that means "already asked" is the gate, and it is read through a default in `from_jsonb` rather than a version bump, so an in-flight interview is never restarted.
+- **Convention: the label map is mirrored on both sides and pinned by a test on each.** Backend `LABEL_DEFAULTS` renders the summary; `frontend/src/lib/selling-modes.ts` renders the screen. A rename has to land in both, and the two tests are what make a one-sided rename fail.
+
+## Ticket 32 slice A review round 3 - bounds, read-back, and stage honesty (2026-11-13)
+
+### Decisions
+
+- **Decision: `config.ordering.defaults` is validated by a pydantic model, not by hand-rolled loops.** `OrderingDefaults` in `selling_modes.py` carries the ticket's own bounds (`deposit_bps` 0-10000, the TTLs > 0, the rest >= 0) plus a `zoneinfo` check, and `normalize_defaults` is its only entry point, so the route's field validator and the write path enforce one rule. A null is now a 422 with `defaults` in the error body instead of `int(None)` on an owner route.
+- **Decision: the confirm stage's card is the stored config and nothing else.** `_stage_card` answers on `selling_mode` (inference, or the stored block if one exists) and on `confirm` (stored only, `None` when nothing is stored). The inference is never offered on the confirm screen - that is the whole point of the read-back the ticket pins.
+- **Decision: the change view carries no inference sentence.** Headline, summary, and evidence render only in the card's confirm view. Before, the owner could pick Bookings and still read "take orders from your menu", because the only sentence available was the one the inference produced.
+- **Decision: `prepare_turn`'s `nxt is None` branch checks `_selling_mode_due` before speaking.** A pre-32 record carries an `ask_beat` and no `selling_mode`, so its last beat-answer clears the cursor and reaches that branch with the mode still owed; it now says the mode's question instead of the activation line, matching the `stage` the same reply emits.
+- **Decision: the tenant 2 seed writes the record gate and `config.ordering` from one local `selling_mode`, in one nested `jsonb_set`.** Same shape as `apply_confirmation`'s two sibling keys, so the two copies cannot drift.
+
+### Gotchas
+
+- **Gotcha: `beats.NAME_CONFIRM_INPUT` satisfies `kind == "text"`, and so do `KNOWLEDGE_INPUT` and `SELLING_MODE_INPUT`.** Any walk test asserting "the input is the beat's own spec" must special-case the pending-name steps (the stage key is still the beat's) and the source stage; `test_every_beat_still_accepts_typed_text` now carries `(expected stage, text)` and asserts exactly that pair.
+- **Gotcha: the ticket already has a placeholder `## Verification` section under `## Blockers`.** Appending a second `## Verification` to the file creates two headings; fill the placeholder instead.
+- **Gotcha: an E2E payload type for `defaults` must be `Record<string, number | string>`.** `timezone` is a string, and the narrower `Record<string, number>` fails `tsc` on the E2E file even though the test would run.
+
+### Conventions
+
+- **Convention: an E2E stub for the confirm stage must return the stage's real card, not `selling_mode: null`.** A null makes the read-back assertion pass vacuously - the client renders nothing and the spec still goes green. If the stub has no card to return, the assertion is not testing anything.
+- **Convention: the summary sentence is asserted from the server's own renderer.** The E2E constants (`ORDERS_SUMMARY`, `BOOKINGS_SUMMARY`) mirror `summary_for` verbatim so a wording change fails the spec rather than drifting.

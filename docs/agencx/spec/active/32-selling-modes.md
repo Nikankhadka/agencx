@@ -1,6 +1,6 @@
 # 32: Selling modes, lead capture, and the order kernel
 
-**Status:** Active - todo.
+**Status:** Active - in progress - slice A built on `feat/32-slice-a-selling-mode-inference`; slices B-H not started.
 **Phase 2 area:** Onboarding, lead capture, ordering, booking, quotes, stock, calendar, owner console, payments ledger.
 
 Depends on ticket 29 (source-first onboarding) and ticket 31 (review
@@ -839,6 +839,29 @@ Tests:
 - E2E: source -> confirmation -> correct -> final summary -> go live; the
   owner's Home shows the chosen Work label.
 
+Delivered notes (2026-11-13):
+
+- The payloads carry two additive fields beyond the shape above. `candidates` on
+  the inference and on the stage payload, because one `mode` cannot express the
+  two modes a medium-confidence source returns or the four a no-source run
+  offers. `defaults` on both, so the card's "how long does an order take?" row
+  starts from the stored default instead of a second copy of the constant on the
+  client.
+- A POST to `/api/onboarding/selling-mode` is idempotent on its own body, so the
+  card applies that response directly and a lost response is safe to retry. The
+  card therefore has no separate stored-config read-back step; the summary is
+  still server-rendered from the config before the owner confirms, and the
+  stored block is readable from `GET /api/onboarding/selling-mode`.
+- Residual, pre-existing: `make seed-tenant2` still fails at confirm with
+  `409 incomplete - missing: ABN; GST registration`. The seed's interview script
+  has no ABN/GST stage, so the tenant never completes; that is a separate ticket.
+  Slice A's gate is confirmed not to be an additional failure mode - the seeded
+  record now carries its selling mode, and the seed reaches the same pre-existing
+  error.
+- Residual: `frontend/e2e/walkthrough-2026-10.spec.ts` is stale against the new
+  stage and is not gating, because `playwright.config.ts` keeps it in
+  `testIgnore`. It is not updated here.
+
 ### Slice B - Leads, orders, and lines
 
 Migration 0039. Goal: one work object with lines, leads, and a canonical state.
@@ -1146,9 +1169,31 @@ the ledger and chat surfaces.
 
 ## Verification
 
-To be filled at the branch tip. The table will list, per slice: the exact
-commands, the pass counts, and the evidence links. Concurrency evidence must
-show the race, not just a single-threaded pass.
+### Slice A (built)
+
+Commit `f439dd8` plus the review rounds, branch
+`feat/32-slice-a-selling-mode-inference`, off `development` at `514f766`.
+
+- `make lint`, `make format-check`, `make typecheck`, `make test`, `make build` green.
+- Full `make test-e2e`: 275 passed, 1 failed, 3 skipped. The one red is
+  `tab-shell-mobile.spec.ts` on `mobile-chrome` ("no overflow and tappable
+  controls at 390px"), which passes alone; it is the recorded
+  order-dependent flake class, not a slice-A defect.
+- Targeted onboarding specs green: `selling-mode-onboarding`,
+  `onboarding`, `onboarding-go-live`, `onboarding-resume`,
+  `onboarding-source-first`, `onboarding-url`, `onboarding-transport`.
+
+Residuals, recorded rather than fixed here:
+
+- `make seed-tenant2` still fails at confirm with the pre-existing
+  `incomplete - missing: ABN; GST registration` gap. Slice A's mode gate is
+  not in that path; the seed now carries a bookings mode on the record and
+  in `config.ordering`.
+- `frontend/e2e/walkthrough-2026-10.spec.ts` drives the old completion path
+  and is stale; it sits in `testIgnore`, so it gates nothing.
+- Two payload fields are additive to the pinned shape: `candidates` on the
+  inference (the spec's medium-confidence case needs to offer two) and
+  `defaults` on the stage card (the Orders timing follow-up writes one).
 
 ## ADRs to add
 

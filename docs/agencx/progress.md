@@ -417,7 +417,11 @@ live in the ticket files, not here.
   confirmation, six independent capability axes, tenant labels, one order
   object with capacity holds for stock, kitchen throughput, slots, and
   resources, a Board/Calendar view, channel-agnostic leads, and a payments
-  ledger. Spec written on `docs/32-selling-modes`; build not started. See
+  resource, a Board/Calendar view, channel-agnostic leads, and a payments
+  ledger. Slice A built and awaiting review: deterministic selling-mode
+  inference, one-tap confirm and correction, `config.ordering`, the
+  `[Go live] [Edit]` read-back on the confirm screen, and the owner
+  bootstrap `ordering` field. See
   [32-selling-modes.md](spec/active/32-selling-modes.md).
 
 ## Spec status
