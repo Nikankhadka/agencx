@@ -1181,7 +1181,7 @@ the ledger and chat surfaces.
 ### Slice A (built)
 
 Built on `feat/32-slice-a-selling-mode-inference` off `development` at `514f766`;
-squashed on merge.
+squashed on merge to `development` as `786ee96` on 2026-11-17.
 
 - `make lint`, `make format-check`, `make typecheck`, `make test`, `make build` green.
 - Full `make test-e2e`: 275 passed, 1 failed, 3 skipped. The one red is

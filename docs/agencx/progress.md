@@ -420,7 +420,7 @@ live in the ticket files, not here.
   ledger. Slice A built and awaiting review: deterministic selling-mode
   inference, one-tap confirm and correction, `config.ordering`, the
   `[Go live] [Edit]` read-back on the confirm screen, and the owner
-  bootstrap `ordering` field. See
+  bootstrap `ordering` field, merged to `development` as `786ee96`. See
   [32-selling-modes.md](spec/active/32-selling-modes.md).
 
 ## Spec status
