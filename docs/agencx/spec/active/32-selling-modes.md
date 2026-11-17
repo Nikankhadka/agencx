@@ -1184,10 +1184,10 @@ Built on `feat/32-slice-a-selling-mode-inference` off `development` at `514f766`
 squashed on merge to `development` as `786ee96` on 2026-11-17.
 
 - `make lint`, `make format-check`, `make typecheck`, `make test`, `make build` green.
-- Full `make test-e2e`: 275 passed, 1 failed, 3 skipped. The one red is
-  `tab-shell-mobile.spec.ts` on `mobile-chrome` ("no overflow and tappable
-  controls at 390px"), which passes alone; it is the recorded
-  order-dependent flake class, not a slice-A defect.
+- Full `make test-e2e` at the merged tip `e6a9a62`: 276 passed, 1 failed,
+  3 skipped. The one red is `tab-shell-mobile.spec.ts` on `mobile-chrome`,
+  `page.goto: WebKit encountered an internal error`, which passes alone in
+  4s; it is the recorded order-dependent flake class, not a slice-A defect.
 - Targeted onboarding specs green: `selling-mode-onboarding`,
   `onboarding`, `onboarding-go-live`, `onboarding-resume`,
   `onboarding-source-first`, `onboarding-url`, `onboarding-transport`.
