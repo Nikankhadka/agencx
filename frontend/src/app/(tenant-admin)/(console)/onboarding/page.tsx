@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Chip } from "@/components/ui/Chip";
 import { Container } from "@/components/ui/Container";
 import { Input } from "@/components/ui/Input";
 import {
@@ -37,7 +38,12 @@ import {
   type UploadTarget,
 } from "@/lib/onboarding";
 import { slugShapeError } from "@/lib/slug";
+import {
+  type SellingModePayload,
+  type SellingModeSuggestion,
+} from "@/lib/selling-modes";
 import { BeatComposer } from "./components/BeatComposer";
+import { SellingModeCard } from "./components/SellingModeCard";
 import {
   type KnowledgeRecord,
   type KnowledgeSection,
@@ -72,6 +78,8 @@ interface StateFields {
   revision?: number;
   missing_required?: string[];
   offering_candidates?: PendingOffering[];
+  /** 32: the selling-mode card, present only while that stage is on screen. */
+  selling_mode?: SellingModeSuggestion | null;
 }
 
 /** What one attach batch produced (29). */
@@ -276,6 +284,14 @@ export default function OnboardingPage() {
   // source left empty. Both come from the same state response.
   const [profile, setProfile] = useState<OnboardingDraft>({});
   const [missingRequired, setMissingRequired] = useState<string[]>([]);
+  // 32: the selling-mode stage's own payload. The server composes it - the
+  // inference and its evidence before the owner answers, the stored config's
+  // summary afterwards - so the card only renders what it is given.
+  const [sellingMode, setSellingMode] = useState<SellingModeSuggestion | null>(null);
+  // 32: the confirm screen's [Edit] - a local view switch, not a route. It
+  // re-opens the card over the stored config and folds back into the summary
+  // the moment the save's own state lands.
+  const [editingMode, setEditingMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +318,10 @@ export default function OnboardingPage() {
     setOwnerOfferings(fields.offering_candidates ?? []);
     setProfile(fields.draft);
     setMissingRequired(fields.missing_required ?? []);
+    setSellingMode(fields.selling_mode ?? null);
+    // A state that just landed is the newest read of the stored config, so an
+    // open editor is holding a draft older than it - close it.
+    setEditingMode(false);
     setBusinessName((current) => current || fields.draft.business_name || "");
     // W-4 US-1/US-2: unconditional, every time - see the `suggestedSlug`
     // declaration above for why this alone is enough for every confirm-
@@ -523,6 +543,28 @@ export default function OnboardingPage() {
         setMessages((prev) => prev.slice(0, -2));
         setError(err instanceof ApiError ? err.detail : "Something went wrong");
       }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 32: write the selling mode and take the state the POST answers with.
+   *
+   * The server composes that envelope from the row it just wrote, so there is
+   * nothing for a second read to add - and a retried POST is idempotent, which
+   * is what makes a lost response safe to retry from here.
+   */
+  async function saveSellingMode(payload: SellingModePayload) {
+    setError(null);
+    setBusy(true);
+    try {
+      const state = await apiFetch<OnboardingState>("/api/onboarding/selling-mode", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      applyStateFields(state);
+      setMessages(historyToMessages(state.history));
     } finally {
       setBusy(false);
     }
@@ -1303,6 +1345,35 @@ export default function OnboardingPage() {
                   Going live as {businessName}.
                 </p>
               ) : null}
+              {/* 32: the ticket's final summary - rendered from the stored
+                  capabilities by the server, above the go-live button, with
+                  [Edit] beside it. `summary_for` is not reimplemented here: the
+                  sentence is whatever the confirm stage's card carries. */}
+              {sellingMode?.summary && !editingMode ? (
+                <div
+                  className="flex flex-col gap-2 rounded-card border border-hairline bg-surface p-4"
+                  data-testid="onboarding-selling-summary"
+                >
+                  <p className="text-prose text-text">{sellingMode.summary}</p>
+                  <div>
+                    <Chip
+                      label="Edit"
+                      dashed
+                      data-testid="onboarding-selling-edit"
+                      disabled={busy}
+                      onClick={() => setEditingMode(true)}
+                    />
+                  </div>
+                </div>
+              ) : null}
+              {sellingMode && editingMode ? (
+                <SellingModeCard
+                  suggestion={sellingMode}
+                  busy={busy}
+                  initialView="change"
+                  onSave={saveSellingMode}
+                />
+              ) : null}
               <Input
                 label="Your business page"
                 value={publicSlug}
@@ -1335,6 +1406,12 @@ export default function OnboardingPage() {
                 Try again
               </Button>
             </div>
+          ) : !completed && stage === "selling_mode" && sellingMode ? (
+            <SellingModeCard
+              suggestion={sellingMode}
+              busy={busy}
+              onSave={saveSellingMode}
+            />
           ) : !completed && input ? (
             <BeatComposer
               key={stage}

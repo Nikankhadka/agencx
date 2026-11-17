@@ -103,10 +103,16 @@ async def find_tenant_for_user(user_id: str) -> str | None:
 
 
 async def get_tenant(tenant_id: str) -> dict[str, Any] | None:
-    """The slug/name/brand triple for the caller's own tenant (Surface-2 header)."""
+    """The slug/name/brand/ordering quad for the caller's own tenant (Surface-2 header).
+
+    ``ordering`` is the same ``config.ordering`` block the ordering service and
+    the public payload read, so the console bootstrap and the rest of the
+    product cannot disagree about what this tenant sells.
+    """
     async with db.tenant_context(tenant_id, "tenant_admin") as conn:
         row = await conn.fetchrow(
-            "select t.slug, t.name, t.business_name, tc.brand from tenants t"
+            "select t.slug, t.name, t.business_name, tc.brand, tc.config->'ordering' as ordering"
+            " from tenants t"
             " left join tenant_config tc on tc.tenant_id = t.id where t.id = $1",
             tenant_id,
         )
@@ -119,6 +125,9 @@ async def get_tenant(tenant_id: str) -> dict[str, Any] | None:
     else:
         parsed = json.loads(raw)
         result["brand"] = parsed if isinstance(parsed, dict) else {}
+    ordering = result.pop("ordering", None)
+    parsed_ordering = json.loads(ordering) if isinstance(ordering, str) else ordering
+    result["ordering"] = parsed_ordering if isinstance(parsed_ordering, dict) else {}
     return result
 
 

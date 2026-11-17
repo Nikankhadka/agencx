@@ -49,6 +49,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.spotlight import scan_input
 from app.features.business.offering_candidates import normalize_name
+from app.features.onboarding import selling_modes
 from app.llm.provider import ChatMessage, LLMProvider
 from app.observability.logging import TRANSCRIPT_LOGGER_NAME
 from app.onboarding import beats
@@ -261,6 +262,12 @@ _NAME_BEAT = "owner_display_name"
 # model. How a business sounds to its customers is the owner's own choice.
 _VOICE_BEAT = "customer_voice_preset"
 
+# 32: the selling-mode stage's key. It is not a beat - it gates no profile field
+# and it is asked once - so `progress` owns it beside the source stage. It sits
+# after the source settles and before the first missing required beat, and the
+# record's own `selling_mode` is the "already asked" gate.
+_SELLING_MODE_BEAT = "selling_mode"
+
 # The storage bound on a name. A confirmed name is accepted however unusual it
 # looks (US-1) - this is the limit that is not about taste.
 _NAME_MAX = 200
@@ -362,6 +369,11 @@ class OnboardingRecord:
     # a junk business name becoming the public identity. It is part of the
     # persisted record, so a reload mid-confirmation resumes the same proposal.
     pending_name: dict[str, str] | None = None
+    # 32: the confirmed selling mode, as it was written to
+    # `tenant_config.config.ordering`. The config is the source of truth for the
+    # rest of the product; this copy exists only so the interview knows the
+    # question has been asked, and so a reload does not ask it twice.
+    selling_mode: dict[str, Any] | None = None
     # Monotonic JSON checkpoint metadata. It makes retries and concurrent tabs
     # converge on one server-authored state instead of advancing twice.
     revision: int = 0
@@ -409,6 +421,11 @@ class OnboardingRecord:
                 # do: a v4 record written before it existed has no name waiting
                 # to be confirmed, which is exactly what its absence says.
                 pending_name=_load_pending_name(raw.get("pending_name")),
+                # 32: an absent config means this record was written before the
+                # stage existed, which is exactly "not asked yet" - read through
+                # a default rather than bumping the version, the same rule W-2
+                # and W-9's fields follow.
+                selling_mode=_load_selling_mode(raw.get("selling_mode")),
                 revision=int(raw.get("revision", 0) or 0),
                 last_action_key=str(raw.get("last_action_key"))
                 if raw.get("last_action_key")
@@ -473,6 +490,7 @@ class OnboardingRecord:
             "ask_count": self.ask_count,
             "paused_beat": self.paused_beat,
             "pending_name": self.pending_name,
+            "selling_mode": self.selling_mode,
             "revision": self.revision,
             "last_action_key": self.last_action_key,
             "last_action_fingerprint": self.last_action_fingerprint,
@@ -492,6 +510,17 @@ def _load_pending_name(raw: Any) -> dict[str, str] | None:
     if pending["target"] in _NAME_FIELDS and pending["proposal"]:
         return pending
     return None
+
+
+def _load_selling_mode(raw: Any) -> dict[str, Any] | None:
+    """Read the confirmed ordering config, or None when no mode was asked yet.
+
+    A config with no recognised mode is not a confirmation - treating it as one
+    would silently skip the question for the rest of the interview.
+    """
+    if not isinstance(raw, dict):
+        return None
+    return raw if raw.get("mode") in selling_modes.MODES else None
 
 
 def _load_offerings(raw: Any) -> list[PendingOffering]:
@@ -719,6 +748,11 @@ _SOURCE_ASK = (
     "time from Settings."
 )
 
+# 32: the one selling-mode question. The card under it carries the inference,
+# its evidence, and the server-rendered summary, so the sentence stays a
+# question and the confirmation stays one tap.
+_SELLING_MODE_ASK = "How do customers buy from you?"
+
 
 # What a rejected beat says when it carries no ``reject`` of its own. Every beat
 # with a deterministic ``valid`` check has one; a beat rejected purely on the
@@ -778,18 +812,31 @@ def selection_reply(record: OnboardingRecord, ack: str = "Got it.") -> str:
     ``ack`` is what the server says about the answer just applied; a confirmed
     name passes its own read-back so the owner sees the spelling that was saved.
     The next line comes from ``progress``'s own ordering, so the reply can never
-    announce a different stage from the one the composer is showing.
+    announce a different stage from the one the composer is showing. 32 routes
+    every stage - including the two non-beat ones and the mode question - through
+    that one source; before it, this function walked ``_advance`` and would have
+    announced the first missing beat while the selling-mode card was on screen.
     """
-    nxt = _advance(record)
-    if nxt is None:
+    stage, _input, _can_confirm = progress(record)
+    if stage in {"confirm", "paused"}:
         record.ask_beat, record.ask_count = "", 0
-        if record.knowledge_pending:
-            return f"{ack} {_SOURCE_ASK}".strip()
+        if stage == "paused":
+            return ack
+        return _completion_reply(record)
+    if stage == "knowledge":
+        record.ask_beat, record.ask_count = "", 0
+        return f"{ack} {_SOURCE_ASK}".strip()
+    if stage == _SELLING_MODE_BEAT:
+        record.ask_beat, record.ask_count = "", 0
+        return f"{ack} {_SELLING_MODE_ASK}".strip()
+    beat = beats.BEATS.get(stage)
+    if beat is None:
+        record.ask_beat, record.ask_count = "", 0
         return _completion_reply(record)
     # The server emitted this question, so its cursor must agree before the
     # owner's next typed answer is extracted and validated.
-    record.ask_beat, record.ask_count = nxt.key, 1
-    return f"{ack} {nxt.ask}"
+    record.ask_beat, record.ask_count = beat.key, 1
+    return f"{ack} {beat.ask}"
 
 
 def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, bool]:
@@ -802,6 +849,10 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     stage is therefore second, which is why the ``knowledge_pending`` check is
     NOT hoisted above ``next_beat`` - done literally it would ask for the source
     before the name and invert the flow. ``_advance`` carries that rule.
+
+    32 inserts one non-beat stage between the source and the beats: the selling
+    mode is asked once, after the source has settled and before the first
+    missing required beat, and the record's own ``selling_mode`` is the gate.
     """
     if record.paused_beat:
         return "paused", None, False
@@ -809,6 +860,8 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     # confirmation chip in the composer instead of the beat's own chips.
     if record.pending_name:
         return record.pending_name["target"], beats.NAME_CONFIRM_INPUT, False
+    if _selling_mode_due(record):
+        return _SELLING_MODE_BEAT, beats.SELLING_MODE_INPUT, False
     nxt = _advance(record)
     if nxt is not None:
         return nxt.key, beats.input_spec(nxt), False
@@ -817,8 +870,33 @@ def progress(record: OnboardingRecord) -> tuple[str, beats.InputSpec | None, boo
     return "confirm", None, not record.completed
 
 
+def _selling_mode_due(record: OnboardingRecord) -> bool:
+    """Whether the one selling-mode question is the next thing to ask (32).
+
+    The name is the only profile beat ahead of it, so that beat being answered
+    or skipped is the whole precondition; the source ask has to be settled
+    because the inference reads what the source left behind. A completed record
+    is never sent back into the interview - an already-live tenant keeps
+    working and picks its ordering block up from Settings.
+
+    ``ask_beat`` empty is the same rule stated from the other side: the card is
+    a question, so it is asked only when no other question is on screen. The
+    flow always satisfies it (``selection_reply`` clears the cursor when it asks
+    for the mode), and it is what keeps an interview that was mid-beat when
+    this stage shipped from being interrupted mid-answer.
+    """
+    name = beats.BEATS[_NAME_BEAT]
+    return (
+        not record.completed
+        and record.selling_mode is None
+        and not record.knowledge_pending
+        and not record.ask_beat
+        and (name.complete(record.draft) or _NAME_BEAT in record.skipped)
+    )
+
+
 def _advance(record: OnboardingRecord) -> beats.Beat | None:
-    """The beat to ask now, or None when the source stage or confirm is next.
+    """The beat to ask now, or None when a non-beat stage or confirm is next.
 
     ``deferred`` is never cleared: once pass one runs out of beats,
     ``next_beat`` falls through to the deferred ones on its own, and keeping
@@ -829,7 +907,13 @@ def _advance(record: OnboardingRecord) -> beats.Beat | None:
     "source if ``knowledge_pending``, else confirm", and ``progress`` says
     which. Do not "simplify" this by moving the flag check above ``next_beat``:
     that inverts the locked flow.
+
+    32 gives the selling-mode stage the same guard for the same reason: while
+    the card owns the screen, a text turn must not pick a beat or announce one,
+    or the card and a beat's question would be on screen together.
     """
+    if _selling_mode_due(record):
+        return None
     nxt = beats.next_beat(record.draft, record.skipped, record.deferred)
     if nxt is None or nxt.key == _NAME_BEAT:
         return nxt
@@ -1185,6 +1269,18 @@ async def prepare_turn(
             reply_msgs=None,
         )
 
+    # 32: the selling mode is a card, not a beat. `_advance` already refuses to
+    # pick a beat while this stage is due, so a typed message here is answered in
+    # the stage's own words - the same reject-then-ask shape every beat uses
+    # when the answer does not fit, and no model call to embellish it.
+    if _selling_mode_due(record):
+        record.history.append({"role": "user", "content": admin_message})
+        return TurnPlan(
+            record=record,
+            summary=f"{_GENERIC_REJECT} {_SELLING_MODE_ASK}",
+            reply_msgs=None,
+        )
+
     # The opening question is rendered from the first open beat before any
     # cursor is persisted. Treat it as asked too, so its first answer receives
     # the same validation as every later one.
@@ -1432,11 +1528,21 @@ async def prepare_turn(
         reply_msgs.append({"role": entry["role"], "content": entry["content"]})
 
     if nxt is None:
-        return TurnPlan(
-            record=record,
+        # 32: a record from before this stage carries an `ask_beat` and no
+        # `selling_mode`, so the beat it was mid-answer on is the last one and
+        # this branch is reached while the mode is still owed - `_advance` only
+        # starts answering None for it once the cursor above is cleared. The
+        # activation line would then announce go-live beside a card asking how
+        # customers buy, so the stage's own question is what this turn says.
+        if _selling_mode_due(record):
+            summary = _SELLING_MODE_ASK
+        else:
             # 29: while the source stage is open, completion must not clear its
             # flag and skip the second question - the stage keeps its own line.
-            summary=_SOURCE_ASK if record.knowledge_pending else _completion_reply(record),
+            summary = _SOURCE_ASK if record.knowledge_pending else _completion_reply(record)
+        return TurnPlan(
+            record=record,
+            summary=summary,
             reply_msgs=None,
             off_topic=off_topic,
         )

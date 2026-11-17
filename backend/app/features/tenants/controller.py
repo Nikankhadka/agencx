@@ -139,7 +139,13 @@ async def me(*, tenant_id: str) -> dict[str, Any]:
         # Should not happen for a resolved tenant_admin (FK guarantees the
         # tenant row exists), but fail closed rather than return a null body.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant not found")
-    return {"tenant_id": tenant_id, "slug": row["slug"], "name": row["name"], "brand": row["brand"]}
+    return {
+        "tenant_id": tenant_id,
+        "slug": row["slug"],
+        "name": row["name"],
+        "brand": row["brand"],
+        "ordering": row["ordering"],
+    }
 
 
 async def resolve_public(slug: str) -> dict[str, Any] | None:

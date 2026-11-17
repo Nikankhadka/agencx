@@ -491,6 +491,13 @@ KNOWLEDGE_INPUT = InputSpec(
 )
 
 
+# 32: the selling-mode stage is the second non-beat stage. Its card is built
+# from the server's own suggestion and summary, so the composer carries no
+# chips - a mode is confirmed through `POST /api/onboarding/selling-mode`, which
+# is also the only door that writes `config.ordering`.
+SELLING_MODE_INPUT = InputSpec(kind="text", placeholder="")
+
+
 def check_completeness(draft: dict[str, Any], skipped: Sequence[str] = ()) -> list[str]:
     """Labels of every unsatisfied beat the owner has not skipped.
 

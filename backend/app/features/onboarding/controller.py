@@ -23,7 +23,7 @@ from fastapi import HTTPException, status
 
 from app.features.business.offering_candidates import normalize_name
 from app.features.knowledge import service as knowledge_service
-from app.features.onboarding import service
+from app.features.onboarding import selling_modes, service
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.llm.embedder import Embedder
 from app.llm.provider import LLMProvider
@@ -147,7 +147,13 @@ def _missing_required(record: OnboardingRecord) -> list[str]:
     ]
 
 
-def _state_event(record: OnboardingRecord) -> dict[str, object]:
+async def _state_event(tenant_id: UUID, record: OnboardingRecord) -> dict[str, object]:
+    """The stream's ``state`` frame - the same shape a REST read answers with.
+
+    32: async because the selling-mode stage's card is a read of its own (the
+    stored config, or the inference over what the source left), and a state
+    frame that omitted it would put the stage on screen with nothing to render.
+    """
     record_data = record.to_jsonb()
     stage, input_, can_confirm = progress(record)
     return {
@@ -171,6 +177,9 @@ def _state_event(record: OnboardingRecord) -> dict[str, object]:
         "pending_confirmation": record.pending_name,
         "skipped": record.skipped,
         "revision": record.revision,
+        "selling_mode": await _stage_card(
+            tenant_id=tenant_id, stage=stage, record_data=record_data
+        ),
     }
 
 
@@ -191,7 +200,16 @@ async def _scrape_and_draft(
     return crawl.text, crawl.title, record
 
 
-def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
+def response_from_record(
+    record_data: dict[str, Any], *, selling_mode: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The wire state for one record.
+
+    32: ``selling_mode`` is the stage card's own payload, composed by
+    ``state_payload`` from the stored config or the inference. It is passed in
+    rather than read here because that read is async, and this function is also
+    called from the turn loop where there is nothing yet to show.
+    """
     onboarding = OnboardingRecord.from_jsonb(record_data)
     draft = onboarding.draft
     completed = onboarding.completed
@@ -231,6 +249,7 @@ def response_from_record(record_data: dict[str, Any]) -> dict[str, Any]:
         "pending_confirmation": onboarding.pending_name,
         "skipped": onboarding.skipped,
         "revision": onboarding.revision,
+        "selling_mode": selling_mode,
     }
 
 
@@ -277,7 +296,9 @@ async def _timed(key: str, awaitable: Awaitable[Any], timings: dict[str, float])
         timings[key] = _elapsed_ms(started)
 
 
-async def _checkpoint(tenant_id: UUID, record: OnboardingRecord) -> dict[str, Any]:
+async def _checkpoint(
+    tenant_id: UUID, record: OnboardingRecord, *, ordering: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Persist one checkpoint and carry the new revision back onto the record.
 
     ``service.save_record`` compare-and-swaps on the stored revision and bumps
@@ -285,10 +306,13 @@ async def _checkpoint(tenant_id: UUID, record: OnboardingRecord) -> dict[str, An
     (every streamed turn does) therefore has to carry that bump back, and doing
     it by hand at each call site meant one missed line was one 500. The read
     back from the written dict is the same value the row now holds.
+
+    32: ``ordering`` rides the same statement as the record, so the selling-mode
+    confirmation is one write - see ``service.set_onboarding_json``.
     """
     record_data = record.to_jsonb()
     try:
-        await service.save_record(tenant_id=tenant_id, record=record_data)
+        await service.save_record(tenant_id=tenant_id, record=record_data, ordering=ordering)
     except service.RevisionConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -339,11 +363,195 @@ def _may_sync_services(record: OnboardingRecord) -> bool:
 
 async def load_record_state(*, tenant_id: UUID) -> dict[str, Any]:
     record = await service.load_record(tenant_id=tenant_id)
-    response = response_from_record(record)
+    response = await state_payload(tenant_id=tenant_id, record_data=record)
     documents = await knowledge_service.list_records(tenant_id=tenant_id)
     if any(document["status"] == "draft" for document in documents):
         response["can_confirm"] = False
     return response
+
+
+def _selling_mode_card(
+    config: selling_modes.SellingMode,
+    *,
+    confidence: selling_modes.Confidence,
+    evidence: list[str],
+    candidates: list[str],
+) -> dict[str, Any]:
+    """The stage card's payload: the bundle, why it was chosen, and the summary.
+
+    ``summary`` is composed here, from the config, and never in the client - the
+    read-back is the same sentence whatever surface asks for it.
+    """
+    return {
+        **config.model_dump(),
+        "confidence": confidence,
+        "evidence": evidence,
+        "candidates": candidates,
+        "summary": selling_modes.summary_for(config),
+    }
+
+
+def _stored_selling_mode(stored: dict[str, Any]) -> selling_modes.SellingMode:
+    """Read ``config.ordering`` through the shared defaults.
+
+    A stored block from an older build can be missing a label or the defaults;
+    both fill here, so the card and the summary never render a blank.
+    """
+    return selling_modes.SellingMode.model_validate(
+        {**stored, "labels": selling_modes.normalize_labels(stored.get("labels"))}
+    )
+
+
+async def _stored_card(*, tenant_id: UUID) -> dict[str, Any] | None:
+    """The stored config's card, or None before one was confirmed.
+
+    The confirm screen's read-back is this and only this: the sentence the owner
+    approves is rendered from ``config.ordering``, the block the rest of the
+    product reads, so a correction cannot leave the screen describing the mode
+    that was inferred.
+    """
+    stored = await service.load_ordering_config(tenant_id=tenant_id)
+    if stored is None:
+        return None
+    config = _stored_selling_mode(stored)
+    return _selling_mode_card(config, confidence="high", evidence=[], candidates=[config.mode])
+
+
+async def selling_mode_payload(*, tenant_id: UUID, record_data: dict[str, Any]) -> dict[str, Any]:
+    """What the selling-mode stage shows: the stored config, else the inference.
+
+    The stored block wins whenever it exists. It is the source of truth for the
+    rest of the product, so a tenant that already has one reads back what it
+    actually sells - including a mode confirmed from Settings while the
+    interview was still in flight.
+    """
+    stored_card = await _stored_card(tenant_id=tenant_id)
+    if stored_card is not None:
+        return stored_card
+    material = await service.load_selling_mode_material(tenant_id=tenant_id, record=record_data)
+    suggestion = selling_modes.infer_selling_mode(material)
+    config = selling_modes.normalize_selling_mode(
+        mode=suggestion.mode,
+        capabilities=suggestion.capabilities,
+        labels=suggestion.labels,
+    )
+    return _selling_mode_card(
+        config,
+        confidence=suggestion.confidence,
+        evidence=suggestion.evidence,
+        candidates=list(suggestion.candidates),
+    )
+
+
+async def _stage_card(
+    *, tenant_id: UUID, stage: str, record_data: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The stage card's payload, or None when another stage is on screen.
+
+    One reader for both wire shapes: the REST body (``state_payload``) and the
+    stream's ``state`` frame build it here, so a card can never render on one
+    and be missing on the other.
+
+    32: the question stage carries the inference, so the owner can answer it;
+    the confirm stage carries the stored config, so the owner approves a
+    sentence built from what was actually saved. A confirm with nothing stored
+    answers None - there is no summary to show, and the inference is explicitly
+    not what that screen reads.
+    """
+    if stage == "selling_mode":
+        return await selling_mode_payload(tenant_id=tenant_id, record_data=record_data)
+    if stage == "confirm":
+        return await _stored_card(tenant_id=tenant_id)
+    return None
+
+
+async def state_payload(*, tenant_id: UUID, record_data: dict[str, Any]) -> dict[str, Any]:
+    """``response_from_record`` plus the one stage that needs its own read.
+
+    Every state-shaped answer goes through here - the REST reads, the writes,
+    and the stream's ``state`` event - so the stage card can never be on screen
+    without the payload that renders it.
+    """
+    onboarding = OnboardingRecord.from_jsonb(record_data)
+    stage, _input, _can_confirm = progress(onboarding)
+    response = response_from_record(record_data)
+    response["selling_mode"] = await _stage_card(
+        tenant_id=tenant_id, stage=stage, record_data=record_data
+    )
+    return response
+
+
+async def suggest_selling_mode(*, tenant_id: UUID) -> dict[str, Any]:
+    """The inference and its evidence, beside whatever is already stored."""
+    record = await service.load_record(tenant_id=tenant_id)
+    material = await service.load_selling_mode_material(tenant_id=tenant_id, record=record)
+    suggestion = selling_modes.infer_selling_mode(material)
+    config = selling_modes.normalize_selling_mode(
+        mode=suggestion.mode,
+        capabilities=suggestion.capabilities,
+        labels=suggestion.labels,
+    )
+    stored = await service.load_ordering_config(tenant_id=tenant_id)
+    return {
+        **_selling_mode_card(
+            config,
+            confidence=suggestion.confidence,
+            evidence=suggestion.evidence,
+            candidates=list(suggestion.candidates),
+        ),
+        "config": None if stored is None else _stored_selling_mode(stored).model_dump(),
+    }
+
+
+async def load_selling_mode(*, tenant_id: UUID) -> dict[str, Any]:
+    """The stored config and its read-back, or a null pair before one exists."""
+    stored = await service.load_ordering_config(tenant_id=tenant_id)
+    if stored is None:
+        return {"config": None, "summary": None}
+    config = _stored_selling_mode(stored)
+    return {"config": config.model_dump(), "summary": selling_modes.summary_for(config)}
+
+
+async def confirm_selling_mode(
+    *,
+    tenant_id: UUID,
+    mode: selling_modes.Mode,
+    capabilities: dict[str, Any] | None,
+    labels: dict[str, Any] | None,
+    defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Write the owner's mode and advance the cursor, with no model call (32).
+
+    The write is one statement: the record's ``selling_mode`` gate and
+    ``config.ordering`` land together, so "asked" and "configured" cannot
+    disagree. A correction takes this same door - it rewrites the config and
+    touches nothing else, because nothing reads the old one yet.
+
+    Idempotent through the guard every other onboarding write uses. The body is
+    the whole action, so its fingerprint is the key: a POST that lands and whose
+    response is lost returns the state it already produced rather than appending
+    a second "Got it" and a second next question.
+    """
+    config = selling_modes.normalize_selling_mode(
+        mode=mode, capabilities=capabilities, labels=labels, defaults=defaults
+    )
+    payload = config.model_dump()
+    record = await service.load_record(tenant_id=tenant_id)
+    onboarding = OnboardingRecord.from_jsonb(record)
+    fingerprint = _fingerprint("selling_mode", payload)
+    if _already_applied(onboarding, key=None, fingerprint=fingerprint):
+        return onboarding.to_jsonb()
+    onboarding.selling_mode = payload
+    if not onboarding.completed:
+        # A live tenant has no interview to advance, so only a live interview
+        # grows a transcript.
+        reply = selection_reply(onboarding, "Got it.")
+        onboarding.history.append(
+            {"role": "user", "content": selling_modes.MODE_TITLES[config.mode]}
+        )
+        onboarding.history.append({"role": "assistant", "content": reply})
+    _mark_action(onboarding, key=None, fingerprint=fingerprint)
+    return await _checkpoint(tenant_id, onboarding, ordering=payload)
 
 
 async def load_offering_suggestions(*, tenant_id: UUID) -> dict[str, Any]:
@@ -691,7 +899,7 @@ async def run_message_stream(
     onboarding = OnboardingRecord.from_jsonb(record)
     fingerprint = _fingerprint("text", text)
     if _already_applied(onboarding, key=idempotency_key, fingerprint=fingerprint):
-        yield _state_event(onboarding)
+        yield await _state_event(tenant_id, onboarding)
         yield {"type": "done"}
         return
     if onboarding.completed:
@@ -716,7 +924,7 @@ async def run_message_stream(
             yield {"type": "progress", "stage": "processing"}
             yield {"type": "token", "text": skipped_reply}
             yield {"type": "reply", "text": skipped_reply}
-            yield _state_event(onboarding)
+            yield await _state_event(tenant_id, onboarding)
             yield {"type": "done"}
             return
     if onboarding.pending_name and not is_affirmative(text):
@@ -732,7 +940,7 @@ async def run_message_stream(
         yield {"type": "progress", "stage": "processing"}
         yield {"type": "token", "text": reply}
         yield {"type": "reply", "text": reply}
-        yield _state_event(onboarding)
+        yield await _state_event(tenant_id, onboarding)
         yield {"type": "done"}
         return
     url = _find_url(text)
@@ -770,7 +978,7 @@ async def run_message_stream(
     plan.record.history.append({"role": "assistant", "content": full})
     await _checkpoint(tenant_id, plan.record)
 
-    yield _state_event(plan.record)
+    yield await _state_event(tenant_id, plan.record)
     yield {"type": "done"}
 
 
@@ -800,7 +1008,7 @@ async def _source_failure_events(
     yield {"type": "reply", "text": _URL_SCRAPE_FAILED}
     onboarding.history.append({"role": "assistant", "content": _URL_SCRAPE_FAILED})
     await _checkpoint(tenant_id, onboarding)
-    yield _state_event(onboarding)
+    yield await _state_event(tenant_id, onboarding)
     yield {"type": "done"}
 
 
@@ -941,7 +1149,7 @@ async def _stream_url_turn(
         plan.record.history.append({"role": "assistant", "content": full})
         await _checkpoint(tenant_id, plan.record)
 
-        yield _state_event(plan.record)
+        yield await _state_event(tenant_id, plan.record)
         yield {"type": "done"}
     finally:
         # 29: one line per source turn, failure included. It has to outlive the
@@ -1345,6 +1553,16 @@ async def confirm(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="review or discard every knowledge draft before going live",
+        )
+    # 32: `config.ordering` is what every later screen and the ordering service
+    # read, and it is written by the one confirmation - so a tenant cannot go
+    # live without it. The interview asks this before the beats, which makes a
+    # confirm without a mode a client that skipped a step, not a tenant that
+    # chose to sell nothing.
+    if onboarding.selling_mode is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="answering how customers buy comes before going live",
         )
     draft = onboarding.draft
     gate = request_finalize(draft, onboarding.skipped)

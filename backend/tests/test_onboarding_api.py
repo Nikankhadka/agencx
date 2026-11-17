@@ -30,6 +30,7 @@ from app.features.onboarding.controller import (
     _url_failure_code,
     response_from_record,
 )
+from app.features.onboarding.selling_modes import Mode, normalize_selling_mode
 from app.features.tenants.slug import suggested_slug, validate_slug
 from app.ingestion.chunker import extract_text
 from app.ingestion.site import CrawlResult
@@ -92,20 +93,23 @@ _CHAT_REPLIES = [
 # own words (the composer's fourth chip swaps to exactly this text widget).
 # 29: the source stage is the second question, so the walk declines it before
 # the profile beats begin.
-_FULL_WALK: list[tuple[Any, ...]] = [
-    ("text", "I'm Sam"),
-    ("text", "yes"),
-    ("text", "skip"),
-    ("text", "we are Bytefix Repairs"),
-    ("text", "yes"),
-    ("text", "we fix phones"),
-    ("text", "just me and one tech"),
-    ("text", "open weekdays 9 to 6"),
-    ("text", "screen repairs and batteries"),
-    ("text", "warm and plain, no jargon"),
-    ("text", "call 555-0100"),
-    ("text", "yes, 51 824 753 556"),
-    ("text", "yes we are"),
+# Each step is (the stage the reply must ask, the typed answer). The stage is
+# asserted, not just the widget shape: every stage renders a `kind == "text"`
+# composer, so "text" alone cannot tell a beat from the source ask.
+_FULL_WALK: list[tuple[str, str]] = [
+    ("owner_display_name", "I'm Sam"),
+    ("knowledge", "yes"),
+    ("business_name", "skip"),
+    ("business_name", "we are Bytefix Repairs"),
+    ("business_type", "yes"),
+    ("headcount", "we fix phones"),
+    ("hours", "just me and one tech"),
+    ("services", "open weekdays 9 to 6"),
+    ("customer_voice_preset", "screen repairs and batteries"),
+    ("contact", "warm and plain, no jargon"),
+    ("abn", "call 555-0100"),
+    ("gst", "yes, 51 824 753 556"),
+    ("confirm", "yes we are"),
 ]
 
 
@@ -276,12 +280,51 @@ async def _send(
     return body
 
 
+async def _confirm_selling_mode(
+    client: httpx.AsyncClient, headers: dict[str, str], mode: Mode = "orders"
+) -> dict[str, Any]:
+    """32: one tap on the mode card - the preset bundle, no model call."""
+    capabilities = normalize_selling_mode(
+        mode=mode, capabilities=None, labels={}
+    ).capabilities.model_dump()
+    response = await client.post(
+        "/api/onboarding/selling-mode",
+        json={"mode": mode, "capabilities": capabilities, "labels": {}},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+async def _settle_mode(
+    client: httpx.AsyncClient, headers: dict[str, str], body: dict[str, Any]
+) -> dict[str, Any]:
+    """Answer the selling-mode card if it is what the interview just asked.
+
+    The walk below is the beat-by-beat path every other test in this file reads;
+    the mode is a single non-beat question in the middle of it, so settling it
+    here keeps those tests about the beats without pretending it does not exist.
+
+    Bounded: the mode is asked once per interview, so a second card in the same
+    answer means the stage never cleared. Raising that as a failure is what keeps
+    a broken clear from hanging the whole file in a loop.
+    """
+    for _ in range(2):
+        if body["stage"] != "selling_mode":
+            return body
+        body = await _confirm_selling_mode(client, headers)
+    if body["stage"] == "selling_mode":
+        raise AssertionError("the selling-mode stage did not clear after confirming it")
+    return body
+
+
 async def _walk(
-    client: httpx.AsyncClient, token: str, steps: list[tuple[Any, ...]] | None = None
+    client: httpx.AsyncClient, token: str, steps: list[tuple[str, str]] | None = None
 ) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     for step in steps or _FULL_WALK:
-        await _send(client, headers, text=step[1])
+        await _settle_mode(client, headers, await _send(client, headers, text=step[1]))
 
 
 async def _walk_until(
@@ -289,7 +332,7 @@ async def _walk_until(
 ) -> dict[str, Any]:
     """Drive the canned walk from the start until the interview asks ``stage``."""
     for step in _FULL_WALK:
-        body = await _send(client, headers, text=step[1])
+        body = await _settle_mode(client, headers, await _send(client, headers, text=step[1]))
         if body["stage"] == stage:
             return body
     raise AssertionError(f"the canned walk never reached {stage}")
@@ -301,7 +344,7 @@ async def _walk_states(
     """Drive the whole canned walk, keeping the state each stage first showed."""
     states: dict[str, dict[str, Any]] = {}
     for step in _FULL_WALK:
-        body = await _send(client, headers, text=step[1])
+        body = await _settle_mode(client, headers, await _send(client, headers, text=step[1]))
         states.setdefault(body["stage"], body)
     return states
 
@@ -352,6 +395,12 @@ async def test_paused_required_field_blocks_publish_and_resumes_in_place(
             draft=draft,
             deferred=["business_type"],
             paused_beat="business_type",
+            # 32: a record that reached the beats has already answered the
+            # selling-mode question; without it the interview would reopen that
+            # stage before the paused field.
+            selling_mode=normalize_selling_mode(
+                mode="orders", capabilities=None, labels={}
+            ).model_dump(),
         ).to_jsonb(),
     )
 
@@ -388,14 +437,37 @@ async def test_every_beat_still_accepts_typed_text(client: httpx.AsyncClient) ->
     """O-6: chips are an accelerator, never a gate. Every beat keeps ``kind``
     "text", so the pill renders on all of them and a typed answer is always a
     way through - which is also what keeps the one-tool extraction loop the
-    single path into the draft."""
+    single path into the draft.
+
+    32: the selling-mode stage sits in the middle of the walk and answers chips,
+    so it is settled between steps. Without that the loop would assert the same
+    stage input nine times and prove nothing about the beats after it.
+
+    32: the assertion is the stage the reply asked plus the beat's *own* spec,
+    not just "kind is text". The selling-mode, source, and name-confirmation
+    widgets all satisfy ``kind == "text"``, so the old pair of assertions could
+    not tell a beat from a non-beat stage - and a walk that stopped asking beats
+    would still pass.
+
+    The pending-name confirmation is the one documented exception: while a
+    proposal waits for its yes the composer is the confirmation chip, so that
+    pair is asserted as itself rather than as the beat's spec.
+    """
     token, _tenant_id = await _signup_tenant_admin(client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    for step in _FULL_WALK[:-1]:
-        body = await _send(client, headers, text=step[1])
-        assert body["input"]["kind"] == "text"
-        assert body["input"]["cta_label"] is None
+    for stage, text in _FULL_WALK[:-1]:
+        body = await _settle_mode(client, headers, await _send(client, headers, text=text))
+        assert body["stage"] == stage
+        # The two non-beat stages and the pending-name confirmation are the
+        # documented exceptions; every other stage owes the beat's own spec.
+        if stage == "knowledge":
+            expected = beats.KNOWLEDGE_INPUT
+        elif body["pending_confirmation"] is not None:
+            expected = beats.NAME_CONFIRM_INPUT
+        else:
+            expected = beats.input_spec(beats.BEATS[stage])
+        assert body["input"] == expected.model_dump()
 
 
 async def test_chipped_beats_offer_their_shortcuts(client: httpx.AsyncClient) -> None:
@@ -583,10 +655,13 @@ async def test_resume_returns_history_and_draft_in_place(client: httpx.AsyncClie
     user_messages = [m["content"] for m in body["history"] if m["role"] == "user"]
     # W-9: each name answer is followed by the owner's own yes, and the thread
     # keeps both - the confirmation is part of the transcript, not a side call.
+    # 32: the one-tap selling mode is part of it too, recorded by the name the
+    # owner read on the chip.
     assert user_messages == [
         "I'm Sam",
         "yes",
         "skip",
+        "Orders",
         "we are Bytefix Repairs",
         "yes",
         "we fix phones",
@@ -857,9 +932,18 @@ async def test_the_source_stage_is_asked_second_and_skip_starts_the_beats(
     assert confirmed["input"]["kind"] == "text"
 
     final = await _send(client, headers, text="skip")
-    assert final["stage"] == "business_name"
+    # 32: the selling mode is the last stage before the profile beats.
+    assert final["stage"] == "selling_mode"
     assert final["draft"] == {"owner_display_name": "Sam"}
     assert final["can_confirm"] is False
+    assert final["selling_mode"] is not None
+    assert final["selling_mode"]["summary"]
+
+    # One tap answers it, and the beats begin where they always were.
+    after = await _confirm_selling_mode(client, headers)
+    assert after["stage"] == "business_name"
+    assert after["draft"] == {"owner_display_name": "Sam"}
+    assert after["can_confirm"] is False
 
 
 async def test_a_skip_word_skips_the_name_without_a_model_call(
@@ -924,8 +1008,12 @@ async def test_the_knowledge_skip_chip_closes_the_ask_without_a_model_call(
     assert [(c["label"], c["value"]) for c in body["input"]["chips"]] == [("Skip for now", "skip")]
 
     final = await _send(client, headers, selection={"beat": "knowledge", "values": ["skip"]})
-    assert final["stage"] == "business_name"
+    assert final["stage"] == "selling_mode"
     assert final["history"][-2] == {"role": "user", "content": "Skip for now"}
+
+    # 32: the mode is the one stage between the source and the beats.
+    after = await _confirm_selling_mode(client, headers)
+    assert after["stage"] == "business_name"
 
 
 async def test_full_flow_confirm_writes_profile(

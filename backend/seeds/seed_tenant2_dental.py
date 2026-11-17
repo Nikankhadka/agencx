@@ -36,6 +36,7 @@ from uuid import UUID
 
 import httpx
 
+from app.features.onboarding.selling_modes import normalize_selling_mode
 from app.shared import db
 from app.shared.config import get_settings
 from app.shared.voice import DEFAULT_VOICE_PRESET
@@ -173,14 +174,23 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
         # browser flow - only the state population method differs.
         print("  onboarding       pre-populating v3 profile")
         draft = _build_draft_from_answers(answers)
+        # 32: the clinic books, so the record carries the bookings bundle the
+        # confirmation itself would write. One value, written twice in one
+        # statement below: the record's gate and `config.ordering` are the same
+        # config, so a tenant can never be live with a mode it was asked about
+        # and an ordering block it does not have.
+        selling_mode = normalize_selling_mode(
+            mode="bookings", capabilities=None, labels=None
+        ).model_dump()
         # This is the one step that talks to the database rather than the API,
         # so it owns its own pool for the duration.
         await db.create_pool()
         try:
             async with db.tenant_context(UUID(signup["tenant_id"]), "tenant_admin") as conn:
                 await conn.execute(
-                    "update tenant_config set config = "
+                    "update tenant_config set config = jsonb_set("
                     "jsonb_set(config, '{onboarding}', $2::jsonb, true), "
+                    "'{ordering}', $3::jsonb, true), "
                     "updated_at = now() where tenant_id = $1",
                     UUID(signup["tenant_id"]),
                     json.dumps(
@@ -190,8 +200,13 @@ async def run_proof(api_base: str, auth_base: str) -> dict[str, Any]:
                             "history": [],
                             "off_topic_count": 0,
                             "completed": False,
+                            # 32: confirm refuses a tenant with no selling mode,
+                            # because config.ordering is what the ordering
+                            # service and the public payload read.
+                            "selling_mode": selling_mode,
                         }
                     ),
+                    json.dumps(selling_mode),
                 )
         finally:
             await db.close_pool()

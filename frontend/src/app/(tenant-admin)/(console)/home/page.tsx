@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { useApiQuery } from "@/lib/useApiQuery";
 import { useScrollRestoration } from "@/lib/useScrollRestoration";
 import type { ConversationListResponse } from "@/lib/api-schemas";
+import { labelFor } from "@/lib/selling-modes";
 import type { KnowledgeRecord } from "../business/details/knowledge/lib/types";
 import { buildBrief, waitingRows } from "./lib/brief";
 import { BriefCard } from "./components/BriefCard";
@@ -30,6 +31,13 @@ import { OfferingSuggestions } from "@/components/knowledge/OfferingSuggestions"
 
 interface OnboardingState {
   draft: Record<string, string>;
+}
+
+/** 32: the owner bootstrap - /api/tenants/me carries the ordering block. */
+interface TenantMe {
+  slug: string;
+  name: string;
+  ordering?: { labels?: Partial<Record<string, string>> };
 }
 
 /** The prototype greets by time of day; the owner's name comes from O-1. */
@@ -61,6 +69,13 @@ export default function HomePage() {
 
   const conversations = useApiQuery<ConversationListResponse>("/api/conversations");
   const records = useApiQuery<KnowledgeRecord[]>("/api/knowledge/records");
+  // 32: the Work destination's own name, from the tenant's label map. Slice A
+  // proves the acceptance check with this one heading; slice G owns the console
+  // rebuild that reads the same block for the tab, the add button, and the
+  // empty state.
+  const tenant = useApiQuery<TenantMe>("/api/tenants/me");
+  const ordering = tenant.data?.ordering;
+  const workLabel = ordering?.labels ? labelFor(ordering.labels, "work") : "";
 
   // Both queries have to have answered before the brief means anything: an
   // empty conversation list is the share nudge's trigger, so composing while
@@ -84,6 +99,15 @@ export default function HomePage() {
           <br />
           {name ?? "admin"}.
         </h1>
+
+        {workLabel ? (
+          <h2
+            className="mt-2 text-card-hl font-medium text-text-secondary"
+            data-testid="home-work-label"
+          >
+            {workLabel}
+          </h2>
+        ) : null}
 
         <WaitingPanel rows={waiting} />
 

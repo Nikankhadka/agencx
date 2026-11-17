@@ -14,7 +14,10 @@ from uuid import UUID
 
 import asyncpg
 
+from app.features.business import service as business_service
 from app.features.business.service import reconcile_offerings_batch
+from app.features.knowledge import service as knowledge_service
+from app.features.onboarding import selling_modes
 from app.features.tenants import service as tenant_service
 from app.llm.embedder import Embedder
 from app.onboarding.flow import PendingOffering
@@ -47,6 +50,7 @@ async def set_onboarding_json(
     *,
     expected_revision: int | None = None,
     profile_patch: dict[str, Any] | None = None,
+    ordering: dict[str, Any] | None = None,
 ) -> None:
     where = "where tenant_id = $1"
     args: list[Any] = [tenant_id, json.dumps(record)]
@@ -60,6 +64,12 @@ async def set_onboarding_json(
             "jsonb_set(config, '{profile}', "
             f"coalesce(config->'profile', '{{}}'::jsonb) || ${len(args)}::jsonb, true)"
         )
+    # 32: the selling-mode confirmation writes `config.ordering` and the
+    # onboarding record together. One UPDATE is what makes "the mode was asked"
+    # and "the product has a mode" the same fact rather than two that can drift.
+    if ordering is not None:
+        args.append(json.dumps(ordering))
+        target = f"jsonb_set({target}, '{{ordering}}', ${len(args)}::jsonb, true)"
     if expected_revision is not None:
         args.append(expected_revision)
         where += f" and coalesce((config->'onboarding'->>'revision')::bigint, 0) = ${len(args)}"
@@ -78,6 +88,7 @@ async def save_record(
     tenant_id: UUID,
     record: dict[str, Any],
     profile_patch: dict[str, Any] | None = None,
+    ordering: dict[str, Any] | None = None,
 ) -> None:
     expected_revision = int(record.get("revision", 0) or 0)
     record["revision"] = expected_revision + 1
@@ -88,7 +99,62 @@ async def save_record(
             record,
             expected_revision=expected_revision,
             profile_patch=profile_patch,
+            ordering=ordering,
         )
+
+
+async def load_ordering_config(*, tenant_id: UUID) -> dict[str, Any] | None:
+    """The stored ``config.ordering`` block, or None before it was written.
+
+    None is the honest absence: no selling mode has been confirmed, so the
+    review card shows nothing rather than an empty object that would read like a
+    tenant configured to sell nothing.
+    """
+    async with db.tenant_context(tenant_id, "tenant_admin") as conn:
+        raw = await conn.fetchval(
+            "select config->'ordering' from tenant_config where tenant_id = $1",
+            tenant_id,
+        )
+    if raw is None:
+        return None
+    parsed = json.loads(raw) if isinstance(raw, str) else raw
+    return parsed if isinstance(parsed, dict) else None
+
+
+async def load_selling_mode_material(
+    *, tenant_id: UUID, record: dict[str, Any]
+) -> selling_modes.SourceMaterial:
+    """Everything the inference may read, gathered from what onboarding stored.
+
+    The source text is the documents' own sections, so the nav words an owner's
+    page uses ("Order online", "Book now") reach the scorer; the profile and the
+    reviewed offerings come from the record, which is the same data the review
+    sheet showed. Categories are included because an owner who filed their
+    offerings under "Treatments" has said something the source text alone does
+    not.
+    """
+    documents = await knowledge_service.list_records(tenant_id=tenant_id)
+    source_text = " ".join(
+        f"{section.get('heading', '')} {section.get('body', '')}"
+        for document in documents
+        for section in document.get("sections", [])
+    )
+    draft = record.get("draft", {}) if isinstance(record.get("draft"), dict) else {}
+    offerings = [
+        " ".join(str(item.get(key, "")) for key in ("name", "description"))
+        for item in record.get("offering_candidates", [])
+        if isinstance(item, dict)
+    ]
+    category_names = [
+        str(category["name"])
+        for category in await business_service.list_categories(tenant_id=tenant_id)
+    ]
+    return selling_modes.SourceMaterial(
+        source_text=source_text,
+        profile=draft,
+        offerings=tuple(offerings),
+        categories=tuple(category_names),
+    )
 
 
 async def apply_confirmation(

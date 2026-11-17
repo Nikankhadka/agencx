@@ -35,7 +35,7 @@ Per-ticket header pattern:
 | [active/29-source-first-onboarding.md](active/29-source-first-onboarding.md) | Source-first onboarding, review sheet, pricing wording, crawl speed (slices A-D, owner-name skip chip removed) | `Active - awaiting review` |
 | [active/30-chat-catalog-full-list.md](active/30-chat-catalog-full-list.md) | Chat catalog boundary at 20 offerings plus the business-page link | `Active - awaiting review` |
 | [active/31-review-surface-refinement.md](active/31-review-surface-refinement.md) | Review surface refinement: field recipe, collapsed categories and focus, confirmations, suggestions paging, URL source endpoint, in-place link editing, category panel pass (slices A-F plus review fixes) | `Active - awaiting review` |
-| [active/32-selling-modes.md](active/32-selling-modes.md) | Selling modes, inferred lead capture, one order object, capacity kernel, scheduling and calendar, owner console, payments ledger (slices A-H) | `Active - todo` |
+| [active/32-selling-modes.md](active/32-selling-modes.md) | Selling modes, inferred lead capture, one order object, capacity kernel, scheduling and calendar, owner console, payments ledger (slices A-H) (slice A built) | `Active - in progress` |
 
 ## Completed work
 
